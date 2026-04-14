@@ -70,7 +70,7 @@ async def debug_exception_handler(request: Request, exc: Exception):
     import traceback
     return JSONResponse(status_code=500, content={"error": str(exc), "trace": traceback.format_exc()})
 
-@app.get("/api/debug/supabase")
+@app.get("/debug-sb")
 def debug_supabase():
     """Temporary: test Supabase connection and return diagnostic info."""
     url = os.getenv("SUPABASE_URL", "")
