@@ -477,7 +477,7 @@ function PdfImportPanel({ onConfirm, onCancel }: {
         {error && <p className="text-xs text-red-400 text-center">{error}</p>}
 
         <p className="text-xs text-gray-400 text-center">
-          Your PDF is processed locally on your machine and never uploaded to any server.
+          Your PDF is sent securely to BackNine for extraction and saved to your account.
         </p>
       </div>
     );
