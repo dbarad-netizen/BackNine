@@ -15,7 +15,7 @@ export default function Home() {
 
       <div className="flex flex-col sm:flex-row gap-4">
         <a
-          href="http://localhost:8000/auth/oura"
+          href="https://backnine-hu60.onrender.com/auth/oura"
           className="inline-flex items-center gap-2 rounded-lg bg-green-500 hover:bg-green-400 text-black font-semibold px-6 py-3 transition-colors"
         >
           <span>Connect Oura Ring</span>
