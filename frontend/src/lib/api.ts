@@ -3,7 +3,7 @@
  * All requests are proxied through Next.js rewrites → FastAPI backend
  */
 
-const BASE = "";  // proxied via next.config.js
+const BASE = "https://backnine-hu60.onrender.com";
 
 export interface TodayData {
   readiness:   Record<string, unknown>;
