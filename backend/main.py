@@ -70,6 +70,20 @@ async def debug_exception_handler(request: Request, exc: Exception):
     import traceback
     return JSONResponse(status_code=500, content={"error": str(exc), "trace": traceback.format_exc()})
 
+@app.get("/api/debug/supabase")
+def debug_supabase():
+    """Temporary: test Supabase connection and return diagnostic info."""
+    url = os.getenv("SUPABASE_URL", "")
+    key = os.getenv("SUPABASE_SERVICE_KEY", "")
+    return {
+        "url_set":      bool(url),
+        "url_prefix":   url[:30] if url else None,
+        "key_set":      bool(key),
+        "key_prefix":   key[:20] if key else None,
+        "key_suffix":   key[-10:] if key else None,
+        "key_length":   len(key) if key else 0,
+    }
+
 # ── JWT session helpers ───────────────────────────────────────────────────────
 # Sessions are encoded as signed JWTs stored in an HttpOnly cookie.
 # No server-side store — survives backend restarts automatically.
