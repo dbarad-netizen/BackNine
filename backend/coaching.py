@@ -147,8 +147,9 @@ def generate_coaching(
     avg_hrv_f1  = _avg(fort1,  "hrv",   smm)
     avg_hrv_f2  = _avg(fort2,  "hrv",   smm)
 
-    hrs30 = [smm[d]["total"] / 3600 for d in last30 if d in smm and smm[d].get("total")]
-    hrs7  = [smm[d]["total"] / 3600 for d in last7  if d in smm and smm[d].get("total")]
+    # Only average nights where ring was actually worn (total > 1h = 3600s)
+    hrs30 = [smm[d]["total"] / 3600 for d in last30 if d in smm and (smm[d].get("total") or 0) >= 3600]
+    hrs7  = [smm[d]["total"] / 3600 for d in last7  if d in smm and (smm[d].get("total") or 0) >= 3600]
     avg_hrs_30 = round(sum(hrs30) / len(hrs30), 1) if hrs30 else None
     avg_hrs_7  = round(sum(hrs7)  / len(hrs7),  1) if hrs7  else None
 
@@ -265,8 +266,8 @@ def generate_coaching(
             "A 2–3 day deload (50% volume reduction) will accelerate adaptation.", "warn"))
 
     # ── Sleep debt ────────────────────────────────────────────────────────────
-    if hrs7:
-        sleep_debt = max(0.0, 7 * 7.5 - sum(hrs7))
+    if len(hrs7) >= 3:  # only calculate debt if we have at least 3 nights of data
+        sleep_debt = max(0.0, len(hrs7) * 7.5 - sum(hrs7))
         if sleep_debt > 5:
             mid_items.append(_ins("🏦", "Significant sleep debt — repay gradually",
                 f"You're {sleep_debt:.1f}h short over 7 days vs 7.5h/night target. "

@@ -113,22 +113,24 @@ def parse_oura_data(raw: dict) -> tuple[dict, dict, dict, dict]:
             "active_cal": rec.get("active_calories"),
         }
 
-    # Sleep model (detail — one record per sleep session, keep longest for each day)
+    # Sleep model (detail — keep longest session ≥ 1h per day, skip naps/rest)
     for rec in raw.get("sleepDetail", {}).get("data", []):
-        if rec.get("type") not in ("long_sleep", "sleep"): continue
+        # Exclude known non-main-sleep types; accept anything ≥ 1 hour otherwise
+        if rec.get("type") in ("rest", "late_nap"): continue
+        total = rec.get("total_sleep_duration") or 0
+        if total < 3600: continue   # ignore sessions under 1 hour
         day = rec.get("day", "")
         if not day: continue
-        total = rec.get("total_sleep_duration") or 0
-        # Keep the longest sleep session for the day (avoids nap overwriting main sleep)
+        # Keep the longest sleep session for the day
         if day in smm and (smm[day].get("total") or 0) >= total:
             continue
         smm[day] = {
-            "total":        total,
-            "deep":         rec.get("deep_sleep_duration"),
-            "rem":          rec.get("rem_sleep_duration"),
-            "hrv":          rec.get("average_hrv"),
-            "rhr":          rec.get("lowest_heart_rate"),
-            "efficiency":   rec.get("efficiency"),
+            "total":         total,
+            "deep":          rec.get("deep_sleep_duration"),
+            "rem":           rec.get("rem_sleep_duration"),
+            "hrv":           rec.get("average_hrv"),
+            "rhr":           rec.get("lowest_heart_rate"),
+            "efficiency":    rec.get("efficiency"),
             "bedtime_start": rec.get("bedtime_start"),
         }
 
