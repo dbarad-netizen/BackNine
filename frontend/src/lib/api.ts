@@ -1,9 +1,39 @@
 /**
  * BackNine API client
- * All requests are proxied through Next.js rewrites → FastAPI backend
+ * All requests go directly to the FastAPI backend on Render.
+ * Auth token is passed via Authorization header to avoid cross-site cookie issues.
  */
 
 const BASE = "https://backnine-hu60.onrender.com";
+
+// ── Token storage ─────────────────────────────────────────────────────────────
+// On load, grab token from URL ?token= param (set by backend after OAuth),
+// persist to localStorage, then remove from URL so it's not bookmarked.
+function _initToken(): string | null {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  const urlToken = params.get("token");
+  if (urlToken) {
+    localStorage.setItem("bn_token", urlToken);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("token");
+    window.history.replaceState({}, "", url.toString());
+    return urlToken;
+  }
+  return localStorage.getItem("bn_token");
+}
+
+let _token: string | null = null;
+
+export function getToken(): string | null {
+  if (!_token) _token = _initToken();
+  return _token;
+}
+
+export function clearToken(): void {
+  _token = null;
+  if (typeof window !== "undefined") localStorage.removeItem("bn_token");
+}
 
 export interface TodayData {
   readiness:   Record<string, unknown>;
@@ -323,13 +353,15 @@ export interface LabEntry {
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  // Don't set Content-Type for FormData — the browser sets it with the boundary automatically
   const isFormData = options?.body instanceof FormData;
+  const token = getToken();
+  const authHeader = token ? { "Authorization": `Bearer ${token}` } : {};
   const res = await fetch(`${BASE}${path}`, {
     credentials: "include",
     ...options,
-    headers: isFormData ? undefined : {
+    headers: isFormData ? authHeader : {
       "Content-Type": "application/json",
+      ...authHeader,
       ...options?.headers,
     },
   });
@@ -345,7 +377,7 @@ export const api = {
   dashboard():          Promise<DashboardData> { return request("/api/dashboard"); },
   wearables():          Promise<{ connected: Wearable[]; available: Wearable[] }> { return request("/api/wearables"); },
   disconnect(p: string): Promise<void> { return request(`/api/wearables/${p}`, { method: "DELETE" }); },
-  logout():             Promise<void> { return request("/auth/logout", { method: "POST" }); },
+  logout():             Promise<void> { clearToken(); return request("/auth/logout", { method: "POST" }); },
   connectOura():        void { window.location.href = "https://backnine-hu60.onrender.com/auth/oura"; },
 
   // ── Nutrition ──────────────────────────────────────────────────────────────

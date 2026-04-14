@@ -99,10 +99,15 @@ def _session_cookie_name() -> str:
 
 
 def _get_session(request: Request) -> Optional[dict]:
+    # Check cookie first
     token = request.cookies.get(_session_cookie_name())
-    if not token:
-        return None
-    return _decode_session(token)
+    if token:
+        return _decode_session(token)
+    # Fall back to Authorization header (cross-origin: Netlify → Render)
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        return _decode_session(auth[7:])
+    return None
 
 
 def _set_session_cookie(response, session: dict) -> None:
@@ -263,8 +268,10 @@ async def oura_auth_callback(
         except Exception:
             pass
 
-        redirect = RedirectResponse(f"{FRONTEND_URL}/dashboard")
-        _set_session_cookie(redirect, session_data)
+        # Pass token in URL for cross-origin compatibility (Netlify + Render)
+        jwt_token = _encode_session(session_data)
+        redirect = RedirectResponse(f"{FRONTEND_URL}/dashboard?token={jwt_token}")
+        _set_session_cookie(redirect, session_data)  # also set cookie as fallback
         return redirect
 
     except Exception as exc:
