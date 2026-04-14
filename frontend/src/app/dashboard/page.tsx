@@ -24,7 +24,7 @@ import {
 } from "recharts";
 
 type Tab     = "scores" | "hrv" | "sleep_detail";
-type Section = "today" | "forecast" | "coaching" | "nutrition" | "training" | "labs" | "challenges";
+type Section = "today" | "coaching" | "nutrition" | "training" | "labs" | "challenges";
 
 // ── Calorie ring ──────────────────────────────────────────────────────────────
 function CalorieRing({
@@ -869,7 +869,6 @@ export default function DashboardPage() {
 
   const NAV_ITEMS: { id: Section; label: string; icon: string }[] = [
     { id: "today",      label: "Today",      icon: "🏠" },
-    { id: "forecast",   label: "Forecast",   icon: "📈" },
     { id: "coaching",   label: "Coaching",   icon: "💡" },
     { id: "nutrition",  label: "Nutrition",  icon: "🥗" },
     { id: "training",   label: "Training",   icon: "🏋️" },
@@ -968,96 +967,37 @@ export default function DashboardPage() {
               </div>
               <TrendChart data={trend} metric={tab} />
             </section>
+
+            {/* Tomorrow's readiness callout */}
+            <section className="rounded-2xl border bg-white p-4 flex items-center gap-4"
+              style={{ borderColor: readiness_forecast.color + "55" }}>
+              <div className="relative w-14 h-14 shrink-0">
+                <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+                  <circle cx="50" cy="50" r="42" fill="none" stroke="#E5E7EB" strokeWidth="10"/>
+                  <circle cx="50" cy="50" r="42" fill="none"
+                    stroke={readiness_forecast.color} strokeWidth="10" strokeLinecap="round"
+                    strokeDasharray={`${2 * Math.PI * 42}`}
+                    strokeDashoffset={`${2 * Math.PI * 42 * (1 - readiness_forecast.score / 100)}`}
+                  />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-sm font-bold text-gray-900">{readiness_forecast.score}</span>
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-0.5">Tomorrow's Readiness</p>
+                <p className="font-semibold text-gray-900 text-sm">{readiness_forecast.label}</p>
+                <div className="flex gap-3 mt-1 text-xs text-gray-400">
+                  <span>HRV <span className={readiness_forecast.hrv_adj >= 0 ? "text-green-500" : "text-red-400"}>
+                    {readiness_forecast.hrv_adj >= 0 ? "+" : ""}{readiness_forecast.hrv_adj}
+                  </span></span>
+                  <span>Sleep <span className={readiness_forecast.sleep_adj >= 0 ? "text-green-500" : "text-red-400"}>
+                    {readiness_forecast.sleep_adj >= 0 ? "+" : ""}{readiness_forecast.sleep_adj}
+                  </span></span>
+                </div>
+              </div>
+            </section>
           </>
-        )}
-
-        {/* ── FORECAST ── */}
-        {section === "forecast" && (
-          <div className="space-y-4">
-            <section className="rounded-2xl border bg-white p-6"
-              style={{ borderColor: readiness_forecast.color + "66" }}>
-              <p className="text-xs text-gray-400 uppercase tracking-widest mb-3">Tomorrow's Readiness</p>
-              <div className="flex items-center gap-5">
-                <div className="relative flex-shrink-0 w-24 h-24">
-                  <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                    <circle cx="50" cy="50" r="42" fill="none" stroke="#E5E7EB" strokeWidth="10"/>
-                    <circle cx="50" cy="50" r="42" fill="none"
-                      stroke={readiness_forecast.color} strokeWidth="10" strokeLinecap="round"
-                      strokeDasharray={`${2 * Math.PI * 42}`}
-                      strokeDashoffset={`${2 * Math.PI * 42 * (1 - readiness_forecast.score / 100)}`}
-                      className="transition-all duration-700"
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="text-2xl font-bold text-gray-900">{readiness_forecast.score}</span>
-                  </div>
-                </div>
-                <div className="flex-1 space-y-2">
-                  <p className="font-semibold text-gray-900 text-lg">{readiness_forecast.label}</p>
-                  <div className="space-y-1 text-xs text-gray-500">
-                    <p>Base (5-day avg): <span className="text-gray-800 font-medium">{readiness_forecast.base}</span></p>
-                    <p>HRV trend: <span className={`font-medium ${readiness_forecast.hrv_adj >= 0 ? "text-green-400" : "text-red-400"}`}>
-                      {readiness_forecast.hrv_adj >= 0 ? "+" : ""}{readiness_forecast.hrv_adj}</span></p>
-                    <p>Sleep factor: <span className={`font-medium ${readiness_forecast.sleep_adj >= 0 ? "text-green-400" : "text-red-400"}`}>
-                      {readiness_forecast.sleep_adj >= 0 ? "+" : ""}{readiness_forecast.sleep_adj}</span></p>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section className="rounded-2xl border bg-white p-6" style={{ borderColor: training_load.color + "66" }}>
-              <p className="text-xs text-gray-400 uppercase tracking-widest mb-3">Training Load (ACWR)</p>
-              <div className="mb-5">
-                <div className="flex justify-between text-xs text-gray-400 mb-1.5">
-                  <span>Under-trained</span><span>Optimal</span><span>Overreaching</span>
-                </div>
-                <div className="relative h-3 rounded-full overflow-hidden bg-gray-100">
-                  <div className="absolute inset-0 flex">
-                    <div className="h-full bg-blue-500/50"  style={{ width: "26.7%" }} />
-                    <div className="h-full bg-green-500/50" style={{ width: "33.3%" }} />
-                    <div className="h-full bg-amber-500/50" style={{ width: "13.3%" }} />
-                    <div className="h-full bg-red-500/50"   style={{ width: "26.7%" }} />
-                  </div>
-                  {training_load.acwr != null && (
-                    <div className="absolute top-0 bottom-0 w-1 rounded-full bg-white shadow-lg transition-all duration-700"
-                      style={{ left: `${Math.min(98, Math.max(1, (training_load.acwr / 2) * 100))}%` }} />
-                  )}
-                </div>
-                <div className="flex justify-between text-xs text-gray-400 mt-1">
-                  <span>0.0</span><span>0.8</span><span>1.3</span><span>1.5</span><span>2.0+</span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-3xl font-bold text-gray-900">{training_load.acwr?.toFixed(2) ?? "—"}</span>
-                    <span className="text-sm font-medium px-2 py-0.5 rounded-full"
-                      style={{ backgroundColor: training_load.color + "33", color: training_load.color }}>
-                      {training_load.label}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-400">Acute/Chronic Workload Ratio</p>
-                </div>
-              </div>
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-xl bg-gray-100 px-4 py-3 text-center">
-                  <p className="text-xs text-gray-400 mb-1">7-Day Avg Load</p>
-                  <p className="text-lg font-bold text-gray-900">{training_load.acute_avg ?? "—"} <span className="text-xs text-gray-400 font-normal">cal</span></p>
-                </div>
-                <div className="rounded-xl bg-gray-100 px-4 py-3 text-center">
-                  <p className="text-xs text-gray-400 mb-1">28-Day Avg Load</p>
-                  <p className="text-lg font-bold text-gray-900">{training_load.chronic_avg ?? "—"} <span className="text-xs text-gray-400 font-normal">cal</span></p>
-                </div>
-              </div>
-              <p className="mt-4 text-xs text-gray-400 leading-relaxed">
-                {training_load.zone === "optimal"  && "Your training load is balanced. Keep this up for sustained performance gains."}
-                {training_load.zone === "low"       && "You've been under-training recently. Gradually increase intensity over the next week."}
-                {training_load.zone === "caution"   && "Load is elevated. Prioritize sleep and recovery to avoid injury."}
-                {training_load.zone === "danger"    && "Overreaching detected. Take 2–3 easy days before resuming hard training."}
-                {training_load.zone === "unknown"   && "Need more activity data for a full analysis. Keep wearing your ring."}
-              </p>
-            </section>
-          </div>
         )}
 
         {/* ── COACHING ── */}
@@ -1258,7 +1198,60 @@ export default function DashboardPage() {
 
         {/* ── TRAINING ── */}
         {section === "training" && (
-          <div>
+          <div className="space-y-4">
+            {/* Training Load (ACWR) */}
+            <section className="rounded-2xl border bg-white p-6" style={{ borderColor: training_load.color + "66" }}>
+              <p className="text-xs text-gray-400 uppercase tracking-widest mb-3">Training Load (ACWR)</p>
+              <div className="mb-5">
+                <div className="flex justify-between text-xs text-gray-400 mb-1.5">
+                  <span>Under-trained</span><span>Optimal</span><span>Overreaching</span>
+                </div>
+                <div className="relative h-3 rounded-full overflow-hidden bg-gray-100">
+                  <div className="absolute inset-0 flex">
+                    <div className="h-full bg-blue-500/50"  style={{ width: "26.7%" }} />
+                    <div className="h-full bg-green-500/50" style={{ width: "33.3%" }} />
+                    <div className="h-full bg-amber-500/50" style={{ width: "13.3%" }} />
+                    <div className="h-full bg-red-500/50"   style={{ width: "26.7%" }} />
+                  </div>
+                  {training_load.acwr != null && (
+                    <div className="absolute top-0 bottom-0 w-1 rounded-full bg-white shadow-lg transition-all duration-700"
+                      style={{ left: `${Math.min(98, Math.max(1, (training_load.acwr / 2) * 100))}%` }} />
+                  )}
+                </div>
+                <div className="flex justify-between text-xs text-gray-400 mt-1">
+                  <span>0.0</span><span>0.8</span><span>1.3</span><span>1.5</span><span>2.0+</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-3xl font-bold text-gray-900">{training_load.acwr?.toFixed(2) ?? "—"}</span>
+                    <span className="text-sm font-medium px-2 py-0.5 rounded-full"
+                      style={{ backgroundColor: training_load.color + "33", color: training_load.color }}>
+                      {training_load.label}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-400">Acute/Chronic Workload Ratio</p>
+                </div>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="rounded-xl bg-gray-100 px-4 py-3 text-center">
+                  <p className="text-xs text-gray-400 mb-1">7-Day Avg Load</p>
+                  <p className="text-lg font-bold text-gray-900">{training_load.acute_avg ?? "—"} <span className="text-xs text-gray-400 font-normal">cal</span></p>
+                </div>
+                <div className="rounded-xl bg-gray-100 px-4 py-3 text-center">
+                  <p className="text-xs text-gray-400 mb-1">28-Day Avg Load</p>
+                  <p className="text-lg font-bold text-gray-900">{training_load.chronic_avg ?? "—"} <span className="text-xs text-gray-400 font-normal">cal</span></p>
+                </div>
+              </div>
+              <p className="mt-4 text-xs text-gray-400 leading-relaxed">
+                {training_load.zone === "optimal"  && "Your training load is balanced. Keep this up for sustained performance gains."}
+                {training_load.zone === "low"       && "You've been under-training recently. Gradually increase intensity over the next week."}
+                {training_load.zone === "caution"   && "Load is elevated. Prioritize sleep and recovery to avoid injury."}
+                {training_load.zone === "danger"    && "Overreaching detected. Take 2–3 easy days before resuming hard training."}
+                {training_load.zone === "unknown"   && "Need more activity data for a full analysis. Keep wearing your ring."}
+              </p>
+            </section>
             <TrainingTab />
           </div>
         )}
