@@ -346,7 +346,7 @@ export const api = {
   wearables():          Promise<{ connected: Wearable[]; available: Wearable[] }> { return request("/api/wearables"); },
   disconnect(p: string): Promise<void> { return request(`/api/wearables/${p}`, { method: "DELETE" }); },
   logout():             Promise<void> { return request("/auth/logout", { method: "POST" }); },
-  connectOura():        void { window.location.href = `${process.env.NEXT_PUBLIC_API_URL || "https://backnine-hu60.onrender.com"}/auth/oura`; },
+  connectOura():        void { window.location.href = "https://backnine-hu60.onrender.com/auth/oura"; },
 
   // ── Nutrition ──────────────────────────────────────────────────────────────
   nutritionToday():     Promise<NutritionToday>    { return request("/api/nutrition/today"); },
