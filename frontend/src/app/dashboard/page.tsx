@@ -1318,7 +1318,7 @@ function ErrorState({ error }: { error: string }) {
         </h2>
         <p className="text-gray-500 text-sm">{isAuth ? "Link your ring to see your daily health intelligence." : error}</p>
         <a
-          href={isAuth ? "http://localhost:8000/auth/oura" : "/dashboard"}
+          href={isAuth ? "https://backnine-hu60.onrender.com/auth/oura" : "/dashboard"}
           className="inline-block rounded-xl bg-[#1B3829] hover:bg-[#2D6A4F] text-white font-semibold px-6 py-3 text-sm transition-colors"
         >
           {isAuth ? "Connect Oura Ring →" : "Retry"}
