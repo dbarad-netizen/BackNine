@@ -301,23 +301,23 @@ async def get_dashboard(request: Request, days: int = 120):
 
     rm, slm, am, smm = parse_oura_data(raw)
 
-    # "Today" with fallback to most recent
+    # ── "Today" — find the most recent date with consistent data ─────────────
+    # Oura APIs update at different times, so we pick one anchor date that has
+    # both a sleep score AND sleep model (the two most commonly out-of-sync),
+    # then pull readiness and activity from the same date where available.
     today_str = datetime.now().strftime("%Y-%m-%d")
-    t_rdy = rm.get(today_str, {})
-    t_sl  = slm.get(today_str, {})
-    t_act = am.get(today_str, {})
-    t_sm  = smm.get(today_str, {})
-    if not t_rdy and rm:  t_rdy = rm[sorted(rm)[-1]]
-    if not t_sl  and slm: t_sl  = slm[sorted(slm)[-1]]
-    if not t_act and am:  t_act = am[sorted(am)[-1]]
-    # For sleep model, prefer the most recent entry with real sleep (> 1 hour).
-    # This skips naps / rest periods that Oura records as short sleep sessions.
-    if not t_sm or (t_sm.get("total") or 0) < 3600:
-        real_sleeps = {d: v for d, v in smm.items() if (v.get("total") or 0) >= 3600}
-        if real_sleeps:
-            t_sm = real_sleeps[sorted(real_sleeps)[-1]]
-        elif smm:
-            t_sm = smm[sorted(smm)[-1]]
+
+    # Find the most recent date that has a real sleep model entry (≥1h)
+    real_sleep_days = sorted(
+        [d for d, v in smm.items() if (v.get("total") or 0) >= 3600],
+        reverse=True,
+    )
+    anchor = real_sleep_days[0] if real_sleep_days else today_str
+
+    t_sm  = smm.get(anchor, {})
+    t_sl  = slm.get(anchor) or (slm[sorted(slm)[-1]] if slm else {})
+    t_rdy = rm.get(anchor)  or (rm[sorted(rm)[-1]]   if rm   else {})
+    t_act = am.get(today_str) or am.get(anchor) or (am[sorted(am)[-1]] if am else {})
 
     # Build coaching
     coaching = generate_coaching(rm, slm, am, smm)
