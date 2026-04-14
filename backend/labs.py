@@ -1,23 +1,25 @@
 """
 Labs module for BackNine Health.
 Stores blood panel results with reference ranges and trend tracking.
-Data persisted to ~/.backnine/labs.json
+Data persisted to Supabase (lab_entries table).
 """
 
 import io
 import json
+import os
 import re
 import uuid
 from datetime import datetime
-from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 
-BASE_DIR = Path.home() / ".backnine"
 
-def _labs_file(user_id: str) -> Path:
-    d = BASE_DIR / user_id
-    d.mkdir(parents=True, exist_ok=True)
-    return d / "labs.json"
+def _sb():
+    from supabase import create_client
+    url = os.getenv("SUPABASE_URL", "")
+    key = os.getenv("SUPABASE_SERVICE_KEY", "")
+    if not url or not key:
+        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY must be set")
+    return create_client(url, key)
 
 # ── Reference ranges ──────────────────────────────────────────────────────────
 # Each marker: { unit, low, high, optimal_low?, optimal_high?, description }
@@ -95,64 +97,57 @@ REFERENCE_RANGES: Dict[str, dict] = {
 LAB_GROUPS = ["Metabolic", "Lipids", "Thyroid", "Hormones", "Inflammation", "Blood", "Vitamins", "Kidney/Liver", "Electrolytes", "CBC", "Iron", "Other"]
 
 
-def _load(user_id: str) -> dict:
-    f = _labs_file(user_id)
-    if f.exists():
-        try:
-            return json.loads(f.read_text())
-        except Exception:
-            pass
-    # One-time migration: copy data from the old single-user location
-    legacy = BASE_DIR / "labs.json"
-    if legacy.exists():
-        try:
-            data = json.loads(legacy.read_text())
-            f.write_text(json.dumps(data, indent=2, default=str))
-            legacy.rename(legacy.with_suffix(".json.migrated"))
-            return data
-        except Exception:
-            pass
-    return {"entries": []}
-
-
-def _save(data: dict, user_id: str) -> None:
-    _labs_file(user_id).write_text(json.dumps(data, indent=2, default=str))
-
-
-def get_entries(user_id: str = "default") -> List[dict]:
-    data = _load(user_id)
-    return sorted(data.get("entries", []), key=lambda x: x["date"])
+def get_entries(user_id: str) -> List[dict]:
+    sb  = _sb()
+    res = sb.table("lab_entries").select("*").eq("user_id", user_id).order("date").execute()
+    rows = res.data or []
+    # Flatten: merge the jsonb 'values' dict into the top-level entry dict
+    entries = []
+    for row in rows:
+        entry = {
+            "id":        row["id"],
+            "date":      row["date"],
+            "logged_at": row["logged_at"],
+            "notes":     row.get("notes", ""),
+        }
+        entry.update(row.get("values", {}))
+        entries.append(entry)
+    return entries
 
 
 def add_entry(date_str: str, values: dict, notes: str = "", user_id: str = "default") -> dict:
     """values = {marker_key: float_value, ...}"""
-    data  = _load(user_id)
-    entry = {
-        "id":        str(uuid.uuid4())[:8],
-        "date":      date_str,
-        "logged_at": datetime.now().isoformat(),
-        "notes":     notes,
-    }
+    entry_id = str(uuid.uuid4())[:8]
+    logged_at = datetime.now().isoformat()
+
     # Validate and store only known markers
+    clean_values: dict = {}
     for key, val in values.items():
         if key in REFERENCE_RANGES and val is not None:
             try:
-                entry[key] = round(float(val), 3)
+                clean_values[key] = round(float(val), 3)
             except (TypeError, ValueError):
                 pass
-    data["entries"].append(entry)
-    _save(data, user_id)
+
+    sb = _sb()
+    sb.table("lab_entries").insert({
+        "id":        entry_id,
+        "user_id":   user_id,
+        "date":      date_str,
+        "logged_at": logged_at,
+        "notes":     notes,
+        "values":    clean_values,
+    }).execute()
+
+    entry = {"id": entry_id, "date": date_str, "logged_at": logged_at, "notes": notes}
+    entry.update(clean_values)
     return entry
 
 
 def delete_entry(entry_id: str, user_id: str = "default") -> bool:
-    data = _load(user_id)
-    orig = data.get("entries", [])
-    data["entries"] = [e for e in orig if e["id"] != entry_id]
-    if len(data["entries"]) == len(orig):
-        return False
-    _save(data, user_id)
-    return True
+    sb  = _sb()
+    res = sb.table("lab_entries").delete().eq("id", entry_id).eq("user_id", user_id).execute()
+    return bool(res.data)
 
 
 def parse_pdf(file_bytes: bytes) -> Tuple[Optional[str], Dict[str, float]]:
