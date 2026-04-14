@@ -65,9 +65,10 @@ def create_challenge(
     target: float,
     duration_days: int,
     creator_name: str,
+    user_id: Optional[str] = None,
     custom_unit: Optional[str] = None,
 ) -> dict:
-    user_id    = get_local_user_id()
+    user_id = user_id or get_local_user_id()
     today      = date.today()
     start_date = today.isoformat()
     end_date   = (today + timedelta(days=duration_days - 1)).isoformat()
@@ -94,8 +95,8 @@ def create_challenge(
     return get_challenge(cid, user_id)
 
 
-def join_challenge(challenge_id: str, display_name: str) -> dict:
-    user_id = get_local_user_id()
+def join_challenge(challenge_id: str, display_name: str, user_id: Optional[str] = None) -> dict:
+    user_id = user_id or get_local_user_id()
     sb = _sb()
     # Upsert participant (idempotent if already joined)
     sb.table("challenge_participants").upsert({
@@ -170,8 +171,8 @@ def get_challenge(challenge_id: str, user_id: Optional[str] = None) -> dict:
     }
 
 
-def list_my_challenges() -> List[dict]:
-    user_id = get_local_user_id()
+def list_my_challenges(user_id: Optional[str] = None) -> List[dict]:
+    user_id = user_id or get_local_user_id()
     sb = _sb()
     # Get all challenge_ids the user participates in
     res = sb.table("challenge_participants").select("challenge_id").eq("user_id", user_id).execute()
@@ -187,8 +188,8 @@ def list_my_challenges() -> List[dict]:
     return sorted(result, key=lambda x: x["start_date"], reverse=True)
 
 
-def log_progress(challenge_id: str, value: float, for_date: Optional[str] = None) -> dict:
-    user_id  = get_local_user_id()
+def log_progress(challenge_id: str, value: float, for_date: Optional[str] = None, user_id: Optional[str] = None) -> dict:
+    user_id  = user_id or get_local_user_id()
     date_str = for_date or date.today().isoformat()
     sb = _sb()
     sb.table("challenge_progress").upsert({

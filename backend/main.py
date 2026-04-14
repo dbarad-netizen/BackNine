@@ -754,13 +754,15 @@ async def import_lab_pdf(request: Request, file: UploadFile = File(...)):
 
 @app.get("/api/challenges/me")
 def my_challenges(request: Request):
-    _require_session(request)
-    return {"challenges": chl.list_my_challenges(), "user_id": chl.get_local_user_id()}
+    session = _require_session(request)
+    user_id = session["user_id"]
+    return {"challenges": chl.list_my_challenges(user_id=user_id), "user_id": user_id}
 
 
 @app.post("/api/challenges")
 async def create_challenge(request: Request):
-    _require_session(request)
+    session = _require_session(request)
+    user_id = session["user_id"]
     body = await request.json()
     try:
         challenge = chl.create_challenge(
@@ -769,6 +771,7 @@ async def create_challenge(request: Request):
             target         = float(body["target"]),
             duration_days  = int(body["duration_days"]),
             creator_name   = body["creator_name"],
+            user_id        = user_id,
             custom_unit    = body.get("custom_unit"),
         )
         return challenge
@@ -778,12 +781,14 @@ async def create_challenge(request: Request):
 
 @app.post("/api/challenges/join")
 async def join_challenge(request: Request):
-    _require_session(request)
+    session = _require_session(request)
+    user_id = session["user_id"]
     body = await request.json()
     try:
         challenge = chl.join_challenge(
             challenge_id = body["challenge_id"],
             display_name = body["display_name"],
+            user_id      = user_id,
         )
         return challenge
     except Exception as e:
@@ -792,22 +797,25 @@ async def join_challenge(request: Request):
 
 @app.get("/api/challenges/{challenge_id}")
 def get_challenge(challenge_id: str, request: Request):
-    _require_session(request)
+    session = _require_session(request)
+    user_id = session["user_id"]
     try:
-        return chl.get_challenge(challenge_id.upper())
+        return chl.get_challenge(challenge_id.upper(), user_id=user_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
 
 @app.post("/api/challenges/{challenge_id}/progress")
 async def log_challenge_progress(challenge_id: str, request: Request):
-    _require_session(request)
+    session = _require_session(request)
+    user_id = session["user_id"]
     body = await request.json()
     try:
         return chl.log_progress(
             challenge_id = challenge_id.upper(),
             value        = float(body["value"]),
             for_date     = body.get("date"),
+            user_id      = user_id,
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
