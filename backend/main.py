@@ -112,8 +112,8 @@ def _set_session_cookie(response, session: dict) -> None:
         key=_session_cookie_name(),
         value=token,
         httponly=True,
-        secure=(ENVIRONMENT == "production"),
-        samesite="lax",
+        secure=True,
+        samesite="none",
         max_age=60 * 60 * 24 * 30,  # 30 days
     )
 
