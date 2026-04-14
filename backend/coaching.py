@@ -50,25 +50,26 @@ def coach_overall(rdy: dict, sm: dict) -> dict:
 
 
 def coach_sleep(sl: dict, sm: dict) -> dict:
-    s = sl.get("score") or 0
+    s   = sl.get("score") or 0
     tot = sm.get("total") or 0
-    hrs = round(tot / 3600, 1) if tot else 0
+    hrs = round(tot / 3600, 1) if tot >= 3600 else None
+    hrs_str = f"{hrs:.1f}h" if hrs is not None else ""
     if s >= 85:
         return {
             "color": "#052e16", "border": "#22c55e", "icon": "😴",
             "title": "Excellent sleep — well recovered!",
-            "msg": f"Sleep score {s}. {hrs:.1f}h of quality sleep. Recovery is solid.",
+            "msg": f"Sleep score {s}." + (f" {hrs_str} of quality sleep." if hrs_str else "") + " Recovery is solid.",
         }
     if s >= 70:
         return {
             "color": "#1c1a07", "border": "#f59e0b", "icon": "😐",
             "title": "Decent sleep — room to improve.",
-            "msg": f"Sleep score {s}. {hrs:.1f}h total. Try consistent sleep timing and less screens before bed.",
+            "msg": f"Sleep score {s}." + (f" {hrs_str} total." if hrs_str else "") + " Try consistent sleep timing and less screens before bed.",
         }
     return {
         "color": "#1c0707", "border": "#ef4444", "icon": "😟",
         "title": "Poor sleep — prioritize rest tonight.",
-        "msg": f"Sleep score {s}. Only {hrs:.1f}h — sleep debt accumulating. Avoid caffeine after noon.",
+        "msg": f"Sleep score {s}." + (f" Only {hrs_str} —" if hrs_str else "") + " Sleep debt accumulating. Avoid caffeine after noon.",
     }
 
 
