@@ -196,7 +196,7 @@ function LabLogForm({ onSave }: LogFormProps) {
       <div>
         <label className="block text-xs text-gray-500 mb-1">Date</label>
         <input type="date" value={date} onChange={e => setDate(e.target.value)}
-          className="w-full bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 text-sm text-white" />
+          className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900" />
       </div>
 
       {/* Group tabs */}
@@ -498,7 +498,7 @@ function PdfImportPanel({ onConfirm, onCancel }: {
       <div>
         <label className="block text-xs text-gray-500 mb-1">Date</label>
         <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)}
-          className="w-full bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 text-sm text-white" />
+          className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900" />
       </div>
 
       {/* Extracted values — grouped */}
