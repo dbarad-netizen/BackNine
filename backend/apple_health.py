@@ -43,13 +43,13 @@ def _sb():
 def get_or_create_key(user_id: str) -> str:
     """Return the existing API key for this user, or generate a new one."""
     sb = _sb()
-    res = sb.table("public.apple_health_keys").select("api_key").eq("user_id", user_id).execute()
+    res = sb.table("apple_health_keys").select("api_key").eq("user_id", user_id).execute()
     rows = res.data or []
     if rows:
         return rows[0]["api_key"]
     # Generate a new key: ah_ prefix + 32 random hex chars
     new_key = "ah_" + secrets.token_hex(16)
-    sb.table("public.apple_health_keys").insert({
+    sb.table("apple_health_keys").insert({
         "user_id": user_id,
         "api_key": new_key,
         "created_at": datetime.utcnow().isoformat(),
@@ -61,7 +61,7 @@ def resolve_user_by_key(api_key: str) -> Optional[str]:
     """Look up user_id from an API key. Returns None if not found."""
     sb = _sb()
     res = (
-        sb.table("public.apple_health_keys")
+        sb.table("apple_health_keys")
         .select("user_id")
         .eq("api_key", api_key)
         .execute()
@@ -189,7 +189,7 @@ def sync_day(user_id: str, payload: dict) -> dict:
             pass
 
     sb = _sb()
-    sb.table("public.apple_health_daily").upsert(
+    sb.table("apple_health_daily").upsert(
         row, on_conflict="user_id,date"
     ).execute()
 
@@ -199,7 +199,7 @@ def sync_day(user_id: str, payload: dict) -> dict:
 def get_day(user_id: str, date_str: str) -> Optional[dict]:
     sb = _sb()
     res = (
-        sb.table("public.apple_health_daily")
+        sb.table("apple_health_daily")
         .select("*")
         .eq("user_id", user_id)
         .eq("date", date_str)
@@ -214,7 +214,7 @@ def get_data(user_id: str, days: int = 30) -> List[dict]:
     since = (date.today() - timedelta(days=days - 1)).isoformat()
     sb = _sb()
     res = (
-        sb.table("public.apple_health_daily")
+        sb.table("apple_health_daily")
         .select("*")
         .eq("user_id", user_id)
         .gte("date", since)
