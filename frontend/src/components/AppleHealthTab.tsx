@@ -13,11 +13,12 @@ function fmt(val: number | undefined | null, decimals = 0): string {
 }
 
 export default function AppleHealthTab() {
-  const [apiKey, setApiKey]   = useState<string | null>(null);
-  const [summary, setSummary] = useState<AppleHealthSummary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [copied, setCopied]   = useState(false);
-  const [error, setError]     = useState<string | null>(null);
+  const [apiKey, setApiKey]       = useState<string | null>(null);
+  const [summary, setSummary]     = useState<AppleHealthSummary | null>(null);
+  const [loading, setLoading]     = useState(true);
+  const [copied, setCopied]       = useState(false);
+  const [error, setError]         = useState<string | null>(null);
+  const [showSetup, setShowSetup] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -28,6 +29,8 @@ export default function AppleHealthTab() {
       .then(([keyRes, dataRes]) => {
         setApiKey(keyRes.api_key);
         setSummary(dataRes);
+        // Only expand setup if no data yet
+        setShowSetup(!dataRes.has_data);
       })
       .catch((e: Error) => setError(e.message || "Failed to load Apple Health data"))
       .finally(() => setLoading(false));
@@ -65,9 +68,16 @@ export default function AppleHealthTab() {
       )}
 
       {/* ── Setup card ─────────────────────────────────────────────────── */}
-      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-6 space-y-5">
-        <h3 className="font-semibold text-gray-800 text-lg">Setup</h3>
+      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+        <button
+          onClick={() => setShowSetup(s => !s)}
+          className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition"
+        >
+          <h3 className="font-semibold text-gray-800">Setup &amp; API Key</h3>
+          <span className="text-gray-400 text-sm">{showSetup ? "▲ Hide" : "▼ Show"}</span>
+        </button>
 
+        {showSetup && <div className="px-6 pb-6 space-y-5">
         <ol className="space-y-5 text-sm text-gray-700">
           {/* Step 1 */}
           <li className="flex gap-3">
@@ -150,6 +160,7 @@ export default function AppleHealthTab() {
             ))}
           </div>
         </div>
+        </div>}
       </div>
 
       {/* ── Data card ──────────────────────────────────────────────────────── */}
