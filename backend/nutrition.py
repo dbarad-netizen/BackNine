@@ -1,37 +1,25 @@
 """
 Nutrition & body-composition module for BackNine Health.
-Stores data in ~/.backnine/nutrition.json — no database required for local dev.
-
-InBody metrics supported:
-  weight_lbs, body_fat_pct, muscle_mass_lbs, lean_mass_lbs,
-  visceral_fat_level, bmr_kcal,
-  trunk_muscle_lbs, right_arm_muscle_lbs, left_arm_muscle_lbs,
-  right_leg_muscle_lbs, left_leg_muscle_lbs,
-  trunk_fat_lbs, right_arm_fat_lbs, left_arm_fat_lbs,
-  right_leg_fat_lbs, left_leg_fat_lbs,
-  ecw_ratio, total_body_water_lbs, intracellular_water_lbs, extracellular_water_lbs,
-  bone_mineral_content_lbs, inbody_score
+Stores data in Supabase (nutrition_meals, nutrition_weight, nutrition_settings).
 """
-import json
 import uuid
 import os
 from datetime import datetime, date, timedelta
-from pathlib import Path
 from typing import Optional, List, Dict
 
-BASE_DIR = Path.home() / ".backnine"
 
-def _data_file(user_id: str) -> Path:
-    """Each user gets their own storage directory."""
-    d = BASE_DIR / user_id
-    d.mkdir(parents=True, exist_ok=True)
-    return d / "nutrition.json"
+# ── Supabase helper ────────────────────────────────────────────────────────────
+
+def _sb():
+    from supabase import create_client
+    url = os.getenv("SUPABASE_URL", "")
+    key = os.getenv("SUPABASE_SERVICE_KEY", "")
+    if not url or not key:
+        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY must be set")
+    return create_client(url, key)
 
 
 # ── Food database ─────────────────────────────────────────────────────────────
-# name → { calories, protein, carbs, fat, serving, unit }
-# All macros are per-serving amounts listed in "serving/unit".
-
 FOODS: Dict[str, dict] = {
     # ── Proteins ──
     "chicken breast":     {"calories": 165, "protein": 31,   "carbs": 0,    "fat": 3.6,  "serving": 100, "unit": "g"},
@@ -123,63 +111,32 @@ FOODS: Dict[str, dict] = {
 }
 
 
-# ── Storage helpers ───────────────────────────────────────────────────────────
-
-def _load(user_id: str) -> dict:
-    f = _data_file(user_id)
-    if f.exists():
-        try:
-            return json.loads(f.read_text())
-        except Exception:
-            pass
-    # One-time migration: copy data from the old single-user location
-    legacy = BASE_DIR / "nutrition.json"
-    if legacy.exists():
-        try:
-            data = json.loads(legacy.read_text())
-            f.write_text(json.dumps(data, indent=2, default=str))
-            legacy.rename(legacy.with_suffix(".json.migrated"))
-            return data
-        except Exception:
-            pass
-    return {"meals": {}, "weight": [], "settings": {}}
-
-
-def _save(data: dict, user_id: str) -> None:
-    _data_file(user_id).write_text(json.dumps(data, indent=2, default=str))
-
-
 # ── Food search ───────────────────────────────────────────────────────────────
 
 def search_foods(query: str, limit: int = 8) -> List[dict]:
     q = query.lower().strip()
     if not q:
         return []
-    results = []
-    for name, macros in FOODS.items():
-        if q in name:
-            results.append({"name": name, **macros})
-    # Rank: exact → starts-with → contains
-    results.sort(key=lambda x: (
-        0 if x["name"] == q else
-        1 if x["name"].startswith(q) else 2
-    ))
+    results = [{"name": name, **macros} for name, macros in FOODS.items() if q in name]
+    results.sort(key=lambda x: (0 if x["name"] == q else 1 if x["name"].startswith(q) else 2))
     return results[:limit]
 
 
 # ── Meal log ──────────────────────────────────────────────────────────────────
 
 def get_meals(date_str: str, user_id: str) -> List[dict]:
-    data = _load(user_id)
-    return data["meals"].get(date_str, [])
+    sb = _sb()
+    res = sb.table("nutrition_meals").select("*").eq("user_id", user_id).eq("date", date_str).order("logged_at").execute()
+    return res.data or []
 
 
 def add_meal(date_str: str, name: str, calories: float,
              protein: float, carbs: float, fat: float,
              meal_type: str = "meal", user_id: str = "default") -> dict:
-    data = _load(user_id)
     entry = {
         "id":        str(uuid.uuid4())[:8],
+        "user_id":   user_id,
+        "date":      date_str,
         "name":      name,
         "calories":  round(calories),
         "protein":   round(protein, 1),
@@ -188,37 +145,29 @@ def add_meal(date_str: str, name: str, calories: float,
         "meal_type": meal_type,
         "logged_at": datetime.now().isoformat(),
     }
-    if date_str not in data["meals"]:
-        data["meals"][date_str] = []
-    data["meals"][date_str].append(entry)
-    _save(data, user_id)
+    sb = _sb()
+    sb.table("nutrition_meals").insert(entry).execute()
     return entry
 
 
 def delete_meal(date_str: str, meal_id: str, user_id: str = "default") -> bool:
-    data = _load(user_id)
-    meals     = data["meals"].get(date_str, [])
-    new_meals = [m for m in meals if m["id"] != meal_id]
-    if len(new_meals) == len(meals):
-        return False
-    data["meals"][date_str] = new_meals
-    _save(data, user_id)
-    return True
+    sb = _sb()
+    res = sb.table("nutrition_meals").delete().eq("id", meal_id).eq("user_id", user_id).execute()
+    return bool(res.data)
 
 
 # ── Weight / body composition ─────────────────────────────────────────────────
 
 def get_weight_entries(user_id: str = "default") -> List[dict]:
-    data = _load(user_id)
-    return sorted(data.get("weight", []), key=lambda x: x["date"])
+    sb = _sb()
+    res = sb.table("nutrition_weight").select("*").eq("user_id", user_id).order("date").execute()
+    return res.data or []
 
 
 def add_weight_entry(
     date_str: str,
     weight_lbs: float,
-    # Basic body comp
     body_fat_pct: Optional[float] = None,
-    # InBody segmental muscle
     muscle_mass_lbs: Optional[float] = None,
     lean_mass_lbs: Optional[float] = None,
     trunk_muscle_lbs: Optional[float] = None,
@@ -226,27 +175,21 @@ def add_weight_entry(
     left_arm_muscle_lbs: Optional[float] = None,
     right_leg_muscle_lbs: Optional[float] = None,
     left_leg_muscle_lbs: Optional[float] = None,
-    # InBody segmental fat
     trunk_fat_lbs: Optional[float] = None,
     right_arm_fat_lbs: Optional[float] = None,
     left_arm_fat_lbs: Optional[float] = None,
     right_leg_fat_lbs: Optional[float] = None,
     left_leg_fat_lbs: Optional[float] = None,
-    # InBody body water
     total_body_water_lbs: Optional[float] = None,
     intracellular_water_lbs: Optional[float] = None,
     extracellular_water_lbs: Optional[float] = None,
     ecw_ratio: Optional[float] = None,
-    # InBody other
     visceral_fat_level: Optional[float] = None,
     bone_mineral_content_lbs: Optional[float] = None,
     bmr_kcal: Optional[int] = None,
     inbody_score: Optional[int] = None,
     user_id: str = "default",
 ) -> dict:
-    data = _load(user_id)
-
-    # Derived metrics
     lean_calc = (
         round(weight_lbs * (1 - body_fat_pct / 100), 1)
         if body_fat_pct is not None else lean_mass_lbs
@@ -258,89 +201,91 @@ def add_weight_entry(
 
     entry: dict = {
         "id":         str(uuid.uuid4())[:8],
+        "user_id":    user_id,
         "date":       date_str,
         "weight_lbs": round(weight_lbs, 1),
         "logged_at":  datetime.now().isoformat(),
     }
-    # Only include fields that were provided
     optional_fields = {
-        "body_fat_pct":            body_fat_pct,
-        "fat_mass_lbs":            fat_mass_lbs,
-        "lean_mass_lbs":           lean_calc,
-        "muscle_mass_lbs":         muscle_mass_lbs,
-        "trunk_muscle_lbs":        trunk_muscle_lbs,
-        "right_arm_muscle_lbs":    right_arm_muscle_lbs,
-        "left_arm_muscle_lbs":     left_arm_muscle_lbs,
-        "right_leg_muscle_lbs":    right_leg_muscle_lbs,
-        "left_leg_muscle_lbs":     left_leg_muscle_lbs,
-        "trunk_fat_lbs":           trunk_fat_lbs,
-        "right_arm_fat_lbs":       right_arm_fat_lbs,
-        "left_arm_fat_lbs":        left_arm_fat_lbs,
-        "right_leg_fat_lbs":       right_leg_fat_lbs,
-        "left_leg_fat_lbs":        left_leg_fat_lbs,
-        "total_body_water_lbs":    total_body_water_lbs,
-        "intracellular_water_lbs": intracellular_water_lbs,
-        "extracellular_water_lbs": extracellular_water_lbs,
-        "ecw_ratio":               ecw_ratio,
-        "visceral_fat_level":      visceral_fat_level,
+        "body_fat_pct":             body_fat_pct,
+        "fat_mass_lbs":             fat_mass_lbs,
+        "lean_mass_lbs":            lean_calc,
+        "muscle_mass_lbs":          muscle_mass_lbs,
+        "trunk_muscle_lbs":         trunk_muscle_lbs,
+        "right_arm_muscle_lbs":     right_arm_muscle_lbs,
+        "left_arm_muscle_lbs":      left_arm_muscle_lbs,
+        "right_leg_muscle_lbs":     right_leg_muscle_lbs,
+        "left_leg_muscle_lbs":      left_leg_muscle_lbs,
+        "trunk_fat_lbs":            trunk_fat_lbs,
+        "right_arm_fat_lbs":        right_arm_fat_lbs,
+        "left_arm_fat_lbs":         left_arm_fat_lbs,
+        "right_leg_fat_lbs":        right_leg_fat_lbs,
+        "left_leg_fat_lbs":         left_leg_fat_lbs,
+        "total_body_water_lbs":     total_body_water_lbs,
+        "intracellular_water_lbs":  intracellular_water_lbs,
+        "extracellular_water_lbs":  extracellular_water_lbs,
+        "ecw_ratio":                ecw_ratio,
+        "visceral_fat_level":       visceral_fat_level,
         "bone_mineral_content_lbs": bone_mineral_content_lbs,
-        "bmr_kcal":                bmr_kcal,
-        "inbody_score":            inbody_score,
+        "bmr_kcal":                 bmr_kcal,
+        "inbody_score":             inbody_score,
     }
     for k, v in optional_fields.items():
         if v is not None:
-            entry[k] = (round(v, 2) if isinstance(v, float) else v)
+            entry[k] = round(v, 2) if isinstance(v, float) else v
 
-    # Replace existing entry for the same date
-    data["weight"] = [e for e in data.get("weight", []) if e["date"] != date_str]
-    data["weight"].append(entry)
-    _save(data, user_id)
+    sb = _sb()
+    sb.table("nutrition_weight").upsert(entry, on_conflict="user_id,date").execute()
     return entry
 
 
 def delete_weight_entry(entry_id: str, user_id: str = "default") -> bool:
-    data  = _load(user_id)
-    orig  = data.get("weight", [])
-    data["weight"] = [e for e in orig if e["id"] != entry_id]
-    if len(data["weight"]) == len(orig):
-        return False
-    _save(data, user_id)
-    return True
+    sb = _sb()
+    res = sb.table("nutrition_weight").delete().eq("id", entry_id).eq("user_id", user_id).execute()
+    return bool(res.data)
 
 
 # ── Settings ──────────────────────────────────────────────────────────────────
 
 DEFAULT_SETTINGS = {
-    "calorie_target":    2000,
-    "protein_g":         150,
-    "carbs_g":           200,
-    "fat_g":             65,
-    "weight_goal_lbs":   None,
-    "weight_goal_type":  "maintain",   # "lose" | "maintain" | "gain"
-    "eating_start":      "12:00",      # 24 h HH:MM
-    "eating_end":        "20:00",
-    "fasting_enabled":   False,
-    "units":             "lbs",
+    "calorie_target":               2000,
+    "protein_g":                    150,
+    "carbs_g":                      200,
+    "fat_g":                        65,
+    "weight_goal_lbs":              None,
+    "weight_goal_type":             "maintain",
+    "eating_start":                 "12:00",
+    "eating_end":                   "20:00",
+    "fasting_enabled":              False,
+    "units":                        "lbs",
     "include_active_cal_in_budget": True,
 }
 
 
 def get_settings(user_id: str = "default") -> dict:
-    data = _load(user_id)
-    return {**DEFAULT_SETTINGS, **data.get("settings", {})}
+    sb = _sb()
+    res = sb.table("nutrition_settings").select("*").eq("user_id", user_id).execute()
+    rows = res.data or []
+    if rows:
+        row = rows[0]
+        row.pop("user_id", None)
+        row.pop("updated_at", None)
+        return {**DEFAULT_SETTINGS, **{k: v for k, v in row.items() if v is not None}}
+    return dict(DEFAULT_SETTINGS)
 
 
 def save_settings(settings: dict, user_id: str = "default") -> dict:
-    data = _load(user_id)
-    data["settings"] = settings
-    _save(data, user_id)
+    sb = _sb()
+    sb.table("nutrition_settings").upsert(
+        {"user_id": user_id, **settings, "updated_at": datetime.now().isoformat()},
+        on_conflict="user_id"
+    ).execute()
     return settings
 
 
 # ── Weekly summary ────────────────────────────────────────────────────────────
 
 def weekly_summary(active_calories_by_date: Optional[dict] = None, user_id: str = "default") -> dict:
-    """Return a 7-day nutrition summary (rolling window ending today)."""
     today      = date.today()
     week_start = today - timedelta(days=6)
 
@@ -354,14 +299,14 @@ def weekly_summary(active_calories_by_date: Optional[dict] = None, user_id: str 
         fat   = round(sum(m["fat"]     for m in meals), 1)
         active = (active_calories_by_date or {}).get(d, 0)
         daily.append({
-            "date":       d,
-            "calories":   cals,
-            "protein":    prot,
-            "carbs":      carbs,
-            "fat":        fat,
+            "date":     d,
+            "calories": cals,
+            "protein":  prot,
+            "carbs":    carbs,
+            "fat":      fat,
             "active_cal": active,
-            "net_cal":    cals - active,
-            "logged":     len(meals) > 0,
+            "net_cal":  cals - active,
+            "logged":   len(meals) > 0,
         })
 
     logged_days = [d for d in daily if d["logged"]]
