@@ -20,12 +20,13 @@ import TrainingTab from "@/components/TrainingTab";
 import LabsTab from "@/components/LabsTab";
 import ChallengeTab from "@/components/ChallengeTab";
 import AppleHealthTab from "@/components/AppleHealthTab";
+import GearTab from "@/components/GearTab";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts";
 
 type Tab     = "scores" | "hrv" | "sleep_detail";
-type Section = "today" | "coaching" | "nutrition" | "training" | "labs" | "challenges" | "apple-health";
+type Section = "today" | "coaching" | "nutrition" | "training" | "labs" | "challenges" | "apple-health" | "gear";
 
 // ── Calorie ring ──────────────────────────────────────────────────────────────
 function CalorieRing({
@@ -876,6 +877,7 @@ export default function DashboardPage() {
     { id: "labs",       label: "Labs",       icon: "🔬" },
     { id: "challenges",   label: "Challenges",    icon: "🏆" },
     { id: "apple-health", label: "Metrics",  icon: "📊" },
+    { id: "gear",         label: "Gear",     icon: "🛒" },
   ];
 
   return (
@@ -1275,6 +1277,12 @@ export default function DashboardPage() {
         {section === "apple-health" && (
           <div>
             <AppleHealthTab />
+          </div>
+        )}
+
+        {section === "gear" && (
+          <div>
+            <GearTab />
           </div>
         )}
 
