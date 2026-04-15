@@ -85,12 +85,88 @@ FIELDS = [
 ]
 
 
+# Health Auto Export metric name → our field name
+HAE_METRIC_MAP = {
+    "step_count":                    "steps",
+    "steps":                         "steps",
+    "resting_heart_rate":            "resting_hr",
+    "heart_rate_variability_sdnn":   "hrv",
+    "heart_rate_variability":        "hrv",
+    "active_energy":                 "active_calories",
+    "active_energy_burned":          "active_calories",
+    "body_mass":                     "weight_raw",   # unit-dependent
+    "respiratory_rate":              "respiratory_rate",
+    "vo2_max":                       "vo2_max",
+    "sleep_duration":                "sleep_hours",
+    "sleep_analysis":                "sleep_hours",
+    "sleeping":                      "sleep_hours",
+    "asleep":                        "sleep_hours",
+}
+
+
+def parse_hae_payload(payload: dict) -> dict:
+    """
+    Convert a Health Auto Export REST payload into our flat dict format.
+    HAE format:
+      { "data": { "metrics": [ { "name": "step_count", "units": "count",
+          "data": [ { "date": "2026-04-15 ...", "qty": 8432 } ] } ] } }
+    Returns a flat dict like { "date": "2026-04-15", "steps": 8432, ... }
+    """
+    result: Dict[str, Any] = {}
+    metrics = (payload.get("data") or payload).get("metrics", [])
+
+    for metric in metrics:
+        name  = metric.get("name", "").lower().replace(" ", "_")
+        units = (metric.get("units") or "").lower()
+        data  = metric.get("data") or []
+        if not data:
+            continue
+
+        # Use the most recent data point
+        latest = data[-1]
+        qty = latest.get("qty") or latest.get("value")
+        if qty is None:
+            continue
+
+        # Extract date (HAE dates look like "2026-04-15 00:00:00 -0700")
+        raw_date = latest.get("date", "")
+        date_part = raw_date[:10] if raw_date else ""
+        if date_part and "date" not in result:
+            result["date"] = date_part
+
+        field = HAE_METRIC_MAP.get(name)
+        if not field:
+            continue
+
+        if field == "weight_raw":
+            # HAE reports body_mass in the user's preferred unit
+            if "lb" in units or "pound" in units:
+                result["weight_lb"] = float(qty)
+            else:
+                result["weight_kg"] = float(qty)
+        elif field == "sleep_hours":
+            # HAE may send minutes or hours depending on version
+            val = float(qty)
+            if units in ("min", "minutes") or val > 24:
+                val = val / 60
+            result["sleep_hours"] = round(val, 2)
+        else:
+            result[field] = float(qty)
+
+    return result
+
+
 def sync_day(user_id: str, payload: dict) -> dict:
     """
     Upsert a day's Apple Health data.
+    Accepts our flat format OR Health Auto Export format automatically.
     Accepts weight_lb and converts to weight_kg automatically.
     Returns the stored row.
     """
+    # Detect Health Auto Export format (has nested "data" or "metrics" key)
+    if "data" in payload or "metrics" in payload:
+        payload = parse_hae_payload(payload)
+
     date_str = payload.get("date") or date.today().isoformat()
 
     # Convert weight_lb → weight_kg if provided
