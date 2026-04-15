@@ -870,14 +870,14 @@ export default function DashboardPage() {
   const remaining  = Math.max(0, budget - consumed);
 
   const NAV_ITEMS: { id: Section; label: string; icon: string }[] = [
-    { id: "today",      label: "Today",      icon: "🏠" },
-    { id: "coaching",   label: "Coaching",   icon: "💡" },
-    { id: "nutrition",  label: "Nutrition",  icon: "🥗" },
-    { id: "training",   label: "Training",   icon: "🏋️" },
-    { id: "labs",       label: "Labs",       icon: "🔬" },
-    { id: "challenges",   label: "Challenges",    icon: "🏆" },
-    { id: "apple-health", label: "Metrics",  icon: "📊" },
-    { id: "gear",         label: "Gear",     icon: "🛒" },
+    { id: "today",        label: "Today",     icon: "🏠" },
+    { id: "coaching",     label: "Coach",     icon: "💡" },
+    { id: "nutrition",    label: "Nutrition", icon: "🥗" },
+    { id: "training",     label: "Training",  icon: "🏋️" },
+    { id: "labs",         label: "Labs",      icon: "🔬" },
+    { id: "challenges",   label: "Compete",   icon: "🏆" },
+    { id: "apple-health", label: "Metrics",   icon: "📊" },
+    { id: "gear",         label: "Gear",      icon: "🛒" },
   ];
 
   return (
