@@ -235,7 +235,9 @@ def add_weight_entry(
             entry[k] = round(v, 2) if isinstance(v, float) else v
 
     sb = _sb()
-    sb.table("nutrition_weight").upsert(entry, on_conflict="user_id,date").execute()
+    # Delete existing entry for same date, then insert fresh
+    sb.table("nutrition_weight").delete().eq("user_id", user_id).eq("date", date_str).execute()
+    sb.table("nutrition_weight").insert(entry).execute()
     return entry
 
 
@@ -276,10 +278,13 @@ def get_settings(user_id: str = "default") -> dict:
 
 def save_settings(settings: dict, user_id: str = "default") -> dict:
     sb = _sb()
-    sb.table("nutrition_settings").upsert(
-        {"user_id": user_id, **settings, "updated_at": datetime.now().isoformat()},
-        on_conflict="user_id"
-    ).execute()
+    row = {"user_id": user_id, **settings, "updated_at": datetime.now().isoformat()}
+    # Try update first, insert if no existing row
+    existing = sb.table("nutrition_settings").select("user_id").eq("user_id", user_id).execute()
+    if existing.data:
+        sb.table("nutrition_settings").update(row).eq("user_id", user_id).execute()
+    else:
+        sb.table("nutrition_settings").insert(row).execute()
     return settings
 
 
