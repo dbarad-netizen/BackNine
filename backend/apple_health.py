@@ -84,6 +84,9 @@ FIELDS = [
     "respiratory_rate",
 ]
 
+# Fields stored as integer in Supabase — must cast to int before insert
+INTEGER_FIELDS = {"steps", "active_calories", "resting_hr"}
+
 
 # Health Auto Export metric name → our field name
 HAE_METRIC_MAP = {
@@ -178,7 +181,8 @@ def sync_day(user_id: str, payload: dict) -> dict:
     for field in FIELDS:
         if field in payload and payload[field] is not None:
             try:
-                row[field] = round(float(payload[field]), 2)
+                val = float(payload[field])
+                row[field] = int(round(val)) if field in INTEGER_FIELDS else round(val, 2)
             except (TypeError, ValueError):
                 pass
 
