@@ -471,6 +471,14 @@ export const api = {
       body: JSON.stringify({ value, date }),
     });
   },
+
+  // ── Apple Health ─────────────────────────────────────────────────────────────
+  appleHealthKey(): Promise<{ api_key: string }> {
+    return request("/api/apple-health/key");
+  },
+  appleHealthData(days = 30): Promise<AppleHealthSummary> {
+    return request(`/api/apple-health/data?days=${days}`);
+  },
 };
 
 // ── Challenge types ───────────────────────────────────────────────────────────
@@ -483,6 +491,26 @@ export interface ChallengeParticipant {
   today_value:  number;
   streak:       number;
   daily:        Record<string, number>;
+}
+
+export interface AppleHealthDay {
+  steps?:            number;
+  sleep_hours?:      number;
+  active_calories?:  number;
+  resting_hr?:       number;
+  hrv?:              number;
+  weight_kg?:        number;
+  vo2_max?:          number;
+  respiratory_rate?: number;
+}
+
+export interface AppleHealthSummary {
+  has_data:         boolean;
+  as_of?:           string;
+  today?:           AppleHealthDay;
+  averages?:        AppleHealthDay;
+  latest_weight_kg?: number;
+  days_synced?:     number;
 }
 
 export interface Challenge {

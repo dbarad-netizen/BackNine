@@ -79,7 +79,7 @@ def create_challenge(
 
     sb = _sb()
     # Insert challenge
-    sb.table("challenges").insert({
+    sb.table("public.challenges").insert({
         "id": cid, "name": name, "type": challenge_type,
         "metric": metric, "target": target,
         "duration_days": duration_days,
@@ -88,7 +88,7 @@ def create_challenge(
     }).execute()
 
     # Auto-join creator
-    sb.table("challenge_participants").insert({
+    sb.table("public.challenge_participants").insert({
         "challenge_id": cid, "user_id": user_id, "display_name": creator_name,
     }).execute()
 
@@ -99,7 +99,7 @@ def join_challenge(challenge_id: str, display_name: str, user_id: Optional[str] 
     user_id = user_id or get_local_user_id()
     sb = _sb()
     # Upsert participant (idempotent if already joined)
-    sb.table("challenge_participants").upsert({
+    sb.table("public.challenge_participants").upsert({
         "challenge_id": challenge_id.upper(),
         "user_id": user_id,
         "display_name": display_name,
@@ -113,17 +113,17 @@ def get_challenge(challenge_id: str, user_id: Optional[str] = None) -> dict:
     sb = _sb()
 
     # Challenge metadata
-    res = sb.table("challenges").select("*").eq("id", challenge_id).single().execute()
+    res = sb.table("public.challenges").select("*").eq("id", challenge_id).single().execute()
     challenge = res.data
     if not challenge:
         raise ValueError(f"Challenge {challenge_id} not found")
 
     # Participants
-    parts = sb.table("challenge_participants").select("*").eq("challenge_id", challenge_id).execute()
+    parts = sb.table("public.challenge_participants").select("*").eq("challenge_id", challenge_id).execute()
     participants = parts.data or []
 
     # Progress for all participants
-    prog = sb.table("challenge_progress").select("*").eq("challenge_id", challenge_id).execute()
+    prog = sb.table("public.challenge_progress").select("*").eq("challenge_id", challenge_id).execute()
     progress_rows = prog.data or []
 
     today_str = date.today().isoformat()
@@ -175,7 +175,7 @@ def list_my_challenges(user_id: Optional[str] = None) -> List[dict]:
     user_id = user_id or get_local_user_id()
     sb = _sb()
     # Get all challenge_ids the user participates in
-    res = sb.table("challenge_participants").select("challenge_id").eq("user_id", user_id).execute()
+    res = sb.table("public.challenge_participants").select("challenge_id").eq("user_id", user_id).execute()
     ids = [r["challenge_id"] for r in (res.data or [])]
     if not ids:
         return []
@@ -192,7 +192,7 @@ def log_progress(challenge_id: str, value: float, for_date: Optional[str] = None
     user_id  = user_id or get_local_user_id()
     date_str = for_date or date.today().isoformat()
     sb = _sb()
-    sb.table("challenge_progress").upsert({
+    sb.table("public.challenge_progress").upsert({
         "challenge_id": challenge_id,
         "user_id":      user_id,
         "date":         date_str,
