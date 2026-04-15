@@ -55,9 +55,9 @@ export default function AppleHealthTab() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-gray-900">Apple Health</h2>
+        <h2 className="text-2xl font-bold text-gray-900">Metrics</h2>
         <p className="mt-1 text-gray-500 text-sm">
-          Sync HealthKit data to BackNine automatically via an iOS Shortcut.
+          Health data synced from Apple Health via Health Auto Export.
         </p>
       </div>
 
@@ -192,6 +192,39 @@ export default function AppleHealthTab() {
               <MetricBox label="Resp. Rate" value={fmt(summary.today?.respiratory_rate, 1)} unit="br/min" icon="💨" />
             </div>
           </div>
+
+          {/* Body composition — only show if InBody data exists */}
+          {(summary.latest_body_fat_pct || summary.latest_lean_mass_kg || summary.latest_skeletal_muscle_kg) && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Body Composition (InBody)</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <MetricBox
+                  label="Body Fat"
+                  value={fmt(summary.latest_body_fat_pct, 1)}
+                  unit="%"
+                  icon="📊"
+                />
+                <MetricBox
+                  label="Lean Mass"
+                  value={summary.latest_lean_mass_kg ? kgToLb(summary.latest_lean_mass_kg) : "—"}
+                  unit="lbs"
+                  icon="💪"
+                />
+                <MetricBox
+                  label="Muscle Mass"
+                  value={summary.latest_skeletal_muscle_kg ? kgToLb(summary.latest_skeletal_muscle_kg) : "—"}
+                  unit="lbs"
+                  icon="🦵"
+                />
+                <MetricBox
+                  label="BMI"
+                  value={fmt(summary.latest_bmi, 1)}
+                  unit=""
+                  icon="⚖️"
+                />
+              </div>
+            </div>
+          )}
 
           {/* 30-day averages */}
           <div>

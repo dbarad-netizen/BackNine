@@ -494,23 +494,31 @@ export interface ChallengeParticipant {
 }
 
 export interface AppleHealthDay {
-  steps?:            number;
-  sleep_hours?:      number;
-  active_calories?:  number;
-  resting_hr?:       number;
-  hrv?:              number;
-  weight_kg?:        number;
-  vo2_max?:          number;
-  respiratory_rate?: number;
+  steps?:                   number;
+  sleep_hours?:             number;
+  active_calories?:         number;
+  resting_hr?:              number;
+  hrv?:                     number;
+  weight_kg?:               number;
+  vo2_max?:                 number;
+  respiratory_rate?:        number;
+  body_fat_percentage?:     number;
+  lean_body_mass_kg?:       number;
+  skeletal_muscle_mass_kg?: number;
+  bmi?:                     number;
 }
 
 export interface AppleHealthSummary {
-  has_data:         boolean;
-  as_of?:           string;
-  today?:           AppleHealthDay;
-  averages?:        AppleHealthDay;
-  latest_weight_kg?: number;
-  days_synced?:     number;
+  has_data:                  boolean;
+  as_of?:                    string;
+  today?:                    AppleHealthDay;
+  averages?:                 AppleHealthDay;
+  latest_weight_kg?:         number;
+  latest_body_fat_pct?:      number;
+  latest_lean_mass_kg?:      number;
+  latest_skeletal_muscle_kg?: number;
+  latest_bmi?:               number;
+  days_synced?:              number;
 }
 
 export interface Challenge {

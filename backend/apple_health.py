@@ -82,6 +82,10 @@ FIELDS = [
     "weight_kg",
     "vo2_max",
     "respiratory_rate",
+    "body_fat_percentage",
+    "lean_body_mass_kg",
+    "skeletal_muscle_mass_kg",
+    "bmi",
 ]
 
 # Fields stored as integer in Supabase — must cast to int before insert
@@ -104,6 +108,14 @@ HAE_METRIC_MAP = {
     "sleep_analysis":                "sleep_hours",
     "sleeping":                      "sleep_hours",
     "asleep":                        "sleep_hours",
+    "body_fat_percentage":           "body_fat_percentage",
+    "percent_body_fat":              "body_fat_percentage",
+    "lean_body_mass":                "lean_body_mass_kg",
+    "lean_body_mass_kg":             "lean_body_mass_kg",
+    "skeletal_muscle_mass":          "skeletal_muscle_mass_kg",
+    "skeletal_muscle_mass_kg":       "skeletal_muscle_mass_kg",
+    "body_mass_index":               "bmi",
+    "bmi":                           "bmi",
 }
 
 
@@ -256,14 +268,18 @@ def get_summary(user_id: str, days: int = 30) -> dict:
         "has_data": True,
         "as_of": today_row["date"],
         "today": {
-            "steps":             today_row.get("steps"),
-            "sleep_hours":       today_row.get("sleep_hours"),
-            "active_calories":   today_row.get("active_calories"),
-            "resting_hr":        today_row.get("resting_hr"),
-            "hrv":               today_row.get("hrv"),
-            "weight_kg":         today_row.get("weight_kg"),
-            "vo2_max":           today_row.get("vo2_max"),
-            "respiratory_rate":  today_row.get("respiratory_rate"),
+            "steps":                    today_row.get("steps"),
+            "sleep_hours":              today_row.get("sleep_hours"),
+            "active_calories":          today_row.get("active_calories"),
+            "resting_hr":               today_row.get("resting_hr"),
+            "hrv":                      today_row.get("hrv"),
+            "weight_kg":                today_row.get("weight_kg"),
+            "vo2_max":                  today_row.get("vo2_max"),
+            "respiratory_rate":         today_row.get("respiratory_rate"),
+            "body_fat_percentage":      today_row.get("body_fat_percentage"),
+            "lean_body_mass_kg":        today_row.get("lean_body_mass_kg"),
+            "skeletal_muscle_mass_kg":  today_row.get("skeletal_muscle_mass_kg"),
+            "bmi":                      today_row.get("bmi"),
         },
         "averages": {
             "steps":            avg("steps"),
@@ -273,6 +289,10 @@ def get_summary(user_id: str, days: int = 30) -> dict:
             "hrv":              avg("hrv"),
             "weight_kg":        avg("weight_kg"),
         },
-        "latest_weight_kg": latest("weight_kg"),
+        "latest_weight_kg":             latest("weight_kg"),
+        "latest_body_fat_pct":          latest("body_fat_percentage"),
+        "latest_lean_mass_kg":          latest("lean_body_mass_kg"),
+        "latest_skeletal_muscle_kg":    latest("skeletal_muscle_mass_kg"),
+        "latest_bmi":                   latest("bmi"),
         "days_synced": len(rows),
     }

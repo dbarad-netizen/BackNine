@@ -875,7 +875,7 @@ export default function DashboardPage() {
     { id: "training",   label: "Training",   icon: "🏋️" },
     { id: "labs",       label: "Labs",       icon: "🔬" },
     { id: "challenges",   label: "Challenges",    icon: "🏆" },
-    { id: "apple-health", label: "Apple Health",  icon: "🍎" },
+    { id: "apple-health", label: "Metrics",  icon: "📊" },
   ];
 
   return (
