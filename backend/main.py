@@ -26,6 +26,7 @@ import nutrition as nutr
 import training as trn
 import labs as lbs
 import challenges as chl
+import apple_health as ah
 
 load_dotenv()
 
@@ -831,6 +832,58 @@ async def log_challenge_progress(challenge_id: str, request: Request):
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ── Apple Health ──────────────────────────────────────────────────────────────
+
+@app.get("/api/apple-health/key")
+async def get_apple_health_key(request: Request):
+    """Return (or create) the user's Apple Health API key."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        key = ah.get_or_create_key(user_id)
+        return {"api_key": key}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/apple-health/sync")
+async def apple_health_sync(request: Request):
+    """
+    Receive a JSON payload from iOS Shortcut.
+    Auth: X-AH-Key header (the per-user static API key).
+    No session cookie needed — Shortcuts can't handle cookies.
+    """
+    api_key = request.headers.get("X-AH-Key", "")
+    if not api_key:
+        raise HTTPException(status_code=401, detail="Missing X-AH-Key header")
+
+    user_id = ah.resolve_user_by_key(api_key)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    try:
+        stored = ah.sync_day(user_id, body)
+        return {"ok": True, "stored": stored}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/apple-health/data")
+async def get_apple_health_data(request: Request, days: int = 30):
+    """Return recent Apple Health data for the current user."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        return ah.get_summary(user_id, days=days)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ── dev entrypoint ────────────────────────────────────────────────────────────
