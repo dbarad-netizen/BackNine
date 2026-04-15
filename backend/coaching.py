@@ -142,6 +142,11 @@ def generate_coaching(
     today_deep = t_sm.get("deep") or 0
     today_rem  = t_sm.get("rem")  or 0
 
+    # Use Oura's personalised sleep need if available, else fall back to 7.5h
+    sleep_need_vals = [smm[d]["sleep_need"] / 3600 for d in last30
+                       if d in smm and smm[d].get("sleep_need")]
+    sleep_target = round(sum(sleep_need_vals) / len(sleep_need_vals), 1) if sleep_need_vals else 7.5
+
     avg_hrv_30  = _avg(last30, "hrv",   smm)
     avg_rdy_30  = _avg(last30, "score", rm)
     avg_slp_30  = _avg(last30, "score", slm)
@@ -268,14 +273,14 @@ def generate_coaching(
 
     # ── Sleep debt ────────────────────────────────────────────────────────────
     if len(hrs7) >= 3:  # only calculate debt if we have at least 3 nights of data
-        sleep_debt = max(0.0, len(hrs7) * 7.5 - sum(hrs7))
+        sleep_debt = max(0.0, len(hrs7) * sleep_target - sum(hrs7))
         if sleep_debt > 5:
             mid_items.append(_ins("🏦", "Significant sleep debt — repay gradually",
-                f"You're {sleep_debt:.1f}h short over 7 days vs 7.5h/night target. "
+                f"You're {sleep_debt:.1f}h short over 7 days vs your {sleep_target}h/night target. "
                 "Add 45–60 min per night for 2 weeks — do not catch up in one weekend.", "urgent"))
         elif sleep_debt > 2:
             mid_items.append(_ins("📊", "Moderate sleep debt building",
-                f"{sleep_debt:.1f}h short over 7 days. Add 30 min per night for 5 days.", "warn"))
+                f"{sleep_debt:.1f}h short over 7 days vs your {sleep_target}h target. Add 30 min per night for 5 days.", "warn"))
 
     # ── Sleep efficiency ──────────────────────────────────────────────────────
     avg_eff = _avg(last30, "efficiency", smm)
@@ -291,9 +296,9 @@ def generate_coaching(
             "Primary lever: more consistent sleep.", "warn"))
 
     # ── Chronic sleep duration ────────────────────────────────────────────────
-    if avg_hrs_30 and avg_hrs_30 < 7.0:
+    if avg_hrs_30 and avg_hrs_30 < sleep_target - 0.5:
         mid_items.append(_ins("💤", "Sleep duration is your biggest unlock",
-            f"Averaging {avg_hrs_30:.1f}h over 30 days — {7.5 - avg_hrs_30:.1f}h short of the 7.5h target. "
+            f"Averaging {avg_hrs_30:.1f}h over 30 days — {sleep_target - avg_hrs_30:.1f}h short of your {sleep_target}h target. "
             "This gap alone predicts cardiovascular and metabolic risk.", "warn"))
 
     # ── Readiness baseline ────────────────────────────────────────────────────

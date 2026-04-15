@@ -124,6 +124,10 @@ def parse_oura_data(raw: dict) -> tuple[dict, dict, dict, dict]:
         # Keep the longest sleep session for the day
         if day in smm and (smm[day].get("total") or 0) >= total:
             continue
+        # sleep_need is in seconds — Oura's personalised nightly target
+        sleep_need_sec = rec.get("sleep_need", {})
+        if isinstance(sleep_need_sec, dict):
+            sleep_need_sec = sleep_need_sec.get("long_sleep", 0) or 0
         smm[day] = {
             "total":         total,
             "deep":          rec.get("deep_sleep_duration"),
@@ -132,6 +136,7 @@ def parse_oura_data(raw: dict) -> tuple[dict, dict, dict, dict]:
             "rhr":           rec.get("lowest_heart_rate"),
             "efficiency":    rec.get("efficiency"),
             "bedtime_start": rec.get("bedtime_start"),
+            "sleep_need":    sleep_need_sec or None,
         }
 
     return rm, slm, am, smm
