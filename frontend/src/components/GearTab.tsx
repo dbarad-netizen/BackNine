@@ -1,15 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import GEAR, { type GearCategory, type GearItem } from "@/lib/gearData";
+import GEAR, { type GearItem } from "@/lib/gearData";
 
 export default function GearTab() {
-  const [activeCategory, setActiveCategory] = useState<string>(GEAR[0].id);
-
-  const current = GEAR.find((c) => c.id === activeCategory) ?? GEAR[0];
-
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+    <div className="max-w-4xl mx-auto px-4 py-6 space-y-10">
       {/* Header */}
       <div>
         <h2 className="text-2xl font-bold text-gray-900">Gear</h2>
@@ -18,35 +13,26 @@ export default function GearTab() {
         </p>
       </div>
 
-      {/* Category pills */}
-      <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
-        {GEAR.map((cat) => (
-          <button
-            key={cat.id}
-            onClick={() => setActiveCategory(cat.id)}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition ${
-              activeCategory === cat.id
-                ? "bg-[#2D6A4F] text-white"
-                : "bg-white border border-gray-200 text-gray-600 hover:border-gray-300"
-            }`}
-          >
-            <span>{cat.icon}</span>
-            {cat.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Product grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {current.items.map((item) => (
-          <ProductCard key={item.id} item={item} />
-        ))}
-      </div>
+      {/* Stacked categories */}
+      {GEAR.map((cat) => (
+        <section key={cat.id} className="space-y-4">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">{cat.icon}</span>
+            <h3 className="text-lg font-semibold text-gray-900">{cat.label}</h3>
+            <div className="flex-1 h-px bg-gray-200 ml-2" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {cat.items.map((item) => (
+              <ProductCard key={item.id} item={item} categoryIcon={cat.icon} />
+            ))}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }
 
-function ProductCard({ item }: { item: GearItem }) {
+function ProductCard({ item, categoryIcon }: { item: GearItem; categoryIcon: string }) {
   return (
     <a
       href={item.link}
@@ -63,7 +49,7 @@ function ProductCard({ item }: { item: GearItem }) {
         />
       ) : (
         <div className="w-full h-32 bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center text-4xl">
-          {GEAR.find((c) => c.items.some((i) => i.id === item.id))?.icon ?? "📦"}
+          {categoryIcon}
         </div>
       )}
 
