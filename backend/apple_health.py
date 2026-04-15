@@ -240,14 +240,53 @@ def get_data(user_id: str, days: int = 30) -> List[dict]:
     return res.data or []
 
 
+def _get_manual_weight_by_date(user_id: str, days: int) -> dict:
+    """
+    Pull manually logged weight from nutrition_weight as a fallback.
+    Returns { "YYYY-MM-DD": weight_kg } for dates not covered by Apple Health.
+    """
+    try:
+        since = (date.today() - timedelta(days=days - 1)).isoformat()
+        sb = _sb()
+        res = (
+            sb.table("nutrition_weight")
+            .select("date, weight_lbs")
+            .eq("user_id", user_id)
+            .gte("date", since)
+            .execute()
+        )
+        return {
+            r["date"]: round(float(r["weight_lbs"]) * 0.453592, 2)
+            for r in (res.data or [])
+            if r.get("weight_lbs")
+        }
+    except Exception:
+        return {}
+
+
 def get_summary(user_id: str, days: int = 30) -> dict:
     """
     Return a summary dict used by the dashboard (today + 30-day averages).
-    Keys match what the frontend expects.
+    Weight: prefers Apple Health data, falls back to manually logged nutrition_weight.
     """
     rows = get_data(user_id, days)
+    manual_weight = _get_manual_weight_by_date(user_id, days)
+
+    # Merge manual weight into rows for dates missing Apple Health weight
+    rows_by_date = {r["date"]: r for r in rows}
+    for d, wkg in manual_weight.items():
+        if d in rows_by_date:
+            if rows_by_date[d].get("weight_kg") is None:
+                rows_by_date[d]["weight_kg"] = wkg
+        else:
+            rows_by_date[d] = {"date": d, "weight_kg": wkg}
+
+    rows = sorted(rows_by_date.values(), key=lambda r: r["date"], reverse=True)
+
     if not rows:
         return {"has_data": False}
+
+    has_ah_data = bool(get_data(user_id, days))
 
     today_str = date.today().isoformat()
     today_row = next((r for r in rows if r["date"] == today_str), None) or rows[0]
