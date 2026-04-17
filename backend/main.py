@@ -13,9 +13,9 @@ import os, secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 
-from fastapi import FastAPI, HTTPException, Depends, Request, Response, UploadFile, File
+from fastapi import FastAPI, HTTPException, Depends, Request, Response, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.responses import RedirectResponse, JSONResponse, PlainTextResponse
 from dotenv import load_dotenv
 from jose import jwt, JWTError
 
@@ -27,17 +27,24 @@ import training as trn
 import labs as lbs
 import challenges as chl
 import apple_health as ah
+import oura_cache as oc
 
 load_dotenv()
 
 # ── config ────────────────────────────────────────────────────────────────────
-OURA_CLIENT_ID     = os.getenv("OURA_CLIENT_ID", "")
-OURA_CLIENT_SECRET = os.getenv("OURA_CLIENT_SECRET", "")
-OURA_REDIRECT_URI  = os.getenv("OURA_REDIRECT_URI", "http://localhost:8000/auth/oura/callback")
-FRONTEND_URL       = os.getenv("FRONTEND_URL", "http://localhost:3000")
-SUPABASE_URL       = os.getenv("SUPABASE_URL", "")
+OURA_CLIENT_ID      = os.getenv("OURA_CLIENT_ID", "")
+OURA_CLIENT_SECRET  = os.getenv("OURA_CLIENT_SECRET", "")
+OURA_REDIRECT_URI   = os.getenv("OURA_REDIRECT_URI", "http://localhost:8000/auth/oura/callback")
+FRONTEND_URL        = os.getenv("FRONTEND_URL", "http://localhost:3000")
+BACKEND_URL         = os.getenv("BACKEND_URL", "https://backnine-api.onrender.com")
+SUPABASE_URL        = os.getenv("SUPABASE_URL", "")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
-ENVIRONMENT        = os.getenv("ENVIRONMENT", "development")
+ENVIRONMENT         = os.getenv("ENVIRONMENT", "development")
+# Random token you generate once and set in Render env vars.
+# Oura uses it to verify your webhook endpoint during subscription setup.
+OURA_WEBHOOK_TOKEN  = os.getenv("OURA_WEBHOOK_TOKEN", "")
+# Protect the /admin/* routes — set any strong secret in Render env vars.
+ADMIN_KEY           = os.getenv("ADMIN_KEY", "")
 
 # ── Supabase client (lazy — only used when env vars present) ──────────────────
 _supabase = None
@@ -209,6 +216,58 @@ def _build_trend(rm, slm, am, smm, days=30) -> list[dict]:
     return result
 
 
+# ── Webhook background task ───────────────────────────────────────────────────
+
+async def _refresh_oura_cache_for_user(oura_user_id: str) -> None:
+    """
+    Called in the background when Oura fires a webhook event.
+    Looks up the user's stored tokens, refreshes them if expired,
+    fetches the last 3 days of data, and writes to oura_daily_cache.
+    """
+    backnine_uid = f"oura_{oura_user_id}"
+    db = get_supabase()
+    if not db:
+        return
+
+    try:
+        res = (
+            db.table("wearable_connections")
+            .select("access_token, refresh_token, expires_at")
+            .eq("user_id", backnine_uid)
+            .eq("provider", "oura")
+            .execute()
+        )
+        rows = res.data or []
+        if not rows:
+            return
+        conn = rows[0]
+        access_token = conn["access_token"]
+        refresh_tok  = conn.get("refresh_token")
+        expires_at   = conn.get("expires_at", 0)
+
+        # Refresh token if expired
+        if expires_at and datetime.now(timezone.utc).timestamp() > expires_at - 60:
+            if not refresh_tok:
+                return
+            tokens = await oura_refresh(refresh_tok, OURA_CLIENT_ID, OURA_CLIENT_SECRET)
+            access_token = tokens["access_token"]
+            new_refresh  = tokens.get("refresh_token", refresh_tok)
+            new_expires  = int(datetime.now(timezone.utc).timestamp()) + tokens.get("expires_in", 86400)
+            db.table("wearable_connections").update({
+                "access_token":  access_token,
+                "refresh_token": new_refresh,
+                "expires_at":    new_expires,
+            }).eq("user_id", backnine_uid).eq("provider", "oura").execute()
+
+        # Fetch the last 3 days (catches any delayed processing on Oura's end)
+        raw = await fetch_all(access_token, days=3)
+        rm, slm, am, smm = parse_oura_data(raw)
+        oc.store_days(backnine_uid, rm, slm, am, smm)
+
+    except Exception:
+        pass  # webhook handler already returned 200; swallow silently
+
+
 # ── routes ────────────────────────────────────────────────────────────────────
 
 @app.get("/health")
@@ -304,6 +363,139 @@ def logout(response: Response):
     return {"status": "logged_out"}
 
 
+# ── Oura Webhooks ─────────────────────────────────────────────────────────────
+
+@app.get("/webhooks/oura")
+def oura_webhook_verify(verification_token: str = None):
+    """
+    Oura calls this GET with ?verification_token=xxx when you register a
+    webhook subscription to confirm the endpoint is live.
+    We echo the token back as plain text.
+    """
+    if not OURA_WEBHOOK_TOKEN:
+        raise HTTPException(status_code=500, detail="OURA_WEBHOOK_TOKEN not configured")
+    if verification_token == OURA_WEBHOOK_TOKEN:
+        return PlainTextResponse(verification_token)
+    raise HTTPException(status_code=403, detail="Invalid verification token")
+
+
+@app.post("/webhooks/oura")
+async def oura_webhook_event(request: Request, background_tasks: BackgroundTasks):
+    """
+    Oura POSTs here when new health data is ready for any user of the app.
+    We respond 200 immediately and refresh that user's cache in the background.
+
+    Payload shape:
+      { "event_type": "create",
+        "data_type":  "daily_readiness",
+        "object_id":  "...",
+        "user_id":    "<oura-user-id>",
+        "event_timestamp": "2026-04-17T..." }
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+
+    oura_user_id = body.get("user_id")
+    if oura_user_id:
+        background_tasks.add_task(_refresh_oura_cache_for_user, oura_user_id)
+
+    return {"status": "ok"}
+
+
+# ── Admin — webhook management ────────────────────────────────────────────────
+
+def _check_admin(request: Request) -> None:
+    if not ADMIN_KEY:
+        raise HTTPException(status_code=500, detail="ADMIN_KEY not configured")
+    if request.headers.get("X-Admin-Key", "") != ADMIN_KEY:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+
+@app.post("/admin/oura/register-webhook")
+async def register_oura_webhook(request: Request):
+    """
+    One-time call to register BackNine's webhook subscriptions with Oura.
+    Run once after deploying; Oura will then push events for all users.
+
+    Call with:  curl -X POST https://<backend>/admin/oura/register-webhook \\
+                     -H "X-Admin-Key: <ADMIN_KEY>"
+    """
+    _check_admin(request)
+    if not OURA_WEBHOOK_TOKEN:
+        raise HTTPException(status_code=500, detail="OURA_WEBHOOK_TOKEN not configured")
+
+    import httpx, base64
+    callback_url = f"{BACKEND_URL}/webhooks/oura"
+    credentials  = base64.b64encode(
+        f"{OURA_CLIENT_ID}:{OURA_CLIENT_SECRET}".encode()
+    ).decode()
+
+    # Subscribe to the four data types that matter for BackNine
+    data_types = ["daily_readiness", "daily_sleep", "daily_activity", "sleep"]
+    results = []
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        for dt in data_types:
+            r = await client.post(
+                "https://api.ouraring.com/v2/webhook/subscription",
+                headers={
+                    "Authorization": f"Basic {credentials}",
+                    "Content-Type":  "application/json",
+                },
+                json={
+                    "callback_url":       callback_url,
+                    "event_type":         "create",
+                    "data_type":          dt,
+                    "verification_token": OURA_WEBHOOK_TOKEN,
+                },
+            )
+            results.append({
+                "data_type": dt,
+                "status":    r.status_code,
+                "response":  r.json() if r.headers.get("content-type", "").startswith("application/json") else r.text,
+            })
+
+    return {"callback_url": callback_url, "subscriptions": results}
+
+
+@app.get("/admin/oura/webhook-subscriptions")
+async def list_oura_webhook_subscriptions(request: Request):
+    """List all active Oura webhook subscriptions for this app."""
+    _check_admin(request)
+
+    import httpx, base64
+    credentials = base64.b64encode(
+        f"{OURA_CLIENT_ID}:{OURA_CLIENT_SECRET}".encode()
+    ).decode()
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.get(
+            "https://api.ouraring.com/v2/webhook/subscription",
+            headers={"Authorization": f"Basic {credentials}"},
+        )
+        return r.json()
+
+
+@app.delete("/admin/oura/webhook-subscriptions/{subscription_id}")
+async def delete_oura_webhook_subscription(subscription_id: str, request: Request):
+    """Delete a specific Oura webhook subscription (useful for re-registering)."""
+    _check_admin(request)
+
+    import httpx, base64
+    credentials = base64.b64encode(
+        f"{OURA_CLIENT_ID}:{OURA_CLIENT_SECRET}".encode()
+    ).decode()
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.delete(
+            f"https://api.ouraring.com/v2/webhook/subscription/{subscription_id}",
+            headers={"Authorization": f"Basic {credentials}"},
+        )
+        return {"status": r.status_code}
+
+
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
 @app.get("/api/dashboard")
@@ -313,13 +505,32 @@ async def get_dashboard(request: Request, days: int = 120):
     if refreshed_session:
         session = refreshed_session
 
-    # Fetch from Oura
-    try:
-        raw = await fetch_all(access_token, days=days)
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Oura API error: {exc}")
+    user_id = session["user_id"]
 
-    rm, slm, am, smm = parse_oura_data(raw)
+    # ── Try cache first ───────────────────────────────────────────────────────
+    # Webhooks keep the cache warm; only call Oura live when the cache is stale.
+    rm, slm, am, smm = {}, {}, {}, {}
+    cache_hit = False
+    try:
+        if oc.is_fresh(user_id, max_age_hours=2.0):
+            rm, slm, am, smm = oc.get_days(user_id, days=days)
+            if rm or slm or am or smm:
+                cache_hit = True
+    except Exception:
+        pass  # fall through to live fetch
+
+    if not cache_hit:
+        try:
+            raw = await fetch_all(access_token, days=days)
+            rm, slm, am, smm = parse_oura_data(raw)
+            # Populate the cache so the next load is instant
+            try:
+                oc.store_days(user_id, rm, slm, am, smm)
+            except Exception:
+                pass
+        except Exception as exc:
+            if not (rm or slm or am or smm):
+                raise HTTPException(status_code=502, detail=f"Oura API error: {exc}")
 
     # ── "Today" — anchor to the most recent available data ───────────────────
     # Oura sleep scores can lag — prefer today, then yesterday, then most recent.
