@@ -370,12 +370,12 @@ def oura_webhook_verify(verification_token: str = None):
     """
     Oura calls this GET with ?verification_token=xxx when you register a
     webhook subscription to confirm the endpoint is live.
-    We echo the token back as plain text.
+    We echo the token back as JSON.
     """
     if not OURA_WEBHOOK_TOKEN:
         raise HTTPException(status_code=500, detail="OURA_WEBHOOK_TOKEN not configured")
     if verification_token == OURA_WEBHOOK_TOKEN:
-        return PlainTextResponse(verification_token)
+        return {"verification_token": verification_token}
     raise HTTPException(status_code=403, detail="Invalid verification token")
 
 
