@@ -426,11 +426,8 @@ async def register_oura_webhook(request: Request):
     if not OURA_WEBHOOK_TOKEN:
         raise HTTPException(status_code=500, detail="OURA_WEBHOOK_TOKEN not configured")
 
-    import httpx, base64
+    import httpx
     callback_url = f"{BACKEND_URL}/webhooks/oura"
-    credentials  = base64.b64encode(
-        f"{OURA_CLIENT_ID}:{OURA_CLIENT_SECRET}".encode()
-    ).decode()
 
     # Subscribe to the four data types that matter for BackNine
     data_types = ["daily_readiness", "daily_sleep", "daily_activity", "sleep"]
@@ -441,8 +438,9 @@ async def register_oura_webhook(request: Request):
             r = await client.post(
                 "https://api.ouraring.com/v2/webhook/subscription",
                 headers={
-                    "Authorization": f"Basic {credentials}",
-                    "Content-Type":  "application/json",
+                    "x-client-id":     OURA_CLIENT_ID,
+                    "x-client-secret": OURA_CLIENT_SECRET,
+                    "Content-Type":    "application/json",
                 },
                 json={
                     "callback_url":       callback_url,
@@ -465,15 +463,15 @@ async def list_oura_webhook_subscriptions(request: Request):
     """List all active Oura webhook subscriptions for this app."""
     _check_admin(request)
 
-    import httpx, base64
-    credentials = base64.b64encode(
-        f"{OURA_CLIENT_ID}:{OURA_CLIENT_SECRET}".encode()
-    ).decode()
+    import httpx
 
     async with httpx.AsyncClient(timeout=15) as client:
         r = await client.get(
             "https://api.ouraring.com/v2/webhook/subscription",
-            headers={"Authorization": f"Basic {credentials}"},
+            headers={
+                "x-client-id":     OURA_CLIENT_ID,
+                "x-client-secret": OURA_CLIENT_SECRET,
+            },
         )
         return r.json()
 
@@ -483,15 +481,15 @@ async def delete_oura_webhook_subscription(subscription_id: str, request: Reques
     """Delete a specific Oura webhook subscription (useful for re-registering)."""
     _check_admin(request)
 
-    import httpx, base64
-    credentials = base64.b64encode(
-        f"{OURA_CLIENT_ID}:{OURA_CLIENT_SECRET}".encode()
-    ).decode()
+    import httpx
 
     async with httpx.AsyncClient(timeout=15) as client:
         r = await client.delete(
             f"https://api.ouraring.com/v2/webhook/subscription/{subscription_id}",
-            headers={"Authorization": f"Basic {credentials}"},
+            headers={
+                "x-client-id":     OURA_CLIENT_ID,
+                "x-client-secret": OURA_CLIENT_SECRET,
+            },
         )
         return {"status": r.status_code}
 
