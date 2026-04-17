@@ -552,7 +552,9 @@ async def get_dashboard(request: Request, days: int = 120):
     t_rdy = rm.get(anchor) or (rm[sorted(rm)[-1]] if rm else {})
     t_act = am.get(today_str) or am.get(anchor) or (am[sorted(am)[-1]] if am else {})
     # Only use smm if it matches the anchor date — avoid mixing scores + hours from different nights
-    t_sm  = smm.get(anchor) or {}
+    # Sleep detail lags behind the daily sleep score — fall back to most recent
+    # available session if the anchor date isn't processed yet.
+    t_sm  = smm.get(anchor) or (smm[sorted(smm)[-1]] if smm else {})
 
     # Build coaching
     coaching = generate_coaching(rm, slm, am, smm)
