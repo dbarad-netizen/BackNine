@@ -28,6 +28,7 @@ import labs as lbs
 import challenges as chl
 import apple_health as ah
 import oura_cache as oc
+import insights as ins
 
 load_dotenv()
 
@@ -1056,6 +1057,23 @@ async def log_challenge_progress(challenge_id: str, request: Request):
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ── Insights ──────────────────────────────────────────────────────────────────
+
+@app.get("/api/insights")
+def get_insights(request: Request, days: int = 60):
+    """
+    Return cross-source correlation insights for the current user.
+    Requires a few weeks of overlapping data across Oura + nutrition + Apple Health.
+    """
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        results = ins.get_insights(user_id, days=days)
+        return {"insights": results, "days_analyzed": days}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ── Apple Health ──────────────────────────────────────────────────────────────

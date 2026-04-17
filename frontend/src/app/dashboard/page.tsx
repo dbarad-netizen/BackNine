@@ -21,6 +21,7 @@ import LabsTab from "@/components/LabsTab";
 import ChallengeTab from "@/components/ChallengeTab";
 import AppleHealthTab from "@/components/AppleHealthTab";
 import GearTab from "@/components/GearTab";
+import InsightsSection from "@/components/InsightsSection";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts";
@@ -1010,6 +1011,7 @@ export default function DashboardPage() {
             <CoachingSection title="Today's Actions" items={coaching.short} />
             <CoachingSection title="This Week"       items={coaching.mid}   />
             <CoachingSection title="Long-Term Watch" items={coaching.long}  />
+            <InsightsSection />
           </div>
         )}
 

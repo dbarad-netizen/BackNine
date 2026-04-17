@@ -479,7 +479,29 @@ export const api = {
   appleHealthData(days = 30): Promise<AppleHealthSummary> {
     return request(`/api/apple-health/data?days=${days}`);
   },
+
+  // ── Insights ──────────────────────────────────────────────────────────────
+  insights(days = 60): Promise<{ insights: Insight[]; days_analyzed: number }> {
+    return request(`/api/insights?days=${days}`);
+  },
 };
+
+// ── Insight types ─────────────────────────────────────────────────────────────
+export interface Insight {
+  id:             string;
+  title:          string;
+  finding:        string;
+  detail:         string;
+  direction:      "positive" | "negative" | "neutral";
+  magnitude:      number;
+  unit:           string;
+  n:              number;
+  r:              number;
+  group_a_label:  string;
+  group_b_label:  string;
+  group_a_avg:    number;
+  group_b_avg:    number;
+}
 
 // ── Challenge types ───────────────────────────────────────────────────────────
 export interface ChallengeParticipant {
