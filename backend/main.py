@@ -366,17 +366,17 @@ def logout(response: Response):
 # ── Oura Webhooks ─────────────────────────────────────────────────────────────
 
 @app.get("/webhooks/oura")
-def oura_webhook_verify(verification_token: str = None):
+def oura_webhook_verify(challenge: str = None, verification_token: str = None):
     """
-    Oura calls this GET with ?verification_token=xxx when you register a
-    webhook subscription to confirm the endpoint is live.
-    We echo the token back as JSON.
+    Oura calls this GET with ?challenge=xxx when registering a subscription
+    to confirm the endpoint is live. Echo the challenge back as JSON.
     """
-    if not OURA_WEBHOOK_TOKEN:
-        raise HTTPException(status_code=500, detail="OURA_WEBHOOK_TOKEN not configured")
-    if verification_token == OURA_WEBHOOK_TOKEN:
+    if challenge:
+        return {"challenge": challenge}
+    # Fallback: some Oura versions send verification_token instead
+    if verification_token:
         return {"verification_token": verification_token}
-    raise HTTPException(status_code=403, detail="Invalid verification token")
+    raise HTTPException(status_code=400, detail="No challenge or verification_token provided")
 
 
 @app.post("/webhooks/oura")
