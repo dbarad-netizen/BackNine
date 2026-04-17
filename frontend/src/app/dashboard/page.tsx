@@ -972,6 +972,12 @@ export default function DashboardPage() {
               <TrendChart data={trend} metric={tab} />
             </section>
 
+          </>
+        )}
+
+        {/* ── COACHING ── */}
+        {section === "coaching" && (
+          <div className="space-y-6">
             {/* Tomorrow's readiness callout */}
             <section className="rounded-2xl border bg-white p-4 flex items-center gap-4"
               style={{ borderColor: readiness_forecast.color + "55" }}>
@@ -1001,12 +1007,6 @@ export default function DashboardPage() {
                 </div>
               </div>
             </section>
-          </>
-        )}
-
-        {/* ── COACHING ── */}
-        {section === "coaching" && (
-          <div className="space-y-6">
             <CoachingSection title="Today's Actions" items={coaching.short} />
             <CoachingSection title="This Week"       items={coaching.mid}   />
             <CoachingSection title="Long-Term Watch" items={coaching.long}  />
