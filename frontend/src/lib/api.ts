@@ -484,6 +484,11 @@ export const api = {
   insights(days = 60): Promise<{ insights: Insight[]; days_analyzed: number }> {
     return request(`/api/insights?days=${days}`);
   },
+
+  // ── Progress ──────────────────────────────────────────────────────────────
+  progress(): Promise<ProgressReport> {
+    return request("/api/progress");
+  },
 };
 
 // ── Insight types ─────────────────────────────────────────────────────────────
@@ -501,6 +506,35 @@ export interface Insight {
   group_b_label:  string;
   group_a_avg:    number;
   group_b_avg:    number;
+}
+
+// ── Progress types ────────────────────────────────────────────────────────────
+export interface ProgressItem {
+  id:               string;
+  title:            string;
+  icon:             string;
+  current_avg:      number | null;
+  previous_avg:     number | null;
+  current_on:       number | null;
+  previous_on:      number | null;
+  period_days:      number;
+  target:           number | null;
+  target_label:     string | null;
+  unit:             string;
+  delta_avg:        number | null;
+  delta_on:         number | null;
+  direction:        "positive" | "negative" | "neutral";
+  personal_best:    number | null;
+  summary:          string;
+}
+
+export interface ProgressReport {
+  items:        ProgressItem[];
+  period_label: string;
+  cur_start:    string;
+  cur_end:      string;
+  prev_start:   string;
+  prev_end:     string;
 }
 
 // ── Challenge types ───────────────────────────────────────────────────────────
