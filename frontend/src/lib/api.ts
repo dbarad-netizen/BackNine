@@ -105,6 +105,7 @@ export interface DashboardData {
   generated:           string;
   data_through:        string;
   provider:            string;
+  has_oura?:           boolean;
   today:               TodayData;
   trend:               TrendDay[];
   coaches:             { overall: CoachCard; sleep: CoachCard; activity: CoachCard };
@@ -378,7 +379,12 @@ export const api = {
   wearables():          Promise<{ connected: Wearable[]; available: Wearable[] }> { return request("/api/wearables"); },
   disconnect(p: string): Promise<void> { return request(`/api/wearables/${p}`, { method: "DELETE" }); },
   logout():             Promise<void> { clearToken(); return request("/auth/logout", { method: "POST" }); },
-  connectOura():        void { window.location.href = "https://backnine-hu60.onrender.com/auth/oura"; },
+  connectOura(userId?: string): void {
+    const url = userId
+      ? `https://backnine-hu60.onrender.com/auth/oura?link_user_id=${encodeURIComponent(userId)}`
+      : "https://backnine-hu60.onrender.com/auth/oura";
+    window.location.href = url;
+  },
 
   // ── Nutrition ──────────────────────────────────────────────────────────────
   nutritionToday():     Promise<NutritionToday>    { return request("/api/nutrition/today"); },

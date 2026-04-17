@@ -45,6 +45,8 @@ ENVIRONMENT         = os.getenv("ENVIRONMENT", "development")
 # Random token you generate once and set in Render env vars.
 # Oura uses it to verify your webhook endpoint during subscription setup.
 OURA_WEBHOOK_TOKEN  = os.getenv("OURA_WEBHOOK_TOKEN", "")
+# Supabase JWT secret — from Supabase dashboard → Settings → API → JWT Secret
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
 # Protect the /admin/* routes — set any strong secret in Render env vars.
 ADMIN_KEY           = os.getenv("ADMIN_KEY", "")
 
@@ -117,6 +119,25 @@ def _decode_session(token: str) -> Optional[dict]:
         return None
 
 
+def _verify_supabase_jwt(token: str) -> Optional[dict]:
+    """
+    Verify a JWT issued by Supabase Auth.
+    Returns the claims dict (including sub = user UUID) or None if invalid.
+    """
+    if not SUPABASE_JWT_SECRET:
+        return None
+    try:
+        claims = jwt.decode(
+            token,
+            SUPABASE_JWT_SECRET,
+            algorithms=[JWT_ALGO],
+            audience="authenticated",
+        )
+        return claims
+    except JWTError:
+        return None
+
+
 # Transient OAuth state nonces (in-memory is fine — just a replay guard)
 _oauth_states: dict = {}  # state → timestamp
 
@@ -153,10 +174,32 @@ def _set_session_cookie(response, session: dict) -> None:
 
 
 def _require_session(request: Request) -> dict:
-    session = _get_session(request)
-    if not session:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    return session
+    # 1. Cookie-based session (existing Oura OAuth flow)
+    token = request.cookies.get(_session_cookie_name())
+    if token:
+        decoded = _decode_session(token)
+        if decoded and decoded.get("user_id"):
+            return decoded
+
+    # 2. Authorization: Bearer header
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        bearer = auth[7:]
+        # Try our own JWT first (existing Oura sessions sent as Bearer)
+        decoded = _decode_session(bearer)
+        if decoded and decoded.get("user_id"):
+            return decoded
+        # Try Supabase JWT (email/Google sign-in)
+        claims = _verify_supabase_jwt(bearer)
+        if claims and claims.get("sub"):
+            return {
+                "user_id":  claims["sub"],   # Supabase UUID
+                "provider": "supabase",
+                "email":    claims.get("email"),
+                "access_token": None,        # no Oura token yet
+            }
+
+    raise HTTPException(status_code=401, detail="Not authenticated")
 
 
 async def _ensure_valid_token(session: dict) -> Tuple[str, Optional[dict]]:
@@ -280,12 +323,19 @@ def health():
 # ── Oura OAuth ────────────────────────────────────────────────────────────────
 
 @app.get("/auth/oura")
-def oura_auth_start(response: Response):
-    """Redirect the user to Oura's OAuth authorization page."""
+def oura_auth_start(response: Response, link_user_id: str = None):
+    """
+    Redirect the user to Oura's OAuth authorization page.
+    If link_user_id is provided (Supabase UUID), the resulting Oura tokens
+    will be stored under that user_id instead of generating a new oura_xxx id.
+    """
     if not OURA_CLIENT_ID:
         raise HTTPException(status_code=500, detail="OURA_CLIENT_ID not configured")
     state = secrets.token_urlsafe(24)
-    _oauth_states[state] = datetime.now(timezone.utc).timestamp()
+    _oauth_states[state] = {
+        "ts":             datetime.now(timezone.utc).timestamp(),
+        "link_user_id":   link_user_id,   # None for fresh Oura-only logins
+    }
     url = build_auth_url(OURA_CLIENT_ID, OURA_REDIRECT_URI, state)
     return RedirectResponse(url)
 
@@ -307,8 +357,9 @@ async def oura_auth_callback(
         if not code or not state:
             return JSONResponse({"error": "missing code or state", "params": dict(request.query_params)})
 
-        # Validate state (skip validation in dev to avoid in-memory loss on restart)
-        _oauth_states.pop(state, None)  # consume it if present, ignore if not
+        # Consume state nonce
+        state_data    = _oauth_states.pop(state, {})
+        link_user_id  = state_data.get("link_user_id") if isinstance(state_data, dict) else None
 
         # Exchange code for tokens
         tokens = await exchange_code(code, OURA_CLIENT_ID, OURA_CLIENT_SECRET, OURA_REDIRECT_URI)
@@ -318,16 +369,18 @@ async def oura_auth_callback(
         expires_in    = tokens.get("expires_in", 86400)
         expires_at    = int(datetime.now(timezone.utc).timestamp()) + expires_in
 
-        # Fetch the stable Oura user ID — this is permanent for their account
-        # so the same person always gets the same user_id even after re-login
-        try:
-            personal = await fetch_personal_info(access_token)
-            user_id  = f"oura_{personal['id']}"
-        except Exception:
-            # Fallback: deterministic hex from access token so at least the
-            # same token maps to the same ID within a session lifetime
-            import hashlib
-            user_id = f"oura_{hashlib.sha256(access_token.encode()).hexdigest()[:16]}"
+        # Determine user_id:
+        # • If linking to an existing Supabase account, use that UUID
+        # • Otherwise derive a stable ID from Oura's own user identifier
+        if link_user_id:
+            user_id = link_user_id
+        else:
+            try:
+                personal = await fetch_personal_info(access_token)
+                user_id  = f"oura_{personal['id']}"
+            except Exception:
+                import hashlib
+                user_id = f"oura_{hashlib.sha256(access_token.encode()).hexdigest()[:16]}"
 
         session_data = {
             "user_id":       user_id,
@@ -501,11 +554,39 @@ async def delete_oura_webhook_subscription(subscription_id: str, request: Reques
 @app.get("/api/dashboard")
 async def get_dashboard(request: Request, days: int = 120):
     session = _require_session(request)
+    user_id = session["user_id"]
+
+    # ── Resolve Oura access token ─────────────────────────────────────────────
+    # Supabase-auth users may not have Oura in their session cookie — look it
+    # up from wearable_connections instead.
+    if not session.get("access_token"):
+        db = get_supabase()
+        if db:
+            try:
+                res = (
+                    db.table("wearable_connections")
+                    .select("access_token, refresh_token, expires_at")
+                    .eq("user_id", user_id)
+                    .eq("provider", "oura")
+                    .execute()
+                )
+                rows = res.data or []
+                if rows:
+                    session = {**session, **rows[0]}
+            except Exception:
+                pass
+
+    if not session.get("access_token"):
+        # User is authenticated but hasn't connected Oura yet
+        return {
+            "generated": datetime.now(timezone.utc).isoformat(),
+            "has_oura":  False,
+            "provider":  session.get("provider", "supabase"),
+        }
+
     access_token, refreshed_session = await _ensure_valid_token(session)
     if refreshed_session:
         session = refreshed_session
-
-    user_id = session["user_id"]
 
     # ── Try cache first ───────────────────────────────────────────────────────
     # Webhooks keep the cache warm; only call Oura live when the cache is stale.
@@ -1058,6 +1139,36 @@ async def log_challenge_progress(challenge_id: str, request: Request):
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ── Current user ─────────────────────────────────────────────────────────────
+
+@app.get("/api/me")
+def get_me(request: Request):
+    """Return the current user's identity and connected wearables."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    has_oura = bool(session.get("access_token"))
+    if not has_oura:
+        db = get_supabase()
+        if db:
+            try:
+                res = (
+                    db.table("wearable_connections")
+                    .select("provider")
+                    .eq("user_id", user_id)
+                    .execute()
+                )
+                providers = [r["provider"] for r in (res.data or [])]
+                has_oura = "oura" in providers
+            except Exception:
+                pass
+    return {
+        "user_id":  user_id,
+        "email":    session.get("email"),
+        "provider": session.get("provider", "oura"),
+        "has_oura": has_oura,
+    }
 
 
 # ── Progress ──────────────────────────────────────────────────────────────────

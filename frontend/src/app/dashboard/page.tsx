@@ -930,6 +930,25 @@ export default function DashboardPage() {
         {/* ── TODAY ── */}
         {section === "today" && (
           <>
+            {/* No-Oura banner */}
+            {data.has_oura === false && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 flex items-start gap-4">
+                <span className="text-2xl mt-0.5">💍</span>
+                <div className="flex-1">
+                  <p className="font-semibold text-amber-900 text-sm">Connect your Oura Ring</p>
+                  <p className="text-xs text-amber-700 mt-0.5">
+                    Link your ring to unlock readiness scores, HRV trends, sleep analysis, and personalized coaching.
+                  </p>
+                </div>
+                <a
+                  href="/connect"
+                  className="shrink-0 mt-0.5 bg-amber-500 hover:bg-amber-400 text-white rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors"
+                >
+                  Connect →
+                </a>
+              </div>
+            )}
+
             <section className="grid grid-cols-3 gap-3">
               {[
                 { score: rdy?.score as number, label: "Readiness" },
