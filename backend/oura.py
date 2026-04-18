@@ -113,30 +113,61 @@ def parse_oura_data(raw: dict) -> tuple[dict, dict, dict, dict]:
             "active_cal": rec.get("active_calories"),
         }
 
-    # Sleep model (detail — keep longest session ≥ 1h per day, skip naps/rest)
+    # Sleep model (detail — SUM all qualifying sessions per day, skip naps/rest)
+    # Oura can split one night into multiple records (ring removed, two sleep periods, etc.)
+    # Keeping only the longest session underreports total sleep time.
+    _smm_raw: dict = {}  # day → list of qualifying session dicts
     for rec in raw.get("sleepDetail", {}).get("data", []):
-        # Exclude known non-main-sleep types; accept anything ≥ 1 hour otherwise
-        if rec.get("type") in ("rest", "late_nap"): continue
+        # Exclude known non-main-sleep types
+        if rec.get("type") in ("rest", "late_nap", "deleted"): continue
         total = rec.get("total_sleep_duration") or 0
         if total < 3600: continue   # ignore sessions under 1 hour
         day = rec.get("day", "")
         if not day: continue
-        # Keep the longest sleep session for the day
-        if day in smm and (smm[day].get("total") or 0) >= total:
-            continue
-        # sleep_need is in seconds — Oura's personalised nightly target
         sleep_need_sec = rec.get("sleep_need", {})
         if isinstance(sleep_need_sec, dict):
             sleep_need_sec = sleep_need_sec.get("long_sleep", 0) or 0
-        smm[day] = {
+        _smm_raw.setdefault(day, []).append({
             "total":         total,
-            "deep":          rec.get("deep_sleep_duration"),
-            "rem":           rec.get("rem_sleep_duration"),
+            "deep":          rec.get("deep_sleep_duration") or 0,
+            "rem":           rec.get("rem_sleep_duration") or 0,
             "hrv":           rec.get("average_hrv"),
             "rhr":           rec.get("lowest_heart_rate"),
             "efficiency":    rec.get("efficiency"),
             "bedtime_start": rec.get("bedtime_start"),
             "sleep_need":    sleep_need_sec or None,
+        })
+
+    # Aggregate sessions: sum durations, weighted-average HRV, minimum RHR
+    for day, sessions in _smm_raw.items():
+        total_sleep = sum(s["total"] for s in sessions)
+        total_deep  = sum(s["deep"]  for s in sessions)
+        total_rem   = sum(s["rem"]   for s in sessions)
+
+        # Weighted HRV average (weight by session length)
+        hrv_pairs = [(s["hrv"], s["total"]) for s in sessions if s["hrv"] is not None]
+        if hrv_pairs:
+            w_sum = sum(w for _, w in hrv_pairs)
+            avg_hrv = round(sum(h * w for h, w in hrv_pairs) / w_sum) if w_sum else None
+        else:
+            avg_hrv = None
+
+        # Lowest RHR across sessions (Oura's value is already the session minimum)
+        rhr_vals = [s["rhr"] for s in sessions if s["rhr"] is not None]
+        min_rhr  = min(rhr_vals) if rhr_vals else None
+
+        # Best efficiency from the longest session
+        longest = max(sessions, key=lambda s: s["total"])
+
+        smm[day] = {
+            "total":         total_sleep,
+            "deep":          total_deep  or None,
+            "rem":           total_rem   or None,
+            "hrv":           avg_hrv,
+            "rhr":           min_rhr,
+            "efficiency":    longest["efficiency"],
+            "bedtime_start": longest["bedtime_start"],
+            "sleep_need":    longest["sleep_need"],
         }
 
     return rm, slm, am, smm

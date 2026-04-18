@@ -593,7 +593,7 @@ async def get_dashboard(request: Request, days: int = 120):
     rm, slm, am, smm = {}, {}, {}, {}
     cache_hit = False
     try:
-        if oc.is_fresh(user_id, max_age_hours=2.0):
+        if oc.is_fresh(user_id, max_age_hours=0.5):
             rm, slm, am, smm = oc.get_days(user_id, days=days)
             if rm or slm or am or smm:
                 cache_hit = True
