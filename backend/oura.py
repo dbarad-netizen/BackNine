@@ -121,7 +121,7 @@ def parse_oura_data(raw: dict) -> tuple[dict, dict, dict, dict]:
         # Exclude known non-main-sleep types
         if rec.get("type") in ("rest", "late_nap", "deleted"): continue
         total = rec.get("total_sleep_duration") or 0
-        if total < 3600: continue   # ignore sessions under 1 hour
+        if total < 300: continue   # ignore sessions under 5 minutes (true rest blips)
         day = rec.get("day", "")
         if not day: continue
         sleep_need_sec = rec.get("sleep_need", {})
