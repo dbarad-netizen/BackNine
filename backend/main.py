@@ -238,9 +238,7 @@ def _build_trend(rm, slm, am, smm, days=30) -> list[dict]:
     for day in all_days:
         if day < cutoff:
             continue
-        # smm uses bedtime date; slm/rm/am use wake date — look back 1 day for detail
-        prev_day = (datetime.strptime(day, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
-        s   = smm.get(day) or smm.get(prev_day) or {}
+        s   = smm.get(day, {})
         rdy = rm.get(day, {})
         sl  = slm.get(day, {})
         act = am.get(day, {})
@@ -637,15 +635,10 @@ async def get_dashboard(request: Request, days: int = 120):
     t_rdy = rm.get(anchor) or (rm[sorted(rm)[-1]] if rm else {})
     t_act = am.get(today_str) or am.get(anchor) or (am[sorted(am)[-1]] if am else {})
 
-    # Oura sleep sessions use BEDTIME date; daily sleep scores use WAKE date.
-    # If you slept Sunday night → Monday morning:
-    #   slm["Monday"] = sleep score   (wake date)
-    #   smm["Sunday"] = sleep detail  (bedtime date = anchor - 1 day)
-    # So always try anchor first, then anchor-1, then give up gracefully.
-    anchor_bedtime = (datetime.strptime(anchor, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
-    t_sm = (smm.get(anchor)
-            or smm.get(anchor_bedtime)
-            or (smm[sorted(smm)[-1]] if smm else {}))
+    # Oura sleep sessions and daily scores both use WAKE date.
+    # When today's session hasn't been processed yet (smm[anchor] missing),
+    # show blank rather than falling back to a previous night's data.
+    t_sm = smm.get(anchor, {})
 
     # Build coaching
     coaching = generate_coaching(rm, slm, am, smm)
@@ -1307,7 +1300,7 @@ async def debug_sleep(request: Request):
         anchor = today_str
 
     anchor_bedtime = (datetime.strptime(anchor, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
-    t_sm = smm.get(anchor) or smm.get(anchor_bedtime) or {}
+    t_sm = smm.get(anchor, {})
 
     def fmt_hrs(s):
         if not s:

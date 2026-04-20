@@ -11,17 +11,10 @@ from typing import Optional
 
 def _smm_for_day(smm: dict, day: str) -> dict:
     """
-    Oura sleep sessions are keyed by BEDTIME date; daily scores use WAKE date.
-    Try wake date first, then wake-1 day (bedtime date), then return {}.
+    Oura sleep sessions use the same wake date as daily scores.
+    Returns the session for that day, or {} if not yet processed.
     """
-    s = smm.get(day)
-    if s:
-        return s
-    try:
-        prev = (datetime.strptime(day, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
-        return smm.get(prev) or {}
-    except Exception:
-        return {}
+    return smm.get(day) or {}
 
 
 def _avg(days: list[str], key: str, src: dict) -> Optional[float]:
