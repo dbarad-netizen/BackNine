@@ -341,7 +341,7 @@ def _training_load_progress(cur_oura: list, prev_oura: list) -> Optional[dict]:
         "current_avg": cur_pct, "previous_avg": prev_pct,
         "current_on": cur_on, "previous_on": prev_on,
         "period_days": len(cur_vals), "target": None,
-        "target_label": "ACWR 0.8–1.3", "unit": "days",
+        "target_label": "ACWR 0.8–1.3", "unit": "%",
         "delta_avg": None, "delta_on": delta_on,
         "direction": direction,
         "personal_best": None, "personal_best_date": None,
