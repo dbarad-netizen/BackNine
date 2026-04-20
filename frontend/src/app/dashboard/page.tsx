@@ -961,12 +961,12 @@ export default function DashboardPage() {
               ))}
             </section>
 
-            {/* Sleep detail syncing notice — shown when score exists but session not yet processed by Oura API */}
+            {/* Sleep detail syncing notice — shown when score exists but neither Oura nor Apple Health has detail yet */}
             {sl?.score && !sm?.total && (
               <div className="flex items-center gap-2 rounded-xl bg-blue-50 border border-blue-100 px-4 py-2.5">
                 <div className="h-3 w-3 rounded-full border-2 border-blue-400 border-t-transparent animate-spin shrink-0" />
                 <p className="text-xs text-blue-700">
-                  Sleep detail is still processing — HRV, hours, and stages will appear within a few hours of waking.
+                  Sleep detail syncing — run the BackNine shortcut on your iPhone for instant data, or check back in a few hours.
                 </p>
               </div>
             )}

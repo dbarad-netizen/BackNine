@@ -645,8 +645,29 @@ async def get_dashboard(request: Request, days: int = 120):
 
     # Oura sleep sessions and daily scores both use WAKE date.
     # When today's session hasn't been processed yet (smm[anchor] missing),
-    # show blank rather than falling back to a previous night's data.
+    # fall back to Apple Health data — the Oura app syncs to AH immediately,
+    # so AH has the data hours before Oura's public API does.
     t_sm = smm.get(anchor, {})
+    if not t_sm:
+        try:
+            ah_day = ah.get_day(user_id, anchor)
+            if ah_day and (ah_day.get("sleep_hours") or ah_day.get("hrv")):
+                sh  = ah_day.get("sleep_hours") or 0
+                sdh = ah_day.get("sleep_deep_hours") or 0
+                srh = ah_day.get("sleep_rem_hours") or 0
+                t_sm = {
+                    "total":         int(sh  * 3600) if sh  else None,
+                    "deep":          int(sdh * 3600) if sdh else None,
+                    "rem":           int(srh * 3600) if srh else None,
+                    "hrv":           ah_day.get("hrv"),
+                    "rhr":           ah_day.get("resting_hr"),
+                    "efficiency":    None,
+                    "bedtime_start": None,
+                    "sleep_need":    None,
+                    "_source":       "apple_health",
+                }
+        except Exception:
+            pass
 
     # Build coaching
     coaching = generate_coaching(rm, slm, am, smm)
