@@ -541,7 +541,8 @@ export interface ProgressItem {
   previous_avg:     number | null;
   current_on:       number | null;
   previous_on:      number | null;
-  period_days:      number;
+  period_days:          number;
+  previous_period_days: number;
   target:           number | null;
   target_label:     string | null;
   unit:             string;

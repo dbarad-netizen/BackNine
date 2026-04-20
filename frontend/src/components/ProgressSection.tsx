@@ -26,20 +26,21 @@ function DeltaBadge({ value, unit, direction }: {
 }
 
 // ── On-target progress bar ────────────────────────────────────────────────────
-function OnTargetBar({ current, previous, total }: {
+function OnTargetBar({ current, previous, total, prevTotal }: {
   current: number;
   previous: number | null;
   total: number;
+  prevTotal: number;
 }) {
   const pct = total > 0 ? Math.round((current / total) * 100) : 0;
-  const prevPct = (previous !== null && total > 0) ? Math.round((previous / total) * 100) : null;
+  const prevPct = (previous !== null && prevTotal > 0) ? Math.round((previous / prevTotal) * 100) : null;
 
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-[10px] text-gray-400">
-        <span>This month: <span className="font-semibold text-gray-700">{current}/{total} days</span></span>
+        <span>Last 30 days: <span className="font-semibold text-gray-700">{current}/{total} days</span></span>
         {prevPct !== null && (
-          <span>Last month: {previous}/{total}</span>
+          <span>Prior 30 days: {previous}/{prevTotal}</span>
         )}
       </div>
       <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -89,7 +90,7 @@ function ProgressCard({ item }: { item: ProgressItem }) {
       {item.current_avg !== null && (
         <div className="flex gap-4">
           <div>
-            <p className="text-[10px] text-gray-400 uppercase tracking-wider">This Month</p>
+            <p className="text-[10px] text-gray-400 uppercase tracking-wider">Last 30 Days</p>
             <p className="text-xl font-bold text-gray-900">
               {typeof item.current_avg === "number" && item.unit === "steps"
                 ? item.current_avg.toLocaleString()
@@ -99,7 +100,7 @@ function ProgressCard({ item }: { item: ProgressItem }) {
           </div>
           {item.previous_avg !== null && (
             <div>
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider">Last Month</p>
+              <p className="text-[10px] text-gray-400 uppercase tracking-wider">Prior 30 Days</p>
               <p className="text-xl font-semibold text-gray-300">
                 {typeof item.previous_avg === "number" && item.unit === "steps"
                   ? item.previous_avg.toLocaleString()
@@ -127,6 +128,7 @@ function ProgressCard({ item }: { item: ProgressItem }) {
           current={item.current_on!}
           previous={item.previous_on}
           total={item.period_days}
+          prevTotal={item.previous_period_days ?? item.period_days}
         />
       )}
 
