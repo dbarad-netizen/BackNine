@@ -244,13 +244,15 @@ def generate_coaching(
                 "Often coincides with supercompensation.", "good"))
 
     # ── Sleep hours ───────────────────────────────────────────────────────────
-    if today_hrs < 6:
+    # Only flag low sleep when we actually have confirmed hours for tonight
+    if today_hrs > 0 and today_hrs < 6:
         short_items.append(_ins("😴", "Rebuild your sleep tonight",
             f"Last night was only {today_hrs:.1f}h — well below your {avg_hrs_30 or 0:.1f}h average. "
             "No screens after 9 PM, lights out by 10 PM.", "urgent"))
-    elif today_hrs < 7:
+    # Only warn about this week if the weekly average itself is below 7h
+    elif avg_hrs_7 is not None and avg_hrs_7 < 7:
         short_items.append(_ins("⚠️", "Prioritize sleep this week",
-            f"You averaged {avg_hrs_7 or today_hrs:.1f}h this week, below the 7–8h optimal range. "
+            f"You averaged {avg_hrs_7:.1f}h this week, below the 7–8h optimal range. "
             "Move bedtime earlier by 30–45 min.", "warn"))
 
     # ── Sleep stages ──────────────────────────────────────────────────────────
