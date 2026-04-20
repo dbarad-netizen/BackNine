@@ -1263,6 +1263,64 @@ async def get_apple_health_data(request: Request, days: int = 30):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/debug/sleep")
+async def debug_sleep(request: Request):
+    """
+    Returns raw parsed sleep data so we can diagnose date mismatches.
+    Shows the last 5 days of smm, slm, and what anchor/t_sm resolve to.
+    """
+    session = _require_session(request)
+    user_id = session["user_id"]
+
+    access_token, err = await _get_oura_token(user_id)
+    if err or not access_token:
+        raise HTTPException(status_code=400, detail=f"No Oura token: {err}")
+
+    raw = await fetch_all(access_token, days=7)
+    rm, slm, am, smm = parse_oura_data(raw)
+
+    today_str     = datetime.now().strftime("%Y-%m-%d")
+    yesterday_str = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+
+    if slm.get(today_str):
+        anchor = today_str
+    elif slm.get(yesterday_str):
+        anchor = yesterday_str
+    elif slm:
+        anchor = sorted(slm)[-1]
+    else:
+        anchor = today_str
+
+    anchor_bedtime = (datetime.strptime(anchor, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+    t_sm = smm.get(anchor) or smm.get(anchor_bedtime) or {}
+
+    def fmt_hrs(s):
+        if not s:
+            return None
+        total = s.get("total")
+        return round(total / 3600, 2) if total else None
+
+    return {
+        "today":           today_str,
+        "anchor":          anchor,
+        "anchor_bedtime":  anchor_bedtime,
+        "smm_keys":        sorted(smm.keys()),
+        "slm_keys":        sorted(slm.keys()),
+        "smm_anchor":      smm.get(anchor),
+        "smm_anchor_prev": smm.get(anchor_bedtime),
+        "t_sm_resolved":   t_sm,
+        "t_sm_hours":      fmt_hrs(t_sm),
+        "last5_smm": {
+            d: {**smm[d], "hours": fmt_hrs(smm[d])}
+            for d in sorted(smm.keys())[-5:]
+        },
+        "last5_slm": {
+            d: slm[d] for d in sorted(slm.keys())[-5:]
+        },
+        "raw_sleep_sessions": raw.get("sleepDetail", {}).get("data", [])[-5:],
+    }
+
+
 # ── dev entrypoint ────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
