@@ -157,10 +157,12 @@ def generate_coaching(
     today_deep = t_sm.get("deep") or 0
     today_rem  = t_sm.get("rem")  or 0
 
-    # Use Oura's personalised sleep need if available, else fall back to 7.5h
+    # Use Oura's personalised sleep need if available.
+    # Do NOT fall back to a generic 7.5h — without real data we can't calculate
+    # meaningful sleep debt, so sleep_target stays None and debt items are skipped.
     sleep_need_vals = [_smm_for_day(smm, d)["sleep_need"] / 3600 for d in last30
                        if _smm_for_day(smm, d).get("sleep_need")]
-    sleep_target = round(sum(sleep_need_vals) / len(sleep_need_vals), 1) if sleep_need_vals else 7.5
+    sleep_target: Optional[float] = round(sum(sleep_need_vals) / len(sleep_need_vals), 1) if sleep_need_vals else None
 
     avg_hrv_30  = _avg_smm(last30, "hrv", smm)
     avg_rdy_30  = _avg(last30, "score", rm)
@@ -289,11 +291,13 @@ def generate_coaching(
             "A 2–3 day deload (50% volume reduction) will accelerate adaptation.", "warn"))
 
     # ── Sleep debt ────────────────────────────────────────────────────────────
-    if len(hrs7) >= 3:  # only calculate debt if we have at least 3 nights of data
+    # Only calculate debt when we have Oura's personalised sleep_need — a generic
+    # 7.5h default produces misleading results for people who naturally sleep less.
+    if sleep_target is not None and len(hrs7) >= 3:
         sleep_debt = max(0.0, len(hrs7) * sleep_target - sum(hrs7))
         if sleep_debt > 5:
             mid_items.append(_ins("🏦", "Significant sleep debt — repay gradually",
-                f"You're {sleep_debt:.1f}h short over 7 days vs your {sleep_target}h/night target. "
+                f"You're {sleep_debt:.1f}h short over 7 days vs your personalised {sleep_target}h/night target. "
                 "Add 45–60 min per night for 2 weeks — do not catch up in one weekend.", "urgent"))
         elif sleep_debt > 2:
             mid_items.append(_ins("📊", "Moderate sleep debt building",
@@ -313,9 +317,9 @@ def generate_coaching(
             "Primary lever: more consistent sleep.", "warn"))
 
     # ── Chronic sleep duration ────────────────────────────────────────────────
-    if avg_hrs_30 and avg_hrs_30 < sleep_target - 0.5:
+    if sleep_target is not None and avg_hrs_30 and avg_hrs_30 < sleep_target - 0.5:
         mid_items.append(_ins("💤", "Sleep duration is your biggest unlock",
-            f"Averaging {avg_hrs_30:.1f}h over 30 days — {sleep_target - avg_hrs_30:.1f}h short of your {sleep_target}h target. "
+            f"Averaging {avg_hrs_30:.1f}h over 30 days — {sleep_target - avg_hrs_30:.1f}h short of your personalised {sleep_target}h target. "
             "This gap alone predicts cardiovascular and metabolic risk.", "warn"))
 
     # ── Readiness baseline ────────────────────────────────────────────────────
