@@ -101,17 +101,35 @@ export interface ReadinessForecast {
   base:      number;
 }
 
+export interface PredictionDay {
+  date:      string;
+  predicted: number;
+  actual:    number;
+  diff:      number;
+  hit:       boolean;
+}
+
+export interface PredictionAccuracy {
+  resolved:       PredictionDay[];
+  accuracy_pct:   number | null;
+  streak:         number;
+  best_streak:    number;
+  total_resolved: number;
+  hit_threshold:  number;
+}
+
 export interface DashboardData {
-  generated:           string;
-  data_through:        string;
-  provider:            string;
-  has_oura?:           boolean;
-  today:               TodayData;
-  trend:               TrendDay[];
-  coaches:             { overall: CoachCard; sleep: CoachCard; activity: CoachCard };
-  coaching:            Coaching;
-  training_load:       TrainingLoad;
-  readiness_forecast:  ReadinessForecast;
+  generated:            string;
+  data_through:         string;
+  provider:             string;
+  has_oura?:            boolean;
+  today:                TodayData;
+  trend:                TrendDay[];
+  coaches:              { overall: CoachCard; sleep: CoachCard; activity: CoachCard };
+  coaching:             Coaching;
+  training_load:        TrainingLoad;
+  readiness_forecast:   ReadinessForecast;
+  prediction_accuracy?: PredictionAccuracy;
 }
 
 export interface Wearable {

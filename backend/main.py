@@ -30,6 +30,7 @@ import apple_health as ah
 import oura_cache as oc
 import insights as ins
 import progress as prog
+import predictions as prd
 
 load_dotenv()
 
@@ -764,6 +765,16 @@ async def get_dashboard(request: Request, days: int = 120):
         "base":       round(base),
     }
 
+    # ── Prediction tracking ───────────────────────────────────────────────────
+    # Save today's forecast as tomorrow's prediction, fill in any past actuals,
+    # then compute accuracy history for the gamification card.
+    from datetime import date as _date
+    tomorrow_str = (_date.today() + timedelta(days=1)).isoformat()
+    prd.save_prediction(user_id, tomorrow_str, forecast_score)
+    prd.fill_actuals(user_id, rm)
+    pred_history = prd.get_history(user_id, days=60)
+    pred_accuracy = prd.compute_accuracy(pred_history)
+
     # Latest data date
     all_days = sorted(set(list(rm) + list(slm) + list(am)))
     data_through = all_days[-1] if all_days else today_str
@@ -780,6 +791,7 @@ async def get_dashboard(request: Request, days: int = 120):
         },
         "training_load":       training_load,
         "readiness_forecast":  readiness_forecast,
+        "prediction_accuracy": pred_accuracy,
         "trend":    trend,
         "coaches":  coaches,
         "coaching": coaching,

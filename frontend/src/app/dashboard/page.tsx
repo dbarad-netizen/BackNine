@@ -837,7 +837,7 @@ export default function DashboardPage() {
   if (error)   return <ErrorState error={error} />;
   if (!data)   return null;
 
-  const { today, trend, coaches, coaching, training_load, readiness_forecast } = data;
+  const { today, trend, coaches, coaching, training_load, readiness_forecast, prediction_accuracy } = data;
   const sm  = today.sleep_model   as Record<string, number | null>;
   const rdy = today.readiness     as Record<string, number | null>;
   const sl  = today.sleep         as Record<string, number | null>;
@@ -1009,34 +1009,117 @@ export default function DashboardPage() {
         {/* ── COACHING ── */}
         {section === "coaching" && (
           <div className="space-y-6">
-            {/* Tomorrow's readiness callout */}
-            <section className="rounded-2xl border bg-white p-4 flex items-center gap-4"
+            {/* Tomorrow's Readiness — gamified prediction tracker */}
+            <section className="rounded-2xl border bg-white p-4 space-y-4"
               style={{ borderColor: readiness_forecast.color + "55" }}>
-              <div className="relative w-14 h-14 shrink-0">
-                <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                  <circle cx="50" cy="50" r="42" fill="none" stroke="#E5E7EB" strokeWidth="10"/>
-                  <circle cx="50" cy="50" r="42" fill="none"
-                    stroke={readiness_forecast.color} strokeWidth="10" strokeLinecap="round"
-                    strokeDasharray={`${2 * Math.PI * 42}`}
-                    strokeDashoffset={`${2 * Math.PI * 42 * (1 - readiness_forecast.score / 100)}`}
-                  />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-sm font-bold text-gray-900">{readiness_forecast.score}</span>
+
+              {/* Header row: forecast + streak badge */}
+              <div className="flex items-center gap-4">
+                {/* Score ring */}
+                <div className="relative w-14 h-14 shrink-0">
+                  <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+                    <circle cx="50" cy="50" r="42" fill="none" stroke="#E5E7EB" strokeWidth="10"/>
+                    <circle cx="50" cy="50" r="42" fill="none"
+                      stroke={readiness_forecast.color} strokeWidth="10" strokeLinecap="round"
+                      strokeDasharray={`${2 * Math.PI * 42}`}
+                      strokeDashoffset={`${2 * Math.PI * 42 * (1 - readiness_forecast.score / 100)}`}
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-sm font-bold text-gray-900">{readiness_forecast.score}</span>
+                  </div>
                 </div>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-0.5">Tomorrow's Readiness</p>
-                <p className="font-semibold text-gray-900 text-sm">{readiness_forecast.label}</p>
-                <div className="flex gap-3 mt-1 text-xs text-gray-400">
-                  <span>HRV <span className={readiness_forecast.hrv_adj >= 0 ? "text-green-500" : "text-red-400"}>
-                    {readiness_forecast.hrv_adj >= 0 ? "+" : ""}{readiness_forecast.hrv_adj}
-                  </span></span>
-                  <span>Sleep <span className={readiness_forecast.sleep_adj >= 0 ? "text-green-500" : "text-red-400"}>
-                    {readiness_forecast.sleep_adj >= 0 ? "+" : ""}{readiness_forecast.sleep_adj}
-                  </span></span>
+
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-0.5">Tomorrow's Forecast</p>
+                  <p className="font-semibold text-gray-900 text-sm">{readiness_forecast.label}</p>
+                  <div className="flex gap-3 mt-1 text-xs text-gray-400">
+                    <span>HRV <span className={readiness_forecast.hrv_adj >= 0 ? "text-green-500" : "text-red-400"}>
+                      {readiness_forecast.hrv_adj >= 0 ? "+" : ""}{readiness_forecast.hrv_adj}
+                    </span></span>
+                    <span>Sleep <span className={readiness_forecast.sleep_adj >= 0 ? "text-green-500" : "text-red-400"}>
+                      {readiness_forecast.sleep_adj >= 0 ? "+" : ""}{readiness_forecast.sleep_adj}
+                    </span></span>
+                  </div>
                 </div>
+
+                {/* Streak badge */}
+                {prediction_accuracy && prediction_accuracy.streak > 0 && (
+                  <div className="text-center shrink-0">
+                    <div className="text-2xl font-bold text-amber-500">{prediction_accuracy.streak}</div>
+                    <div className="text-[10px] text-gray-400">day streak 🔥</div>
+                  </div>
+                )}
               </div>
+
+              {/* Yesterday's result */}
+              {prediction_accuracy && prediction_accuracy.resolved.length > 0 && (() => {
+                const yesterday = prediction_accuracy.resolved[0];
+                const diffAbs   = Math.abs(yesterday.diff);
+                const diffLabel = yesterday.diff > 0 ? `+${yesterday.diff}` : `${yesterday.diff}`;
+                return (
+                  <div className={`rounded-xl px-3 py-2 flex items-center justify-between text-xs ${
+                    yesterday.hit
+                      ? "bg-green-50 border border-green-100"
+                      : "bg-red-50 border border-red-100"
+                  }`}>
+                    <span className="text-gray-500">
+                      Yesterday — predicted <span className="font-semibold text-gray-700">{yesterday.predicted}</span>,
+                      got <span className="font-semibold text-gray-700">{yesterday.actual}</span>
+                    </span>
+                    <span className={`font-semibold ml-2 shrink-0 ${yesterday.hit ? "text-green-600" : "text-red-500"}`}>
+                      {yesterday.hit ? `✓ ${diffAbs === 0 ? "exact!" : `off by ${diffAbs}`}` : `✗ off by ${diffAbs}`}
+                    </span>
+                  </div>
+                );
+              })()}
+
+              {/* Accuracy stats + dot chart */}
+              {prediction_accuracy && prediction_accuracy.total_resolved >= 3 && (
+                <div className="space-y-2">
+                  {/* Stats row */}
+                  <div className="flex gap-4 text-xs text-gray-400">
+                    <span>
+                      <span className="font-semibold text-gray-700">{prediction_accuracy.accuracy_pct}%</span> accuracy
+                    </span>
+                    <span>
+                      <span className="font-semibold text-gray-700">{prediction_accuracy.total_resolved}</span> predictions
+                    </span>
+                    <span>
+                      Best streak <span className="font-semibold text-gray-700">{prediction_accuracy.best_streak}</span>
+                    </span>
+                  </div>
+
+                  {/* Dot chart — last 30 resolved predictions, oldest left */}
+                  <div className="flex items-end gap-0.5 h-10 overflow-hidden">
+                    {[...prediction_accuracy.resolved].reverse().slice(0, 30).map((p, i) => {
+                      const height = Math.max(20, Math.min(100, 50 + p.diff * 2));
+                      return (
+                        <div key={i} className="flex-1 flex flex-col items-center justify-end gap-0.5" title={`${p.date}: predicted ${p.predicted}, got ${p.actual}`}>
+                          <div
+                            className="w-full rounded-sm"
+                            style={{
+                              height: `${height}%`,
+                              backgroundColor: p.hit ? "#22c55e" : "#ef4444",
+                              opacity: 0.7 + (i / 30) * 0.3,
+                            }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[10px] text-gray-300 text-right">
+                    ±{prediction_accuracy.hit_threshold} pts = hit · last {Math.min(prediction_accuracy.total_resolved, 30)} nights
+                  </p>
+                </div>
+              )}
+
+              {/* Cold start message */}
+              {(!prediction_accuracy || prediction_accuracy.total_resolved < 3) && (
+                <p className="text-xs text-gray-400">
+                  Accuracy tracking starts after a few days — check back tomorrow to see how tonight's forecast holds up.
+                </p>
+              )}
             </section>
             <ProgressSection />
             <CoachingSection title="Today's Actions" items={coaching.short} />
