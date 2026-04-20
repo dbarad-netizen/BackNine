@@ -9,8 +9,30 @@ from typing import Optional
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
+def _smm_for_day(smm: dict, day: str) -> dict:
+    """
+    Oura sleep sessions are keyed by BEDTIME date; daily scores use WAKE date.
+    Try wake date first, then wake-1 day (bedtime date), then return {}.
+    """
+    s = smm.get(day)
+    if s:
+        return s
+    try:
+        prev = (datetime.strptime(day, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+        return smm.get(prev) or {}
+    except Exception:
+        return {}
+
+
 def _avg(days: list[str], key: str, src: dict) -> Optional[float]:
     vals = [src[d][key] for d in days if d in src and src[d].get(key) is not None]
+    return round(sum(vals) / len(vals), 1) if vals else None
+
+
+def _avg_smm(days: list[str], key: str, smm: dict) -> Optional[float]:
+    """Like _avg but uses _smm_for_day to handle the bedtime-date offset."""
+    vals = [_smm_for_day(smm, d)[key] for d in days
+            if _smm_for_day(smm, d).get(key) is not None]
     return round(sum(vals) / len(vals), 1) if vals else None
 
 
@@ -130,7 +152,7 @@ def generate_coaching(
     t_rdy = rm.get(today_str, {})
     t_sl  = slm.get(today_str, {})
     t_act = am.get(today_str, {})
-    t_sm  = smm.get(today_str, {})
+    t_sm  = _smm_for_day(smm, today_str)
     if not t_rdy and rm:  t_rdy = rm[sorted(rm)[-1]]
     if not t_sl  and slm: t_sl  = slm[sorted(slm)[-1]]
     if not t_act and am:  t_act = am[sorted(am)[-1]]
@@ -143,26 +165,28 @@ def generate_coaching(
     today_rem  = t_sm.get("rem")  or 0
 
     # Use Oura's personalised sleep need if available, else fall back to 7.5h
-    sleep_need_vals = [smm[d]["sleep_need"] / 3600 for d in last30
-                       if d in smm and smm[d].get("sleep_need")]
+    sleep_need_vals = [_smm_for_day(smm, d)["sleep_need"] / 3600 for d in last30
+                       if _smm_for_day(smm, d).get("sleep_need")]
     sleep_target = round(sum(sleep_need_vals) / len(sleep_need_vals), 1) if sleep_need_vals else 7.5
 
-    avg_hrv_30  = _avg(last30, "hrv",   smm)
+    avg_hrv_30  = _avg_smm(last30, "hrv", smm)
     avg_rdy_30  = _avg(last30, "score", rm)
     avg_slp_30  = _avg(last30, "score", slm)
-    avg_hrv_f1  = _avg(fort1,  "hrv",   smm)
-    avg_hrv_f2  = _avg(fort2,  "hrv",   smm)
+    avg_hrv_f1  = _avg_smm(fort1, "hrv", smm)
+    avg_hrv_f2  = _avg_smm(fort2, "hrv", smm)
 
     # Only average nights where ring was actually worn (total > 1h = 3600s)
-    hrs30 = [smm[d]["total"] / 3600 for d in last30 if d in smm and (smm[d].get("total") or 0) >= 3600]
-    hrs7  = [smm[d]["total"] / 3600 for d in last7  if d in smm and (smm[d].get("total") or 0) >= 3600]
+    hrs30 = [_smm_for_day(smm, d)["total"] / 3600 for d in last30
+             if (_smm_for_day(smm, d).get("total") or 0) >= 3600]
+    hrs7  = [_smm_for_day(smm, d)["total"] / 3600 for d in last7
+             if (_smm_for_day(smm, d).get("total") or 0) >= 3600]
     avg_hrs_30 = round(sum(hrs30) / len(hrs30), 1) if hrs30 else None
     avg_hrs_7  = round(sum(hrs7)  / len(hrs7),  1) if hrs7  else None
 
     # bedtime consistency
     bedtimes = []
     for d in last30:
-        bs = smm.get(d, {}).get("bedtime_start", "")
+        bs = _smm_for_day(smm, d).get("bedtime_start", "")
         if bs:
             try:
                 t2 = datetime.fromisoformat(bs)
@@ -283,7 +307,7 @@ def generate_coaching(
                 f"{sleep_debt:.1f}h short over 7 days vs your {sleep_target}h target. Add 30 min per night for 5 days.", "warn"))
 
     # ── Sleep efficiency ──────────────────────────────────────────────────────
-    avg_eff = _avg(last30, "efficiency", smm)
+    avg_eff = _avg_smm(last30, "efficiency", smm)
     if avg_eff and avg_eff < 83:
         mid_items.append(_ins("🛏️", "Sleep efficiency needs work",
             f"30-day avg efficiency is {avg_eff:.0f}% (target >85%). "
