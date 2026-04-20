@@ -1272,9 +1272,24 @@ async def debug_sleep(request: Request):
     session = _require_session(request)
     user_id = session["user_id"]
 
-    access_token, err = await _get_oura_token(user_id)
-    if err or not access_token:
-        raise HTTPException(status_code=400, detail=f"No Oura token: {err}")
+    # Resolve Oura token (same logic as dashboard)
+    if not session.get("access_token"):
+        db = get_supabase()
+        if db:
+            try:
+                res = (db.table("wearable_connections")
+                    .select("access_token, refresh_token, expires_at")
+                    .eq("user_id", user_id).eq("provider", "oura").execute())
+                rows = res.data or []
+                if rows:
+                    session = {**session, **rows[0]}
+            except Exception:
+                pass
+
+    if not session.get("access_token"):
+        raise HTTPException(status_code=400, detail="No Oura token found for this user")
+
+    access_token, _ = await _ensure_valid_token(session)
 
     raw = await fetch_all(access_token, days=7)
     rm, slm, am, smm = parse_oura_data(raw)
