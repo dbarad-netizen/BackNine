@@ -600,6 +600,14 @@ async def get_dashboard(request: Request, days: int = 120):
     except Exception:
         pass  # fall through to live fetch
 
+    # Even when the cache is fresh, bypass it if today's session detail is
+    # missing — Oura processes scores quickly but session detail takes longer.
+    # Re-fetching live catches the moment Oura finishes processing.
+    if cache_hit:
+        today_str_check = datetime.now().strftime("%Y-%m-%d")
+        if slm.get(today_str_check) and not smm.get(today_str_check):
+            cache_hit = False  # force live fetch to try to get today's session
+
     if not cache_hit:
         try:
             raw = await fetch_all(access_token, days=days)
