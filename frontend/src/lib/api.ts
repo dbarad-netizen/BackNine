@@ -36,6 +36,7 @@ export function clearToken(): void {
 }
 
 export interface TodayData {
+  date?:       string;
   readiness:   Record<string, unknown>;
   sleep:       Record<string, unknown>;
   activity:    Record<string, unknown>;
