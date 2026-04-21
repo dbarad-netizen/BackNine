@@ -28,7 +28,7 @@ import {
 } from "recharts";
 
 type Tab     = "scores" | "hrv" | "sleep_detail";
-type Section = "today" | "coaching" | "nutrition" | "training" | "labs" | "challenges" | "apple-health" | "gear";
+type Section = "coaching" | "nutrition" | "training" | "labs" | "challenges" | "apple-health" | "gear";
 
 // ── Calorie ring ──────────────────────────────────────────────────────────────
 function CalorieRing({
@@ -742,7 +742,7 @@ export default function DashboardPage() {
   const [error,      setError]      = useState<string | null>(null);
   const [loading,    setLoading]    = useState(true);
   const [tab,        setTab]        = useState<Tab>("scores");
-  const [section,    setSection]    = useState<Section>("today");
+  const [section,    setSection]    = useState<Section>("coaching");
 
   // Nutrition state
   const [nutToday,   setNutToday]   = useState<NutritionToday | null>(null);
@@ -872,8 +872,7 @@ export default function DashboardPage() {
   const remaining  = Math.max(0, budget - consumed);
 
   const NAV_ITEMS: { id: Section; label: string; icon: string }[] = [
-    { id: "today",        label: "Today",     icon: "🏠" },
-    { id: "coaching",     label: "Coach",     icon: "💡" },
+    { id: "coaching",     label: "Today",     icon: "🏠" },
     { id: "nutrition",    label: "Nutrition", icon: "🥗" },
     { id: "training",     label: "Training",  icon: "🏋️" },
     { id: "labs",         label: "Labs",      icon: "🔬" },
@@ -927,8 +926,8 @@ export default function DashboardPage() {
 
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
 
-        {/* ── TODAY ── */}
-        {section === "today" && (() => {
+        {/* ── COACH (also the landing page) ── */}
+        {section === "coaching" && (() => {
           const todayStr   = new Date().toISOString().slice(0, 10);
           const isStale    = !!(data.today?.date && data.today.date < todayStr);
           const rdyScore   = rdy?.score  as number | undefined;
@@ -951,7 +950,7 @@ export default function DashboardPage() {
           const hasLive    = liveScore != null || liveSteps != null || liveCalVal != null;
 
           return (
-          <>
+          <div className="space-y-6">
             {/* No-Oura banner */}
             {data.has_oura === false && (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 flex items-start gap-4">
@@ -1265,13 +1264,7 @@ export default function DashboardPage() {
               </div>
               <TrendChart data={trend} metric={tab} />
             </section>
-          </>
-          );
-        })()}
-
-        {/* ── COACHING — strategic deep dive ── */}
-        {section === "coaching" && (
-          <div className="space-y-6">
+            {/* ── Strategic deep-dive ── */}
             {/* Full prediction tracker with dot chart */}
             <section className="rounded-2xl border bg-white p-4 space-y-4"
               style={{ borderColor: readiness_forecast.color + "55" }}>
@@ -1367,7 +1360,8 @@ export default function DashboardPage() {
             <CoachingSection title="Long-Term Watch"  items={coaching.long}  />
             <InsightsSection />
           </div>
-        )}
+          );
+        })()}
 
         {/* ── NUTRITION ── */}
         {section === "nutrition" && (
