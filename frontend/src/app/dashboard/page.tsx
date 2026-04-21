@@ -930,6 +930,16 @@ export default function DashboardPage() {
         {/* ── TODAY ── */}
         {section === "today" && (
           <>
+            {/* Stale data banner — shown when Oura data is from a previous day */}
+            {data.today?.date && data.today.date < new Date().toISOString().slice(0, 10) && (
+              <div className="rounded-xl bg-gray-50 border border-gray-200 px-4 py-2.5 flex items-center gap-2">
+                <span className="text-sm">🕐</span>
+                <p className="text-xs text-gray-500">
+                  Showing data from {fmtDate(data.today.date)} — today's Oura data is still processing.
+                </p>
+              </div>
+            )}
+
             {/* No-Oura banner */}
             {data.has_oura === false && (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 flex items-start gap-4">

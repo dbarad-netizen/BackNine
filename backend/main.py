@@ -641,8 +641,11 @@ async def get_dashboard(request: Request, days: int = 120):
         anchor = today_str
 
     t_sl  = slm.get(anchor, {})
+    # Readiness: fall back to most recent — yesterday's score is still meaningful
     t_rdy = rm.get(anchor) or (rm[sorted(rm)[-1]] if rm else {})
-    t_act = am.get(today_str) or am.get(anchor) or (am[sorted(am)[-1]] if am else {})
+    # Activity: only show today's data. Yesterday's steps/calories on the Today
+    # page is misleading — show blank rather than stale numbers.
+    t_act = am.get(today_str, {})
 
     # Oura sleep sessions and daily scores both use WAKE date.
     # When today's session hasn't been processed yet (smm[anchor] missing),
@@ -784,6 +787,7 @@ async def get_dashboard(request: Request, days: int = 120):
         "data_through": data_through,
         "provider":     "oura",
         "today": {
+            "date":        anchor,
             "readiness":   t_rdy,
             "sleep":       t_sl,
             "activity":    t_act,
