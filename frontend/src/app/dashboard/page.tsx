@@ -937,16 +937,18 @@ export default function DashboardPage() {
           const heroColor  = coaches.overall?.border ?? "#22c55e";
           const visibleMetrics = metrics.filter(m => m.value !== "—");
 
-          // Yesterday's performance (Oura anchor — usually yesterday)
-          const yestDate   = data.today?.date ?? "";
-          const yestLabel  = yestDate === todayStr ? "Today" : "Yesterday";
-          const yestSteps  = act?.steps  as number | null;
-          const yestActCal = act?.active_cal as number | null;
+          // Yesterday's performance — explicit yesterday Oura data, always labeled correctly
+          const yest       = today.yesterday_activity as Record<string, number | null> | undefined;
+          const yestScore  = yest?.score   ?? null;
+          const yestSteps  = yest?.steps   ?? null;
+          const yestActCal = yest?.active_cal ?? null;
+          const hasYest    = yestScore != null || yestSteps != null || yestActCal != null;
 
-          // Today's live data from Apple Health
+          // Today so far — live AH data + today's Oura activity score if available
+          const liveScore  = liveAct?.score  ?? null;
           const liveSteps  = liveAct?.steps  ?? null;
           const liveCalVal = liveAct?.active_cal ?? null;
-          const hasLive    = liveSteps != null || liveCalVal != null;
+          const hasLive    = liveScore != null || liveSteps != null || liveCalVal != null;
 
           return (
           <>
@@ -1061,32 +1063,28 @@ export default function DashboardPage() {
               </section>
             )}
 
-            {/* ── Yesterday's Performance ── */}
-            {(actScore != null || yestSteps != null || yestActCal != null) && (
+            {/* ── Today So Far — live AH + today's Oura score if ready ── */}
+            {hasLive && (
               <section className="rounded-2xl border border-gray-100 bg-white p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400">
-                    {yestLabel}&apos;s Performance
-                  </h3>
-                  {yestDate && yestDate !== todayStr && (
-                    <span className="text-[10px] text-gray-300">{fmtDate(yestDate)}</span>
-                  )}
+                  <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400">Today So Far</h3>
+                  <span className="text-[10px] text-gray-300">syncs every 5 min</span>
                 </div>
                 <div className="flex items-center gap-4">
-                  {actScore != null && (
+                  {liveScore != null && (
                     <div className="flex items-center gap-2 shrink-0">
                       <div className="relative w-10 h-10">
                         <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
                           <circle cx="50" cy="50" r="42" fill="none" stroke="#E5E7EB" strokeWidth="14"/>
                           <circle cx="50" cy="50" r="42" fill="none"
-                            stroke={actScore >= 85 ? "#22c55e" : actScore >= 70 ? "#f59e0b" : "#ef4444"}
+                            stroke={liveScore >= 85 ? "#22c55e" : liveScore >= 70 ? "#f59e0b" : "#ef4444"}
                             strokeWidth="14" strokeLinecap="round"
                             strokeDasharray={`${2 * Math.PI * 42}`}
-                            strokeDashoffset={`${2 * Math.PI * 42 * (1 - actScore / 100)}`}
+                            strokeDashoffset={`${2 * Math.PI * 42 * (1 - liveScore / 100)}`}
                           />
                         </svg>
                         <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="text-xs font-bold text-gray-900">{actScore}</span>
+                          <span className="text-xs font-bold text-gray-900">{liveScore}</span>
                         </div>
                       </div>
                       <div>
@@ -1095,51 +1093,76 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   )}
-                  <div className="flex-1 flex gap-4">
+                  <div className="flex gap-6">
+                    {liveSteps != null && (
+                      <div>
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">Steps</p>
+                        <p className="text-base font-bold text-gray-900">{liveSteps.toLocaleString()}</p>
+                      </div>
+                    )}
+                    {liveCalVal != null && (
+                      <div>
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">Active Cal</p>
+                        <p className="text-base font-bold text-gray-900">{liveCalVal}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* ── Yesterday's Performance — explicit yesterday Oura data ── */}
+            {hasYest && (
+              <section className="rounded-2xl border border-gray-100 bg-white p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+                    Yesterday&apos;s Performance
+                  </h3>
+                </div>
+                <div className="flex items-center gap-4">
+                  {yestScore != null && (
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="relative w-10 h-10">
+                        <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+                          <circle cx="50" cy="50" r="42" fill="none" stroke="#E5E7EB" strokeWidth="14"/>
+                          <circle cx="50" cy="50" r="42" fill="none"
+                            stroke={yestScore >= 85 ? "#22c55e" : yestScore >= 70 ? "#f59e0b" : "#ef4444"}
+                            strokeWidth="14" strokeLinecap="round"
+                            strokeDasharray={`${2 * Math.PI * 42}`}
+                            strokeDashoffset={`${2 * Math.PI * 42 * (1 - yestScore / 100)}`}
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-xs font-bold text-gray-900">{yestScore}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wide">Activity</p>
+                        <p className="text-xs font-medium text-gray-700">Score</p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex gap-6">
                     {yestSteps != null && (
                       <div>
                         <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">Steps</p>
-                        <p className="text-sm font-semibold text-gray-900">{yestSteps.toLocaleString()}</p>
+                        <p className="text-base font-bold text-gray-900">{yestSteps.toLocaleString()}</p>
                       </div>
                     )}
                     {yestActCal != null && (
                       <div>
                         <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">Active Cal</p>
-                        <p className="text-sm font-semibold text-gray-900">{yestActCal}</p>
+                        <p className="text-base font-bold text-gray-900">{yestActCal}</p>
                       </div>
                     )}
                   </div>
                 </div>
-                {/* Connection narrative */}
+                {/* Coach narrative connecting yesterday to today's readiness */}
                 {coaches.activity?.msg && (
                   <p className="text-xs text-gray-400 mt-3 pt-3 border-t border-gray-50 leading-snug">
                     {coaches.activity.msg}
                   </p>
                 )}
-              </section>
-            )}
-
-            {/* ── Today So Far (live Apple Health) ── */}
-            {hasLive && (
-              <section className="rounded-2xl border border-gray-100 bg-white px-4 py-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400">Today So Far</h3>
-                  <span className="text-[10px] text-gray-300">syncs every 5 min</span>
-                </div>
-                <div className="flex gap-6 mt-2">
-                  {liveSteps != null && (
-                    <div>
-                      <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">Steps</p>
-                      <p className="text-base font-bold text-gray-900">{liveSteps.toLocaleString()}</p>
-                    </div>
-                  )}
-                  {liveCalVal != null && (
-                    <div>
-                      <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">Active Cal</p>
-                      <p className="text-base font-bold text-gray-900">{liveCalVal}</p>
-                    </div>
-                  )}
-                </div>
               </section>
             )}
 

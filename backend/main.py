@@ -661,10 +661,19 @@ async def get_dashboard(request: Request, days: int = 120):
     except Exception:
         ah_live = None
 
+    # "Yesterday's Performance" uses yesterday's Oura data explicitly — never
+    # anchor-based — so the label and data are always in sync regardless of
+    # which date Oura has processed sleep for.
+    yesterday_activity = am.get(yesterday_str, {})
+
+    # "Today So Far" = live AH data + today's Oura activity score if Oura
+    # has already closed today's ring (available by mid-morning most days).
+    today_oura_act = am.get(today_str, {})
     activity_live = {
         "date":       today_str,
         "steps":      (ah_live or {}).get("steps"),
         "active_cal": (ah_live or {}).get("active_calories"),
+        "score":      today_oura_act.get("score") or None,  # None if not yet available
     }
     t_act_coach = t_act  # Oura-sourced; used for coach_activity() message
 
@@ -808,12 +817,13 @@ async def get_dashboard(request: Request, days: int = 120):
         "data_through": data_through,
         "provider":     "oura",
         "today": {
-            "date":          anchor,       # Oura data anchor (often yesterday)
-            "readiness":     t_rdy,
-            "sleep":         t_sl,
-            "activity":      t_act,        # Oura activity summary for anchor date
-            "activity_live": activity_live, # AH live data for today (may be partial)
-            "sleep_model":   t_sm,
+            "date":               anchor,             # Oura data anchor (often yesterday)
+            "readiness":          t_rdy,
+            "sleep":              t_sl,
+            "activity":           t_act,              # Oura activity for anchor (coach card)
+            "yesterday_activity": yesterday_activity, # Explicit yesterday Oura data
+            "activity_live":      activity_live,      # AH live + today's Oura score
+            "sleep_model":        t_sm,
         },
         "training_load":       training_load,
         "readiness_forecast":  readiness_forecast,
