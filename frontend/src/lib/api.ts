@@ -506,8 +506,8 @@ export const api = {
   },
 
   // ── Insights ──────────────────────────────────────────────────────────────
-  insights(days = 60): Promise<{ insights: Insight[]; days_analyzed: number }> {
-    return request(`/api/insights?days=${days}`);
+  insights(days = 60, options?: RequestInit): Promise<{ insights: Insight[]; days_analyzed: number }> {
+    return request(`/api/insights?days=${days}`, options);
   },
 
   // ── Progress ──────────────────────────────────────────────────────────────

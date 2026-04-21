@@ -104,15 +104,29 @@ export default function InsightsSection() {
   const [error,    setError]      = useState<string | null>(null);
 
   useEffect(() => {
-    api.insights(60)
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10_000); // 10-second timeout
+
+    api.insights(60, { signal: controller.signal })
       .then(r => {
+        clearTimeout(timer);
         setInsights(r.insights);
         setLoading(false);
       })
       .catch(e => {
-        setError(e.message ?? "Failed to load insights");
+        clearTimeout(timer);
+        // AbortError = our 10-second timeout fired — silently show the empty state
+        // rather than spinning forever or showing a broken UI
+        if (e.name !== "AbortError") {
+          setError(e.message ?? "Failed to load insights");
+        }
         setLoading(false);
       });
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, []);
 
   if (loading) {

@@ -1239,11 +1239,20 @@ def get_insights(request: Request, days: int = 60):
     """
     Return cross-source correlation insights for the current user.
     Requires a few weeks of overlapping data across Oura + nutrition + Apple Health.
+    Runs with an 8-second wall-clock timeout so slow Supabase queries never
+    leave the spinner running indefinitely.
     """
+    import concurrent.futures
     session = _require_session(request)
     user_id = session["user_id"]
     try:
-        results = ins.get_insights(user_id, days=days)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(ins.get_insights, user_id, days)
+            try:
+                results = future.result(timeout=8)
+            except concurrent.futures.TimeoutError:
+                # Return empty list — frontend will show "not enough data" state
+                return {"insights": [], "days_analyzed": days}
         return {"insights": results, "days_analyzed": days}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
