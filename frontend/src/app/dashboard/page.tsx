@@ -852,20 +852,20 @@ export default function DashboardPage() {
     ? `${(rdy.temperature_deviation as number) > 0 ? "+" : ""}${(rdy.temperature_deviation as number).toFixed(1)}°C`
     : "—";
 
+  // Recovery metrics — last night's biometrics from Oura/AH (no activity data here)
   const metrics = [
-    { label: "HRV",        value: sm?.hrv         ? `${sm.hrv} ms`                         : "—" },
-    { label: "RHR",        value: sm?.rhr          ? `${sm.rhr} bpm`                        : "—" },
-    { label: "Sleep",      value: hrsTot != null   ? `${hrsTot}h ${hrsMins}m`               : "—" },
-    { label: "Steps",      value: act?.steps       ? `${(act.steps as number).toLocaleString()}` : "—" },
-    { label: "Deep",       value: deepMin          ? `${deepMin} min`                       : "—" },
-    { label: "REM",        value: remMin           ? `${remMin} min`                        : "—" },
-    { label: "Temp",       value: tempVal },
-    { label: "Active Cal", value: act?.active_cal  ? `${act.active_cal}`                    : "—" },
+    { label: "HRV",   value: sm?.hrv       ? `${sm.hrv} ms`         : "—" },
+    { label: "RHR",   value: sm?.rhr       ? `${sm.rhr} bpm`        : "—" },
+    { label: "Sleep", value: hrsTot != null ? `${hrsTot}h ${hrsMins}m` : "—" },
+    { label: "Deep",  value: deepMin       ? `${deepMin} min`       : "—" },
+    { label: "REM",   value: remMin        ? `${remMin} min`        : "—" },
+    { label: "Temp",  value: tempVal },
   ];
 
-  // Calorie budget calculation
+  // Calorie budget calculation — prefer live AH active cal for today's budget
+  const liveAct    = today.activity_live;
   const settings   = nutToday?.settings;
-  const activeCal  = (act?.active_cal as number) || 0;
+  const activeCal  = (liveAct?.active_cal ?? act?.active_cal as number) || 0;
   const baseBudget = settings?.calorie_target ?? 2000;
   const budget     = settings?.include_active_cal_in_budget ? baseBudget + activeCal : baseBudget;
   const consumed   = nutToday?.totals.calories ?? 0;
@@ -929,12 +929,24 @@ export default function DashboardPage() {
 
         {/* ── TODAY ── */}
         {section === "today" && (() => {
-          const isStale = !!(data.today?.date && data.today.date < new Date().toISOString().slice(0, 10));
-          const rdyScore  = rdy?.score as number | undefined;
-          const slScore   = sl?.score  as number | undefined;
-          const actScore  = act?.score as number | undefined;
-          const heroColor = coaches.overall?.border ?? "#22c55e";
+          const todayStr   = new Date().toISOString().slice(0, 10);
+          const isStale    = !!(data.today?.date && data.today.date < todayStr);
+          const rdyScore   = rdy?.score  as number | undefined;
+          const slScore    = sl?.score   as number | undefined;
+          const actScore   = act?.score  as number | undefined;
+          const heroColor  = coaches.overall?.border ?? "#22c55e";
           const visibleMetrics = metrics.filter(m => m.value !== "—");
+
+          // Yesterday's performance (Oura anchor — usually yesterday)
+          const yestDate   = data.today?.date ?? "";
+          const yestLabel  = yestDate === todayStr ? "Today" : "Yesterday";
+          const yestSteps  = act?.steps  as number | null;
+          const yestActCal = act?.active_cal as number | null;
+
+          // Today's live data from Apple Health
+          const liveSteps  = liveAct?.steps  ?? null;
+          const liveCalVal = liveAct?.active_cal ?? null;
+          const hasLive    = liveSteps != null || liveCalVal != null;
 
           return (
           <>
@@ -1049,9 +1061,91 @@ export default function DashboardPage() {
               </section>
             )}
 
-            {/* ── Metric tiles — only show tiles that have data ── */}
+            {/* ── Yesterday's Performance ── */}
+            {(actScore != null || yestSteps != null || yestActCal != null) && (
+              <section className="rounded-2xl border border-gray-100 bg-white p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+                    {yestLabel}&apos;s Performance
+                  </h3>
+                  {yestDate && yestDate !== todayStr && (
+                    <span className="text-[10px] text-gray-300">{fmtDate(yestDate)}</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-4">
+                  {actScore != null && (
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="relative w-10 h-10">
+                        <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+                          <circle cx="50" cy="50" r="42" fill="none" stroke="#E5E7EB" strokeWidth="14"/>
+                          <circle cx="50" cy="50" r="42" fill="none"
+                            stroke={actScore >= 85 ? "#22c55e" : actScore >= 70 ? "#f59e0b" : "#ef4444"}
+                            strokeWidth="14" strokeLinecap="round"
+                            strokeDasharray={`${2 * Math.PI * 42}`}
+                            strokeDashoffset={`${2 * Math.PI * 42 * (1 - actScore / 100)}`}
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-xs font-bold text-gray-900">{actScore}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wide">Activity</p>
+                        <p className="text-xs font-medium text-gray-700">Score</p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex-1 flex gap-4">
+                    {yestSteps != null && (
+                      <div>
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">Steps</p>
+                        <p className="text-sm font-semibold text-gray-900">{yestSteps.toLocaleString()}</p>
+                      </div>
+                    )}
+                    {yestActCal != null && (
+                      <div>
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">Active Cal</p>
+                        <p className="text-sm font-semibold text-gray-900">{yestActCal}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {/* Connection narrative */}
+                {coaches.activity?.msg && (
+                  <p className="text-xs text-gray-400 mt-3 pt-3 border-t border-gray-50 leading-snug">
+                    {coaches.activity.msg}
+                  </p>
+                )}
+              </section>
+            )}
+
+            {/* ── Today So Far (live Apple Health) ── */}
+            {hasLive && (
+              <section className="rounded-2xl border border-gray-100 bg-white px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400">Today So Far</h3>
+                  <span className="text-[10px] text-gray-300">syncs every 5 min</span>
+                </div>
+                <div className="flex gap-6 mt-2">
+                  {liveSteps != null && (
+                    <div>
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">Steps</p>
+                      <p className="text-base font-bold text-gray-900">{liveSteps.toLocaleString()}</p>
+                    </div>
+                  )}
+                  {liveCalVal != null && (
+                    <div>
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">Active Cal</p>
+                      <p className="text-base font-bold text-gray-900">{liveCalVal}</p>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {/* ── Recovery Metrics — sleep biometrics only ── */}
             {visibleMetrics.length > 0 && (
-              <section className="grid grid-cols-4 gap-2">
+              <section className="grid grid-cols-3 gap-2">
                 {visibleMetrics.map(({ label, value }) => (
                   <div key={label} className="rounded-xl border border-gray-200 bg-white px-3 py-3 text-center">
                     <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-1">{label}</p>

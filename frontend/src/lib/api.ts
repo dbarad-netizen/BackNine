@@ -35,12 +35,19 @@ export function clearToken(): void {
   if (typeof window !== "undefined") localStorage.removeItem("bn_token");
 }
 
+export interface ActivityLive {
+  date:       string;
+  steps:      number | null;
+  active_cal: number | null;
+}
+
 export interface TodayData {
-  date?:       string;
-  readiness:   Record<string, unknown>;
-  sleep:       Record<string, unknown>;
-  activity:    Record<string, unknown>;
-  sleep_model: Record<string, unknown>;
+  date?:          string;   // Oura anchor date (often yesterday)
+  readiness:      Record<string, unknown>;
+  sleep:          Record<string, unknown>;
+  activity:       Record<string, unknown>; // Oura summary for anchor date
+  activity_live?: ActivityLive;            // Apple Health live data for today
+  sleep_model:    Record<string, unknown>;
 }
 
 export interface TrendDay {

@@ -647,6 +647,27 @@ async def get_dashboard(request: Request, days: int = 120):
     t_rdy = rm.get(anchor) or (rm[sorted(rm)[-1]] if rm else {})
     t_act = am.get(anchor) or (am[sorted(am)[-1]] if am else {})
 
+    # ── Live activity metrics (today's steps / active calories from Apple Health) ──
+    # Oura's activity summary closes at midnight — t_act.steps/active_cal are
+    # from the anchor date (usually yesterday).  Apple Health accumulates live
+    # data from iPhone/Watch throughout the day (synced via Health Auto Export
+    # every 5 min), so it has today's running total.
+    #
+    # Strategy: keep t_act intact (Oura data for anchor date) for coaching and
+    # "Yesterday's Performance" display.  Send a separate activity_live dict
+    # with today's AH data so the frontend can show a "Today so far" section.
+    try:
+        ah_live = ah.get_day(user_id, today_str)
+    except Exception:
+        ah_live = None
+
+    activity_live = {
+        "date":       today_str,
+        "steps":      (ah_live or {}).get("steps"),
+        "active_cal": (ah_live or {}).get("active_calories"),
+    }
+    t_act_coach = t_act  # Oura-sourced; used for coach_activity() message
+
     # Oura sleep sessions and daily scores both use WAKE date.
     # When today's session hasn't been processed yet (smm[anchor] missing),
     # fall back to Apple Health data — the Oura app syncs to AH immediately,
@@ -787,11 +808,12 @@ async def get_dashboard(request: Request, days: int = 120):
         "data_through": data_through,
         "provider":     "oura",
         "today": {
-            "date":        anchor,
-            "readiness":   t_rdy,
-            "sleep":       t_sl,
-            "activity":    t_act,
-            "sleep_model": t_sm,
+            "date":          anchor,       # Oura data anchor (often yesterday)
+            "readiness":     t_rdy,
+            "sleep":         t_sl,
+            "activity":      t_act,        # Oura activity summary for anchor date
+            "activity_live": activity_live, # AH live data for today (may be partial)
+            "sleep_model":   t_sm,
         },
         "training_load":       training_load,
         "readiness_forecast":  readiness_forecast,
