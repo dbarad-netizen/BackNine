@@ -872,7 +872,7 @@ export default function DashboardPage() {
   const remaining  = Math.max(0, budget - consumed);
 
   const NAV_ITEMS: { id: Section; label: string; icon: string }[] = [
-    { id: "coaching",     label: "Today",     icon: "🏠" },
+    { id: "coaching",     label: "Brief",     icon: "🏠" },
     { id: "nutrition",    label: "Nutrition", icon: "🥗" },
     { id: "training",     label: "Training",  icon: "🏋️" },
     { id: "labs",         label: "Labs",      icon: "🔬" },
@@ -1175,60 +1175,6 @@ export default function DashboardPage() {
                 )}
               </section>
             )}
-
-            {/* ── Tomorrow's Forecast — compact ── */}
-            <section className="rounded-2xl border bg-white p-4"
-              style={{ borderColor: readiness_forecast.color + "44" }}>
-              <div className="flex items-center gap-4">
-                <div className="relative w-12 h-12 shrink-0">
-                  <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                    <circle cx="50" cy="50" r="42" fill="none" stroke="#E5E7EB" strokeWidth="12"/>
-                    <circle cx="50" cy="50" r="42" fill="none"
-                      stroke={readiness_forecast.color} strokeWidth="12" strokeLinecap="round"
-                      strokeDasharray={`${2 * Math.PI * 42}`}
-                      strokeDashoffset={`${2 * Math.PI * 42 * (1 - readiness_forecast.score / 100)}`}
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-xs font-bold text-gray-900">{readiness_forecast.score}</span>
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-0.5">Tomorrow&apos;s Forecast</p>
-                  <p className="font-semibold text-gray-900 text-sm leading-snug">{readiness_forecast.label}</p>
-                  <div className="flex gap-3 mt-1 text-xs text-gray-400">
-                    <span>HRV <span className={readiness_forecast.hrv_adj >= 0 ? "text-green-500" : "text-red-400"}>
-                      {readiness_forecast.hrv_adj >= 0 ? "+" : ""}{readiness_forecast.hrv_adj}
-                    </span></span>
-                    <span>Sleep <span className={readiness_forecast.sleep_adj >= 0 ? "text-green-500" : "text-red-400"}>
-                      {readiness_forecast.sleep_adj >= 0 ? "+" : ""}{readiness_forecast.sleep_adj}
-                    </span></span>
-                  </div>
-                </div>
-                {prediction_accuracy && prediction_accuracy.streak > 0 && (
-                  <div className="text-center shrink-0">
-                    <div className="text-xl font-bold text-amber-500">{prediction_accuracy.streak}</div>
-                    <div className="text-[10px] text-gray-400">streak 🔥</div>
-                  </div>
-                )}
-              </div>
-              {prediction_accuracy && prediction_accuracy.resolved.length > 0 && (() => {
-                const p = prediction_accuracy.resolved[0];
-                const diff = Math.abs(p.diff);
-                return (
-                  <div className={`mt-3 rounded-lg px-3 py-1.5 flex items-center justify-between text-xs ${
-                    p.hit ? "bg-green-50 border border-green-100" : "bg-red-50 border border-red-100"
-                  }`}>
-                    <span className="text-gray-500">
-                      Yesterday — predicted <span className="font-semibold text-gray-700">{p.predicted}</span>, got <span className="font-semibold text-gray-700">{p.actual}</span>
-                    </span>
-                    <span className={`font-semibold ml-2 shrink-0 ${p.hit ? "text-green-600" : "text-red-500"}`}>
-                      {p.hit ? `✓ ${diff === 0 ? "exact!" : `off by ${diff}`}` : `✗ off by ${diff}`}
-                    </span>
-                  </div>
-                );
-              })()}
-            </section>
 
             {/* ── Recovery Details ── */}
             {visibleMetrics.length > 0 && (
