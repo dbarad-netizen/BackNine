@@ -90,10 +90,16 @@ FIELDS = [
     "lean_body_mass_kg",
     "skeletal_muscle_mass_kg",
     "bmi",
+    "blood_pressure_systolic",
+    "blood_pressure_diastolic",
+    "spo2",
+    "visceral_fat_rating",
+    "waist_circumference_cm",
 ]
 
 # Fields stored as integer in Supabase — must cast to int before insert
-INTEGER_FIELDS = {"steps", "active_calories", "resting_hr"}
+INTEGER_FIELDS = {"steps", "active_calories", "resting_hr",
+                  "blood_pressure_systolic", "blood_pressure_diastolic"}
 
 
 # Health Auto Export metric name → our field name
@@ -122,6 +128,7 @@ HAE_METRIC_MAP = {
     "sleep_unspecified":             "sleep_core_hours",
     "sleep_awake":                   "sleep_awake_hours",
     "in_bed_awake":                  "sleep_awake_hours",
+    # Body composition — InBody scale
     "body_fat_percentage":           "body_fat_percentage",
     "percent_body_fat":              "body_fat_percentage",
     "lean_body_mass":                "lean_body_mass_kg",
@@ -130,6 +137,18 @@ HAE_METRIC_MAP = {
     "skeletal_muscle_mass_kg":       "skeletal_muscle_mass_kg",
     "body_mass_index":               "bmi",
     "bmi":                           "bmi",
+    "visceral_fat_rating":           "visceral_fat_rating",
+    "visceral_fat":                  "visceral_fat_rating",
+    "waist_circumference":           "waist_circumference_cm",
+    # Blood pressure — Withings BP monitor
+    "blood_pressure_systolic":       "blood_pressure_systolic",
+    "systolic_blood_pressure":       "blood_pressure_systolic",
+    "blood_pressure_diastolic":      "blood_pressure_diastolic",
+    "diastolic_blood_pressure":      "blood_pressure_diastolic",
+    # Blood oxygen
+    "oxygen_saturation":             "spo2",
+    "blood_oxygen_saturation":       "spo2",
+    "spo2":                          "spo2",
 }
 
 
