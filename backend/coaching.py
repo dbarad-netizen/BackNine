@@ -43,24 +43,25 @@ def _ins(icon: str, label: str, text: str, sev: str = "info") -> dict:
 # ── today tile coaches (simple 3-color cards) ─────────────────────────────────
 
 def coach_overall(rdy: dict, sm: dict) -> dict:
-    s = rdy.get("score") or 0
-    hrv = sm.get("hrv") or 0
+    s   = rdy.get("score") or 0
+    hrv = sm.get("hrv")
+    hrv_str = f" HRV {hrv}ms." if hrv else ""
     if s >= 85:
         return {
             "color": "#052e16", "border": "#22c55e", "icon": "🟢",
             "title": "You're primed to perform today.",
-            "msg": f"Readiness {s} — your body is well-recovered. HRV of {hrv}ms is strong. Great day for training.",
+            "msg": f"Readiness {s} — your body is well-recovered.{hrv_str} Great day for training.",
         }
     if s >= 70:
         return {
             "color": "#1c1a07", "border": "#f59e0b", "icon": "🟡",
             "title": "Moderate readiness — listen to your body.",
-            "msg": f"Readiness {s}. HRV {hrv}ms. OK for moderate exercise. Avoid max-effort training.",
+            "msg": f"Readiness {s}.{hrv_str} OK for moderate exercise. Avoid max-effort training.",
         }
     return {
         "color": "#1c0707", "border": "#ef4444", "icon": "🔴",
         "title": "Your body needs recovery today.",
-        "msg": f"Readiness {s} — fatigue elevated. HRV {hrv}ms. Skip intense exercise, prioritize rest.",
+        "msg": f"Readiness {s} — fatigue elevated.{hrv_str} Skip intense exercise, prioritize rest.",
     }
 
 
@@ -89,25 +90,31 @@ def coach_sleep(sl: dict, sm: dict) -> dict:
 
 
 def coach_activity(act: dict) -> dict:
-    s = act.get("score") or 0
-    steps = act.get("steps") or 0
-    steps_fmt = f"{steps:,}"
+    s     = act.get("score")
+    steps = act.get("steps")
+    if not s:
+        return {
+            "color": "#111827", "border": "#d1d5db", "icon": "🏃",
+            "title": "Activity data syncing.",
+            "msg": "Today's activity score isn't available yet — check back later or keep moving!",
+        }
+    steps_str = f" {steps:,} steps." if steps else ""
     if s >= 85:
         return {
             "color": "#052e16", "border": "#22c55e", "icon": "🏃",
             "title": "Crushing your activity goals!",
-            "msg": f"Activity score {s}. {steps_fmt} steps. Excellent movement consistency.",
+            "msg": f"Activity score {s}.{steps_str} Excellent movement consistency.",
         }
     if s >= 70:
         return {
             "color": "#1c1a07", "border": "#f59e0b", "icon": "🚶",
             "title": "Good activity — keep the momentum.",
-            "msg": f"Activity score {s}. {steps_fmt} steps. Keep moving!",
+            "msg": f"Activity score {s}.{steps_str} Keep moving!",
         }
     return {
         "color": "#1c0707", "border": "#ef4444", "icon": "🛑",
         "title": "Low activity today.",
-        "msg": f"Activity score {s}. {steps_fmt} steps. Even a short walk helps.",
+        "msg": f"Activity score {s}.{steps_str} Even a short walk helps.",
     }
 
 
