@@ -912,7 +912,7 @@ export default function DashboardPage() {
           {/* Right side */}
           <div className="flex items-center gap-3 ml-3 shrink-0">
             <span className="hidden sm:block text-xs text-gray-400">
-              {fmtDate(data.data_through)}
+              {fmtDate(new Date().toISOString().slice(0, 10))}
             </span>
             <button
               onClick={() => api.logout().then(() => (window.location.href = "/"))}
