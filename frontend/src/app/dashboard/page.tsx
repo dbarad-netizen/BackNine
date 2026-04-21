@@ -928,18 +928,16 @@ export default function DashboardPage() {
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
 
         {/* ── TODAY ── */}
-        {section === "today" && (
-          <>
-            {/* Stale data banner — shown when Oura data is from a previous day */}
-            {data.today?.date && data.today.date < new Date().toISOString().slice(0, 10) && (
-              <div className="rounded-xl bg-gray-50 border border-gray-200 px-4 py-2.5 flex items-center gap-2">
-                <span className="text-sm">🕐</span>
-                <p className="text-xs text-gray-500">
-                  Showing data from {fmtDate(data.today.date)} — today's Oura data is still processing.
-                </p>
-              </div>
-            )}
+        {section === "today" && (() => {
+          const isStale = !!(data.today?.date && data.today.date < new Date().toISOString().slice(0, 10));
+          const rdyScore  = rdy?.score as number | undefined;
+          const slScore   = sl?.score  as number | undefined;
+          const actScore  = act?.score as number | undefined;
+          const heroColor = coaches.overall?.border ?? "#22c55e";
+          const visibleMetrics = metrics.filter(m => m.value !== "—");
 
+          return (
+          <>
             {/* No-Oura banner */}
             {data.has_oura === false && (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 flex items-start gap-4">
@@ -950,52 +948,120 @@ export default function DashboardPage() {
                     Link your ring to unlock readiness scores, HRV trends, sleep analysis, and personalized coaching.
                   </p>
                 </div>
-                <a
-                  href="/connect"
-                  className="shrink-0 mt-0.5 bg-amber-500 hover:bg-amber-400 text-white rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors"
-                >
+                <a href="/connect"
+                  className="shrink-0 mt-0.5 bg-amber-500 hover:bg-amber-400 text-white rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors">
                   Connect →
                 </a>
               </div>
             )}
 
-            <section className="grid grid-cols-3 gap-3">
-              {[
-                { score: rdy?.score as number, label: "Readiness" },
-                { score: sl?.score  as number, label: "Sleep"     },
-                { score: act?.score as number, label: "Activity"  },
-              ].map(({ score, label }) => (
-                <div key={label} className="flex flex-col items-center rounded-2xl border border-gray-200 bg-white py-5 gap-1">
-                  <ScoreRing score={score} label={label} />
-                </div>
-              ))}
-            </section>
+            {/* ── Morning Briefing Hero ── */}
+            {rdyScore && (
+              <section className="rounded-2xl border-2 bg-white p-5 space-y-4"
+                style={{ borderColor: heroColor }}>
 
-            {/* Sleep detail syncing notice — shown when score exists but neither Oura nor Apple Health has detail yet */}
-            {sl?.score && !sm?.total && (
-              <div className="flex items-center gap-2 rounded-xl bg-blue-50 border border-blue-100 px-4 py-2.5">
-                <div className="h-3 w-3 rounded-full border-2 border-blue-400 border-t-transparent animate-spin shrink-0" />
-                <p className="text-xs text-blue-700">
-                  Sleep detail syncing — run the BackNine shortcut on your iPhone for instant data, or check back in a few hours.
-                </p>
-              </div>
+                {/* Top row: big readiness score + narrative */}
+                <div className="flex items-start gap-4">
+                  {/* Score ring */}
+                  <div className="relative shrink-0 w-16 h-16">
+                    <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+                      <circle cx="50" cy="50" r="42" fill="none" stroke="#E5E7EB" strokeWidth="10"/>
+                      <circle cx="50" cy="50" r="42" fill="none"
+                        stroke={heroColor} strokeWidth="10" strokeLinecap="round"
+                        strokeDasharray={`${2 * Math.PI * 42}`}
+                        strokeDashoffset={`${2 * Math.PI * 42 * (1 - rdyScore / 100)}`}
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-lg font-bold text-gray-900 leading-none">{rdyScore}</span>
+                      <span className="text-[9px] text-gray-400 uppercase tracking-wide">Ready</span>
+                    </div>
+                  </div>
+
+                  {/* Narrative */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <p className="font-bold text-gray-900 text-base leading-tight">
+                        {coaches.overall?.title ?? "Checking your recovery…"}
+                      </p>
+                      {isStale && (
+                        <span className="text-[10px] text-gray-400 shrink-0 ml-2">
+                          {fmtDate(data.today.date!)}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-500 mt-1 leading-snug">
+                      {coaches.overall?.msg}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Bottom row: sleep + activity scores inline */}
+                <div className="flex gap-3 pt-1 border-t border-gray-100">
+                  {slScore != null && (
+                    <div className="flex items-center gap-2">
+                      <div className="relative w-8 h-8 shrink-0">
+                        <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+                          <circle cx="50" cy="50" r="42" fill="none" stroke="#E5E7EB" strokeWidth="14"/>
+                          <circle cx="50" cy="50" r="42" fill="none"
+                            stroke={slScore >= 85 ? "#22c55e" : slScore >= 70 ? "#f59e0b" : "#ef4444"}
+                            strokeWidth="14" strokeLinecap="round"
+                            strokeDasharray={`${2 * Math.PI * 42}`}
+                            strokeDashoffset={`${2 * Math.PI * 42 * (1 - slScore / 100)}`}
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-[10px] font-bold text-gray-900">{slScore}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wide">Sleep</p>
+                        <p className="text-xs font-medium text-gray-700">{coaches.sleep?.title?.split("—")[0].trim()}</p>
+                      </div>
+                    </div>
+                  )}
+                  {actScore != null && (
+                    <div className="flex items-center gap-2 ml-4">
+                      <div className="relative w-8 h-8 shrink-0">
+                        <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+                          <circle cx="50" cy="50" r="42" fill="none" stroke="#E5E7EB" strokeWidth="14"/>
+                          <circle cx="50" cy="50" r="42" fill="none"
+                            stroke={actScore >= 85 ? "#22c55e" : actScore >= 70 ? "#f59e0b" : "#ef4444"}
+                            strokeWidth="14" strokeLinecap="round"
+                            strokeDasharray={`${2 * Math.PI * 42}`}
+                            strokeDashoffset={`${2 * Math.PI * 42 * (1 - actScore / 100)}`}
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-[10px] font-bold text-gray-900">{actScore}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wide">Activity</p>
+                        <p className="text-xs font-medium text-gray-700">{coaches.activity?.title?.split("—")[0].trim()}</p>
+                      </div>
+                    </div>
+                  )}
+                  {slScore == null && actScore == null && (
+                    <p className="text-xs text-gray-400">Sleep &amp; activity scores syncing…</p>
+                  )}
+                </div>
+              </section>
             )}
 
-            <section className="grid grid-cols-4 gap-2">
-              {metrics.map(({ label, value }) => (
-                <div key={label} className="rounded-xl border border-gray-200 bg-white px-3 py-3 text-center">
-                  <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-1">{label}</p>
-                  <p className="text-sm font-semibold text-gray-900 leading-tight">{value}</p>
-                </div>
-              ))}
-            </section>
+            {/* ── Metric tiles — only show tiles that have data ── */}
+            {visibleMetrics.length > 0 && (
+              <section className="grid grid-cols-4 gap-2">
+                {visibleMetrics.map(({ label, value }) => (
+                  <div key={label} className="rounded-xl border border-gray-200 bg-white px-3 py-3 text-center">
+                    <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-1">{label}</p>
+                    <p className="text-sm font-semibold text-gray-900 leading-tight">{value}</p>
+                  </div>
+                ))}
+              </section>
+            )}
 
-            <section className="space-y-2.5">
-              <CoachCard card={coaches.overall}  />
-              <CoachCard card={coaches.sleep}    />
-              <CoachCard card={coaches.activity} />
-            </section>
-
+            {/* ── 30-Day Trends ── */}
             <section className="rounded-2xl border border-gray-200 bg-white p-5">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="font-semibold text-gray-900 text-sm">30-Day Trends</h2>
@@ -1012,9 +1078,9 @@ export default function DashboardPage() {
               </div>
               <TrendChart data={trend} metric={tab} />
             </section>
-
           </>
-        )}
+          );
+        })()}
 
         {/* ── COACHING ── */}
         {section === "coaching" && (
