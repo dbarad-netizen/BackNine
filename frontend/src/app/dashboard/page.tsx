@@ -1673,21 +1673,51 @@ function LoadingState() {
 }
 
 function ErrorState({ error }: { error: string }) {
-  const isAuth = error.toLowerCase().includes("auth") || error === "Not authenticated";
+  const e = error.toLowerCase();
+  const isAuth    = e.includes("not authenticated") || e.includes("session expired") || e === "401";
+  const isOuraApi = e.includes("oura") || e.includes("502") || e.includes("token");
+  const isOffline = e.includes("fetch") || e.includes("network") || e.includes("failed to fetch");
+
+  let emoji = "⚠️";
+  let title = "Something went wrong";
+  let message = error;
+  let btnLabel = "Retry";
+  let btnHref  = "/dashboard";
+
+  if (isAuth || isOuraApi) {
+    emoji   = "🔗";
+    title   = "Oura connection issue";
+    message = e.includes("expired") || e.includes("reconnect")
+      ? "Your Oura session expired. Reconnect to restore your dashboard."
+      : "There was a problem reaching your Oura Ring data. Try reconnecting — it usually fixes it.";
+    btnLabel = "Reconnect Oura →";
+    btnHref  = "https://backnine-hu60.onrender.com/auth/oura";
+  } else if (isOffline) {
+    emoji   = "📡";
+    title   = "Can't reach the server";
+    message = "The backend may be waking up (give it 30 seconds) or check your connection.";
+    btnLabel = "Retry";
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#F4F1EA] px-4">
       <div className="text-center space-y-5 max-w-sm">
-        <p className="text-5xl">{isAuth ? "🔗" : "⚠️"}</p>
-        <h2 className="text-xl font-semibold text-gray-900">
-          {isAuth ? "Connect your Oura Ring" : "Something went wrong"}
-        </h2>
-        <p className="text-gray-500 text-sm">{isAuth ? "Link your ring to see your daily health intelligence." : error}</p>
-        <a
-          href={isAuth ? "https://backnine-hu60.onrender.com/auth/oura" : "/dashboard"}
-          className="inline-block rounded-xl bg-[#1B3829] hover:bg-[#2D6A4F] text-white font-semibold px-6 py-3 text-sm transition-colors"
-        >
-          {isAuth ? "Connect Oura Ring →" : "Retry"}
-        </a>
+        <p className="text-5xl">{emoji}</p>
+        <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
+        <p className="text-gray-500 text-sm leading-relaxed">{message}</p>
+        <div className="flex flex-col gap-2 items-center">
+          <a
+            href={btnHref}
+            className="inline-block rounded-xl bg-[#1B3829] hover:bg-[#2D6A4F] text-white font-semibold px-6 py-3 text-sm transition-colors"
+          >
+            {btnLabel}
+          </a>
+          {(isAuth || isOuraApi) && (
+            <a href="/dashboard" className="text-xs text-gray-400 hover:text-gray-600">
+              Retry without reconnecting
+            </a>
+          )}
+        </div>
       </div>
     </div>
   );

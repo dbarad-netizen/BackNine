@@ -57,25 +57,63 @@ async def fetch_personal_info(access_token: str) -> dict:
         return r.json()  # contains: id, age, weight, height, biological_sex, email
 
 async def fetch_all(access_token: str, days: int = 120) -> dict:
-    """Fetch all Oura data endpoints for the past N days."""
+    """
+    Fetch all Oura data endpoints for the past N days.
+
+    Each endpoint is fetched independently.  If a non-critical endpoint fails
+    (e.g. sleepDetail) we log it and continue so the rest of the dashboard
+    still loads.  The core endpoints (readiness, sleep, activity) raise on
+    failure so callers know when we have no useful data at all.
+    """
     end   = datetime.now().strftime("%Y-%m-%d")
     start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
     headers = {"Authorization": f"Bearer {access_token}"}
 
-    endpoints = {
-        "readiness":   f"{OURA_API_BASE}/daily_readiness?start_date={start}&end_date={end}",
-        "sleep":       f"{OURA_API_BASE}/daily_sleep?start_date={start}&end_date={end}",
-        "activity":    f"{OURA_API_BASE}/daily_activity?start_date={start}&end_date={end}",
+    # core = failure here means we have nothing useful to show
+    core_endpoints = {
+        "readiness": f"{OURA_API_BASE}/daily_readiness?start_date={start}&end_date={end}",
+        "sleep":     f"{OURA_API_BASE}/daily_sleep?start_date={start}&end_date={end}",
+        "activity":  f"{OURA_API_BASE}/daily_activity?start_date={start}&end_date={end}",
+    }
+    # optional = nice-to-have; silently skip on failure
+    optional_endpoints = {
         "sleepDetail": f"{OURA_API_BASE}/sleep?start_date={start}&end_date={end}",
     }
 
-    async with httpx.AsyncClient(timeout=30) as client:
-        results = {}
-        for key, url in endpoints.items():
-            r = await client.get(url, headers=headers)
-            r.raise_for_status()
-            results[key] = r.json()
+    results: dict = {}
+    errors:  list = []
 
+    async with httpx.AsyncClient(timeout=30) as client:
+        # Fetch core endpoints — any 401/403 bubbles up immediately
+        for key, url in core_endpoints.items():
+            try:
+                r = await client.get(url, headers=headers)
+                if r.status_code in (401, 403):
+                    raise httpx.HTTPStatusError(
+                        f"Oura token invalid or expired ({r.status_code})",
+                        request=r.request, response=r,
+                    )
+                r.raise_for_status()
+                results[key] = r.json()
+            except Exception as exc:
+                errors.append(f"{key}: {exc}")
+
+        # Fetch optional endpoints — log errors but don't fail
+        for key, url in optional_endpoints.items():
+            try:
+                r = await client.get(url, headers=headers)
+                r.raise_for_status()
+                results[key] = r.json()
+            except Exception:
+                results[key] = {"data": []}  # empty fallback
+
+    # If ALL core endpoints failed, surface one clear error
+    if not results:
+        detail = "; ".join(errors) if errors else "Oura API unreachable"
+        raise RuntimeError(detail)
+
+    # If some core endpoints failed but others succeeded, keep going with
+    # what we have so the dashboard still loads partial data.
     return results
 
 def parse_oura_data(raw: dict) -> tuple[dict, dict, dict, dict]:

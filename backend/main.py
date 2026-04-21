@@ -619,6 +619,12 @@ async def get_dashboard(request: Request, days: int = 120):
             except Exception:
                 pass
         except Exception as exc:
+            exc_str = str(exc).lower()
+            if "401" in exc_str or "403" in exc_str or "token" in exc_str or "expired" in exc_str:
+                raise HTTPException(
+                    status_code=401,
+                    detail="Oura token expired — please reconnect your Oura Ring.",
+                )
             if not (rm or slm or am or smm):
                 raise HTTPException(status_code=502, detail=f"Oura API error: {exc}")
 
