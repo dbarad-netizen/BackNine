@@ -128,6 +128,33 @@ export interface PredictionAccuracy {
   hit_threshold:  number;
 }
 
+export interface LongevityComponent {
+  label:  string;
+  value:  string;
+  norm:   string;
+  points: number;
+  max:    number;
+}
+
+export interface LongevityScore {
+  score:                number | null;
+  grade:                string | null;
+  biological_age_delta: number | null;
+  components:           Record<string, LongevityComponent>;
+  data_coverage:        string;
+}
+
+export interface UserProfile {
+  age?:            number | null;
+  biological_sex?: "male" | "female" | null;
+  health_goals?:   string[];
+}
+
+export interface ChatMessage {
+  role:    "user" | "assistant";
+  content: string;
+}
+
 export interface DashboardData {
   generated:            string;
   data_through:         string;
@@ -140,6 +167,7 @@ export interface DashboardData {
   training_load:        TrainingLoad;
   readiness_forecast:   ReadinessForecast;
   prediction_accuracy?: PredictionAccuracy;
+  longevity_score?:     LongevityScore;
 }
 
 export interface Wearable {
@@ -522,6 +550,22 @@ export const api = {
   // ── Progress ──────────────────────────────────────────────────────────────
   progress(): Promise<ProgressReport> {
     return request("/api/progress");
+  },
+
+  // ── Profile ───────────────────────────────────────────────────────────────
+  getProfile(): Promise<UserProfile> {
+    return request("/api/profile");
+  },
+  saveProfile(profile: UserProfile): Promise<UserProfile> {
+    return request("/api/profile", { method: "POST", body: JSON.stringify(profile) });
+  },
+
+  // ── AI Chat ───────────────────────────────────────────────────────────────
+  chat(message: string, history: ChatMessage[]): Promise<{ reply: string }> {
+    return request("/api/chat", {
+      method: "POST",
+      body: JSON.stringify({ message, history }),
+    });
   },
 };
 

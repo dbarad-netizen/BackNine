@@ -31,6 +31,8 @@ import oura_cache as oc
 import insights as ins
 import progress as prog
 import predictions as prd
+import longevity as lon
+import chat as ch
 
 load_dotenv()
 
@@ -60,6 +62,18 @@ def get_supabase():
         from supabase import create_client
         _supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
     return _supabase
+
+
+def _get_profile(user_id: str) -> dict:
+    """Return the user's profile row, or {} if not found."""
+    try:
+        db = get_supabase()
+        if not db:
+            return {}
+        res = db.table("user_profiles").select("*").eq("user_id", user_id).execute()
+        return res.data[0] if res.data else {}
+    except Exception:
+        return {}
 
 
 # ── app ───────────────────────────────────────────────────────────────────────
@@ -804,6 +818,32 @@ async def get_dashboard(request: Request, days: int = 120):
         "base":       round(base),
     }
 
+    # ── Longevity Score ───────────────────────────────────────────────────────
+    try:
+        _profile = _get_profile(user_id)
+        _ah_sum  = ah.get_summary(user_id, days=30)
+        _lon_metrics = {
+            "hrv":                 t_sm.get("hrv"),
+            "rhr":                 t_sm.get("rhr"),
+            "vo2_max":             _ah_sum.get("most_recent", {}).get("vo2_max"),
+            "body_fat_percentage": _ah_sum.get("most_recent", {}).get("body_fat_percentage"),
+            # 7-day averages for sleep and steps
+            "sleep_hours": (lambda v: v if v else None)(
+                next((d.get("total_hrs") for d in sorted(
+                    [{"d": d, "total_hrs": (
+                        sum(t_sm2.get("total", 0) or 0 for t_sm2 in [smm.get(d2, {}) for d2 in [d]])
+                        / 3600
+                    )} for d in sorted(smm, reverse=True)[:7]], key=lambda x: x["d"]
+                ) if d.get("total_hrs", 0) > 0), None)
+            ),
+            "steps": (lambda vals: round(sum(vals) / len(vals)) if vals else None)(
+                [am[d]["steps"] for d in sorted(am, reverse=True)[:7] if am[d].get("steps")]
+            ),
+        }
+        longevity_score = lon.compute(_lon_metrics, _profile)
+    except Exception:
+        longevity_score = {"score": None, "grade": None, "components": {}}
+
     # ── Prediction tracking ───────────────────────────────────────────────────
     # Save today's forecast as tomorrow's prediction, fill in any past actuals,
     # then compute accuracy history for the gamification card.
@@ -834,6 +874,7 @@ async def get_dashboard(request: Request, days: int = 120):
         "training_load":       training_load,
         "readiness_forecast":  readiness_forecast,
         "prediction_accuracy": pred_accuracy,
+        "longevity_score":     longevity_score,
         "trend":    trend,
         "coaches":  coaches,
         "coaching": coaching,
@@ -1292,6 +1333,115 @@ def get_insights(request: Request, days: int = 60):
                 # Return empty list — frontend will show "not enough data" state
                 return {"insights": [], "days_analyzed": days}
         return {"insights": results, "days_analyzed": days}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Profile ───────────────────────────────────────────────────────────────────
+
+@app.get("/api/profile")
+def get_profile(request: Request):
+    session = _require_session(request)
+    return _get_profile(session["user_id"])
+
+
+@app.post("/api/profile")
+async def save_profile(request: Request):
+    session = _require_session(request)
+    user_id = session["user_id"]
+    body = await request.json()
+    allowed = {"name", "age", "biological_sex", "height_cm", "health_goals"}
+    data = {k: v for k, v in body.items() if k in allowed}
+    data["user_id"] = user_id
+    try:
+        db = get_supabase()
+        db.table("user_profiles").upsert(data, on_conflict="user_id").execute()
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Chat ───────────────────────────────────────────────────────────────────────
+
+@app.post("/api/chat")
+async def health_chat(request: Request):
+    session = _require_session(request)
+    user_id = session["user_id"]
+    body = await request.json()
+    message = body.get("message", "").strip()
+    history = body.get("history", [])
+    if not message:
+        raise HTTPException(status_code=400, detail="message is required")
+
+    # Build health context from cached Oura data
+    try:
+        rm, slm, am, smm = oc.get_days(user_id, days=30)
+    except Exception:
+        rm, slm, am, smm = {}, {}, {}, {}
+
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    anchor = today_str if slm.get(today_str) else (
+        (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d") if slm else today_str
+    )
+    t_rdy = rm.get(anchor, {})
+    t_sl  = slm.get(anchor, {})
+    t_act = am.get(anchor, {})
+    t_sm  = smm.get(anchor, {})
+
+    # 7-day averages
+    recent_days = sorted(smm.keys(), reverse=True)[:7]
+    hrv_vals  = [smm[d]["hrv"]   for d in recent_days if smm[d].get("hrv")]
+    sleep_vals = [smm[d]["total"] for d in recent_days if smm[d].get("total")]
+    rdy_vals  = [rm[d]["score"]  for d in sorted(rm.keys(), reverse=True)[:7] if rm.get(d, {}).get("score")]
+
+    hrv_avg = round(sum(hrv_vals) / len(hrv_vals)) if hrv_vals else None
+    hrv_prev = (sum(hrv_vals[len(hrv_vals)//2:]) / max(1, len(hrv_vals[len(hrv_vals)//2:]))) if len(hrv_vals) >= 4 else None
+    hrv_direction = (
+        "rising" if hrv_avg and hrv_prev and hrv_avg > hrv_prev + 1
+        else "falling" if hrv_avg and hrv_prev and hrv_avg < hrv_prev - 1
+        else "stable"
+    )
+
+    # AH data for extra context
+    try:
+        ah_sum = ah.get_summary(user_id, days=30)
+        ah_recent = ah_sum.get("most_recent", {})
+    except Exception:
+        ah_recent = {}
+
+    health_context = {
+        "today": {
+            "readiness_score":     t_rdy.get("score"),
+            "sleep_score":         t_sl.get("score"),
+            "hrv":                 t_sm.get("hrv"),
+            "rhr":                 t_sm.get("rhr"),
+            "activity_score":      t_act.get("score"),
+            "steps":               t_act.get("steps"),
+            "sleep_hours":         round(t_sm["total"] / 3600, 1) if t_sm.get("total") else None,
+            "body_fat_percentage": ah_recent.get("body_fat_percentage"),
+            "vo2_max":             ah_recent.get("vo2_max"),
+        },
+        "seven_day": {
+            "hrv_avg":       hrv_avg,
+            "hrv_direction": hrv_direction,
+            "sleep_avg":     round(sum(sleep_vals) / len(sleep_vals) / 3600, 1) if sleep_vals else None,
+            "readiness_avg": round(sum(rdy_vals) / len(rdy_vals)) if rdy_vals else None,
+        },
+        "coaching": {
+            "short_term": "; ".join(
+                f"{i.get('icon','')} {i.get('label','')}: {i.get('text','')}"
+                for i in (generate_coaching(rm, slm, am, smm).get("short") or [])
+            ),
+        },
+    }
+
+    profile = _get_profile(user_id)
+
+    try:
+        reply = ch.chat(message, health_context, profile, history)
+        return {"reply": reply}
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

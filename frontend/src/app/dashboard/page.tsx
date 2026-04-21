@@ -23,6 +23,8 @@ import AppleHealthTab from "@/components/AppleHealthTab";
 import GearTab from "@/components/GearTab";
 import InsightsSection from "@/components/InsightsSection";
 import ProgressSection from "@/components/ProgressSection";
+import ChatWidget from "@/components/ChatWidget";
+import ProfileModal from "@/components/ProfileModal";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts";
@@ -743,6 +745,7 @@ export default function DashboardPage() {
   const [loading,    setLoading]    = useState(true);
   const [tab,        setTab]        = useState<Tab>("scores");
   const [section,    setSection]    = useState<Section>("coaching");
+  const [showProfile, setShowProfile] = useState(false);
 
   // Nutrition state
   const [nutToday,   setNutToday]   = useState<NutritionToday | null>(null);
@@ -914,6 +917,13 @@ export default function DashboardPage() {
             <span className="hidden sm:block text-xs text-gray-400">
               {fmtDate(new Date().toISOString().slice(0, 10))}
             </span>
+            <button
+              onClick={() => setShowProfile(true)}
+              title="Edit health profile"
+              className="text-gray-400 hover:text-gray-700 transition-colors text-base leading-none"
+            >
+              👤
+            </button>
             <button
               onClick={() => api.logout().then(() => (window.location.href = "/"))}
               className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
@@ -1301,7 +1311,76 @@ export default function DashboardPage() {
             </section>
 
             <ProgressSection />
-            <CoachingSection title="Today's Actions"  items={coaching.short} />
+
+            {/* ── Longevity Score ── */}
+            {data.longevity_score?.score != null && (() => {
+              const lon = data.longevity_score!;
+              const gradeColor = lon.grade === "Excellent" ? "#22c55e"
+                : lon.grade === "Good" ? "#84cc16"
+                : lon.grade === "Fair" ? "#f59e0b" : "#ef4444";
+              const circ = 2 * Math.PI * 42;
+              return (
+                <section className="rounded-2xl border bg-white p-5 space-y-4" style={{ borderColor: gradeColor + "66" }}>
+                  <div className="flex items-center gap-4">
+                    {/* Score ring */}
+                    <div className="relative w-16 h-16 shrink-0">
+                      <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+                        <circle cx="50" cy="50" r="42" fill="none" stroke="#E5E7EB" strokeWidth="10"/>
+                        <circle cx="50" cy="50" r="42" fill="none"
+                          stroke={gradeColor} strokeWidth="10" strokeLinecap="round"
+                          strokeDasharray={circ}
+                          strokeDashoffset={circ * (1 - lon.score! / 100)}
+                        />
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-lg font-bold text-gray-900 leading-none">{lon.score}</span>
+                        <span className="text-[9px] text-gray-400 uppercase tracking-wide">Vitality</span>
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-0.5">Longevity Score</p>
+                      <p className="font-bold text-gray-900 text-base" style={{ color: gradeColor }}>{lon.grade}</p>
+                      {lon.biological_age_delta != null && (
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Biologically{" "}
+                          <span className={`font-semibold ${lon.biological_age_delta < 0 ? "text-green-600" : "text-red-500"}`}>
+                            {Math.abs(lon.biological_age_delta)} yr {lon.biological_age_delta < 0 ? "younger" : "older"}
+                          </span>{" "}
+                          than your age suggests
+                        </p>
+                      )}
+                      <p className="text-[10px] text-gray-300 mt-1">{lon.data_coverage} available</p>
+                    </div>
+                  </div>
+                  {/* Component breakdown */}
+                  {Object.keys(lon.components).length > 0 && (
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">
+                      {Object.values(lon.components).map(comp => {
+                        const pct = Math.round((comp.points / comp.max) * 100);
+                        const barColor = pct >= 80 ? "#22c55e" : pct >= 60 ? "#84cc16" : pct >= 40 ? "#f59e0b" : "#ef4444";
+                        return (
+                          <div key={comp.label} className="space-y-1">
+                            <div className="flex justify-between text-[10px]">
+                              <span className="text-gray-500 truncate pr-1">{comp.label}</span>
+                              <span className="text-gray-700 font-medium shrink-0">{comp.points}/{comp.max}</span>
+                            </div>
+                            <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                              <div className="h-full rounded-full transition-all duration-500"
+                                style={{ width: `${pct}%`, backgroundColor: barColor }} />
+                            </div>
+                            <p className="text-[9px] text-gray-400">{comp.value}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <p className="text-[10px] text-gray-400 border-t border-gray-50 pt-2">
+                    💡 Add your age &amp; sex in <button onClick={() => setShowProfile(true)} className="underline hover:text-gray-600">Profile</button> for more accurate norms.
+                  </p>
+                </section>
+              );
+            })()}
+
             <CoachingSection title="This Week"        items={coaching.mid}   />
             <CoachingSection title="Long-Term Watch"  items={coaching.long}  />
             <InsightsSection />
@@ -1583,6 +1662,13 @@ export default function DashboardPage() {
         )}
 
       </main>
+
+      {/* ── AI Chat ── */}
+      <ChatWidget />
+
+      {/* ── Profile modal ── */}
+      {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
+
     </div>
   );
 }
