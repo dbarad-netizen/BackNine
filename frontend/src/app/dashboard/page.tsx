@@ -972,17 +972,18 @@ export default function DashboardPage() {
           const yestActCal = yest?.active_cal ?? null;
           const hasYest    = anchorIsToday && (yestScore != null || yestSteps != null || yestActCal != null);
 
-          // Today's Performance — live AH steps/cal merged with today's Oura activity.
-          // Falls back to the anchor-date activity (actScore/steps) so the card always
-          // shows when any activity data exists — even before AH syncs or Oura closes today.
+          // Today's Performance — live AH data merged with today's Oura activity.
+          // Only uses genuinely-today data: AH live (syncs every 5 min) or
+          // today_activity = am[oura_today].  Never falls back to act (anchor-date
+          // Oura activity) because _scored_row can return a previous day when today's
+          // score is 0 — that would make Today and Yesterday show identical numbers.
           const liveScore    = liveAct?.score  ?? null;
           const liveSteps    = liveAct?.steps  ?? null;
           const liveCalVal   = liveAct?.active_cal ?? null;
           const todayAct     = today.today_activity as Record<string, number | null> | undefined;
-          const todayActScore = liveScore ?? (todayAct?.score ?? null) ?? (actScore ?? null);
-          // Prefer AH live steps/cal (real-time); fall back to today's / anchor Oura activity
-          const todaySteps   = liveSteps  ?? (todayAct?.steps   ?? null) ?? ((act?.steps  as number) ?? null);
-          const todayActCal  = liveCalVal ?? (todayAct?.active_cal ?? null) ?? ((act?.active_cal as number) ?? null);
+          const todayActScore = liveScore ?? (todayAct?.score ?? null);
+          const todaySteps   = liveSteps ?? (todayAct?.steps   ?? null);
+          const todayActCal  = liveCalVal ?? (todayAct?.active_cal ?? null);
           const hasTodayPerf = todayActScore != null || todaySteps != null || todayActCal != null;
 
           return (
