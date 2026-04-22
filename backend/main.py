@@ -704,8 +704,11 @@ async def get_dashboard(request: Request, days: int = 120):
     # Strategy: keep t_act intact (Oura data for anchor date) for coaching and
     # "Yesterday's Performance" display.  Send a separate activity_live dict
     # with today's AH data so the frontend can show a "Today so far" section.
+    # Use oura_today (timezone-safe) for AH fetch — today_str is server UTC and
+    # can be one day ahead of the user's local date after 8 PM ET, causing the
+    # AH lookup to request a date that doesn't exist yet in the user's data.
     try:
-        ah_live = ah.get_day(user_id, today_str)
+        ah_live = ah.get_day(user_id, oura_today)
     except Exception:
         ah_live = None
 

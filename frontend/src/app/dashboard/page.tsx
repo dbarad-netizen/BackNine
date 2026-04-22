@@ -972,15 +972,17 @@ export default function DashboardPage() {
           const yestActCal = yest?.active_cal ?? null;
           const hasYest    = anchorIsToday && (yestScore != null || yestSteps != null || yestActCal != null);
 
-          // Today's Performance — live AH steps/cal merged with today's Oura activity
+          // Today's Performance — live AH steps/cal merged with today's Oura activity.
+          // Falls back to the anchor-date activity (actScore/steps) so the card always
+          // shows when any activity data exists — even before AH syncs or Oura closes today.
           const liveScore    = liveAct?.score  ?? null;
           const liveSteps    = liveAct?.steps  ?? null;
           const liveCalVal   = liveAct?.active_cal ?? null;
           const todayAct     = today.today_activity as Record<string, number | null> | undefined;
-          const todayActScore = liveScore ?? (todayAct?.score ?? null);
-          // Prefer AH live steps/cal (real-time); fall back to today's Oura activity
-          const todaySteps   = liveSteps  ?? (todayAct?.steps   ?? null);
-          const todayActCal  = liveCalVal ?? (todayAct?.active_cal ?? null);
+          const todayActScore = liveScore ?? (todayAct?.score ?? null) ?? (actScore ?? null);
+          // Prefer AH live steps/cal (real-time); fall back to today's / anchor Oura activity
+          const todaySteps   = liveSteps  ?? (todayAct?.steps   ?? null) ?? ((act?.steps  as number) ?? null);
+          const todayActCal  = liveCalVal ?? (todayAct?.active_cal ?? null) ?? ((act?.active_cal as number) ?? null);
           const hasTodayPerf = todayActScore != null || todaySteps != null || todayActCal != null;
 
           return (
@@ -1156,8 +1158,8 @@ export default function DashboardPage() {
 
             {/* ── Yesterday's Performance — explicit yesterday Oura data ── */}
             {hasYest && (
-              <section className="rounded-2xl border border-gray-100 bg-white p-4">
-                <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
+              <section className="rounded-2xl border border-gray-100 bg-white p-4 space-y-3">
+                <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400">
                   Yesterday&apos;s Performance
                 </h3>
                 <div className="flex items-center gap-4">
@@ -1199,49 +1201,14 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 {coaches.activity?.msg && (
-                  <p className="text-xs text-gray-400 mt-3 pt-3 border-t border-gray-50 leading-snug">
+                  <p className="text-xs text-gray-400 pt-2 border-t border-gray-50 leading-snug">
                     {coaches.activity.msg}
                   </p>
                 )}
               </section>
             )}
 
-            {/* ── Recovery Details ── */}
-            {visibleMetrics.length > 0 && (
-              <section>
-                <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">
-                  Recovery Details
-                </h3>
-                <div className="grid grid-cols-3 gap-2">
-                  {visibleMetrics.map(({ label, value }) => (
-                    <div key={label} className="rounded-xl border border-gray-200 bg-white px-3 py-3 text-center">
-                      <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-1">{label}</p>
-                      <p className="text-sm font-semibold text-gray-900 leading-tight">{value}</p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* ── 30-Day Trends ── */}
-            <section className="rounded-2xl border border-gray-200 bg-white p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="font-semibold text-gray-900 text-sm">30-Day Trends</h2>
-                <div className="flex gap-1">
-                  {(["scores", "hrv", "sleep_detail"] as Tab[]).map((t) => (
-                    <button key={t} onClick={() => setTab(t)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                        tab === t ? "bg-gray-200 text-gray-900" : "text-gray-500 hover:text-gray-800"
-                      }`}>
-                      {t === "scores" ? "Scores" : t === "hrv" ? "HRV/RHR" : "Sleep"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <TrendChart data={trend} metric={tab} />
-            </section>
-            {/* ── Strategic deep-dive ── */}
-            {/* Full prediction tracker with dot chart */}
+            {/* ── Tomorrow's Forecast ── */}
             <section className="rounded-2xl border bg-white p-4 space-y-4"
               style={{ borderColor: readiness_forecast.color + "55" }}>
               <div className="flex items-center gap-4">
@@ -1330,6 +1297,40 @@ export default function DashboardPage() {
               )}
             </section>
 
+            {/* ── Recovery Details ── */}
+            {visibleMetrics.length > 0 && (
+              <section>
+                <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">
+                  Recovery Details
+                </h3>
+                <div className="grid grid-cols-3 gap-2">
+                  {visibleMetrics.map(({ label, value }) => (
+                    <div key={label} className="rounded-xl border border-gray-200 bg-white px-3 py-3 text-center">
+                      <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-1">{label}</p>
+                      <p className="text-sm font-semibold text-gray-900 leading-tight">{value}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* ── 30-Day Trends ── */}
+            <section className="rounded-2xl border border-gray-200 bg-white p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold text-gray-900 text-sm">30-Day Trends</h2>
+                <div className="flex gap-1">
+                  {(["scores", "hrv", "sleep_detail"] as Tab[]).map((t) => (
+                    <button key={t} onClick={() => setTab(t)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                        tab === t ? "bg-gray-200 text-gray-900" : "text-gray-500 hover:text-gray-800"
+                      }`}>
+                      {t === "scores" ? "Scores" : t === "hrv" ? "HRV/RHR" : "Sleep"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <TrendChart data={trend} metric={tab} />
+            </section>
             {/* ── Coach Al teaser ── */}
             <section
               className="rounded-2xl overflow-hidden cursor-pointer group"
@@ -1411,7 +1412,7 @@ export default function DashboardPage() {
                       <p className="text-[10px] text-gray-300 mt-1">{lon.data_coverage} available</p>
                     </div>
                   </div>
-                  {/* Component breakdown */}
+                  {/* Component breakdown — scored metrics */}
                   {Object.keys(lon.components).length > 0 && (
                     <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">
                       {Object.values(lon.components).map(comp => {
@@ -1427,12 +1428,61 @@ export default function DashboardPage() {
                               <div className="h-full rounded-full transition-all duration-500"
                                 style={{ width: `${pct}%`, backgroundColor: barColor }} />
                             </div>
-                            <p className="text-[9px] text-gray-400">{comp.value}</p>
+                            <p className="text-[9px] text-gray-400">{comp.value} · {comp.norm}</p>
                           </div>
                         );
                       })}
                     </div>
                   )}
+
+                  {/* Missing metrics — show what would unlock a higher score */}
+                  {(() => {
+                    const present = new Set(Object.keys(lon.components));
+                    const missing = [
+                      !present.has("vo2_max")   && { label: "VO2 Max",    hint: "sync via Apple Health (Fitness app)", max: 20 },
+                      !present.has("body_fat")   && { label: "Body Fat %", hint: "log via Apple Health or the Metrics tab", max: 10 },
+                    ].filter(Boolean) as { label: string; hint: string; max: number }[];
+                    if (!missing.length) return null;
+                    return (
+                      <div className="pt-2 border-t border-gray-100 space-y-1.5">
+                        <p className="text-[10px] text-gray-400 font-medium uppercase tracking-widest">Unlock more points</p>
+                        {missing.map(m => (
+                          <div key={m.label} className="flex items-center gap-2 text-[10px] text-gray-400">
+                            <span className="w-1.5 h-1.5 rounded-full bg-gray-300 shrink-0" />
+                            <span><span className="font-medium text-gray-500">{m.label}</span> (+{m.max} pts max) — {m.hint}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Top improvement tip — highlight the lowest-scoring component */}
+                  {(() => {
+                    const comps = Object.values(lon.components);
+                    if (!comps.length) return null;
+                    const worst = comps.reduce((a, b) => (a.points / a.max < b.points / b.max ? a : b));
+                    const pct = Math.round((worst.points / worst.max) * 100);
+                    if (pct >= 80) return null; // no tip needed if everything is good
+                    const tips: Record<string, string> = {
+                      "Heart Rate Variability": "Prioritize 7–9h sleep and reduce evening alcohol — HRV is highly sensitive to both.",
+                      "Resting Heart Rate":     "Add 20–30 min of Zone 2 cardio 3×/week. Consistent aerobic work lowers resting HR over weeks.",
+                      "VO2 Max":                "Include one interval session per week (e.g. 4×4 min at hard effort) — the strongest driver of VO2 max.",
+                      "Sleep (7-day avg)":      "Set a consistent bedtime alarm. Even 30 min more sleep per night compounds quickly.",
+                      "Body Fat %":             "Modest calorie deficit (200–300 kcal/day) plus resistance training 2–3×/week drives the best body composition change.",
+                      "Daily Steps (avg)":      "Aim for 7,000–8,000 steps — a short 15-min walk after each meal gets you there without dedicated workout time.",
+                    };
+                    const tip = tips[worst.label];
+                    if (!tip) return null;
+                    return (
+                      <div className="rounded-xl bg-amber-50 border border-amber-100 px-3 py-2.5">
+                        <p className="text-[10px] text-amber-700 font-semibold uppercase tracking-wide mb-1">
+                          Biggest opportunity · {worst.label}
+                        </p>
+                        <p className="text-xs text-amber-800 leading-snug">{tip}</p>
+                      </div>
+                    );
+                  })()}
+
                   <p className="text-[10px] text-gray-400 border-t border-gray-50 pt-2">
                     💡 Add your age &amp; sex in <button onClick={() => setShowProfile(true)} className="underline hover:text-gray-600">Profile</button> for more accurate norms.
                   </p>
