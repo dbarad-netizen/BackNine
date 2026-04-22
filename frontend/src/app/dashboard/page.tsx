@@ -761,6 +761,10 @@ export default function DashboardPage() {
       .then(setData)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
+    // Pre-load weight entries so Body Composition card is ready on Scorecard
+    api.weightEntries()
+      .then(w => setWeightLog(w.entries))
+      .catch(() => {});
   }, []);
 
   // Reload nutrition data every time the tab is opened so meals logged
@@ -1215,6 +1219,53 @@ export default function DashboardPage() {
               );
             })()}
 
+            {/* ── Body Composition ── */}
+            <section className="rounded-2xl border border-gray-200 bg-white p-5">
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-sm font-semibold text-gray-900">Body Composition</p>
+                {weightLog.length > 0 && (
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-gray-900">{weightLog[weightLog.length - 1].weight_lbs} <span className="text-xs text-gray-400 font-normal">lbs</span></p>
+                    {settings?.weight_goal_lbs && (
+                      <p className="text-xs text-gray-400">
+                        Goal: {settings.weight_goal_lbs} lbs
+                        ({((weightLog[weightLog.length - 1].weight_lbs - settings.weight_goal_lbs) > 0 ? "+" : "") +
+                          (weightLog[weightLog.length - 1].weight_lbs - settings.weight_goal_lbs).toFixed(1)} lbs)
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <WeightTrendChart entries={weightLog} goalLbs={settings?.weight_goal_lbs ?? null} />
+
+              {/* Latest InBody breakdown */}
+              {weightLog.length > 0 && <BodyCompBadge entry={weightLog[weightLog.length - 1]} />}
+
+              {/* Last 3 entries */}
+              {weightLog.length > 0 && (
+                <div className="mt-4 space-y-1.5">
+                  {weightLog.slice(-3).reverse().map((e) => (
+                    <div key={e.id} className="flex items-center justify-between rounded-lg bg-gray-100/80 px-3 py-2">
+                      <div>
+                        <span className="text-sm text-gray-900 font-medium">{e.weight_lbs} lbs</span>
+                        {e.body_fat_pct && <span className="text-xs text-gray-400 ml-2">{e.body_fat_pct}% fat</span>}
+                        {e.muscle_mass_lbs && <span className="text-xs text-gray-400 ml-2">{e.muscle_mass_lbs} lbs muscle</span>}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400">{e.date}</span>
+                        <button onClick={() => handleDeleteWeight(e.id)}
+                          className="text-gray-400 hover:text-red-400 transition-colors text-lg leading-none">×</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {/* ── Log Weigh-In ── */}
+            <WeightForm onSave={handleLogWeight} />
+
             {/* ── Coach Al teaser ── */}
             <section
               className="rounded-2xl overflow-hidden cursor-pointer group"
@@ -1632,52 +1683,6 @@ export default function DashboardPage() {
                   </section>
                 )}
 
-                {/* ─ Weight section ─ */}
-                <section className="rounded-2xl border border-gray-200 bg-white p-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <p className="text-sm font-semibold text-gray-900">Body Composition</p>
-                    {weightLog.length > 0 && (
-                      <div className="text-right">
-                        <p className="text-lg font-bold text-gray-900">{weightLog[weightLog.length - 1].weight_lbs} <span className="text-xs text-gray-400 font-normal">lbs</span></p>
-                        {settings?.weight_goal_lbs && (
-                          <p className="text-xs text-gray-400">
-                            Goal: {settings.weight_goal_lbs} lbs
-                            ({((weightLog[weightLog.length - 1].weight_lbs - settings.weight_goal_lbs) > 0 ? "+" : "") +
-                              (weightLog[weightLog.length - 1].weight_lbs - settings.weight_goal_lbs).toFixed(1)} lbs)
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  <WeightTrendChart entries={weightLog} goalLbs={settings?.weight_goal_lbs ?? null} />
-
-                  {/* Latest InBody breakdown */}
-                  {weightLog.length > 0 && <BodyCompBadge entry={weightLog[weightLog.length - 1]} />}
-
-                  {/* Last 3 entries */}
-                  {weightLog.length > 0 && (
-                    <div className="mt-4 space-y-1.5">
-                      {weightLog.slice(-3).reverse().map((e) => (
-                        <div key={e.id} className="flex items-center justify-between rounded-lg bg-gray-100/80 px-3 py-2">
-                          <div>
-                            <span className="text-sm text-gray-900 font-medium">{e.weight_lbs} lbs</span>
-                            {e.body_fat_pct && <span className="text-xs text-gray-400 ml-2">{e.body_fat_pct}% fat</span>}
-                            {e.muscle_mass_lbs && <span className="text-xs text-gray-400 ml-2">{e.muscle_mass_lbs} lbs muscle</span>}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-400">{e.date}</span>
-                            <button onClick={() => handleDeleteWeight(e.id)}
-                              className="text-gray-400 hover:text-red-400 transition-colors text-lg leading-none">×</button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </section>
-
-                {/* ─ Log weight ─ */}
-                <WeightForm onSave={handleLogWeight} />
 
                 {/* ─ Settings ─ */}
                 <div>
