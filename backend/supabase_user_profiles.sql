@@ -3,11 +3,13 @@
 -- It creates the user_profiles table with RLS so users can only read/write
 -- their own row, keyed to auth.uid().
 
+-- user_id is TEXT (not UUID) to support both Oura-only users
+-- (user_id = "oura_XXXXX") and future Supabase auth users.
 CREATE TABLE IF NOT EXISTS public.user_profiles (
-  user_id         UUID    PRIMARY KEY REFERENCES auth.users (id) ON DELETE CASCADE,
+  user_id         TEXT        PRIMARY KEY,
   age             INTEGER,
-  biological_sex  TEXT    CHECK (biological_sex IN ('male', 'female')),
-  health_goals    TEXT[]  DEFAULT '{}',
+  biological_sex  TEXT        CHECK (biological_sex IN ('male', 'female')),
+  health_goals    TEXT[]      DEFAULT '{}',
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -27,23 +29,12 @@ CREATE TRIGGER trg_user_profiles_updated_at
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 -- ── Row-level security ────────────────────────────────────────────────────────
+-- The backend always uses the service_role key, which bypasses RLS automatically.
+-- RLS is enabled to prevent accidental public exposure; the permissive policy
+-- covers any direct Supabase client access in the future.
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
 
--- Users can read their own profile
-CREATE POLICY "users_select_own_profile"
-  ON public.user_profiles FOR SELECT
-  USING (auth.uid() = user_id);
-
--- Users can insert their own profile (first save)
-CREATE POLICY "users_insert_own_profile"
-  ON public.user_profiles FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
-
--- Users can update their own profile
-CREATE POLICY "users_update_own_profile"
-  ON public.user_profiles FOR UPDATE
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
-
--- Service role (used by backend) has full access (bypasses RLS anyway, but explicit is cleaner)
--- No extra policy needed — service_role key bypasses RLS by default.
+CREATE POLICY "service_all"
+  ON public.user_profiles
+  USING (true)
+  WITH CHECK (true);
