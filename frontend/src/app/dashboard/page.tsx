@@ -746,6 +746,7 @@ export default function DashboardPage() {
   const [tab,        setTab]        = useState<Tab>("scores");
   const [section,    setSection]    = useState<Section>("coaching");
   const [showProfile, setShowProfile] = useState(false);
+  const openChatRef = useRef<(() => void) | null>(null);
 
   // Nutrition state
   const [nutToday,   setNutToday]   = useState<NutritionToday | null>(null);
@@ -1310,6 +1311,41 @@ export default function DashboardPage() {
               )}
             </section>
 
+            {/* ── Coach Al teaser ── */}
+            <section
+              className="rounded-2xl overflow-hidden cursor-pointer group"
+              style={{ background: "linear-gradient(135deg, #1B3829 0%, #2D6A4F 60%, #3a8a63 100%)" }}
+              onClick={() => openChatRef.current?.()}
+            >
+              <div className="px-5 py-4 flex items-center gap-4">
+                {/* Al avatar */}
+                <div className="w-12 h-12 rounded-full bg-white/15 flex items-center justify-center text-white font-bold text-lg shrink-0 ring-2 ring-white/20 group-hover:ring-white/40 transition-all">
+                  Al
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-bold text-sm leading-tight">Meet Coach Al</p>
+                  <p className="text-white/70 text-xs mt-0.5 leading-snug">
+                    Your AI health coach — ask about your recovery, sleep, training, or anything on your mind.
+                  </p>
+                </div>
+                <div className="shrink-0 bg-white/20 hover:bg-white/30 transition-colors rounded-xl px-3 py-2 text-white text-xs font-semibold group-hover:scale-105 transition-transform">
+                  Chat →
+                </div>
+              </div>
+              {/* Quick-start chips */}
+              <div className="px-5 pb-4 flex flex-wrap gap-2">
+                {["How's my recovery?", "Optimize my sleep", "What's my longevity score mean?"].map(q => (
+                  <button
+                    key={q}
+                    onClick={e => { e.stopPropagation(); openChatRef.current?.(); }}
+                    className="text-[11px] text-white/80 bg-white/10 hover:bg-white/20 rounded-full px-3 py-1 transition-colors border border-white/20"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </section>
+
             <ProgressSection />
 
             {/* ── Longevity Score ── */}
@@ -1675,8 +1711,8 @@ export default function DashboardPage() {
 
       </main>
 
-      {/* ── AI Chat ── */}
-      <ChatWidget />
+      {/* ── Coach Al chat ── */}
+      <ChatWidget onRegisterOpen={opener => { openChatRef.current = opener; }} />
 
       {/* ── Profile modal ── */}
       {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
