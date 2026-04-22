@@ -945,7 +945,8 @@ export default function DashboardPage() {
           const rdyScore   = rdy?.score  as number | undefined;
           const slScore    = sl?.score   as number | undefined;
           const actScore   = act?.score  as number | undefined;
-          const heroColor  = coaches.overall?.border ?? "#22c55e";
+          const hasReadiness = rdyScore != null && rdyScore > 0;
+          const heroColor  = hasReadiness ? (coaches.overall?.border ?? "#22c55e") : "#d1d5db";
           const visibleMetrics = metrics.filter(m => m.value !== "—");
 
           // Yesterday's performance — explicit yesterday Oura data, always labeled correctly
@@ -988,7 +989,7 @@ export default function DashboardPage() {
               const scoreColor = (s: number | undefined) =>
                 !s ? "#9ca3af" : s >= 85 ? "#22c55e" : s >= 70 ? "#f59e0b" : "#ef4444";
               const scoreLabel = (s: number | undefined) =>
-                !s ? "—" : s >= 85 ? "Excellent" : s >= 70 ? "Good" : "Low";
+                !s ? "" : s >= 85 ? "Excellent" : s >= 70 ? "Good" : "Low";
 
               const rings = [
                 { label: "Readiness", score: rdyScore, color: heroColor },
@@ -1038,10 +1039,16 @@ export default function DashboardPage() {
                             />
                           </svg>
                           <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <span className="text-xl font-bold text-gray-900 leading-none">
-                              {score ?? "—"}
-                            </span>
-                            <span className="text-[9px] text-gray-400 mt-0.5">/100</span>
+                            {score != null && score > 0 ? (
+                              <>
+                                <span className="text-xl font-bold text-gray-900 leading-none">{score}</span>
+                                <span className="text-[9px] text-gray-400 mt-0.5">/100</span>
+                              </>
+                            ) : (
+                              <span className="text-[10px] text-gray-400 text-center leading-tight px-1">
+                                Syncing…
+                              </span>
+                            )}
                           </div>
                         </div>
                         <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest">{label}</p>

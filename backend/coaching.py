@@ -43,9 +43,21 @@ def _ins(icon: str, label: str, text: str, sev: str = "info") -> dict:
 # ── today tile coaches (simple 3-color cards) ─────────────────────────────────
 
 def coach_overall(rdy: dict, sm: dict) -> dict:
-    s   = rdy.get("score") or 0
+    s   = rdy.get("score")   # None when Oura hasn't synced yet
     hrv = sm.get("hrv")
     hrv_str = f" HRV {hrv}ms." if hrv else ""
+
+    # No readiness data yet — return a neutral "syncing" card
+    if not s:
+        return {
+            "color": "#111827", "border": "#d1d5db", "icon": "⏳",
+            "title": "Readiness syncing…",
+            "msg": (
+                f"Today's readiness score isn't available yet.{hrv_str} "
+                "Check back after your ring syncs — usually within a few minutes of waking."
+            ),
+        }
+
     if s >= 85:
         return {
             "color": "#052e16", "border": "#22c55e", "icon": "🟢",
