@@ -109,12 +109,14 @@ def compute(metrics: dict, profile: dict) -> dict:
         total_points += vo2_points
         max_possible += 20
 
-    # Sleep (7-day avg hours): 15 pts — 7-8.5h:15, 6.5-7 or 8.5-9.5:11, 6-6.5:7, else:3
+    # Sleep (7-day avg hours): 15 pts
+    # NSF / American Academy of Sleep Medicine: 7–9 hrs for adults
+    # 7–9 h: 15 pts | 6.5–7 or 9–10 h: 11 pts | 6–6.5 h: 7 pts | else: 3 pts
     if "sleep_hours" in metrics and metrics["sleep_hours"] is not None:
         sleep = metrics["sleep_hours"]
-        if 7 <= sleep <= 8.5:
+        if 7 <= sleep <= 9:
             sleep_points = 15
-        elif (6.5 <= sleep < 7) or (8.5 < sleep <= 9.5):
+        elif (6.5 <= sleep < 7) or (9 < sleep <= 10):
             sleep_points = 11
         elif 6 <= sleep < 6.5:
             sleep_points = 7
@@ -123,7 +125,7 @@ def compute(metrics: dict, profile: dict) -> dict:
         components["sleep"] = {
             "label": "Sleep (7-day avg)",
             "value": f"{sleep:.1f} hours",
-            "norm": "7–8.5 hours optimal",
+            "norm": "7–9 hrs optimal (NSF / AAoSM)",
             "points": sleep_points,
             "max": 15,
         }
@@ -163,23 +165,26 @@ def compute(metrics: dict, profile: dict) -> dict:
         total_points += bf_points
         max_possible += 10
 
-    # Steps (daily avg): 10 pts — >=10000:10, >=7500:8, >=5000:6, >=2500:4, else:2
+    # Steps (daily avg): 10 pts
+    # Research (2020 JAMA meta-analysis) shows mortality benefits plateau
+    # at 7,000–8,000 steps/day; 10,000 is a fitness marketing figure.
+    # Tiers: >=8000:10, >=7000:8, >=5000:6, >=3000:4, else:2
     if "steps" in metrics and metrics["steps"] is not None:
         steps = metrics["steps"]
-        if steps >= 10000:
+        if steps >= 8000:
             steps_points = 10
-        elif steps >= 7500:
+        elif steps >= 7000:
             steps_points = 8
         elif steps >= 5000:
             steps_points = 6
-        elif steps >= 2500:
+        elif steps >= 3000:
             steps_points = 4
         else:
             steps_points = 2
         components["steps"] = {
             "label": "Daily Steps (avg)",
             "value": f"{int(steps):,}",
-            "norm": ">=10,000 optimal",
+            "norm": "7,000–8,000 optimal (research-backed)",
             "points": steps_points,
             "max": 10,
         }

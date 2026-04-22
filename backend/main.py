@@ -660,12 +660,23 @@ async def get_dashboard(request: Request, days: int = 120):
     else:
         anchor = today_str
 
-    t_sl  = slm.get(anchor, {})
-    # Fall back to most recent available data for all Oura metrics —
-    # yesterday's scores are still meaningful and better than blank.
-    # The frontend shows a "data as of [date]" banner when anchor != today.
-    t_rdy = rm.get(anchor) or (rm[sorted(rm)[-1]] if rm else {})
-    t_act = am.get(anchor) or (am[sorted(am)[-1]] if am else {})
+    # Resolve anchor-date metrics with score fallback.
+    # If the anchor-date dict exists but has no score yet (Oura still processing),
+    # walk back to the most recent day that actually has a score so the hero card
+    # rings never show "Syncing…" when data is available.
+    def _best(mapping: dict, preferred_date: str) -> dict:
+        """Return preferred_date's entry if it has a score, else most recent scored entry."""
+        row = mapping.get(preferred_date) or {}
+        if row.get("score"):
+            return row
+        for d in sorted(mapping, reverse=True):
+            if mapping[d].get("score"):
+                return mapping[d]
+        return row  # return whatever we have even if score-less
+
+    t_sl  = _best(slm, anchor)
+    t_rdy = _best(rm,  anchor)
+    t_act = _best(am,  anchor)
 
     # ── Live activity metrics (today's steps / active calories from Apple Health) ──
     # Oura's activity summary closes at midnight — t_act.steps/active_cal are
@@ -681,10 +692,14 @@ async def get_dashboard(request: Request, days: int = 120):
     except Exception:
         ah_live = None
 
-    # "Yesterday's Performance" uses yesterday's Oura data explicitly — never
-    # anchor-based — so the label and data are always in sync regardless of
-    # which date Oura has processed sleep for.
-    yesterday_activity = am.get(yesterday_str, {})
+    # "Yesterday's Performance" — always one day before the anchor.
+    # When anchor = today, this is calendar-yesterday (the common case).
+    # When anchor = yesterday (sleep not yet processed for today), we show the
+    # day-before-yesterday so the card is never redundant with the main rings.
+    anchor_prev_str = (
+        datetime.strptime(anchor, "%Y-%m-%d") - timedelta(days=1)
+    ).strftime("%Y-%m-%d")
+    yesterday_activity = am.get(anchor_prev_str, {})
 
     # "Today So Far" = live AH data + today's Oura activity score if Oura
     # has already closed today's ring (available by mid-morning most days).
@@ -864,10 +879,11 @@ async def get_dashboard(request: Request, days: int = 120):
         "provider":     "oura",
         "today": {
             "date":               anchor,             # Oura data anchor (often yesterday)
+            "calendar_today":     today_str,          # Actual calendar today
             "readiness":          t_rdy,
             "sleep":              t_sl,
             "activity":           t_act,              # Oura activity for anchor (coach card)
-            "yesterday_activity": yesterday_activity, # Explicit yesterday Oura data
+            "yesterday_activity": yesterday_activity, # Day before anchor's Oura activity
             "activity_live":      activity_live,      # AH live + today's Oura score
             "sleep_model":        t_sm,
         },

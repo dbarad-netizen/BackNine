@@ -763,9 +763,10 @@ export default function DashboardPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Lazy-load nutrition data when the tab is opened
+  // Reload nutrition data every time the tab is opened so meals logged
+  // in an earlier session / on another device always show up.
   useEffect(() => {
-    if (section !== "nutrition" || nutToday) return;
+    if (section !== "nutrition") return;
     setNutLoading(true);
     Promise.all([
       api.nutritionToday(),
@@ -777,7 +778,7 @@ export default function DashboardPage() {
       setWeightLog(weight.entries);
     }).catch(console.error)
       .finally(() => setNutLoading(false));
-  }, [section, nutToday]);
+  }, [section]); // Re-fetch every tab switch — keeps data fresh across sessions
 
   const handleAddMeal = async (meal: Omit<Meal, "id" | "logged_at">) => {
     try {
@@ -949,12 +950,15 @@ export default function DashboardPage() {
           const heroColor  = hasReadiness ? (coaches.overall?.border ?? "#22c55e") : "#d1d5db";
           const visibleMetrics = metrics.filter(m => m.value !== "—");
 
-          // Yesterday's performance — explicit yesterday Oura data, always labeled correctly
+          // Yesterday's Performance — only show when the main rings are showing TODAY's data.
+          // When anchor = yesterday, the main rings already display yesterday's activity,
+          // so "Yesterday's Performance" would be a duplicate. In that case we hide it.
+          const anchorIsToday = today.date === todayStr;
           const yest       = today.yesterday_activity as Record<string, number | null> | undefined;
           const yestScore  = yest?.score   ?? null;
           const yestSteps  = yest?.steps   ?? null;
           const yestActCal = yest?.active_cal ?? null;
-          const hasYest    = yestScore != null || yestSteps != null || yestActCal != null;
+          const hasYest    = anchorIsToday && (yestScore != null || yestSteps != null || yestActCal != null);
 
           // Today so far — live AH data + today's Oura activity score if available
           const liveScore  = liveAct?.score  ?? null;
