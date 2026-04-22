@@ -650,33 +650,39 @@ async def get_dashboard(request: Request, days: int = 120):
     today_str     = datetime.now().strftime("%Y-%m-%d")
     yesterday_str = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
 
-    # Anchor: prefer today → yesterday → most recent slm date
-    if slm.get(today_str):
+    # Anchor: prefer the most recent date where ALL three Oura scores are ready.
+    # Oura often publishes daily_sleep with score=null for several hours after waking,
+    # even though readiness and activity are already scored.  Anchoring to today when
+    # sleep score is null gives a mixed set: readiness ✓, sleep "Syncing", activity ✓.
+    # Better to anchor to yesterday where everything is complete, then jump to today
+    # once today's sleep score has been published.
+    def _scored(d: str, mapping: dict) -> bool:
+        return bool(mapping.get(d, {}).get("score"))
+
+    if _scored(today_str, slm):
         anchor = today_str
-    elif slm.get(yesterday_str):
+    elif _scored(yesterday_str, slm):
         anchor = yesterday_str
     elif slm:
-        anchor = sorted(slm)[-1]
+        # Find the most recent date that actually has a sleep score
+        scored_dates = [d for d in sorted(slm, reverse=True) if slm[d].get("score")]
+        anchor = scored_dates[0] if scored_dates else sorted(slm)[-1]
     else:
         anchor = today_str
 
-    # Resolve anchor-date metrics with score fallback.
-    # If the anchor-date dict exists but has no score yet (Oura still processing),
-    # walk back to the most recent day that actually has a score so the hero card
-    # rings never show "Syncing…" when data is available.
-    def _best(mapping: dict, preferred_date: str) -> dict:
-        """Return preferred_date's entry if it has a score, else most recent scored entry."""
-        row = mapping.get(preferred_date) or {}
+    t_sl  = slm.get(anchor, {})
+    # Readiness and activity are processed faster than sleep — if the anchor date
+    # is missing either (rare edge case), fall back to their own most-recent scored day.
+    def _scored_row(mapping: dict, preferred: str) -> dict:
+        row = mapping.get(preferred) or {}
         if row.get("score"):
             return row
         for d in sorted(mapping, reverse=True):
             if mapping[d].get("score"):
                 return mapping[d]
-        return row  # return whatever we have even if score-less
-
-    t_sl  = _best(slm, anchor)
-    t_rdy = _best(rm,  anchor)
-    t_act = _best(am,  anchor)
+        return row
+    t_rdy = _scored_row(rm, anchor)
+    t_act = _scored_row(am, anchor)
 
     # ── Live activity metrics (today's steps / active calories from Apple Health) ──
     # Oura's activity summary closes at midnight — t_act.steps/active_cal are
