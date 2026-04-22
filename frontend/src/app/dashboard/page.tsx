@@ -25,6 +25,7 @@ import InsightsSection from "@/components/InsightsSection";
 import ProgressSection from "@/components/ProgressSection";
 import ChatWidget from "@/components/ChatWidget";
 import ProfileModal from "@/components/ProfileModal";
+import CoachAlAvatar from "@/components/CoachAlAvatar";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts";
@@ -979,99 +980,86 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {/* ── Morning Briefing Hero ── */}
-            {rdyScore && (
-              <section className="rounded-2xl border-2 bg-white p-5 space-y-4"
-                style={{ borderColor: heroColor }}>
+            {/* ── Daily Greeting + Score Snapshot ── */}
+            {(() => {
+              const hour = new Date().getHours();
+              const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+              const dayFull  = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+              const scoreColor = (s: number | undefined) =>
+                !s ? "#9ca3af" : s >= 85 ? "#22c55e" : s >= 70 ? "#f59e0b" : "#ef4444";
+              const scoreLabel = (s: number | undefined) =>
+                !s ? "—" : s >= 85 ? "Excellent" : s >= 70 ? "Good" : "Low";
 
-                {/* Top row: big readiness score + narrative */}
-                <div className="flex items-start gap-4">
-                  {/* Score ring */}
-                  <div className="relative shrink-0 w-16 h-16">
-                    <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                      <circle cx="50" cy="50" r="42" fill="none" stroke="#E5E7EB" strokeWidth="10"/>
-                      <circle cx="50" cy="50" r="42" fill="none"
-                        stroke={heroColor} strokeWidth="10" strokeLinecap="round"
-                        strokeDasharray={`${2 * Math.PI * 42}`}
-                        strokeDashoffset={`${2 * Math.PI * 42 * (1 - rdyScore / 100)}`}
-                      />
-                    </svg>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-lg font-bold text-gray-900 leading-none">{rdyScore}</span>
-                      <span className="text-[9px] text-gray-400 uppercase tracking-wide">Ready</span>
+              const rings = [
+                { label: "Readiness", score: rdyScore, color: heroColor },
+                { label: "Sleep",     score: slScore,  color: scoreColor(slScore) },
+                { label: "Activity",  score: actScore, color: scoreColor(actScore) },
+              ];
+
+              const circ = 2 * Math.PI * 40;
+
+              return (
+                <section className="rounded-2xl border-2 bg-white overflow-hidden"
+                  style={{ borderColor: heroColor + "88" }}>
+
+                  {/* Greeting row */}
+                  <div className="px-5 pt-4 pb-3 flex items-start justify-between">
+                    <div>
+                      <p className="text-xs text-gray-400 uppercase tracking-widest mb-0.5">{greeting}</p>
+                      <p className="font-bold text-gray-900 text-lg leading-tight">{dayFull}</p>
                     </div>
-                  </div>
-
-                  {/* Narrative */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <p className="font-bold text-gray-900 text-base leading-tight">
-                        {coaches.overall?.title ?? "Checking your recovery…"}
-                      </p>
-                      {isStale && (
-                        <span className="text-[10px] text-gray-400 shrink-0 ml-2">
-                          {fmtDate(data.today.date!)}
+                    {coaches.overall?.title && (
+                      <div className="text-right ml-3 shrink-0">
+                        <span
+                          className="inline-block rounded-full px-2.5 py-1 text-[11px] font-semibold leading-tight"
+                          style={{ color: heroColor, backgroundColor: heroColor + "18" }}
+                        >
+                          {coaches.overall.title.replace(/[.!]$/, "")}
                         </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-gray-500 mt-1 leading-snug">
-                      {coaches.overall?.msg}
-                    </p>
+                        {isStale && (
+                          <p className="text-[10px] text-gray-400 mt-1">{fmtDate(data.today.date!)}</p>
+                        )}
+                      </div>
+                    )}
                   </div>
-                </div>
 
-                {/* Bottom row: sleep + activity scores inline */}
-                <div className="flex gap-3 pt-1 border-t border-gray-100">
-                  {slScore != null && (
-                    <div className="flex items-center gap-2">
-                      <div className="relative w-8 h-8 shrink-0">
-                        <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                          <circle cx="50" cy="50" r="42" fill="none" stroke="#E5E7EB" strokeWidth="14"/>
-                          <circle cx="50" cy="50" r="42" fill="none"
-                            stroke={slScore >= 85 ? "#22c55e" : slScore >= 70 ? "#f59e0b" : "#ef4444"}
-                            strokeWidth="14" strokeLinecap="round"
-                            strokeDasharray={`${2 * Math.PI * 42}`}
-                            strokeDashoffset={`${2 * Math.PI * 42 * (1 - slScore / 100)}`}
-                          />
-                        </svg>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="text-[10px] font-bold text-gray-900">{slScore}</span>
+                  {/* Three score rings */}
+                  <div className="grid grid-cols-3 gap-2 px-4 pb-4">
+                    {rings.map(({ label, score, color }) => (
+                      <div key={label} className="flex flex-col items-center gap-1.5">
+                        <div className="relative w-20 h-20">
+                          <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+                            <circle cx="50" cy="50" r="40" fill="none" stroke="#E5E7EB" strokeWidth="11"/>
+                            <circle cx="50" cy="50" r="40" fill="none"
+                              stroke={color} strokeWidth="11" strokeLinecap="round"
+                              strokeDasharray={circ}
+                              strokeDashoffset={circ * (1 - (score ?? 0) / 100)}
+                              className="transition-all duration-700"
+                            />
+                          </svg>
+                          <div className="absolute inset-0 flex flex-col items-center justify-center">
+                            <span className="text-xl font-bold text-gray-900 leading-none">
+                              {score ?? "—"}
+                            </span>
+                            <span className="text-[9px] text-gray-400 mt-0.5">/100</span>
+                          </div>
                         </div>
+                        <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest">{label}</p>
+                        <p className="text-[11px] font-medium" style={{ color }}>{scoreLabel(score)}</p>
                       </div>
-                      <div>
-                        <p className="text-[10px] text-gray-400 uppercase tracking-wide">Sleep</p>
-                        <p className="text-xs font-medium text-gray-700">{coaches.sleep?.title?.split("—")[0].trim()}</p>
-                      </div>
+                    ))}
+                  </div>
+
+                  {/* Coach verdict */}
+                  {coaches.overall?.msg && (
+                    <div className="border-t border-gray-100 px-5 py-3 flex items-start gap-2.5">
+                      <span className="text-base shrink-0 mt-0.5">💬</span>
+                      <p className="text-xs text-gray-500 leading-relaxed">{coaches.overall.msg}</p>
                     </div>
                   )}
-                  {actScore != null && (
-                    <div className="flex items-center gap-2 ml-4">
-                      <div className="relative w-8 h-8 shrink-0">
-                        <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                          <circle cx="50" cy="50" r="42" fill="none" stroke="#E5E7EB" strokeWidth="14"/>
-                          <circle cx="50" cy="50" r="42" fill="none"
-                            stroke={actScore >= 85 ? "#22c55e" : actScore >= 70 ? "#f59e0b" : "#ef4444"}
-                            strokeWidth="14" strokeLinecap="round"
-                            strokeDasharray={`${2 * Math.PI * 42}`}
-                            strokeDashoffset={`${2 * Math.PI * 42 * (1 - actScore / 100)}`}
-                          />
-                        </svg>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="text-[10px] font-bold text-gray-900">{actScore}</span>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-gray-400 uppercase tracking-wide">Activity</p>
-                        <p className="text-xs font-medium text-gray-700">{coaches.activity?.title?.split("—")[0].trim()}</p>
-                      </div>
-                    </div>
-                  )}
-                  {slScore == null && actScore == null && (
-                    <p className="text-xs text-gray-400">Sleep &amp; activity scores syncing…</p>
-                  )}
-                </div>
-              </section>
-            )}
+                </section>
+              );
+            })()}
 
             {/* ── Today's Focus — personalized coaching actions ── */}
             {coaching.short?.length > 0 && (
@@ -1318,10 +1306,8 @@ export default function DashboardPage() {
               onClick={() => openChatRef.current?.()}
             >
               <div className="px-5 py-4 flex items-center gap-4">
-                {/* Al avatar */}
-                <div className="w-12 h-12 rounded-full bg-white/15 flex items-center justify-center text-white font-bold text-lg shrink-0 ring-2 ring-white/20 group-hover:ring-white/40 transition-all">
-                  Al
-                </div>
+                {/* Al caricature */}
+                <CoachAlAvatar size={52} className="rounded-full ring-2 ring-white/30 group-hover:ring-white/50 transition-all shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-white font-bold text-sm leading-tight">Meet Coach Al</p>
                   <p className="text-white/70 text-xs mt-0.5 leading-snug">

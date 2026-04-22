@@ -10,16 +10,12 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { api, type ChatMessage } from "@/lib/api";
+import CoachAlAvatar from "@/components/CoachAlAvatar";
 
-// Coach Al avatar — initials badge
+// Wrapper that sizes the SVG caricature consistently
 function AlAvatar({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
-  const sizes = { sm: "w-7 h-7 text-xs", md: "w-9 h-9 text-sm", lg: "w-12 h-12 text-base" };
-  return (
-    <div className={`${sizes[size]} rounded-full flex items-center justify-center font-bold text-white shrink-0`}
-      style={{ background: "linear-gradient(135deg, #1B3829 0%, #2D6A4F 100%)" }}>
-      Al
-    </div>
-  );
+  const px = { sm: 28, md: 36, lg: 48 };
+  return <CoachAlAvatar size={px[size]} className="shrink-0 rounded-full" />;
 }
 
 interface Props {
@@ -92,13 +88,13 @@ export default function ChatWidget({ onRegisterOpen }: Props) {
       <button
         onClick={() => setOpen(v => !v)}
         aria-label="Chat with Coach Al"
-        className="fixed bottom-5 right-4 z-40 flex items-center gap-2.5 rounded-full px-4 py-2.5 text-white text-sm font-semibold shadow-lg transition-all hover:scale-105 active:scale-95"
+        className="fixed bottom-5 right-4 z-40 flex items-center gap-2 rounded-full pl-1.5 pr-4 py-1.5 text-white text-sm font-semibold shadow-lg transition-all hover:scale-105 active:scale-95"
         style={{
           background: "linear-gradient(135deg, #1B3829 0%, #2D6A4F 100%)",
           boxShadow: "0 4px 20px rgba(27,56,41,0.4)",
         }}
       >
-        <AlAvatar size="sm" />
+        <CoachAlAvatar size={34} className="rounded-full ring-2 ring-white/30" />
         <span className={open ? "hidden sm:inline" : undefined}>
           {open ? "Close" : "Ask Coach Al"}
         </span>
