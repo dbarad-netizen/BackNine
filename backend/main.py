@@ -647,28 +647,34 @@ async def get_dashboard(request: Request, days: int = 120):
     # All data sources (readiness, sleep, activity) use the same anchor date
     # so coach cards never mix data from different days.
     from datetime import timedelta
-    today_str     = datetime.now().strftime("%Y-%m-%d")
+    today_str     = datetime.now().strftime("%Y-%m-%d")  # server UTC clock — for cache/AH fetch only
     yesterday_str = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
 
-    # Anchor: prefer the most recent date where ALL three Oura scores are ready.
-    # Oura often publishes daily_sleep with score=null for several hours after waking,
-    # even though readiness and activity are already scored.  Anchoring to today when
-    # sleep score is null gives a mixed set: readiness ✓, sleep "Syncing", activity ✓.
-    # Better to anchor to yesterday where everything is complete, then jump to today
-    # once today's sleep score has been published.
+    # TIMEZONE-SAFE "today": use the most recent date in Oura data, not the server clock.
+    # The Render server runs in UTC. After ~8 PM Eastern (midnight UTC) the server's
+    # calendar date rolls forward by one day, making server "yesterday" = user's "today".
+    # Oura records dates in the user's local time, so the max Oura date is always correct.
+    all_oura_dates = sorted(set(list(rm) + list(slm) + list(am)))
+    oura_today     = all_oura_dates[-1] if all_oura_dates else today_str
+    oura_yesterday = (
+        datetime.strptime(oura_today, "%Y-%m-%d") - timedelta(days=1)
+    ).strftime("%Y-%m-%d")
+
+    # Anchor: prefer the most recent date where the sleep score is ready.
+    # Oura publishes daily_sleep with score=null for several hours after waking;
+    # anchor to yesterday (where everything is complete) until today's score arrives.
     def _scored(d: str, mapping: dict) -> bool:
         return bool(mapping.get(d, {}).get("score"))
 
-    if _scored(today_str, slm):
-        anchor = today_str
-    elif _scored(yesterday_str, slm):
-        anchor = yesterday_str
+    if _scored(oura_today, slm):
+        anchor = oura_today
+    elif _scored(oura_yesterday, slm):
+        anchor = oura_yesterday
     elif slm:
-        # Find the most recent date that actually has a sleep score
         scored_dates = [d for d in sorted(slm, reverse=True) if slm[d].get("score")]
         anchor = scored_dates[0] if scored_dates else sorted(slm)[-1]
     else:
-        anchor = today_str
+        anchor = oura_today
 
     t_sl  = slm.get(anchor, {})
     # Readiness and activity are processed faster than sleep — if the anchor date
@@ -885,7 +891,7 @@ async def get_dashboard(request: Request, days: int = 120):
         "provider":     "oura",
         "today": {
             "date":               anchor,             # Oura data anchor (often yesterday)
-            "calendar_today":     today_str,          # Actual calendar today
+            "calendar_today":     oura_today,         # Timezone-safe "today" from Oura data
             "readiness":          t_rdy,
             "sleep":              t_sl,
             "activity":           t_act,              # Oura activity for anchor (coach card)

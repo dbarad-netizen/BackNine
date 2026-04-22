@@ -951,9 +951,9 @@ export default function DashboardPage() {
           const visibleMetrics = metrics.filter(m => m.value !== "—");
 
           // Yesterday's Performance — only show when the main rings are showing TODAY's data.
-          // When anchor = yesterday, the main rings already display yesterday's activity,
-          // so "Yesterday's Performance" would be a duplicate. In that case we hide it.
-          const anchorIsToday = today.date === todayStr;
+          // Use today.calendar_today (Oura's timezone-safe "today") rather than the browser's
+          // UTC date, which can be one day ahead of the user's local date after ~8 PM ET.
+          const anchorIsToday = today.date === today.calendar_today;
           const yest       = today.yesterday_activity as Record<string, number | null> | undefined;
           const yestScore  = yest?.score   ?? null;
           const yestSteps  = yest?.steps   ?? null;
