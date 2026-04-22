@@ -1091,6 +1091,130 @@ export default function DashboardPage() {
               );
             })()}
 
+            {/* ── Longevity Score ── */}
+            {data.longevity_score?.score != null && (() => {
+              const lon = data.longevity_score!;
+              const gradeColor = lon.grade === "Excellent" ? "#22c55e"
+                : lon.grade === "Good" ? "#84cc16"
+                : lon.grade === "Fair" ? "#f59e0b" : "#ef4444";
+              const circ = 2 * Math.PI * 42;
+              return (
+                <section className="rounded-2xl border bg-white p-5 space-y-4" style={{ borderColor: gradeColor + "66" }}>
+                  <div className="flex items-center gap-4">
+                    {/* Score ring */}
+                    <div className="relative w-16 h-16 shrink-0">
+                      <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+                        <circle cx="50" cy="50" r="42" fill="none" stroke="#E5E7EB" strokeWidth="10"/>
+                        <circle cx="50" cy="50" r="42" fill="none"
+                          stroke={gradeColor} strokeWidth="10" strokeLinecap="round"
+                          strokeDasharray={circ}
+                          strokeDashoffset={circ * (1 - lon.score! / 100)}
+                        />
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-lg font-bold text-gray-900 leading-none">{lon.score}</span>
+                        <span className="text-[9px] text-gray-400 uppercase tracking-wide">Vitality</span>
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-0.5">Longevity Score</p>
+                      <p className="font-bold text-gray-900 text-base" style={{ color: gradeColor }}>{lon.grade}</p>
+                      {lon.biological_age_delta != null && (
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {lon.biological_age_delta === 0 ? (
+                            <span className="font-semibold text-gray-600">On par with your chronological age</span>
+                          ) : (
+                            <>
+                              Biologically{" "}
+                              <span className={`font-semibold ${lon.biological_age_delta < 0 ? "text-green-600" : "text-red-500"}`}>
+                                {Math.abs(lon.biological_age_delta)} yr {lon.biological_age_delta < 0 ? "younger" : "older"}
+                              </span>{" "}
+                              than your age suggests
+                            </>
+                          )}
+                        </p>
+                      )}
+                      <p className="text-[10px] text-gray-300 mt-1">{lon.data_coverage} available</p>
+                    </div>
+                  </div>
+                  {/* Component breakdown — scored metrics */}
+                  {Object.keys(lon.components).length > 0 && (
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">
+                      {Object.values(lon.components).map(comp => {
+                        const pct = Math.round((comp.points / comp.max) * 100);
+                        const barColor = pct >= 80 ? "#22c55e" : pct >= 60 ? "#84cc16" : pct >= 40 ? "#f59e0b" : "#ef4444";
+                        return (
+                          <div key={comp.label} className="space-y-1">
+                            <div className="flex justify-between text-[10px]">
+                              <span className="text-gray-500 truncate pr-1">{comp.label}</span>
+                              <span className="text-gray-700 font-medium shrink-0">{comp.points}/{comp.max}</span>
+                            </div>
+                            <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                              <div className="h-full rounded-full transition-all duration-500"
+                                style={{ width: `${pct}%`, backgroundColor: barColor }} />
+                            </div>
+                            <p className="text-[9px] text-gray-400">{comp.value} · {comp.norm}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Missing metrics — show what would unlock a higher score */}
+                  {(() => {
+                    const present = new Set(Object.keys(lon.components));
+                    const missing = [
+                      !present.has("vo2_max")   && { label: "VO2 Max",    hint: "sync via Apple Health (Fitness app)", max: 20 },
+                      !present.has("body_fat")   && { label: "Body Fat %", hint: "log via Apple Health or the Metrics tab", max: 10 },
+                    ].filter(Boolean) as { label: string; hint: string; max: number }[];
+                    if (!missing.length) return null;
+                    return (
+                      <div className="pt-2 border-t border-gray-100 space-y-1.5">
+                        <p className="text-[10px] text-gray-400 font-medium uppercase tracking-widest">Unlock more points</p>
+                        {missing.map(m => (
+                          <div key={m.label} className="flex items-center gap-2 text-[10px] text-gray-400">
+                            <span className="w-1.5 h-1.5 rounded-full bg-gray-300 shrink-0" />
+                            <span><span className="font-medium text-gray-500">{m.label}</span> (+{m.max} pts max) — {m.hint}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Top improvement tip — highlight the lowest-scoring component */}
+                  {(() => {
+                    const comps = Object.values(lon.components);
+                    if (!comps.length) return null;
+                    const worst = comps.reduce((a, b) => (a.points / a.max < b.points / b.max ? a : b));
+                    const pct = Math.round((worst.points / worst.max) * 100);
+                    if (pct >= 80) return null; // no tip needed if everything is good
+                    const tips: Record<string, string> = {
+                      "Heart Rate Variability": "Prioritize 7–9h sleep and reduce evening alcohol — HRV is highly sensitive to both.",
+                      "Resting Heart Rate":     "Add 20–30 min of Zone 2 cardio 3×/week. Consistent aerobic work lowers resting HR over weeks.",
+                      "VO2 Max":                "Include one interval session per week (e.g. 4×4 min at hard effort) — the strongest driver of VO2 max.",
+                      "Sleep (7-day avg)":      "Set a consistent bedtime alarm. Even 30 min more sleep per night compounds quickly.",
+                      "Body Fat %":             "Modest calorie deficit (200–300 kcal/day) plus resistance training 2–3×/week drives the best body composition change.",
+                      "Daily Steps (avg)":      "Aim for 7,000–8,000 steps — a short 15-min walk after each meal gets you there without dedicated workout time.",
+                    };
+                    const tip = tips[worst.label];
+                    if (!tip) return null;
+                    return (
+                      <div className="rounded-xl bg-amber-50 border border-amber-100 px-3 py-2.5">
+                        <p className="text-[10px] text-amber-700 font-semibold uppercase tracking-wide mb-1">
+                          Biggest opportunity · {worst.label}
+                        </p>
+                        <p className="text-xs text-amber-800 leading-snug">{tip}</p>
+                      </div>
+                    );
+                  })()}
+
+                  <p className="text-[10px] text-gray-400 border-t border-gray-50 pt-2">
+                    💡 Add your age &amp; sex in <button onClick={() => setShowProfile(true)} className="underline hover:text-gray-600">Profile</button> for more accurate norms.
+                  </p>
+                </section>
+              );
+            })()}
+
             {/* ── Today's Focus — personalized coaching actions ── */}
             {coaching.short?.length > 0 && (
               <section>
@@ -1366,130 +1490,6 @@ export default function DashboardPage() {
             </section>
 
             <ProgressSection />
-
-            {/* ── Longevity Score ── */}
-            {data.longevity_score?.score != null && (() => {
-              const lon = data.longevity_score!;
-              const gradeColor = lon.grade === "Excellent" ? "#22c55e"
-                : lon.grade === "Good" ? "#84cc16"
-                : lon.grade === "Fair" ? "#f59e0b" : "#ef4444";
-              const circ = 2 * Math.PI * 42;
-              return (
-                <section className="rounded-2xl border bg-white p-5 space-y-4" style={{ borderColor: gradeColor + "66" }}>
-                  <div className="flex items-center gap-4">
-                    {/* Score ring */}
-                    <div className="relative w-16 h-16 shrink-0">
-                      <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                        <circle cx="50" cy="50" r="42" fill="none" stroke="#E5E7EB" strokeWidth="10"/>
-                        <circle cx="50" cy="50" r="42" fill="none"
-                          stroke={gradeColor} strokeWidth="10" strokeLinecap="round"
-                          strokeDasharray={circ}
-                          strokeDashoffset={circ * (1 - lon.score! / 100)}
-                        />
-                      </svg>
-                      <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-lg font-bold text-gray-900 leading-none">{lon.score}</span>
-                        <span className="text-[9px] text-gray-400 uppercase tracking-wide">Vitality</span>
-                      </div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-0.5">Longevity Score</p>
-                      <p className="font-bold text-gray-900 text-base" style={{ color: gradeColor }}>{lon.grade}</p>
-                      {lon.biological_age_delta != null && (
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {lon.biological_age_delta === 0 ? (
-                            <span className="font-semibold text-gray-600">On par with your chronological age</span>
-                          ) : (
-                            <>
-                              Biologically{" "}
-                              <span className={`font-semibold ${lon.biological_age_delta < 0 ? "text-green-600" : "text-red-500"}`}>
-                                {Math.abs(lon.biological_age_delta)} yr {lon.biological_age_delta < 0 ? "younger" : "older"}
-                              </span>{" "}
-                              than your age suggests
-                            </>
-                          )}
-                        </p>
-                      )}
-                      <p className="text-[10px] text-gray-300 mt-1">{lon.data_coverage} available</p>
-                    </div>
-                  </div>
-                  {/* Component breakdown — scored metrics */}
-                  {Object.keys(lon.components).length > 0 && (
-                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">
-                      {Object.values(lon.components).map(comp => {
-                        const pct = Math.round((comp.points / comp.max) * 100);
-                        const barColor = pct >= 80 ? "#22c55e" : pct >= 60 ? "#84cc16" : pct >= 40 ? "#f59e0b" : "#ef4444";
-                        return (
-                          <div key={comp.label} className="space-y-1">
-                            <div className="flex justify-between text-[10px]">
-                              <span className="text-gray-500 truncate pr-1">{comp.label}</span>
-                              <span className="text-gray-700 font-medium shrink-0">{comp.points}/{comp.max}</span>
-                            </div>
-                            <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                              <div className="h-full rounded-full transition-all duration-500"
-                                style={{ width: `${pct}%`, backgroundColor: barColor }} />
-                            </div>
-                            <p className="text-[9px] text-gray-400">{comp.value} · {comp.norm}</p>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Missing metrics — show what would unlock a higher score */}
-                  {(() => {
-                    const present = new Set(Object.keys(lon.components));
-                    const missing = [
-                      !present.has("vo2_max")   && { label: "VO2 Max",    hint: "sync via Apple Health (Fitness app)", max: 20 },
-                      !present.has("body_fat")   && { label: "Body Fat %", hint: "log via Apple Health or the Metrics tab", max: 10 },
-                    ].filter(Boolean) as { label: string; hint: string; max: number }[];
-                    if (!missing.length) return null;
-                    return (
-                      <div className="pt-2 border-t border-gray-100 space-y-1.5">
-                        <p className="text-[10px] text-gray-400 font-medium uppercase tracking-widest">Unlock more points</p>
-                        {missing.map(m => (
-                          <div key={m.label} className="flex items-center gap-2 text-[10px] text-gray-400">
-                            <span className="w-1.5 h-1.5 rounded-full bg-gray-300 shrink-0" />
-                            <span><span className="font-medium text-gray-500">{m.label}</span> (+{m.max} pts max) — {m.hint}</span>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
-
-                  {/* Top improvement tip — highlight the lowest-scoring component */}
-                  {(() => {
-                    const comps = Object.values(lon.components);
-                    if (!comps.length) return null;
-                    const worst = comps.reduce((a, b) => (a.points / a.max < b.points / b.max ? a : b));
-                    const pct = Math.round((worst.points / worst.max) * 100);
-                    if (pct >= 80) return null; // no tip needed if everything is good
-                    const tips: Record<string, string> = {
-                      "Heart Rate Variability": "Prioritize 7–9h sleep and reduce evening alcohol — HRV is highly sensitive to both.",
-                      "Resting Heart Rate":     "Add 20–30 min of Zone 2 cardio 3×/week. Consistent aerobic work lowers resting HR over weeks.",
-                      "VO2 Max":                "Include one interval session per week (e.g. 4×4 min at hard effort) — the strongest driver of VO2 max.",
-                      "Sleep (7-day avg)":      "Set a consistent bedtime alarm. Even 30 min more sleep per night compounds quickly.",
-                      "Body Fat %":             "Modest calorie deficit (200–300 kcal/day) plus resistance training 2–3×/week drives the best body composition change.",
-                      "Daily Steps (avg)":      "Aim for 7,000–8,000 steps — a short 15-min walk after each meal gets you there without dedicated workout time.",
-                    };
-                    const tip = tips[worst.label];
-                    if (!tip) return null;
-                    return (
-                      <div className="rounded-xl bg-amber-50 border border-amber-100 px-3 py-2.5">
-                        <p className="text-[10px] text-amber-700 font-semibold uppercase tracking-wide mb-1">
-                          Biggest opportunity · {worst.label}
-                        </p>
-                        <p className="text-xs text-amber-800 leading-snug">{tip}</p>
-                      </div>
-                    );
-                  })()}
-
-                  <p className="text-[10px] text-gray-400 border-t border-gray-50 pt-2">
-                    💡 Add your age &amp; sex in <button onClick={() => setShowProfile(true)} className="underline hover:text-gray-600">Profile</button> for more accurate norms.
-                  </p>
-                </section>
-              );
-            })()}
 
             {/* De-dupe: strip any mid/long items whose label already appears in short */}
             {(() => {
