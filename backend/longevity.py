@@ -204,11 +204,22 @@ def compute(metrics: dict, profile: dict) -> dict:
     else:
         grade = "Needs Work"
 
-    # Compute biological_age_delta
+    # Compute biological_age_delta from the composite longevity score.
+    #
+    # Using the composite score (not HRV alone) means RHR, sleep, steps,
+    # VO2 max, and body fat all contribute — a holistic view.
+    #
+    # Calibration: score 70 = "Good" = roughly on par with chronological age.
+    # Each ~6 points above/below 70 corresponds to ~1 year younger/older.
+    # Cap at ±15 years so extreme scores stay plausible.
+    #   97 → -(97-70)/6 = -4.5 → -5 yrs  (5 years younger)
+    #   85 → -(85-70)/6 = -2.5 → -3 yrs  (3 years younger)
+    #   70 →  0 yrs  (on par)
+    #   55 → +(55-70)/(-6) = +2.5 → +3 yrs  (3 years older)
     biological_age_delta = None
-    if has_hrv and hrv_value is not None and hrv_norm is not None:
-        delta_years = round((hrv_norm - hrv_value) / 0.65)
-        biological_age_delta = -delta_years  # negative = younger than chronological age
+    if score is not None:
+        raw = -(score - 70) / 6
+        biological_age_delta = max(-15, min(15, round(raw)))
 
     # Data coverage
     num_metrics = len(components)

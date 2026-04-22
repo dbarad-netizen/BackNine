@@ -1371,11 +1371,17 @@ export default function DashboardPage() {
                       <p className="font-bold text-gray-900 text-base" style={{ color: gradeColor }}>{lon.grade}</p>
                       {lon.biological_age_delta != null && (
                         <p className="text-xs text-gray-500 mt-0.5">
-                          Biologically{" "}
-                          <span className={`font-semibold ${lon.biological_age_delta < 0 ? "text-green-600" : "text-red-500"}`}>
-                            {Math.abs(lon.biological_age_delta)} yr {lon.biological_age_delta < 0 ? "younger" : "older"}
-                          </span>{" "}
-                          than your age suggests
+                          {lon.biological_age_delta === 0 ? (
+                            <span className="font-semibold text-gray-600">On par with your chronological age</span>
+                          ) : (
+                            <>
+                              Biologically{" "}
+                              <span className={`font-semibold ${lon.biological_age_delta < 0 ? "text-green-600" : "text-red-500"}`}>
+                                {Math.abs(lon.biological_age_delta)} yr {lon.biological_age_delta < 0 ? "younger" : "older"}
+                              </span>{" "}
+                              than your age suggests
+                            </>
+                          )}
                         </p>
                       )}
                       <p className="text-[10px] text-gray-300 mt-1">{lon.data_coverage} available</p>
