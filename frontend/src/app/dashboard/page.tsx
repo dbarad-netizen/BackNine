@@ -946,7 +946,19 @@ export default function DashboardPage() {
           const rdyScore   = rdy?.score  as number | undefined;
           const slScore    = sl?.score   as number | undefined;
           const actScore   = act?.score  as number | undefined;
-          const hasReadiness = rdyScore != null && rdyScore > 0;
+
+          // Fallback: if today's readiness/sleep isn't scored yet, use the most recent
+          // historical value from trend so rings show something useful instead of "Syncing…".
+          // This covers cases where the ring wasn't worn overnight, Oura processing lags,
+          // or the ring is worn during the day but not during sleep.
+          const lastRdyEntry = [...trend].reverse().find(t => t.readiness != null && t.readiness > 0);
+          const lastSlEntry  = [...trend].reverse().find(t => t.sleep != null && t.sleep > 0);
+          const displayRdy   = (rdyScore != null && rdyScore > 0) ? rdyScore : (lastRdyEntry?.readiness ?? null);
+          const displaySl    = (slScore  != null && slScore  > 0) ? slScore  : (lastSlEntry?.sleep    ?? null);
+          const rdyFallback  = displayRdy != null && displayRdy !== rdyScore;
+          const slFallback   = displaySl  != null && displaySl  !== slScore;
+
+          const hasReadiness = displayRdy != null && displayRdy > 0;
           const heroColor  = hasReadiness ? (coaches.overall?.border ?? "#22c55e") : "#d1d5db";
           const visibleMetrics = metrics.filter(m => m.value !== "—");
 
@@ -964,7 +976,6 @@ export default function DashboardPage() {
           const liveScore    = liveAct?.score  ?? null;
           const liveSteps    = liveAct?.steps  ?? null;
           const liveCalVal   = liveAct?.active_cal ?? null;
-          const hasLive      = liveScore != null || liveSteps != null || liveCalVal != null;
           const todayAct     = today.today_activity as Record<string, number | null> | undefined;
           const todayActScore = liveScore ?? (todayAct?.score ?? null);
           // Prefer AH live steps/cal (real-time); fall back to today's Oura activity
@@ -1002,9 +1013,9 @@ export default function DashboardPage() {
                 !s ? "" : s >= 85 ? "Excellent" : s >= 70 ? "Good" : "Low";
 
               const rings = [
-                { label: "Readiness", score: rdyScore, color: heroColor },
-                { label: "Sleep",     score: slScore,  color: scoreColor(slScore) },
-                { label: "Activity",  score: actScore, color: scoreColor(actScore) },
+                { label: "Readiness", score: displayRdy, color: heroColor,              stale: rdyFallback },
+                { label: "Sleep",     score: displaySl,  color: scoreColor(displaySl),  stale: slFallback  },
+                { label: "Activity",  score: actScore,   color: scoreColor(actScore),   stale: false       },
               ];
 
               const circ = 2 * Math.PI * 40;
@@ -1036,13 +1047,14 @@ export default function DashboardPage() {
 
                   {/* Three score rings */}
                   <div className="grid grid-cols-3 gap-2 px-4 pb-4">
-                    {rings.map(({ label, score, color }) => (
+                    {rings.map(({ label, score, color, stale }) => (
                       <div key={label} className="flex flex-col items-center gap-1.5">
                         <div className="relative w-20 h-20">
                           <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
                             <circle cx="50" cy="50" r="40" fill="none" stroke="#E5E7EB" strokeWidth="11"/>
                             <circle cx="50" cy="50" r="40" fill="none"
-                              stroke={color} strokeWidth="11" strokeLinecap="round"
+                              stroke={stale ? color + "88" : color}
+                              strokeWidth="11" strokeLinecap="round"
                               strokeDasharray={circ}
                               strokeDashoffset={circ * (1 - (score ?? 0) / 100)}
                               className="transition-all duration-700"
@@ -1051,18 +1063,16 @@ export default function DashboardPage() {
                           <div className="absolute inset-0 flex flex-col items-center justify-center">
                             {score != null && score > 0 ? (
                               <>
-                                <span className="text-xl font-bold text-gray-900 leading-none">{score}</span>
-                                <span className="text-[9px] text-gray-400 mt-0.5">/100</span>
+                                <span className={`text-xl font-bold leading-none ${stale ? "text-gray-400" : "text-gray-900"}`}>{score}</span>
+                                <span className="text-[9px] text-gray-400 mt-0.5">{stale ? "last" : "/100"}</span>
                               </>
                             ) : (
-                              <span className="text-[10px] text-gray-400 text-center leading-tight px-1">
-                                Syncing…
-                              </span>
+                              <span className="text-[11px] text-gray-400 text-center leading-tight px-1">—</span>
                             )}
                           </div>
                         </div>
                         <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest">{label}</p>
-                        <p className="text-[11px] font-medium" style={{ color }}>{scoreLabel(score)}</p>
+                        <p className="text-[11px] font-medium" style={{ color: stale ? "#9ca3af" : color }}>{stale ? "Last known" : scoreLabel(score)}</p>
                       </div>
                     ))}
                   </div>
@@ -1088,54 +1098,6 @@ export default function DashboardPage() {
                   {(coaching.short as Parameters<typeof CoachingItem>[0]["item"][]).map((item, i) => (
                     <CoachingItem key={i} item={item} />
                   ))}
-                </div>
-              </section>
-            )}
-
-            {/* ── Today So Far — live AH + today's Oura score if ready ── */}
-            {hasLive && (
-              <section className="rounded-2xl border border-gray-100 bg-white p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400">Today So Far</h3>
-                  <span className="text-[10px] text-gray-300">syncs every 5 min</span>
-                </div>
-                <div className="flex items-center gap-4">
-                  {liveScore != null && (
-                    <div className="flex items-center gap-2 shrink-0">
-                      <div className="relative w-10 h-10">
-                        <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                          <circle cx="50" cy="50" r="42" fill="none" stroke="#E5E7EB" strokeWidth="14"/>
-                          <circle cx="50" cy="50" r="42" fill="none"
-                            stroke={liveScore >= 85 ? "#22c55e" : liveScore >= 70 ? "#f59e0b" : "#ef4444"}
-                            strokeWidth="14" strokeLinecap="round"
-                            strokeDasharray={`${2 * Math.PI * 42}`}
-                            strokeDashoffset={`${2 * Math.PI * 42 * (1 - liveScore / 100)}`}
-                          />
-                        </svg>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="text-xs font-bold text-gray-900">{liveScore}</span>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-gray-400 uppercase tracking-wide">Activity</p>
-                        <p className="text-xs font-medium text-gray-700">Score</p>
-                      </div>
-                    </div>
-                  )}
-                  <div className="flex gap-6">
-                    {liveSteps != null && (
-                      <div>
-                        <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">Steps</p>
-                        <p className="text-base font-bold text-gray-900">{liveSteps.toLocaleString()}</p>
-                      </div>
-                    )}
-                    {liveCalVal != null && (
-                      <div>
-                        <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">Active Cal</p>
-                        <p className="text-base font-bold text-gray-900">{liveCalVal}</p>
-                      </div>
-                    )}
-                  </div>
                 </div>
               </section>
             )}
