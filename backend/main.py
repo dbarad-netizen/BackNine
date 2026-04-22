@@ -664,7 +664,9 @@ async def get_dashboard(request: Request, days: int = 120):
     # Oura publishes daily_sleep with score=null for several hours after waking;
     # anchor to yesterday (where everything is complete) until today's score arrives.
     def _scored(d: str, mapping: dict) -> bool:
-        return bool(mapping.get(d, {}).get("score"))
+        # score=0 means ring not worn — treat as no data, not a valid score.
+        s = mapping.get(d, {}).get("score")
+        return bool(s and s > 0)
 
     if _scored(oura_today, slm):
         anchor = oura_today
@@ -680,11 +682,14 @@ async def get_dashboard(request: Request, days: int = 120):
     # Readiness and activity are processed faster than sleep — if the anchor date
     # is missing either (rare edge case), fall back to their own most-recent scored day.
     def _scored_row(mapping: dict, preferred: str) -> dict:
+        # score=0 means ring not worn — skip it and find a genuinely scored day.
         row = mapping.get(preferred) or {}
-        if row.get("score"):
+        s = row.get("score")
+        if s and s > 0:
             return row
         for d in sorted(mapping, reverse=True):
-            if mapping[d].get("score"):
+            s2 = mapping[d].get("score")
+            if s2 and s2 > 0:
                 return mapping[d]
         return row
     t_rdy = _scored_row(rm, anchor)
@@ -715,13 +720,16 @@ async def get_dashboard(request: Request, days: int = 120):
 
     # "Today So Far" = live AH data + today's Oura activity score if Oura
     # has already closed today's ring (available by mid-morning most days).
-    today_oura_act = am.get(today_str, {})
+    # Use oura_today (timezone-safe) instead of server's today_str to avoid UTC drift.
+    today_oura_act = am.get(oura_today, {})
     activity_live = {
-        "date":       today_str,
+        "date":       oura_today,
         "steps":      (ah_live or {}).get("steps"),
         "active_cal": (ah_live or {}).get("active_calories"),
         "score":      today_oura_act.get("score") or None,  # None if not yet available
     }
+    # Full today Oura activity (for Today's Performance card — steps/cal even without AH)
+    today_activity = today_oura_act
     t_act_coach = t_act  # Oura-sourced; used for coach_activity() message
 
     # Oura sleep sessions and daily scores both use WAKE date.
@@ -750,8 +758,8 @@ async def get_dashboard(request: Request, days: int = 120):
         except Exception:
             pass
 
-    # Build coaching
-    coaching = generate_coaching(rm, slm, am, smm)
+    # Build coaching — pass oura_today so it uses the correct timezone-safe date
+    coaching = generate_coaching(rm, slm, am, smm, oura_today=oura_today)
     coaches  = {
         "overall":  coach_overall(t_rdy, t_sm),
         "sleep":    coach_sleep(t_sl, t_sm),
@@ -897,6 +905,7 @@ async def get_dashboard(request: Request, days: int = 120):
             "activity":           t_act,              # Oura activity for anchor (coach card)
             "yesterday_activity": yesterday_activity, # Day before anchor's Oura activity
             "activity_live":      activity_live,      # AH live + today's Oura score
+            "today_activity":     today_activity,     # Full Oura activity for oura_today
             "sleep_model":        t_sm,
         },
         "training_load":       training_load,

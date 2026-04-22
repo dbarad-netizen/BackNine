@@ -49,6 +49,7 @@ export interface TodayData {
   sleep:               Record<string, unknown>;
   activity:            Record<string, unknown>; // Oura summary for anchor (coach card)
   yesterday_activity?: Record<string, unknown>; // Day before anchor Oura activity
+  today_activity?:     Record<string, unknown>; // Full Oura activity for oura_today
   activity_live?:      ActivityLive;            // AH live + today's Oura score
   sleep_model:         Record<string, unknown>;
 }

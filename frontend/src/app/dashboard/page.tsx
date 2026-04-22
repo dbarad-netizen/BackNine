@@ -960,11 +960,17 @@ export default function DashboardPage() {
           const yestActCal = yest?.active_cal ?? null;
           const hasYest    = anchorIsToday && (yestScore != null || yestSteps != null || yestActCal != null);
 
-          // Today so far — live AH data + today's Oura activity score if available
-          const liveScore  = liveAct?.score  ?? null;
-          const liveSteps  = liveAct?.steps  ?? null;
-          const liveCalVal = liveAct?.active_cal ?? null;
-          const hasLive    = liveScore != null || liveSteps != null || liveCalVal != null;
+          // Today's Performance — live AH steps/cal merged with today's Oura activity
+          const liveScore    = liveAct?.score  ?? null;
+          const liveSteps    = liveAct?.steps  ?? null;
+          const liveCalVal   = liveAct?.active_cal ?? null;
+          const hasLive      = liveScore != null || liveSteps != null || liveCalVal != null;
+          const todayAct     = today.today_activity as Record<string, number | null> | undefined;
+          const todayActScore = liveScore ?? (todayAct?.score ?? null);
+          // Prefer AH live steps/cal (real-time); fall back to today's Oura activity
+          const todaySteps   = liveSteps  ?? (todayAct?.steps   ?? null);
+          const todayActCal  = liveCalVal ?? (todayAct?.active_cal ?? null);
+          const hasTodayPerf = todayActScore != null || todaySteps != null || todayActCal != null;
 
           return (
           <div className="space-y-6">
@@ -1127,6 +1133,58 @@ export default function DashboardPage() {
                       <div>
                         <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">Active Cal</p>
                         <p className="text-base font-bold text-gray-900">{liveCalVal}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* ── Today's Performance — live AH data merged with today's Oura activity ── */}
+            {hasTodayPerf && (
+              <section className="rounded-2xl border border-green-100 bg-white p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+                    Today&apos;s Performance
+                  </h3>
+                  {liveSteps != null && (
+                    <span className="text-[10px] text-green-500 font-medium">● Live</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-4">
+                  {todayActScore != null && (
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="relative w-10 h-10">
+                        <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+                          <circle cx="50" cy="50" r="42" fill="none" stroke="#E5E7EB" strokeWidth="14"/>
+                          <circle cx="50" cy="50" r="42" fill="none"
+                            stroke={todayActScore >= 85 ? "#22c55e" : todayActScore >= 70 ? "#f59e0b" : "#ef4444"}
+                            strokeWidth="14" strokeLinecap="round"
+                            strokeDasharray={`${2 * Math.PI * 42}`}
+                            strokeDashoffset={`${2 * Math.PI * 42 * (1 - todayActScore / 100)}`}
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-xs font-bold text-gray-900">{todayActScore}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wide">Activity</p>
+                        <p className="text-xs font-medium text-gray-700">Score</p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex gap-6">
+                    {todaySteps != null && (
+                      <div>
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">Steps</p>
+                        <p className="text-base font-bold text-gray-900">{todaySteps.toLocaleString()}</p>
+                      </div>
+                    )}
+                    {todayActCal != null && (
+                      <div>
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">Active Cal</p>
+                        <p className="text-base font-bold text-gray-900">{todayActCal}</p>
                       </div>
                     )}
                   </div>

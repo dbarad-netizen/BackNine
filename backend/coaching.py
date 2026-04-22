@@ -133,11 +133,12 @@ def coach_activity(act: dict) -> dict:
 # ── main coaching engine ───────────────────────────────────────────────────────
 
 def generate_coaching(
-    rm: dict,    # readiness map  {date: {...}}
-    slm: dict,   # sleep score map
-    am: dict,    # activity map
-    smm: dict,   # sleep model detail map
-    labs=None,  # dict | None
+    rm: dict,           # readiness map  {date: {...}}
+    slm: dict,          # sleep score map
+    am: dict,           # activity map
+    smm: dict,          # sleep model detail map
+    labs=None,          # dict | None
+    oura_today: str = None,  # timezone-safe "today" from Oura max date
 ) -> dict:
     """
     Generate coaching intelligence items from 120 days of Oura data.
@@ -152,7 +153,9 @@ def generate_coaching(
     """
     labs = labs or {}
     now = datetime.now()
-    today_str = now.strftime("%Y-%m-%d")
+    # Use Oura's timezone-safe "today" if provided; otherwise fall back to server clock.
+    # The Render server runs UTC — after ~8 PM ET the server date is one day ahead of users.
+    today_str = oura_today if oura_today else now.strftime("%Y-%m-%d")
 
     all_days = sorted(set(list(rm) + list(slm) + list(am)))
     last30   = [d for d in all_days if d >= (now - timedelta(days=30)).strftime("%Y-%m-%d")]
@@ -171,7 +174,8 @@ def generate_coaching(
     if not t_sm  and smm: t_sm  = smm[sorted(smm)[-1]]
 
     today_hrv  = t_sm.get("hrv")  or 0
-    today_rdy  = t_rdy.get("score") or 0
+    # score=0 means ring not worn / no data — treat as None, not a legitimately low score.
+    today_rdy  = t_rdy.get("score") or None
     today_hrs  = round((t_sm.get("total") or 0) / 3600, 1)
     today_deep = t_sm.get("deep") or 0
     today_rem  = t_sm.get("rem")  or 0
@@ -243,7 +247,8 @@ def generate_coaching(
             short_items.append(_ins("🛌", "Rest day — skip training",
                 f"HRV {today_hrv} ms is severely suppressed ({(1-ratio)*100:.0f}% below {round(avg_hrv_30)} ms baseline). "
                 "Full rest only. Light stretching or walking.", "urgent"))
-    elif today_rdy < 70:
+    elif today_rdy and today_rdy < 70:
+        # Only fire when we have a real readiness score (not 0, which means ring not worn).
         short_items.append(_ins("🔴", "Recovery day required",
             f"Readiness {today_rdy} — nervous system still recovering. HRV {today_hrv} ms. "
             "Avoid intense training.", "urgent"))
