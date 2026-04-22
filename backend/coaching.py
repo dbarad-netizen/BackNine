@@ -235,9 +235,9 @@ def generate_coaching(
         short_items.append(_ins("🔴", "Recovery day required",
             f"Readiness {today_rdy} — nervous system still recovering. HRV {today_hrv} ms. "
             "Avoid intense training.", "urgent"))
-    else:
-        short_items.append(_ins("🟢", "Body is primed",
-            f"Readiness {today_rdy} with HRV {today_hrv} ms. Good day for quality training.", "good"))
+    # else: readiness is fine but no HRV comparison data — hero card already
+    # communicates readiness status ("You're primed to perform today" etc.) so
+    # no need for a redundant short_item here.
 
     # ── Temperature deviation ─────────────────────────────────────────────────
     temp_dev = t_rdy.get("temp_dev")

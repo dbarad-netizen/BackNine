@@ -1381,8 +1381,20 @@ export default function DashboardPage() {
               );
             })()}
 
-            <CoachingSection title="This Week"        items={coaching.mid}   />
-            <CoachingSection title="Long-Term Watch"  items={coaching.long}  />
+            {/* De-dupe: strip any mid/long items whose label already appears in short */}
+            {(() => {
+              const shortLabels = new Set(
+                (coaching.short as { label?: string }[]).map(i => i.label).filter(Boolean)
+              );
+              const midUniq  = (coaching.mid  as { label?: string }[]).filter(i => !shortLabels.has(i.label));
+              const longUniq = (coaching.long as { label?: string }[]).filter(i => !shortLabels.has(i.label));
+              return (
+                <>
+                  <CoachingSection title="This Week"       items={midUniq}  />
+                  <CoachingSection title="Long-Term Watch" items={longUniq} />
+                </>
+              );
+            })()}
             <InsightsSection />
           </div>
           );
