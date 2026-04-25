@@ -385,17 +385,49 @@ async def oura_auth_callback(
         expires_at    = int(datetime.now(timezone.utc).timestamp()) + expires_in
 
         # Determine user_id:
-        # • If linking to an existing Supabase account, use that UUID
-        # • Otherwise derive a stable ID from Oura's own user identifier
+        # • If linking to an existing Supabase account, use that UUID and
+        #   store the Oura personal ID so we can resolve it later.
+        # • If signing in with Oura directly, look up whether this Oura account
+        #   was previously linked to a Supabase UUID (via oura_user_id column).
+        #   If found, use the Supabase UUID so ALL data (meals, weight, labs,
+        #   challenges, etc.) stays under one identity across devices.
+        # • Otherwise fall back to oura_<oura_user_id> (legacy).
+        try:
+            personal = await fetch_personal_info(access_token)
+            oura_pid = personal["id"]          # Oura's own numeric user ID
+            oura_native_id = f"oura_{oura_pid}"
+        except Exception:
+            import hashlib
+            oura_pid = None
+            oura_native_id = f"oura_{hashlib.sha256(access_token.encode()).hexdigest()[:16]}"
+
         if link_user_id:
+            # User is connecting Oura from a Supabase account — use the Supabase UUID
             user_id = link_user_id
+        elif oura_pid:
+            # Direct Oura sign-in — check if this Oura account is already linked
+            # to a Supabase UUID via the oura_user_id column in wearable_connections
+            db = get_supabase()
+            canonical_id = None
+            if db:
+                try:
+                    res = (
+                        db.table("wearable_connections")
+                        .select("user_id")
+                        .eq("oura_user_id", oura_pid)
+                        .eq("provider", "oura")
+                        .execute()
+                    )
+                    for row in (res.data or []):
+                        uid = row["user_id"]
+                        if not uid.startswith("oura_"):
+                            canonical_id = uid  # Found the Supabase UUID
+                            break
+                except Exception:
+                    pass
+            user_id = canonical_id or oura_native_id
         else:
-            try:
-                personal = await fetch_personal_info(access_token)
-                user_id  = f"oura_{personal['id']}"
-            except Exception:
-                import hashlib
-                user_id = f"oura_{hashlib.sha256(access_token.encode()).hexdigest()[:16]}"
+            user_id = oura_native_id
 
         session_data = {
             "user_id":       user_id,
@@ -406,14 +438,21 @@ async def oura_auth_callback(
         }
 
         # Supabase — best effort only
+        # Store oura_user_id so that direct Oura sign-ins on other devices
+        # can resolve back to this user's canonical Supabase UUID.
         try:
             db = get_supabase()
             if db:
-                db.table("wearable_connections").upsert({
-                    "user_id": user_id, "provider": "oura",
-                    "access_token": access_token, "refresh_token": refresh_tok,
-                    "expires_at": expires_at,
-                }).execute()
+                row = {
+                    "user_id":      user_id,
+                    "provider":     "oura",
+                    "access_token": access_token,
+                    "refresh_token": refresh_tok,
+                    "expires_at":   expires_at,
+                }
+                if oura_pid:
+                    row["oura_user_id"] = str(oura_pid)
+                db.table("wearable_connections").upsert(row).execute()
         except Exception:
             pass
 
