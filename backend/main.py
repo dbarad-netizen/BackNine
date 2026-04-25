@@ -1237,11 +1237,62 @@ async def import_lab_pdf(request: Request, file: UploadFile = File(...)):
 
 # ── Challenges ────────────────────────────────────────────────────────────────
 
+def _auto_sync_oura_steps(user_id: str, challenges: list) -> None:
+    """
+    For any active 'steps' challenge the user participates in, pull their
+    daily step counts from the Oura cache and upsert into challenge_progress.
+    Only fills days where Oura has data — leaves gaps for manual entry.
+    Runs silently; never raises so it can't break the challenges endpoint.
+    """
+    try:
+        steps_challenges = [
+            c for c in challenges
+            if c.get("type") == "steps" and c.get("is_active")
+        ]
+        if not steps_challenges:
+            return
+
+        # Pull up to 90 days of Oura cached data
+        rm, slm, am, smm = oc.get_days(user_id, days=90)
+        if not am:
+            return
+
+        for challenge in steps_challenges:
+            cid        = challenge["id"]
+            start_str  = challenge["start_date"]
+            end_str    = challenge["end_date"]
+
+            # Walk every date in the challenge window that Oura has steps for
+            from datetime import date as _date, timedelta as _td
+            cur = _date.fromisoformat(start_str)
+            end = _date.fromisoformat(end_str)
+            today_d = _date.today()
+
+            while cur <= min(end, today_d):
+                ds = cur.isoformat()
+                steps = am.get(ds, {}).get("steps")
+                if steps and steps > 0:
+                    # Only write if Oura has a real value — don't overwrite manual entries
+                    # with 0, and don't invent data for days Oura didn't record
+                    try:
+                        chl.log_progress(cid, float(steps), for_date=ds, user_id=user_id)
+                    except Exception:
+                        pass
+                cur += _td(days=1)
+    except Exception:
+        pass  # Never surface errors from auto-sync
+
+
 @app.get("/api/challenges/me")
 def my_challenges(request: Request):
     session = _require_session(request)
     user_id = session["user_id"]
-    return {"challenges": chl.list_my_challenges(user_id=user_id), "user_id": user_id}
+    challenges = chl.list_my_challenges(user_id=user_id)
+    # Auto-populate steps challenges from Oura cache before returning
+    _auto_sync_oura_steps(user_id, challenges)
+    # Re-fetch so the returned data reflects the auto-filled values
+    challenges = chl.list_my_challenges(user_id=user_id)
+    return {"challenges": challenges, "user_id": user_id}
 
 
 @app.post("/api/challenges")
@@ -1285,6 +1336,9 @@ def get_challenge(challenge_id: str, request: Request):
     session = _require_session(request)
     user_id = session["user_id"]
     try:
+        challenge = chl.get_challenge(challenge_id.upper(), user_id=user_id)
+        # Auto-fill steps from Oura before returning
+        _auto_sync_oura_steps(user_id, [challenge])
         return chl.get_challenge(challenge_id.upper(), user_id=user_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
