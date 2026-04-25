@@ -1310,7 +1310,9 @@ async def create_challenge(request: Request):
             user_id        = user_id,
             custom_unit    = body.get("custom_unit"),
         )
-        return challenge
+        # Immediately backfill Oura steps for the full challenge window
+        _auto_sync_oura_steps(user_id, [challenge])
+        return chl.get_challenge(challenge["id"], user_id=user_id)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -1326,7 +1328,9 @@ async def join_challenge(request: Request):
             display_name = body["display_name"],
             user_id      = user_id,
         )
-        return challenge
+        # Backfill any Oura steps already recorded during this challenge window
+        _auto_sync_oura_steps(user_id, [challenge])
+        return chl.get_challenge(challenge["id"], user_id=user_id)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

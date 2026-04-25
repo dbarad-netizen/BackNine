@@ -130,7 +130,7 @@ def get_challenge(challenge_id: str, user_id: Optional[str] = None) -> dict:
     start     = date.fromisoformat(challenge["start_date"])
     end_d     = date.fromisoformat(challenge["end_date"])
     total_days = challenge["duration_days"]
-    elapsed    = max(0, (date.today() - start).days + 1)
+    elapsed    = min(total_days, max(0, (date.today() - start).days + 1))
     days_left  = max(0, (end_d - date.today()).days)
 
     # Build per-participant summary
