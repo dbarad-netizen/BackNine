@@ -758,6 +758,7 @@ export default function DashboardPage() {
   const [vo2Input,     setVo2Input]     = useState("");
   const [vo2Saving,    setVo2Saving]    = useState(false);
   const [vo2Saved,     setVo2Saved]     = useState(false);
+  const [vo2Editing,   setVo2Editing]   = useState(false);
 
   useEffect(() => {
     api.dashboard()
@@ -845,6 +846,8 @@ export default function DashboardPage() {
     try {
       await api.saveProfile({ vo2_max: val });
       setVo2Saved(true);
+      setVo2Editing(false);
+      setVo2Input("");
       // Refresh dashboard so longevity score recalculates with the new VO2 max
       const fresh = await api.dashboard();
       setData(fresh);
@@ -1165,17 +1168,50 @@ export default function DashboardPage() {
                       {Object.values(lon.components).map(comp => {
                         const pct = Math.round((comp.points / comp.max) * 100);
                         const barColor = pct >= 80 ? "#22c55e" : pct >= 60 ? "#84cc16" : pct >= 40 ? "#f59e0b" : "#ef4444";
+                        const isVo2 = comp.label === "VO2 Max";
                         return (
                           <div key={comp.label} className="space-y-1">
                             <div className="flex justify-between text-[10px]">
                               <span className="text-gray-500 truncate pr-1">{comp.label}</span>
-                              <span className="text-gray-700 font-medium shrink-0">{comp.points}/{comp.max}</span>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <span className="text-gray-700 font-medium">{comp.points}/{comp.max}</span>
+                                {isVo2 && !vo2Editing && (
+                                  <button
+                                    onClick={() => { setVo2Editing(true); setVo2Input(""); setVo2Saved(false); }}
+                                    className="text-[9px] text-blue-400 hover:text-blue-600 underline leading-none"
+                                    title="Update VO2 Max"
+                                  >edit</button>
+                                )}
+                              </div>
                             </div>
                             <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
                               <div className="h-full rounded-full transition-all duration-500"
                                 style={{ width: `${pct}%`, backgroundColor: barColor }} />
                             </div>
                             <p className="text-[9px] text-gray-400">{comp.value} · {comp.norm}</p>
+                            {/* Inline edit form — shown when user clicks "edit" */}
+                            {isVo2 && vo2Editing && (
+                              <div className="flex items-center gap-1.5 pt-0.5">
+                                <input
+                                  type="number" min={10} max={90} step={0.1}
+                                  placeholder="ml/kg/min"
+                                  value={vo2Input}
+                                  onChange={e => setVo2Input(e.target.value)}
+                                  className="w-20 rounded border border-gray-200 bg-gray-50 px-2 py-1 text-[10px] text-gray-900 focus:outline-none focus:border-green-400"
+                                />
+                                <button
+                                  onClick={handleSaveVo2}
+                                  disabled={vo2Saving || !vo2Input}
+                                  className="rounded bg-green-600 px-2 py-1 text-[10px] font-semibold text-white disabled:opacity-40 hover:bg-green-700 transition-colors"
+                                >
+                                  {vo2Saved ? "✓" : vo2Saving ? "…" : "Save"}
+                                </button>
+                                <button
+                                  onClick={() => { setVo2Editing(false); setVo2Input(""); }}
+                                  className="text-[10px] text-gray-400 hover:text-gray-600"
+                                >✕</button>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
