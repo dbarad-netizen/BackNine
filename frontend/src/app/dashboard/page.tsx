@@ -845,14 +845,9 @@ export default function DashboardPage() {
     try {
       await api.saveProfile({ vo2_max: val });
       setVo2Saved(true);
-      setData(prev => prev ? {
-        ...prev,
-        longevity_score: {
-          ...prev.longevity_score,
-          // optimistically clear the "missing" state so the hint disappears
-          _vo2_manual: val,
-        }
-      } : prev);
+      // Refresh dashboard so longevity score recalculates with the new VO2 max
+      const fresh = await api.dashboard();
+      setData(fresh);
       setTimeout(() => setVo2Saved(false), 3000);
     } catch (e) { console.error(e); }
     finally { setVo2Saving(false); }
