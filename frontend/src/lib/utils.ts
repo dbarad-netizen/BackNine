@@ -20,7 +20,11 @@ export function scoreBg(score: number | null | undefined): string {
 }
 
 export function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  // Date-only strings (YYYY-MM-DD) are parsed as UTC midnight by the JS Date
+  // constructor, which shifts them back one day in timezones behind UTC (e.g.
+  // ET after 8 PM). Append T12:00:00 to anchor to local noon instead.
+  const safe = iso.length === 10 ? iso + "T12:00:00" : iso;
+  return new Date(safe).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 export function fmtHrs(secs: number | null | undefined): string {

@@ -922,7 +922,7 @@ export default function DashboardPage() {
           {/* Right side */}
           <div className="flex items-center gap-3 ml-3 shrink-0">
             <span className="hidden sm:block text-xs text-gray-400">
-              {fmtDate(new Date().toISOString().slice(0, 10))}
+              {new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
             </span>
             <button
               onClick={() => setShowProfile(true)}
