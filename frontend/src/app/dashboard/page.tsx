@@ -755,6 +755,9 @@ export default function DashboardPage() {
   const [weightLog,  setWeightLog]  = useState<WeightEntry[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [nutLoading,   setNutLoading]   = useState(false);
+  const [vo2Input,     setVo2Input]     = useState("");
+  const [vo2Saving,    setVo2Saving]    = useState(false);
+  const [vo2Saved,     setVo2Saved]     = useState(false);
 
   useEffect(() => {
     api.dashboard()
@@ -833,6 +836,26 @@ export default function DashboardPage() {
       await api.deleteWeight(id);
       setWeightLog(prev => prev.filter(e => e.id !== id));
     } catch (e) { console.error(e); }
+  };
+
+  const handleSaveVo2 = async () => {
+    const val = parseFloat(vo2Input);
+    if (!val || val < 10 || val > 90) return;
+    setVo2Saving(true);
+    try {
+      await api.saveProfile({ vo2_max: val });
+      setVo2Saved(true);
+      setData(prev => prev ? {
+        ...prev,
+        longevity_score: {
+          ...prev.longevity_score,
+          // optimistically clear the "missing" state so the hint disappears
+          _vo2_manual: val,
+        }
+      } : prev);
+      setTimeout(() => setVo2Saved(false), 3000);
+    } catch (e) { console.error(e); }
+    finally { setVo2Saving(false); }
   };
 
   const handleSaveSettings = async (s: NutritionSettings) => {
@@ -1167,20 +1190,51 @@ export default function DashboardPage() {
                   {/* Missing metrics — show what would unlock a higher score */}
                   {(() => {
                     const present = new Set(Object.keys(lon.components));
-                    const missing = [
-                      !present.has("vo2_max")   && { label: "VO2 Max",    hint: "sync via Apple Health (Fitness app)", max: 20 },
-                      !present.has("body_fat")   && { label: "Body Fat %", hint: "log via Apple Health or the Metrics tab", max: 10 },
-                    ].filter(Boolean) as { label: string; hint: string; max: number }[];
-                    if (!missing.length) return null;
+                    const missingBodyFat = !present.has("body_fat");
+                    const missingVo2    = !present.has("vo2_max");
+                    if (!missingBodyFat && !missingVo2) return null;
                     return (
-                      <div className="pt-2 border-t border-gray-100 space-y-1.5">
+                      <div className="pt-2 border-t border-gray-100 space-y-2">
                         <p className="text-[10px] text-gray-400 font-medium uppercase tracking-widest">Unlock more points</p>
-                        {missing.map(m => (
-                          <div key={m.label} className="flex items-center gap-2 text-[10px] text-gray-400">
-                            <span className="w-1.5 h-1.5 rounded-full bg-gray-300 shrink-0" />
-                            <span><span className="font-medium text-gray-500">{m.label}</span> (+{m.max} pts max) — {m.hint}</span>
+
+                        {/* VO2 Max — inline entry */}
+                        {missingVo2 && (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                              <span className="w-1.5 h-1.5 rounded-full bg-gray-300 shrink-0" />
+                              <span><span className="font-medium text-gray-500">VO2 Max</span> (+20 pts max)</span>
+                            </div>
+                            <div className="flex items-center gap-2 pl-3.5">
+                              <input
+                                type="number"
+                                min={10} max={90} step={0.1}
+                                placeholder="e.g. 45"
+                                value={vo2Input}
+                                onChange={e => setVo2Input(e.target.value)}
+                                className="w-24 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs text-gray-900 focus:outline-none focus:border-green-400"
+                              />
+                              <span className="text-[10px] text-gray-400">ml/kg/min</span>
+                              <button
+                                onClick={handleSaveVo2}
+                                disabled={vo2Saving || !vo2Input}
+                                className="rounded-lg bg-green-600 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-40 hover:bg-green-700 transition-colors"
+                              >
+                                {vo2Saved ? "✓ Saved" : vo2Saving ? "…" : "Save"}
+                              </button>
+                            </div>
+                            <p className="pl-3.5 text-[10px] text-gray-400">
+                              From your Oura app or Apple Health → Cardio Fitness. Will auto-sync once connected.
+                            </p>
                           </div>
-                        ))}
+                        )}
+
+                        {/* Body fat — redirect to weigh-in card */}
+                        {missingBodyFat && (
+                          <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                            <span className="w-1.5 h-1.5 rounded-full bg-gray-300 shrink-0" />
+                            <span><span className="font-medium text-gray-500">Body Fat %</span> (+10 pts max) — enter via the Log Weigh-In card below</span>
+                          </div>
+                        )}
                       </div>
                     );
                   })()}

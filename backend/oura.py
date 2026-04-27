@@ -77,7 +77,8 @@ async def fetch_all(access_token: str, days: int = 120) -> dict:
     }
     # optional = nice-to-have; silently skip on failure
     optional_endpoints = {
-        "sleepDetail": f"{OURA_API_BASE}/sleep?start_date={start}&end_date={end}",
+        "sleepDetail":        f"{OURA_API_BASE}/sleep?start_date={start}&end_date={end}",
+        "cardiovascularAge":  f"{OURA_API_BASE}/daily_cardiovascular_age?start_date={start}&end_date={end}",
     }
 
     results: dict = {}
@@ -209,3 +210,19 @@ def parse_oura_data(raw: dict) -> tuple[dict, dict, dict, dict]:
         }
 
     return rm, slm, am, smm
+
+
+def parse_oura_vo2_max(raw: dict) -> float | None:
+    """
+    Extract the most recent VO2 max estimate from the cardiovascular_age endpoint.
+    Returns None if unavailable (not all Oura generations support this).
+    """
+    records = raw.get("cardiovascularAge", {}).get("data", [])
+    if not records:
+        return None
+    # Data comes back in date order; take the last non-null VO2 max
+    for rec in reversed(records):
+        v = rec.get("vo2_max")
+        if v is not None:
+            return float(v)
+    return None

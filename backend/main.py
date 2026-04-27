@@ -19,7 +19,7 @@ from fastapi.responses import RedirectResponse, JSONResponse, PlainTextResponse
 from dotenv import load_dotenv
 from jose import jwt, JWTError
 
-from oura import build_auth_url, exchange_code, refresh_token as oura_refresh, fetch_all, parse_oura_data, fetch_personal_info
+from oura import build_auth_url, exchange_code, refresh_token as oura_refresh, fetch_all, parse_oura_data, parse_oura_vo2_max, fetch_personal_info
 from coaching import generate_coaching, coach_overall, coach_sleep, coach_activity
 from models import DashboardResponse, DailyMetrics, WearableConnection
 import nutrition as nutr
@@ -645,6 +645,7 @@ async def get_dashboard(request: Request, days: int = 120):
     # ── Try cache first ───────────────────────────────────────────────────────
     # Webhooks keep the cache warm; only call Oura live when the cache is stale.
     rm, slm, am, smm = {}, {}, {}, {}
+    oura_vo2_max: float | None = None
     cache_hit = False
     try:
         if oc.is_fresh(user_id, max_age_hours=0.5):
@@ -666,6 +667,7 @@ async def get_dashboard(request: Request, days: int = 120):
         try:
             raw = await fetch_all(access_token, days=days)
             rm, slm, am, smm = parse_oura_data(raw)
+            oura_vo2_max = parse_oura_vo2_max(raw)
             # Populate the cache so the next load is instant
             try:
                 oc.store_days(user_id, rm, slm, am, smm)
@@ -900,21 +902,25 @@ async def get_dashboard(request: Request, days: int = 120):
         _profile = _get_profile(user_id)
         _ah_sum  = ah.get_summary(user_id, days=30)
 
-        # Body fat: prefer Apple Health, fall back to most recent weight_entries log
+        # Body fat: Apple Health → weight_entries (Body Composition card)
         _ah_body_fat = _ah_sum.get("today", {}).get("body_fat_percentage") or _ah_sum.get("latest_body_fat_pct")
         if _ah_body_fat is None:
             try:
                 _we = nutr.get_weight_entries(user_id)
-                # get_weight_entries returns ascending order; take last entry with body_fat_pct
                 _we_with_bf = [e for e in reversed(_we) if e.get("body_fat_pct") is not None]
                 _ah_body_fat = _we_with_bf[0]["body_fat_pct"] if _we_with_bf else None
             except Exception:
                 _ah_body_fat = None
 
+        # VO2 Max: Apple Health → Oura cardiovascular_age → manual profile entry
+        _vo2 = (_ah_sum.get("today", {}).get("vo2_max")
+                or oura_vo2_max
+                or _profile.get("vo2_max"))
+
         _lon_metrics = {
             "hrv":                 t_sm.get("hrv"),
             "rhr":                 t_sm.get("rhr"),
-            "vo2_max":             _ah_sum.get("today", {}).get("vo2_max"),
+            "vo2_max":             _vo2,
             "body_fat_percentage": _ah_body_fat,
             # 7-day averages for sleep and steps
             "sleep_hours": (lambda v: v if v else None)(
@@ -1499,7 +1505,7 @@ async def save_profile(request: Request):
     session = _require_session(request)
     user_id = session["user_id"]
     body = await request.json()
-    allowed = {"name", "age", "biological_sex", "height_cm", "health_goals"}
+    allowed = {"name", "age", "biological_sex", "height_cm", "health_goals", "vo2_max"}
     data = {k: v for k, v in body.items() if k in allowed}
     data["user_id"] = user_id
     try:

@@ -150,6 +150,7 @@ export interface UserProfile {
   age?:            number | null;
   biological_sex?: "male" | "female" | null;
   health_goals?:   string[];
+  vo2_max?:        number | null;
 }
 
 export interface ChatMessage {
