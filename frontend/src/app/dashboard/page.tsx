@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
   api,
   type DashboardData,
@@ -1304,8 +1304,13 @@ export default function DashboardPage() {
               );
             })()}
 
-            {/* ── Body Composition ── */}
-            <section className="rounded-2xl border border-gray-200 bg-white p-5">
+            {/* ── Body & Weight (collapsible) ── */}
+            <CollapsibleSection
+              title="Body & Weight"
+              icon="⚖️"
+              badge={weightLog.length > 0 ? `${weightLog[weightLog.length-1].weight_lbs} lbs` : undefined}
+            >
+            <section className="rounded-xl border border-gray-100 bg-gray-50 p-4">
               <div className="flex items-center justify-between mb-4">
                 <p className="text-sm font-semibold text-gray-900">Body Composition</p>
                 {weightLog.length > 0 && (
@@ -1350,6 +1355,7 @@ export default function DashboardPage() {
 
             {/* ── Log Weigh-In ── */}
             <WeightForm onSave={handleLogWeight} />
+            </CollapsibleSection>
 
             {/* ── Coach Al teaser ── */}
             <section
@@ -1451,7 +1457,12 @@ export default function DashboardPage() {
 
             {/* ── Yesterday's Performance — explicit yesterday Oura data ── */}
             {hasYest && (
-              <section className="rounded-2xl border border-gray-100 bg-white p-4 space-y-3">
+            <CollapsibleSection
+              title="Yesterday's Performance"
+              icon="📅"
+              badge={(() => { const s = (today.readiness as Record<string,number|null>); return s ? undefined : undefined; })()}
+            >
+              <section className="rounded-xl border border-gray-100 bg-gray-50 p-4 space-y-3">
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400">
                   Yesterday&apos;s Performance
                 </h3>
@@ -1499,10 +1510,16 @@ export default function DashboardPage() {
                   </p>
                 )}
               </section>
+            </CollapsibleSection>
             )}
 
-            {/* ── Tomorrow's Forecast ── */}
-            <section className="rounded-2xl border bg-white p-4 space-y-4"
+            {/* ── Tomorrow's Forecast (collapsible) ── */}
+            <CollapsibleSection
+              title="Tomorrow's Forecast"
+              icon="🔮"
+              badge={`${readiness_forecast.score} · ${readiness_forecast.label}`}
+            >
+            <section className="rounded-xl border bg-gray-50 p-4 space-y-4"
               style={{ borderColor: readiness_forecast.color + "55" }}>
               <div className="flex items-center gap-4">
                 <div className="relative w-14 h-14 shrink-0">
@@ -1606,8 +1623,10 @@ export default function DashboardPage() {
                 </div>
               </section>
             )}
+            </CollapsibleSection>
 
-            {/* ── 30-Day Trends ── */}
+            {/* ── Trends & Progress (collapsible) ── */}
+            <CollapsibleSection title="Trends & Progress" icon="📈">
             <section className="rounded-2xl border border-gray-200 bg-white p-5">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="font-semibold text-gray-900 text-sm">30-Day Trends</h2>
@@ -1625,22 +1644,26 @@ export default function DashboardPage() {
               <TrendChart data={trend} metric={tab} />
             </section>
             <ProgressSection />
+            </CollapsibleSection>
 
-            {/* De-dupe: strip any mid/long items whose label already appears in short */}
-            {(() => {
-              const shortLabels = new Set(
-                (coaching.short as { label?: string }[]).map(i => i.label).filter(Boolean)
-              );
-              const midUniq  = (coaching.mid  as { label?: string }[]).filter(i => !shortLabels.has(i.label));
-              const longUniq = (coaching.long as { label?: string }[]).filter(i => !shortLabels.has(i.label));
-              return (
-                <>
-                  <CoachingSection title="This Week"       items={midUniq}  />
-                  <CoachingSection title="Long-Term Watch" items={longUniq} />
-                </>
-              );
-            })()}
-            <InsightsSection />
+            {/* ── Insights (collapsible) ── */}
+            <CollapsibleSection title="Coaching Insights" icon="💡">
+              {/* De-dupe: strip any mid/long items whose label already appears in short */}
+              {(() => {
+                const shortLabels = new Set(
+                  (coaching.short as { label?: string }[]).map(i => i.label).filter(Boolean)
+                );
+                const midUniq  = (coaching.mid  as { label?: string }[]).filter(i => !shortLabels.has(i.label));
+                const longUniq = (coaching.long as { label?: string }[]).filter(i => !shortLabels.has(i.label));
+                return (
+                  <>
+                    <CoachingSection title="This Week"       items={midUniq}  />
+                    <CoachingSection title="Long-Term Watch" items={longUniq} />
+                  </>
+                );
+              })()}
+              <InsightsSection />
+            </CollapsibleSection>
           </div>
           );
         })()}
@@ -1893,6 +1916,46 @@ export default function DashboardPage() {
       {/* ── Profile modal ── */}
       {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
 
+    </div>
+  );
+}
+
+// ── Collapsible section wrapper ───────────────────────────────────────────────
+function CollapsibleSection({
+  title, icon, defaultOpen = false, badge, children,
+}: {
+  title: string;
+  icon?: string;
+  defaultOpen?: boolean;
+  badge?: string;          // optional summary shown when collapsed, e.g. "82 · Good"
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          {icon && <span className="text-base">{icon}</span>}
+          <span className="text-sm font-semibold text-gray-800">{title}</span>
+          {!open && badge && (
+            <span className="text-xs text-gray-400 font-normal">{badge}</span>
+          )}
+        </div>
+        <svg
+          className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div className="px-4 pb-4 pt-1 space-y-4 border-t border-gray-50">
+          {children}
+        </div>
+      )}
     </div>
   );
 }
