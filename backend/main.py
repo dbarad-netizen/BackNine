@@ -942,9 +942,12 @@ async def get_dashboard(request: Request, days: int = 120):
     # ── Prediction tracking ───────────────────────────────────────────────────
     # Save today's forecast as tomorrow's prediction, fill in any past actuals,
     # then compute accuracy history for the gamification card.
-    from datetime import date as _date
-    tomorrow_str = (_date.today() + timedelta(days=1)).isoformat()
-    prd.save_prediction(user_id, tomorrow_str, forecast_score)
+    # Use oura_today (Oura-anchored local date) not server UTC — avoids saving
+    # for the wrong date after 8 PM ET when the UTC clock rolls forward.
+    oura_tomorrow_str = (
+        datetime.strptime(oura_today, "%Y-%m-%d") + timedelta(days=1)
+    ).strftime("%Y-%m-%d")
+    prd.save_prediction(user_id, oura_tomorrow_str, forecast_score)
     prd.fill_actuals(user_id, rm)
     pred_history = prd.get_history(user_id, days=60)
     pred_accuracy = prd.compute_accuracy(pred_history)
