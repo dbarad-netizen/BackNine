@@ -1728,7 +1728,7 @@ export default function DashboardPage() {
                 </div>
               </div>
               <div className="flex items-center justify-between">
-                <div>
+                <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-3xl font-bold text-gray-900">{training_load.acwr?.toFixed(2) ?? "—"}</span>
                     <span className="text-sm font-medium px-2 py-0.5 rounded-full"
@@ -1736,17 +1736,30 @@ export default function DashboardPage() {
                       {training_load.label}
                     </span>
                   </div>
-                  <p className="text-xs text-gray-400">Acute/Chronic Workload Ratio</p>
+                  <p className="text-xs text-gray-400">
+                    Acute/Chronic Workload Ratio
+                    <span className="ml-2 text-gray-300">·</span>
+                    <span className="ml-2 text-green-600 font-medium">Optimal: 0.8–1.3</span>
+                  </p>
                 </div>
               </div>
-              <div className="mt-4 grid grid-cols-2 gap-3">
+              <div className="mt-4 grid grid-cols-3 gap-3">
                 <div className="rounded-xl bg-gray-100 px-4 py-3 text-center">
-                  <p className="text-xs text-gray-400 mb-1">7-Day Avg Load</p>
+                  <p className="text-xs text-gray-400 mb-1">7-Day Avg</p>
                   <p className="text-lg font-bold text-gray-900">{training_load.acute_avg ?? "—"} <span className="text-xs text-gray-400 font-normal">cal</span></p>
                 </div>
                 <div className="rounded-xl bg-gray-100 px-4 py-3 text-center">
-                  <p className="text-xs text-gray-400 mb-1">28-Day Avg Load</p>
+                  <p className="text-xs text-gray-400 mb-1">28-Day Avg</p>
                   <p className="text-lg font-bold text-gray-900">{training_load.chronic_avg ?? "—"} <span className="text-xs text-gray-400 font-normal">cal</span></p>
+                </div>
+                <div className="rounded-xl px-4 py-3 text-center" style={{ backgroundColor: training_load.color + "18" }}>
+                  <p className="text-xs text-gray-400 mb-1">Status</p>
+                  <p className="text-sm font-bold" style={{ color: training_load.color }}>
+                    {training_load.zone === "optimal" ? "✓ In zone" :
+                     training_load.zone === "low"     ? "↑ Too low" :
+                     training_load.zone === "caution" ? "⚠ High" :
+                     training_load.zone === "danger"  ? "⛔ Over" : "—"}
+                  </p>
                 </div>
               </div>
               <p className="mt-4 text-xs text-gray-400 leading-relaxed">

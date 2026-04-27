@@ -26,21 +26,25 @@ function DeltaBadge({ value, unit, direction }: {
 }
 
 // ── On-target progress bar ────────────────────────────────────────────────────
-function OnTargetBar({ current, previous, total, prevTotal }: {
+function OnTargetBar({ current, previous, total, prevTotal, windowDays }: {
   current: number;
   previous: number | null;
   total: number;
   prevTotal: number;
+  windowDays?: number;
 }) {
-  const pct = total > 0 ? Math.round((current / total) * 100) : 0;
-  const prevPct = (previous !== null && prevTotal > 0) ? Math.round((previous / prevTotal) * 100) : null;
+  // windowDays = calendar window (always 30); total = days with ring data
+  const denom     = windowDays ?? total;
+  const prevDenom = windowDays ?? prevTotal;
+  const pct     = denom     > 0 ? Math.round((current  / denom)     * 100) : 0;
+  const prevPct = (previous !== null && prevDenom > 0) ? Math.round((previous / prevDenom) * 100) : null;
 
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-[10px] text-gray-400">
-        <span>Last 30 days: <span className="font-semibold text-gray-700">{current}/{total} days</span></span>
+        <span>Last 30 days: <span className="font-semibold text-gray-700">{current}/{denom} days</span></span>
         {prevPct !== null && (
-          <span>Prior 30 days: {previous}/{prevTotal}</span>
+          <span>Prior 30 days: {previous}/{prevDenom}</span>
         )}
       </div>
       <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -129,6 +133,7 @@ function ProgressCard({ item }: { item: ProgressItem }) {
           previous={item.previous_on}
           total={item.period_days}
           prevTotal={item.previous_period_days ?? item.period_days}
+          windowDays={item.window_days}
         />
       )}
 

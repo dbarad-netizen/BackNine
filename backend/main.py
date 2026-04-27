@@ -899,11 +899,23 @@ async def get_dashboard(request: Request, days: int = 120):
     try:
         _profile = _get_profile(user_id)
         _ah_sum  = ah.get_summary(user_id, days=30)
+
+        # Body fat: prefer Apple Health, fall back to most recent weight_entries log
+        _ah_body_fat = _ah_sum.get("today", {}).get("body_fat_percentage") or _ah_sum.get("latest_body_fat_pct")
+        if _ah_body_fat is None:
+            try:
+                _we = nutr.get_weight_entries(user_id)
+                # get_weight_entries returns ascending order; take last entry with body_fat_pct
+                _we_with_bf = [e for e in reversed(_we) if e.get("body_fat_pct") is not None]
+                _ah_body_fat = _we_with_bf[0]["body_fat_pct"] if _we_with_bf else None
+            except Exception:
+                _ah_body_fat = None
+
         _lon_metrics = {
             "hrv":                 t_sm.get("hrv"),
             "rhr":                 t_sm.get("rhr"),
-            "vo2_max":             _ah_sum.get("most_recent", {}).get("vo2_max"),
-            "body_fat_percentage": _ah_sum.get("most_recent", {}).get("body_fat_percentage"),
+            "vo2_max":             _ah_sum.get("today", {}).get("vo2_max"),
+            "body_fat_percentage": _ah_body_fat,
             # 7-day averages for sleep and steps
             "sleep_hours": (lambda v: v if v else None)(
                 next((d.get("total_hrs") for d in sorted(
