@@ -907,7 +907,6 @@ export default function DashboardPage() {
     { id: "apple-health", label: "Metrics",   icon: "📊" },
     { id: "nutrition",    label: "Nutrition", icon: "🥗" },
     { id: "training",     label: "Training",  icon: "🏋️" },
-    { id: "labs",         label: "Labs",      icon: "🔬" },
     { id: "challenges",   label: "Compete",   icon: "🏆" },
     { id: "gear",         label: "Gear",      icon: "🛒" },
   ];
@@ -1862,12 +1861,6 @@ export default function DashboardPage() {
         )}
 
         {/* ── LABS ── */}
-        {section === "labs" && (
-          <div>
-            <LabsTab />
-          </div>
-        )}
-
         {/* ── CHALLENGES ── */}
         {section === "challenges" && (
           <div>
@@ -1897,6 +1890,8 @@ export default function DashboardPage() {
             <ProgressSection />
             {/* ── Apple Health raw data ── */}
             <AppleHealthTab />
+            {/* ── Labs ── */}
+            <LabsTab />
           </div>
         )}
 
