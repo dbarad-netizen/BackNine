@@ -536,6 +536,15 @@ export const api = {
       body: JSON.stringify({ value, date }),
     });
   },
+  getChallengeMessages(challenge_id: string): Promise<{ messages: ChallengeMessage[] }> {
+    return request(`/api/challenges/${challenge_id}/messages`);
+  },
+  postChallengeMessage(challenge_id: string, text: string, display_name: string): Promise<ChallengeMessage> {
+    return request(`/api/challenges/${challenge_id}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ text, display_name }),
+    });
+  },
 
   // ── Apple Health ─────────────────────────────────────────────────────────────
   appleHealthKey(): Promise<{ api_key: string }> {
@@ -621,6 +630,14 @@ export interface ProgressReport {
 }
 
 // ── Challenge types ───────────────────────────────────────────────────────────
+export interface ChallengeMessage {
+  id:           string;
+  user_id:      string;
+  display_name: string;
+  text:         string;
+  created_at:   string;
+}
+
 export interface ChallengeParticipant {
   user_id:      string;
   display_name: string;

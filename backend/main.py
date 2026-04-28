@@ -1424,6 +1424,29 @@ async def log_challenge_progress(challenge_id: str, request: Request):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@app.get("/api/challenges/{challenge_id}/messages")
+def get_challenge_messages(challenge_id: str, request: Request):
+    _require_session(request)
+    return {"messages": chl.get_messages(challenge_id.upper())}
+
+
+@app.post("/api/challenges/{challenge_id}/messages")
+async def post_challenge_message(challenge_id: str, request: Request):
+    session = _require_session(request)
+    user_id = session["user_id"]
+    body = await request.json()
+    try:
+        msg = chl.post_message(
+            challenge_id  = challenge_id.upper(),
+            user_id       = user_id,
+            display_name  = str(body.get("display_name", "")).strip() or "Anonymous",
+            text          = str(body.get("text", "")),
+        )
+        return msg
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 # ── Current user ─────────────────────────────────────────────────────────────
 
 @app.get("/api/me")

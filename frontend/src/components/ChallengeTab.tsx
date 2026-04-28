@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { api, type Challenge, type ChallengeParticipant } from "@/lib/api";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { api, type Challenge, type ChallengeParticipant, type ChallengeMessage } from "@/lib/api";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const TYPE_OPTIONS = [
@@ -235,6 +235,144 @@ function LeaderboardRow({
   );
 }
 
+// ── Challenge chat ────────────────────────────────────────────────────────────
+const QUICK_REACTIONS = [
+  { emoji: "🔥", text: "Let's go! 🔥" },
+  { emoji: "💪", text: "Crush it! 💪" },
+  { emoji: "😤", text: "I'm catching up 😤" },
+  { emoji: "🐌", text: "Someone's slacking... 🐌" },
+];
+
+function fmtTime(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+function ChallengeChat({ challengeId, myDisplayName }: { challengeId: string; myDisplayName: string }) {
+  const [messages, setMessages] = useState<ChallengeMessage[]>([]);
+  const [text, setText]         = useState("");
+  const [sending, setSending]   = useState(false);
+  const [open, setOpen]         = useState(false);
+  const bottomRef               = useRef<HTMLDivElement>(null);
+  const pollRef                 = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const { messages: msgs } = await api.getChallengeMessages(challengeId);
+      setMessages(msgs);
+    } catch {}
+  }, [challengeId]);
+
+  // Load messages when chat is opened; poll every 8s while open
+  useEffect(() => {
+    if (!open) {
+      if (pollRef.current) clearInterval(pollRef.current);
+      return;
+    }
+    load();
+    pollRef.current = setInterval(load, 8000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [open, load]);
+
+  // Scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (open) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, open]);
+
+  const send = async (msgText: string) => {
+    const t = msgText.trim();
+    if (!t || sending) return;
+    setSending(true);
+    try {
+      const msg = await api.postChallengeMessage(challengeId, t, myDisplayName);
+      setMessages(prev => [...prev, msg]);
+      setText("");
+    } catch {}
+    finally { setSending(false); }
+  };
+
+  const unread = messages.length;
+
+  return (
+    <div className="border-t border-gray-100">
+      {/* Toggle button */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-gray-500 hover:text-gray-800 hover:bg-gray-50 transition-colors"
+      >
+        <span className="flex items-center gap-1.5 font-semibold">
+          💬 Chat
+          {!open && unread > 0 && (
+            <span className="bg-[#1B3829] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">{unread}</span>
+          )}
+        </span>
+        <span className="text-gray-400">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 space-y-3">
+          {/* Message list */}
+          <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+            {messages.length === 0 && (
+              <p className="text-center text-xs text-gray-400 py-4">No messages yet — be the first to talk trash 😤</p>
+            )}
+            {messages.map(m => (
+              <div key={m.id} className={`flex flex-col ${m.display_name === myDisplayName ? "items-end" : "items-start"}`}>
+                <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
+                  m.display_name === myDisplayName
+                    ? "bg-[#1B3829] text-white rounded-br-sm"
+                    : "bg-gray-100 text-gray-800 rounded-bl-sm"
+                }`}>
+                  {m.text}
+                </div>
+                <p className="text-[9px] text-gray-400 mt-0.5 px-1">
+                  {m.display_name === myDisplayName ? "You" : m.display_name} · {fmtTime(m.created_at)}
+                </p>
+              </div>
+            ))}
+            <div ref={bottomRef} />
+          </div>
+
+          {/* Quick reactions */}
+          <div className="flex flex-wrap gap-1.5">
+            {QUICK_REACTIONS.map(r => (
+              <button
+                key={r.emoji}
+                onClick={() => send(r.text)}
+                disabled={sending}
+                className="text-lg hover:scale-110 transition-transform disabled:opacity-40"
+                title={r.text}
+              >
+                {r.emoji}
+              </button>
+            ))}
+          </div>
+
+          {/* Free text input */}
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={text}
+              onChange={e => setText(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && send(text)}
+              placeholder="Talk some trash…"
+              maxLength={200}
+              className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#1B3829]"
+            />
+            <button
+              onClick={() => send(text)}
+              disabled={sending || !text.trim()}
+              className="rounded-xl bg-[#1B3829] px-4 py-2 text-sm font-semibold text-white disabled:opacity-40 hover:bg-[#2D6A4F] transition-colors"
+            >
+              {sending ? "…" : "Send"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Challenge card ────────────────────────────────────────────────────────────
 function ChallengeCard({
   challenge, onRefresh, onLog,
@@ -366,6 +504,12 @@ function ChallengeCard({
           )}
         </div>
       )}
+
+      {/* ── Chat ── */}
+      <ChallengeChat
+        challengeId={challenge.id}
+        myDisplayName={me?.display_name ?? "You"}
+      />
     </div>
   );
 }

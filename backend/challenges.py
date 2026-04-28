@@ -202,6 +202,47 @@ def log_progress(challenge_id: str, value: float, for_date: Optional[str] = None
     return get_challenge(challenge_id, user_id)
 
 
+# ── Challenge chat ────────────────────────────────────────────────────────────
+
+def get_messages(challenge_id: str, limit: int = 50) -> List[dict]:
+    """Return the most recent messages for a challenge, oldest-first."""
+    sb = _sb()
+    res = (
+        sb.table("challenge_messages")
+        .select("id, user_id, display_name, text, created_at")
+        .eq("challenge_id", challenge_id)
+        .order("created_at", desc=False)
+        .limit(limit)
+        .execute()
+    )
+    return res.data or []
+
+
+def post_message(challenge_id: str, user_id: str, display_name: str, text: str) -> dict:
+    """Post a message to a challenge chat. Returns the saved row."""
+    text = text.strip()[:500]
+    if not text:
+        raise ValueError("Message cannot be empty")
+    sb = _sb()
+    # Verify the user is a participant
+    check = (
+        sb.table("challenge_participants")
+        .select("user_id")
+        .eq("challenge_id", challenge_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    if not (check.data or []):
+        raise ValueError("You are not a participant in this challenge")
+    res = sb.table("challenge_messages").insert({
+        "challenge_id": challenge_id,
+        "user_id":      user_id,
+        "display_name": display_name,
+        "text":         text,
+    }).execute()
+    return (res.data or [{}])[0]
+
+
 def _calc_streak(daily: Dict[str, float], today_str: str) -> int:
     """Count consecutive days ending today (or yesterday) where value > 0."""
     streak = 0
