@@ -904,11 +904,11 @@ export default function DashboardPage() {
 
   const NAV_ITEMS: { id: Section; label: string; icon: string }[] = [
     { id: "coaching",     label: "Scorecard", icon: "📋" },
-    { id: "apple-health", label: "Metrics",   icon: "📊" },
     { id: "nutrition",    label: "Nutrition", icon: "🥗" },
     { id: "training",     label: "Training",  icon: "🏋️" },
     { id: "challenges",   label: "Compete",   icon: "🏆" },
     { id: "gear",         label: "Gear",      icon: "🛒" },
+    { id: "apple-health", label: "Metrics",   icon: "📊" },
   ];
 
   return (
