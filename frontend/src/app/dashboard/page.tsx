@@ -1336,6 +1336,24 @@ export default function DashboardPage() {
               </div>
             </section>
 
+            {/* ── Coaching Insights (collapsible) ── */}
+            <CollapsibleSection title="Coaching Insights" icon="💡">
+              {(() => {
+                const shortLabels = new Set(
+                  (coaching.short as { label?: string }[]).map(i => i.label).filter(Boolean)
+                );
+                const midUniq  = (coaching.mid  as { label?: string }[]).filter(i => !shortLabels.has(i.label));
+                const longUniq = (coaching.long as { label?: string }[]).filter(i => !shortLabels.has(i.label));
+                return (
+                  <>
+                    <CoachingSection title="This Week"       items={midUniq}  />
+                    <CoachingSection title="Long-Term Watch" items={longUniq} />
+                  </>
+                );
+              })()}
+              <InsightsSection />
+            </CollapsibleSection>
+
             {/* ── Body & Weight (collapsible) ── */}
             <CollapsibleSection
               title="Body & Weight"
@@ -1646,24 +1664,6 @@ export default function DashboardPage() {
             <ProgressSection />
             </CollapsibleSection>
 
-            {/* ── Insights (collapsible) ── */}
-            <CollapsibleSection title="Coaching Insights" icon="💡">
-              {/* De-dupe: strip any mid/long items whose label already appears in short */}
-              {(() => {
-                const shortLabels = new Set(
-                  (coaching.short as { label?: string }[]).map(i => i.label).filter(Boolean)
-                );
-                const midUniq  = (coaching.mid  as { label?: string }[]).filter(i => !shortLabels.has(i.label));
-                const longUniq = (coaching.long as { label?: string }[]).filter(i => !shortLabels.has(i.label));
-                return (
-                  <>
-                    <CoachingSection title="This Week"       items={midUniq}  />
-                    <CoachingSection title="Long-Term Watch" items={longUniq} />
-                  </>
-                );
-              })()}
-              <InsightsSection />
-            </CollapsibleSection>
           </div>
           );
         })()}
