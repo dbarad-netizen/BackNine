@@ -1643,27 +1643,6 @@ export default function DashboardPage() {
             )}
             </CollapsibleSection>
 
-            {/* ── Trends & Progress (collapsible) ── */}
-            <CollapsibleSection title="Trends & Progress" icon="📈">
-            <section className="rounded-2xl border border-gray-200 bg-white p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="font-semibold text-gray-900 text-sm">30-Day Trends</h2>
-                <div className="flex gap-1">
-                  {(["scores", "hrv", "sleep_detail"] as Tab[]).map((t) => (
-                    <button key={t} onClick={() => setTab(t)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                        tab === t ? "bg-gray-200 text-gray-900" : "text-gray-500 hover:text-gray-800"
-                      }`}>
-                      {t === "scores" ? "Scores" : t === "hrv" ? "HRV/RHR" : "Sleep"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <TrendChart data={trend} metric={tab} />
-            </section>
-            <ProgressSection />
-            </CollapsibleSection>
-
           </div>
           );
         })()}
@@ -1897,7 +1876,26 @@ export default function DashboardPage() {
         )}
 
         {section === "apple-health" && (
-          <div>
+          <div className="space-y-4">
+            {/* ── Trends & Progress ── */}
+            <section className="rounded-2xl border border-gray-200 bg-white p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold text-gray-900 text-sm">30-Day Trends</h2>
+                <div className="flex gap-1">
+                  {(["scores", "hrv", "sleep_detail"] as Tab[]).map((t) => (
+                    <button key={t} onClick={() => setTab(t)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                        tab === t ? "bg-gray-200 text-gray-900" : "text-gray-500 hover:text-gray-800"
+                      }`}>
+                      {t === "scores" ? "Scores" : t === "hrv" ? "HRV/RHR" : "Sleep"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <TrendChart data={trend} metric={tab} />
+            </section>
+            <ProgressSection />
+            {/* ── Apple Health raw data ── */}
             <AppleHealthTab />
           </div>
         )}
