@@ -1324,9 +1324,11 @@ def _auto_sync_oura_steps(user_id: str, challenges: list) -> None:
 
             # Walk every date in the challenge window that Oura has steps for
             from datetime import date as _date, timedelta as _td
+            from zoneinfo import ZoneInfo as _ZI
+            from datetime import datetime as _dt
             cur = _date.fromisoformat(start_str)
             end = _date.fromisoformat(end_str)
-            today_d = _date.today()
+            today_d = _dt.now(tz=_ZI("America/New_York")).date()
 
             while cur <= min(end, today_d):
                 ds = cur.isoformat()

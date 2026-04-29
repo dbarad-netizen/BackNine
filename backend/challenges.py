@@ -11,6 +11,17 @@ import uuid
 from datetime import datetime, date, timedelta
 from pathlib import Path
 from typing import Optional, List, Dict, Any
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    from backports.zoneinfo import ZoneInfo
+
+def _today() -> date:
+    """Return today's date in US/Eastern — avoids UTC server clock rollover after 8 PM ET."""
+    return datetime.now(tz=ZoneInfo("America/New_York")).date()
+
+def _today_str() -> str:
+    return _today().isoformat()
 
 DATA_DIR    = Path.home() / ".backnine"
 USER_ID_FILE = DATA_DIR / "user_id"
@@ -69,7 +80,7 @@ def create_challenge(
     custom_unit: Optional[str] = None,
 ) -> dict:
     user_id = user_id or get_local_user_id()
-    today      = date.today()
+    today      = _today()
     start_date = today.isoformat()
     end_date   = (today + timedelta(days=duration_days - 1)).isoformat()
     cid        = _short_id()
@@ -126,12 +137,13 @@ def get_challenge(challenge_id: str, user_id: Optional[str] = None) -> dict:
     prog = sb.table("challenge_progress").select("*").eq("challenge_id", challenge_id).execute()
     progress_rows = prog.data or []
 
-    today_str = date.today().isoformat()
+    today_str = _today_str()
     start     = date.fromisoformat(challenge["start_date"])
     end_d     = date.fromisoformat(challenge["end_date"])
+    today_d   = _today()
     total_days = challenge["duration_days"]
-    elapsed    = min(total_days, max(0, (date.today() - start).days + 1))
-    days_left  = max(0, (end_d - date.today()).days)
+    elapsed    = min(total_days, max(0, (today_d - start).days + 1))
+    days_left  = max(0, (end_d - today_d).days)
 
     # Build per-participant summary
     participant_summaries = []
@@ -164,7 +176,7 @@ def get_challenge(challenge_id: str, user_id: Optional[str] = None) -> dict:
         "elapsed_days": elapsed,
         "days_left":    days_left,
         "total_days":   total_days,
-        "is_active":    date.today() <= end_d,
+        "is_active":    _today() <= end_d,
         "is_mine":      challenge["creator_id"] == user_id,
         "participants": participant_summaries,
         "type_info":    CHALLENGE_TYPES.get(challenge["type"], CHALLENGE_TYPES["custom"]),
@@ -190,7 +202,7 @@ def list_my_challenges(user_id: Optional[str] = None) -> List[dict]:
 
 def log_progress(challenge_id: str, value: float, for_date: Optional[str] = None, user_id: Optional[str] = None) -> dict:
     user_id  = user_id or get_local_user_id()
-    date_str = for_date or date.today().isoformat()
+    date_str = for_date or _today_str()
     sb = _sb()
     sb.table("challenge_progress").upsert({
         "challenge_id": challenge_id,
