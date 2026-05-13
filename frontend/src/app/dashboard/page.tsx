@@ -1348,6 +1348,10 @@ export default function DashboardPage() {
             <GearPicks
               hasOura={data.has_oura !== false}
               longevityKeys={Object.keys(data.longevity_score?.components ?? {})}
+              sleepAvg7d={(() => {
+                const vals = trend.slice(-7).map(t => t.sleep).filter((s): s is number => s != null && s > 0);
+                return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+              })()}
               onJump={() => setSection("gear")}
             />
 
