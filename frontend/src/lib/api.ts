@@ -579,7 +579,22 @@ export const api = {
       body: JSON.stringify({ message, history }),
     });
   },
+
+  // ── Morning Briefing ──────────────────────────────────────────────────────
+  briefing(refresh = false): Promise<BriefingResponse> {
+    return request(`/api/briefing/today${refresh ? "?refresh=1" : ""}`);
+  },
 };
+
+// ── Briefing types ────────────────────────────────────────────────────────────
+export interface BriefingResponse {
+  date:                string;
+  narrative:           string;
+  prediction_streak:   number | null;
+  prediction_accuracy: number | null;
+  generated_at:        string | null;
+  cached:              boolean;
+}
 
 // ── Insight types ─────────────────────────────────────────────────────────────
 export interface Insight {

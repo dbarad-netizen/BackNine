@@ -33,6 +33,7 @@ import progress as prog
 import predictions as prd
 import longevity as lon
 import chat as ch
+import briefing as brf
 
 load_dotenv()
 
@@ -1627,6 +1628,168 @@ async def health_chat(request: Request):
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Morning Briefing ──────────────────────────────────────────────────────────
+
+@app.get("/api/briefing/today")
+async def get_morning_briefing(request: Request, refresh: bool = False):
+    """Return today's Coach Al morning briefing for the current user.
+
+    Cache strategy: one row per (user_id, date) in public.daily_briefings.
+    First call of the day generates the narrative via Claude Haiku and saves it;
+    subsequent calls return the cached row. Pass ?refresh=1 to force a regenerate
+    (rate-limit responsibly client-side; this costs an Anthropic call).
+    """
+    session = _require_session(request)
+    user_id = session["user_id"]
+
+    # Timezone-safe "today" — same convention as challenges.py so cache keys
+    # don't roll over at midnight UTC for ET-based users.
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        from backports.zoneinfo import ZoneInfo  # type: ignore
+    today_str = datetime.now(tz=ZoneInfo("America/New_York")).date().isoformat()
+
+    db = get_supabase()
+
+    # Cache hit?
+    if db and not refresh:
+        try:
+            cached = (
+                db.table("daily_briefings")
+                .select("narrative, prediction_streak, prediction_accuracy, generated_at")
+                .eq("user_id", user_id)
+                .eq("date", today_str)
+                .execute()
+            )
+            if cached.data:
+                row = cached.data[0]
+                return {
+                    "date":                today_str,
+                    "narrative":           row["narrative"],
+                    "prediction_streak":   row.get("prediction_streak"),
+                    "prediction_accuracy": row.get("prediction_accuracy"),
+                    "generated_at":        row.get("generated_at"),
+                    "cached":              True,
+                }
+        except Exception:
+            pass  # fall through to regenerate
+
+    # Build health context — same shape as /api/chat
+    try:
+        rm, slm, am, smm = oc.get_days(user_id, days=30)
+    except Exception:
+        rm, slm, am, smm = {}, {}, {}, {}
+
+    anchor = today_str if slm.get(today_str) else (
+        (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d") if slm else today_str
+    )
+    t_rdy = rm.get(anchor, {})
+    t_sl  = slm.get(anchor, {})
+    t_act = am.get(anchor, {})
+    t_sm  = smm.get(anchor, {})
+
+    recent_days = sorted(smm.keys(), reverse=True)[:7]
+    hrv_vals   = [smm[d]["hrv"]   for d in recent_days if smm[d].get("hrv")]
+    sleep_vals = [smm[d]["total"] for d in recent_days if smm[d].get("total")]
+    rdy_vals   = [rm[d]["score"]  for d in sorted(rm.keys(), reverse=True)[:7] if rm.get(d, {}).get("score")]
+
+    hrv_avg  = round(sum(hrv_vals) / len(hrv_vals)) if hrv_vals else None
+    hrv_prev = (sum(hrv_vals[len(hrv_vals)//2:]) / max(1, len(hrv_vals[len(hrv_vals)//2:]))) if len(hrv_vals) >= 4 else None
+    hrv_direction = (
+        "rising"  if hrv_avg and hrv_prev and hrv_avg > hrv_prev + 1
+        else "falling" if hrv_avg and hrv_prev and hrv_avg < hrv_prev - 1
+        else "stable"
+    )
+
+    try:
+        ah_sum = ah.get_summary(user_id, days=30)
+        ah_today = (ah_sum.get("today") or {})
+    except Exception:
+        ah_today = {}
+
+    # Short-term coaching items as a one-line summary
+    try:
+        short_items = generate_coaching(rm, slm, am, smm).get("short") or []
+        short_text = "; ".join(
+            f"{i.get('icon','')} {i.get('label','')}: {i.get('text','')}"
+            for i in short_items
+        )
+    except Exception:
+        short_text = ""
+
+    health_context = {
+        "today": {
+            "readiness_score":     t_rdy.get("score"),
+            "sleep_score":         t_sl.get("score"),
+            "hrv":                 t_sm.get("hrv"),
+            "rhr":                 t_sm.get("rhr"),
+            "activity_score":      t_act.get("score"),
+            "steps":               t_act.get("steps"),
+            "sleep_hours":         round(t_sm["total"] / 3600, 1) if t_sm.get("total") else None,
+            "body_fat_percentage": ah_today.get("body_fat_percentage"),
+            "vo2_max":             ah_today.get("vo2_max"),
+        },
+        "seven_day": {
+            "hrv_avg":       hrv_avg,
+            "hrv_direction": hrv_direction,
+            "sleep_avg":     round(sum(sleep_vals) / len(sleep_vals) / 3600, 1) if sleep_vals else None,
+            "readiness_avg": round(sum(rdy_vals) / len(rdy_vals)) if rdy_vals else None,
+        },
+        "coaching": {"short_term": short_text},
+    }
+
+    # Prediction status — used both for the prompt AND returned to the client
+    try:
+        history  = prd.get_history(user_id, days=60)
+        accuracy = prd.compute_accuracy(history)
+        resolved = accuracy.get("resolved") or []
+        last_resolved = resolved[0] if resolved else None
+        prediction_status = {
+            "streak":         accuracy.get("streak"),
+            "accuracy_pct":   accuracy.get("accuracy_pct"),
+            "last_predicted": last_resolved.get("predicted") if last_resolved else None,
+            "last_actual":    last_resolved.get("actual")    if last_resolved else None,
+        }
+    except Exception:
+        prediction_status = {"streak": 0, "accuracy_pct": None, "last_predicted": None, "last_actual": None}
+
+    profile = _get_profile(user_id)
+
+    # Generate the narrative
+    try:
+        narrative = brf.generate(health_context, profile, prediction_status)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"briefing generation failed: {e}")
+
+    # Save to cache (best-effort — never crash the dashboard over a write)
+    if db:
+        try:
+            db.table("daily_briefings").upsert(
+                {
+                    "user_id":             user_id,
+                    "date":                today_str,
+                    "narrative":           narrative,
+                    "prediction_streak":   prediction_status.get("streak"),
+                    "prediction_accuracy": prediction_status.get("accuracy_pct"),
+                },
+                on_conflict="user_id,date",
+            ).execute()
+        except Exception:
+            pass
+
+    return {
+        "date":                today_str,
+        "narrative":           narrative,
+        "prediction_streak":   prediction_status.get("streak"),
+        "prediction_accuracy": prediction_status.get("accuracy_pct"),
+        "generated_at":        None,
+        "cached":              False,
+    }
 
 
 # ── Apple Health ──────────────────────────────────────────────────────────────

@@ -26,6 +26,7 @@ import ProgressSection from "@/components/ProgressSection";
 import ChatWidget from "@/components/ChatWidget";
 import ProfileModal from "@/components/ProfileModal";
 import CoachAlAvatar from "@/components/CoachAlAvatar";
+import MorningBriefing from "@/components/MorningBriefing";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts";
@@ -1028,6 +1029,9 @@ export default function DashboardPage() {
                 </a>
               </div>
             )}
+
+            {/* ── Coach Al's Morning Briefing ── */}
+            <MorningBriefing onOpenChat={() => openChatRef.current?.()} />
 
             {/* ── Daily Greeting + Score Snapshot ── */}
             {(() => {
