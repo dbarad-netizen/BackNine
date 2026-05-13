@@ -584,6 +584,28 @@ export const api = {
   briefing(refresh = false): Promise<BriefingResponse> {
     return request(`/api/briefing/today${refresh ? "?refresh=1" : ""}`);
   },
+
+  // ── Friends ────────────────────────────────────────────────────────────────
+  friends: {
+    invite(): Promise<FriendInvite> {
+      return request("/api/friends/invite", { method: "POST" });
+    },
+    accept(code: string): Promise<unknown> {
+      return request("/api/friends/accept", {
+        method: "POST",
+        body: JSON.stringify({ code }),
+      });
+    },
+    list(): Promise<{ friends: Friend[] }> {
+      return request("/api/friends");
+    },
+    remove(friend_user_id: string): Promise<{ removed: boolean }> {
+      return request(`/api/friends/${encodeURIComponent(friend_user_id)}`, { method: "DELETE" });
+    },
+    events(limit = 30): Promise<{ events: FriendActivityEvent[] }> {
+      return request(`/api/friends/events?limit=${limit}`);
+    },
+  },
 };
 
 // ── Briefing types ────────────────────────────────────────────────────────────
@@ -594,6 +616,30 @@ export interface BriefingResponse {
   prediction_accuracy: number | null;
   generated_at:        string | null;
   cached:              boolean;
+}
+
+// ── Friends types ─────────────────────────────────────────────────────────────
+export interface FriendInvite {
+  code:         string;
+  inviter_name: string;
+  expires_at:   string;
+}
+
+export interface Friend {
+  user_id: string;
+  name:    string;
+  since:   string | null;
+}
+
+export interface FriendActivityEvent {
+  id:         string;
+  user_id:    string;
+  user_name:  string | null;
+  event_type: string;
+  payload:    Record<string, unknown>;
+  created_at: string;
+  is_me:      boolean;
+  summary:    string;
 }
 
 // ── Insight types ─────────────────────────────────────────────────────────────

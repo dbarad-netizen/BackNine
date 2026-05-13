@@ -34,6 +34,7 @@ import predictions as prd
 import longevity as lon
 import chat as ch
 import briefing as brf
+import friends as frd
 
 load_dotenv()
 
@@ -1116,6 +1117,19 @@ async def log_weight(request: Request):
         inbody_score             = body.get("inbody_score"),
         user_id                  = uid,
     )
+    # Activity feed event — best-effort
+    try:
+        frd.record_event(
+            uid,
+            "weight_logged",
+            {
+                "weight_lbs":   body.get("weight_lbs"),
+                "body_fat_pct": body.get("body_fat_pct"),
+            },
+            user_name=_display_name_for(uid),
+        )
+    except Exception:
+        pass
     return entry
 
 
@@ -1172,7 +1186,8 @@ def get_workouts(request: Request, days: int = 30):
 
 @app.post("/api/training/workouts")
 async def log_workout(request: Request):
-    _require_session(request)
+    session = _require_session(request)
+    user_id = session["user_id"]
     body = await request.json()
     today = datetime.now().strftime("%Y-%m-%d")
     entry = trn.add_workout(
@@ -1182,6 +1197,20 @@ async def log_workout(request: Request):
         duration_min = body.get("duration_min"),
         notes        = body.get("notes", ""),
     )
+    # Activity feed event — best-effort, never blocks the response
+    try:
+        frd.record_event(
+            user_id,
+            "workout_logged",
+            {
+                "type":         body.get("type", "lifting"),
+                "duration_min": body.get("duration_min"),
+                "name":         f"a {body.get('type', 'lifting')} workout",
+            },
+            user_name=_display_name_for(user_id),
+        )
+    except Exception:
+        pass
     return entry
 
 
@@ -1393,6 +1422,19 @@ async def join_challenge(request: Request):
         )
         # Backfill any Oura steps already recorded during this challenge window
         _auto_sync_oura_steps(user_id, [challenge])
+        # Activity feed event — best-effort
+        try:
+            frd.record_event(
+                user_id,
+                "challenge_joined",
+                {
+                    "challenge_id":   challenge.get("id"),
+                    "challenge_name": challenge.get("name"),
+                },
+                user_name=body.get("display_name") or _display_name_for(user_id),
+            )
+        except Exception:
+            pass
         return chl.get_challenge(challenge["id"], user_id=user_id)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -1790,6 +1832,78 @@ async def get_morning_briefing(request: Request, refresh: bool = False):
         "generated_at":        None,
         "cached":              False,
     }
+
+
+# ── Friends ───────────────────────────────────────────────────────────────────
+
+def _display_name_for(user_id: str) -> str:
+    """Pull the user's display name from their profile, falling back to a default."""
+    try:
+        prof = _get_profile(user_id)
+        return prof.get("name") or "BackNine user"
+    except Exception:
+        return "BackNine user"
+
+
+@app.post("/api/friends/invite")
+async def create_friend_invite(request: Request):
+    """Generate a one-time invite code for the current user to share."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        return frd.create_invite(user_id, _display_name_for(user_id))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"could not create invite: {e}")
+
+
+@app.post("/api/friends/accept")
+async def accept_friend_invite(request: Request):
+    """Accept an invite by code. Body: { code }."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    body = await request.json()
+    code = (body.get("code") or "").strip().upper()
+    if not code:
+        raise HTTPException(status_code=400, detail="code is required")
+    try:
+        return frd.accept_invite(code, user_id, _display_name_for(user_id))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"could not accept invite: {e}")
+
+
+@app.get("/api/friends")
+def list_friends(request: Request):
+    """List the current user's accepted friendships."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        return {"friends": frd.list_friends(user_id)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/friends/{friend_user_id}")
+def remove_friend(friend_user_id: str, request: Request):
+    """Remove an existing friendship."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        return frd.remove_friend(user_id, friend_user_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/friends/events")
+def list_friend_events(request: Request, limit: int = 30):
+    """Recent activity events from the user's friends + themselves."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        return {"events": frd.list_friend_events(user_id, limit=min(max(limit, 1), 100))}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ── Apple Health ──────────────────────────────────────────────────────────────
