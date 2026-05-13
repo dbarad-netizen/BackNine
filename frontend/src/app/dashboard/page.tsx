@@ -27,6 +27,8 @@ import ChatWidget from "@/components/ChatWidget";
 import ProfileModal from "@/components/ProfileModal";
 import CoachAlAvatar from "@/components/CoachAlAvatar";
 import MorningBriefing from "@/components/MorningBriefing";
+import ActiveCompetitions from "@/components/ActiveCompetitions";
+import GearPicks from "@/components/GearPicks";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts";
@@ -1339,6 +1341,16 @@ export default function DashboardPage() {
               </div>
             </section>
 
+            {/* ── Active Competitions strip ── */}
+            <ActiveCompetitions onJump={() => setSection("challenges")} />
+
+            {/* ── Picked For You (smart gear recommendations) ── */}
+            <GearPicks
+              hasOura={data.has_oura !== false}
+              longevityKeys={Object.keys(data.longevity_score?.components ?? {})}
+              onJump={() => setSection("gear")}
+            />
+
             {/* ── Coaching Insights (collapsible) ── */}
             <CollapsibleSection title="Coaching Insights" icon="💡">
               {(() => {
@@ -1410,20 +1422,6 @@ export default function DashboardPage() {
             <WeightForm onSave={handleLogWeight} />
             </CollapsibleSection>
 
-            {/* ── Today's Focus — personalized coaching actions ── */}
-            {coaching.short?.length > 0 && (
-              <section>
-                <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
-                  Today&apos;s Focus
-                </h3>
-                <div className="space-y-2">
-                  {(coaching.short as Parameters<typeof CoachingItem>[0]["item"][]).map((item, i) => (
-                    <CoachingItem key={i} item={item} />
-                  ))}
-                </div>
-              </section>
-            )}
-
             {/* ── Today's Performance — live AH data merged with today's Oura activity ── */}
             {hasTodayPerf && (
               <section className="rounded-2xl border border-green-100 bg-white p-4">
@@ -1476,159 +1474,7 @@ export default function DashboardPage() {
               </section>
             )}
 
-            {/* ── Yesterday's Performance — explicit yesterday Oura data ── */}
-            {hasYest && (
-            <CollapsibleSection
-              title="Yesterday's Performance"
-              icon="📅"
-              badge={(() => { const s = (today.readiness as Record<string,number|null>); return s ? undefined : undefined; })()}
-            >
-              <section className="rounded-xl border border-gray-100 bg-gray-50 p-4 space-y-3">
-                <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400">
-                  Yesterday&apos;s Performance
-                </h3>
-                <div className="flex items-center gap-4">
-                  {yestScore != null && (
-                    <div className="flex items-center gap-2 shrink-0">
-                      <div className="relative w-10 h-10">
-                        <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                          <circle cx="50" cy="50" r="42" fill="none" stroke="#E5E7EB" strokeWidth="14"/>
-                          <circle cx="50" cy="50" r="42" fill="none"
-                            stroke={yestScore >= 85 ? "#22c55e" : yestScore >= 70 ? "#f59e0b" : "#ef4444"}
-                            strokeWidth="14" strokeLinecap="round"
-                            strokeDasharray={`${2 * Math.PI * 42}`}
-                            strokeDashoffset={`${2 * Math.PI * 42 * (1 - yestScore / 100)}`}
-                          />
-                        </svg>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="text-xs font-bold text-gray-900">{yestScore}</span>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-gray-400 uppercase tracking-wide">Activity</p>
-                        <p className="text-xs font-medium text-gray-700">Score</p>
-                      </div>
-                    </div>
-                  )}
-                  <div className="flex gap-6">
-                    {yestSteps != null && (
-                      <div>
-                        <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">Steps</p>
-                        <p className="text-base font-bold text-gray-900">{yestSteps.toLocaleString()}</p>
-                      </div>
-                    )}
-                    {yestActCal != null && (
-                      <div>
-                        <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">Active Cal</p>
-                        <p className="text-base font-bold text-gray-900">{yestActCal}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                {coaches.activity?.msg && (
-                  <p className="text-xs text-gray-400 pt-2 border-t border-gray-50 leading-snug">
-                    {coaches.activity.msg}
-                  </p>
-                )}
-              </section>
-            </CollapsibleSection>
-            )}
-
-            {/* ── Tomorrow's Forecast (collapsible) ── */}
-            <CollapsibleSection
-              title="Tomorrow's Forecast"
-              icon="🔮"
-              badge={`${readiness_forecast.score} · ${readiness_forecast.label}`}
-            >
-            <section className="rounded-xl border bg-gray-50 p-4 space-y-4"
-              style={{ borderColor: readiness_forecast.color + "55" }}>
-              <div className="flex items-center gap-4">
-                <div className="relative w-14 h-14 shrink-0">
-                  <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                    <circle cx="50" cy="50" r="42" fill="none" stroke="#E5E7EB" strokeWidth="10"/>
-                    <circle cx="50" cy="50" r="42" fill="none"
-                      stroke={readiness_forecast.color} strokeWidth="10" strokeLinecap="round"
-                      strokeDasharray={`${2 * Math.PI * 42}`}
-                      strokeDashoffset={`${2 * Math.PI * 42 * (1 - readiness_forecast.score / 100)}`}
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-sm font-bold text-gray-900">{readiness_forecast.score}</span>
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-0.5">Tomorrow&apos;s Forecast</p>
-                  <p className="font-semibold text-gray-900 text-sm">{readiness_forecast.label}</p>
-                  <div className="flex gap-3 mt-1 text-xs text-gray-400">
-                    <span>HRV <span className={readiness_forecast.hrv_adj >= 0 ? "text-green-500" : "text-red-400"}>
-                      {readiness_forecast.hrv_adj >= 0 ? "+" : ""}{readiness_forecast.hrv_adj}
-                    </span></span>
-                    <span>Sleep <span className={readiness_forecast.sleep_adj >= 0 ? "text-green-500" : "text-red-400"}>
-                      {readiness_forecast.sleep_adj >= 0 ? "+" : ""}{readiness_forecast.sleep_adj}
-                    </span></span>
-                  </div>
-                </div>
-                {prediction_accuracy && prediction_accuracy.streak > 0 && (
-                  <div className="text-center shrink-0">
-                    <div className="text-2xl font-bold text-amber-500">{prediction_accuracy.streak}</div>
-                    <div className="text-[10px] text-gray-400">day streak 🔥</div>
-                  </div>
-                )}
-              </div>
-
-              {prediction_accuracy && prediction_accuracy.resolved.length > 0 && (() => {
-                const yesterday = prediction_accuracy.resolved[0];
-                const diffAbs   = Math.abs(yesterday.diff);
-                return (
-                  <div className={`rounded-xl px-3 py-2 flex items-center justify-between text-xs ${
-                    yesterday.hit ? "bg-green-50 border border-green-100" : "bg-red-50 border border-red-100"
-                  }`}>
-                    <span className="text-gray-500">
-                      Yesterday — predicted <span className="font-semibold text-gray-700">{yesterday.predicted}</span>,
-                      got <span className="font-semibold text-gray-700">{yesterday.actual}</span>
-                    </span>
-                    <span className={`font-semibold ml-2 shrink-0 ${yesterday.hit ? "text-green-600" : "text-red-500"}`}>
-                      {yesterday.hit ? `✓ ${diffAbs === 0 ? "exact!" : `off by ${diffAbs}`}` : `✗ off by ${diffAbs}`}
-                    </span>
-                  </div>
-                );
-              })()}
-
-              {prediction_accuracy && prediction_accuracy.total_resolved >= 3 && (
-                <div className="space-y-2">
-                  <div className="flex gap-4 text-xs text-gray-400">
-                    <span><span className="font-semibold text-gray-700">{prediction_accuracy.accuracy_pct}%</span> accuracy</span>
-                    <span><span className="font-semibold text-gray-700">{prediction_accuracy.total_resolved}</span> predictions</span>
-                    <span>Best streak <span className="font-semibold text-gray-700">{prediction_accuracy.best_streak}</span></span>
-                  </div>
-                  <div className="flex items-end gap-0.5 h-10 overflow-hidden">
-                    {[...prediction_accuracy.resolved].reverse().slice(0, 30).map((p, i) => {
-                      const height = Math.max(20, Math.min(100, 50 + p.diff * 2));
-                      return (
-                        <div key={i} className="flex-1 flex flex-col items-center justify-end" title={`${p.date}: predicted ${p.predicted}, got ${p.actual}`}>
-                          <div className="w-full rounded-sm" style={{
-                            height: `${height}%`,
-                            backgroundColor: p.hit ? "#22c55e" : "#ef4444",
-                            opacity: 0.7 + (i / 30) * 0.3,
-                          }} />
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <p className="text-[10px] text-gray-300 text-right">
-                    ±{prediction_accuracy.hit_threshold} pts = hit · last {Math.min(prediction_accuracy.total_resolved, 30)} nights
-                  </p>
-                </div>
-              )}
-
-              {(!prediction_accuracy || prediction_accuracy.total_resolved < 3) && (
-                <p className="text-xs text-gray-400">
-                  Accuracy tracking starts after a few days — check back tomorrow to see how tonight&apos;s forecast holds up.
-                </p>
-              )}
-            </section>
-
-            {/* ── Recovery Details ── */}
+            {/* ── Recovery Details (preserved from the removed Tomorrow's Forecast section) ── */}
             {visibleMetrics.length > 0 && (
               <section>
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">
@@ -1644,7 +1490,6 @@ export default function DashboardPage() {
                 </div>
               </section>
             )}
-            </CollapsibleSection>
 
           </div>
           );
