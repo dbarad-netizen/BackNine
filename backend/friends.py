@@ -241,8 +241,10 @@ def list_friend_events(user_id: str, limit: int = 30) -> list[dict]:
     """
     Return recent events from the user's friends + themselves.
 
-    Returns rows shaped for the frontend feed: each row has user_id, user_name,
-    event_type, payload, created_at, and a friendly summary line.
+    Each row carries the original event fields plus:
+      • summary    — a one-line human description
+      • is_me      — whether the current user is the author
+      • reactions  — list of { emoji, count, i_reacted } aggregated across reactors
     """
     sb = _sb()
     friends = list_friends(user_id)
@@ -258,14 +260,114 @@ def list_friend_events(user_id: str, limit: int = 30) -> list[dict]:
         .execute()
     )
     rows = res.data or []
+    if not rows:
+        return []
+
+    # Fetch reactions for these events in one round-trip
+    event_ids = [r["id"] for r in rows]
+    react_res = (
+        sb.table("event_reactions")
+        .select("event_id, user_id, emoji")
+        .in_("event_id", event_ids)
+        .execute()
+    )
+    react_rows = react_res.data or []
+
+    # Aggregate: { event_id: { emoji: {count, i_reacted} } }
+    react_by_event: dict[str, dict[str, dict]] = {}
+    for rr in react_rows:
+        eid   = rr["event_id"]
+        emoji = rr["emoji"]
+        slot  = react_by_event.setdefault(eid, {}).setdefault(emoji, {"count": 0, "i_reacted": False})
+        slot["count"] += 1
+        if rr["user_id"] == user_id:
+            slot["i_reacted"] = True
+
     out: list[dict] = []
     for r in rows:
+        agg = react_by_event.get(r["id"], {})
         out.append({
             **r,
-            "is_me":   r["user_id"] == user_id,
-            "summary": _summarize_event(r),
+            "is_me":     r["user_id"] == user_id,
+            "summary":   _summarize_event(r),
+            "reactions": [
+                {"emoji": e, "count": v["count"], "i_reacted": v["i_reacted"]}
+                for e, v in agg.items()
+            ],
         })
     return out
+
+
+# ── Reactions ─────────────────────────────────────────────────────────────────
+
+ALLOWED_REACTIONS = {"🔥", "💪", "👀", "🙌", "😤"}
+
+
+def toggle_reaction(user_id: str, event_id: str, emoji: str) -> dict:
+    """
+    Toggle a reaction. If (event_id, user_id, emoji) exists → delete it.
+    Otherwise insert it. Returns the updated reactions list for the event.
+
+    Raises ValueError for bad input or self-reaction attempts.
+    """
+    if not event_id or not emoji:
+        raise ValueError("event_id and emoji are required")
+    if emoji not in ALLOWED_REACTIONS:
+        raise ValueError(f"emoji must be one of {sorted(ALLOWED_REACTIONS)}")
+
+    sb = _sb()
+
+    # Reject self-reactions — you can't 🔥 your own workout
+    evt = (
+        sb.table("activity_events")
+        .select("user_id")
+        .eq("id", event_id)
+        .execute()
+    )
+    if not evt.data:
+        raise ValueError("event not found")
+    if evt.data[0]["user_id"] == user_id:
+        raise ValueError("you can't react to your own event")
+
+    # Check existing
+    existing = (
+        sb.table("event_reactions")
+        .select("id")
+        .eq("event_id", event_id)
+        .eq("user_id", user_id)
+        .eq("emoji", emoji)
+        .execute()
+    )
+    if existing.data:
+        sb.table("event_reactions").delete().eq("id", existing.data[0]["id"]).execute()
+    else:
+        sb.table("event_reactions").insert({
+            "event_id": event_id,
+            "user_id":  user_id,
+            "emoji":    emoji,
+        }).execute()
+
+    # Return the fresh aggregated reaction summary for this event
+    res = (
+        sb.table("event_reactions")
+        .select("user_id, emoji")
+        .eq("event_id", event_id)
+        .execute()
+    )
+    rows = res.data or []
+    agg: dict[str, dict] = {}
+    for r in rows:
+        slot = agg.setdefault(r["emoji"], {"count": 0, "i_reacted": False})
+        slot["count"] += 1
+        if r["user_id"] == user_id:
+            slot["i_reacted"] = True
+    return {
+        "event_id":  event_id,
+        "reactions": [
+            {"emoji": e, "count": v["count"], "i_reacted": v["i_reacted"]}
+            for e, v in agg.items()
+        ],
+    }
 
 
 def _summarize_event(row: dict) -> str:

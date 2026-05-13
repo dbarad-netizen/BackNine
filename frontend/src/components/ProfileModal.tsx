@@ -28,10 +28,12 @@ type Tab = "profile" | "friends";
 
 interface Props {
   onClose: () => void;
+  /** Which tab to open initially. Defaults to "profile". */
+  initialTab?: Tab;
 }
 
-export default function ProfileModal({ onClose }: Props) {
-  const [tab, setTab] = useState<Tab>("profile");
+export default function ProfileModal({ onClose, initialTab = "profile" }: Props) {
+  const [tab, setTab] = useState<Tab>(initialTab);
 
   // ── Profile state ──
   const [profile,  setProfile]  = useState<UserProfile>({ age: null, biological_sex: null, health_goals: [] });

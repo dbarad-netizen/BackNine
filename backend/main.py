@@ -1906,6 +1906,23 @@ def list_friend_events(request: Request, limit: int = 30):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/friends/events/{event_id}/react")
+async def react_to_event(event_id: str, request: Request):
+    """Toggle a reaction on a friend's activity event. Body: { emoji }."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    body = await request.json()
+    emoji = (body.get("emoji") or "").strip()
+    if not emoji:
+        raise HTTPException(status_code=400, detail="emoji is required")
+    try:
+        return frd.toggle_reaction(user_id, event_id, emoji)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ── Apple Health ──────────────────────────────────────────────────────────────
 
 @app.get("/api/apple-health/key")

@@ -605,6 +605,12 @@ export const api = {
     events(limit = 30): Promise<{ events: FriendActivityEvent[] }> {
       return request(`/api/friends/events?limit=${limit}`);
     },
+    react(event_id: string, emoji: string): Promise<{ event_id: string; reactions: ReactionSummary[] }> {
+      return request(`/api/friends/events/${encodeURIComponent(event_id)}/react`, {
+        method: "POST",
+        body: JSON.stringify({ emoji }),
+      });
+    },
   },
 };
 
@@ -631,6 +637,12 @@ export interface Friend {
   since:   string | null;
 }
 
+export interface ReactionSummary {
+  emoji:      string;
+  count:      number;
+  i_reacted:  boolean;
+}
+
 export interface FriendActivityEvent {
   id:         string;
   user_id:    string;
@@ -640,6 +652,7 @@ export interface FriendActivityEvent {
   created_at: string;
   is_me:      boolean;
   summary:    string;
+  reactions:  ReactionSummary[];
 }
 
 // ── Insight types ─────────────────────────────────────────────────────────────

@@ -29,6 +29,7 @@ import CoachAlAvatar from "@/components/CoachAlAvatar";
 import MorningBriefing from "@/components/MorningBriefing";
 import ActiveCompetitions from "@/components/ActiveCompetitions";
 import GearPicks from "@/components/GearPicks";
+import PulseFeed from "@/components/PulseFeed";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts";
@@ -750,6 +751,7 @@ export default function DashboardPage() {
   const [tab,        setTab]        = useState<Tab>("scores");
   const [section,    setSection]    = useState<Section>("coaching");
   const [showProfile, setShowProfile] = useState(false);
+  const [profileInitialTab, setProfileInitialTab] = useState<"profile" | "friends">("profile");
   const openChatRef = useRef<(() => void) | null>(null);
 
   // Nutrition state
@@ -1341,6 +1343,9 @@ export default function DashboardPage() {
               </div>
             </section>
 
+            {/* ── Friend Pulse feed ── */}
+            <PulseFeed onInviteFriend={() => { setProfileInitialTab("friends"); setShowProfile(true); }} />
+
             {/* ── Active Competitions strip ── */}
             <ActiveCompetitions onJump={() => setSection("challenges")} />
 
@@ -1760,7 +1765,7 @@ export default function DashboardPage() {
       <ChatWidget onRegisterOpen={opener => { openChatRef.current = opener; }} />
 
       {/* ── Profile modal ── */}
-      {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
+      {showProfile && <ProfileModal onClose={() => setShowProfile(false)} initialTab={profileInitialTab} />}
 
     </div>
   );
