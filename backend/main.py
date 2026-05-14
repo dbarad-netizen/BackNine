@@ -984,10 +984,14 @@ async def get_dashboard(request: Request, days: int = 120):
             except Exception:
                 _ah_body_fat = None
 
-        # VO2 Max: Apple Health → Oura cardiovascular_age → manual profile entry
-        _vo2 = (_ah_sum.get("today", {}).get("vo2_max")
-                or oura_vo2_max
-                or _profile.get("vo2_max"))
+        # VO2 Max: manual profile entry → Apple Health → Oura cardiovascular_age.
+        # Manual override wins so the "edit" button on the Longevity card actually
+        # takes effect. Users typically edit because they have better data than
+        # what the automatic estimates produced (Cooper test, Apple Watch trust,
+        # etc.). To revert to automatic, the user clears the profile field.
+        _vo2 = (_profile.get("vo2_max")
+                or _ah_sum.get("today", {}).get("vo2_max")
+                or oura_vo2_max)
 
         _lon_metrics = {
             "hrv":                 t_sm.get("hrv"),
