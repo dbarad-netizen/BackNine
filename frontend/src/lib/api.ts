@@ -147,6 +147,7 @@ export interface LongevityScore {
 }
 
 export interface UserProfile {
+  name?:           string | null;
   age?:            number | null;
   biological_sex?: "male" | "female" | null;
   health_goals?:   string[];

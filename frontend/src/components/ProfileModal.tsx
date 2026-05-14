@@ -36,7 +36,7 @@ export default function ProfileModal({ onClose, initialTab = "profile" }: Props)
   const [tab, setTab] = useState<Tab>(initialTab);
 
   // ── Profile state ──
-  const [profile,  setProfile]  = useState<UserProfile>({ age: null, biological_sex: null, health_goals: [] });
+  const [profile,  setProfile]  = useState<UserProfile>({ name: null, age: null, biological_sex: null, health_goals: [] });
   const [loading,  setLoading]  = useState(true);
   const [saving,   setSaving]   = useState(false);
   const [saved,    setSaved]    = useState(false);
@@ -44,7 +44,12 @@ export default function ProfileModal({ onClose, initialTab = "profile" }: Props)
 
   useEffect(() => {
     api.getProfile()
-      .then(p => setProfile({ age: p.age ?? null, biological_sex: p.biological_sex ?? null, health_goals: p.health_goals ?? [] }))
+      .then(p => setProfile({
+        name:           p.name ?? null,
+        age:            p.age ?? null,
+        biological_sex: p.biological_sex ?? null,
+        health_goals:   p.health_goals ?? [],
+      }))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -122,6 +127,22 @@ export default function ProfileModal({ onClose, initialTab = "profile" }: Props)
             </div>
           ) : (
             <div className="px-5 py-4 space-y-5 max-h-[55vh] overflow-y-auto">
+
+              {/* Display name */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1.5">Display Name</label>
+                <input
+                  type="text"
+                  maxLength={40}
+                  placeholder="e.g. David B."
+                  className={inp}
+                  value={profile.name ?? ""}
+                  onChange={e => setProfile(prev => ({ ...prev, name: e.target.value || null }))}
+                />
+                <p className="text-[10px] text-gray-400 mt-1">
+                  What your friends see in their Pulse feed and Friends list.
+                </p>
+              </div>
 
               {/* Age */}
               <div>

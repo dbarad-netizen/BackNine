@@ -1583,9 +1583,30 @@ async def save_profile(request: Request):
     try:
         db = get_supabase()
         db.table("user_profiles").upsert(data, on_conflict="user_id").execute()
-        return {"ok": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+    # If the display name was provided, fan it out to the denormalized name
+    # columns on friendships and activity_events so existing data reflects
+    # the user's chosen identity instead of "BackNine user". Best-effort —
+    # the profile save itself already succeeded by this point.
+    new_name = data.get("name")
+    if new_name and isinstance(new_name, str) and new_name.strip():
+        new_name = new_name.strip()
+        try:
+            db.table("friendships").update({"user_a_name": new_name}).eq("user_id_a", user_id).execute()
+        except Exception:
+            pass
+        try:
+            db.table("friendships").update({"user_b_name": new_name}).eq("user_id_b", user_id).execute()
+        except Exception:
+            pass
+        try:
+            db.table("activity_events").update({"user_name": new_name}).eq("user_id", user_id).execute()
+        except Exception:
+            pass
+
+    return {"ok": True}
 
 
 # ── Chat ───────────────────────────────────────────────────────────────────────
