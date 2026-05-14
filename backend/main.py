@@ -117,16 +117,15 @@ def _resolve_oura_anchor(user_id: str, rm: dict, slm: dict, am: dict, smm: dict)
     t_sl  = slm.get(anchor, {})
     t_act = am.get(anchor, {})
 
-    # smm lookup with bedtime-offset fallback then AH fallback
+    # smm lookup — direct anchor first, Apple Health as fallback. We deliberately
+    # do NOT fall back to smm[anchor - 1 day]: Oura's /sleep endpoint keys
+    # sessions by wake date in its `day` field (verified empirically), so a
+    # missing smm[anchor] means Oura's session detail for last night hasn't
+    # synced yet — not that the data is offset to the prior day. Reading
+    # anchor-1 would surface a session from two nights ago and let Coach Al
+    # confidently report stale numbers. Better to leave sleep empty so the
+    # prompt honestly omits it.
     t_sm = smm.get(anchor, {}) or {}
-    if not t_sm.get("total"):
-        try:
-            prev = (datetime.strptime(anchor, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
-            alt = smm.get(prev) or {}
-            if alt.get("total"):
-                t_sm = alt
-        except Exception:
-            pass
     if not t_sm.get("total"):
         try:
             ah_day = ah.get_day(user_id, anchor)
