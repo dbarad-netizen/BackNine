@@ -1959,11 +1959,7 @@ async def get_morning_briefing(request: Request, refresh: bool = False):
     # Proactive observations — runs once per dashboard load (dedup'd by date).
     # Best-effort: a failure here must never block the briefing.
     try:
-        # Build accuracy shape expected by observation detector
         accuracy_block = {"streak": prediction_status.get("streak", 0)}
-        # Insights are expensive — skip on the briefing path; the in-app
-        # insights endpoint will surface them. We only feed HRV + streak
-        # detectors here. Empty list is a safe no-op for top_insight.
         obs.generate_and_upsert(
             user_id,
             smm=smm,
@@ -1975,6 +1971,31 @@ async def get_morning_briefing(request: Request, refresh: bool = False):
         pass
 
     profile = _get_profile(user_id)
+
+    # Daily milestone events for the Pulse feed — only positive wins broadcast
+    # to friends. Dedup'd by (user_id, event_type, anchor) so each milestone
+    # fires at most once per day. Bad news (HRV drops, poor sleep) stays
+    # private in coach_observations above.
+    try:
+        # Re-resolve the anchor so milestones reference the same date as the
+        # rest of the briefing context (the helper above already did this work).
+        m_anchor, m_rdy, m_sl, m_act, m_sm = _resolve_oura_anchor(user_id, rm, slm, am, smm)
+        frd.generate_daily_milestones(
+            user_id,
+            (profile or {}).get("name") or "Friend",
+            anchor=m_anchor,
+            t_rdy=m_rdy,
+            t_sl=m_sl,
+            t_act=m_act,
+            t_sm=m_sm,
+            rm=rm,
+            slm=slm,
+            am=am,
+            smm=smm,
+            prediction_streak=prediction_status.get("streak"),
+        )
+    except Exception:
+        pass
 
     # Generate the narrative
     try:

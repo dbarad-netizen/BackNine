@@ -461,6 +461,135 @@ def toggle_reaction(user_id: str, event_id: str, emoji: str) -> dict:
     }
 
 
+# ── Daily milestone events ────────────────────────────────────────────────────
+#
+# Auto-generated Pulse events from passive Oura data. Most BackNine users
+# don't manually log workouts every day, but their bodies generate
+# interesting numbers nightly via Oura — these milestones surface the
+# noteworthy moments so a friend with great sleep/readiness/HRV broadcasts
+# without lifting a finger.
+#
+# Privacy: only positive milestones broadcast to friends. Bad-news patterns
+# (HRV drops, poor sleep) stay private in coach_observations.
+# Dedup: each milestone fires at most once per user per calendar day per type.
+
+MILESTONE_SLEEP_THRESHOLD     = 85
+MILESTONE_READINESS_THRESHOLD = 85
+MILESTONE_ACTIVITY_THRESHOLD  = 85
+MILESTONE_HRV_REBOUND_PCT     = 0.15  # +15% vs yesterday
+
+
+def _has_event_today(sb, user_id: str, event_type: str, today: str) -> bool:
+    """True if a milestone of this type was already written for this user today."""
+    try:
+        res = (
+            sb.table("activity_events")
+            .select("id")
+            .eq("user_id", user_id)
+            .eq("event_type", event_type)
+            .gte("created_at", f"{today}T00:00:00")
+            .lt("created_at",  f"{today}T23:59:59.999")
+            .limit(1)
+            .execute()
+        )
+        return bool(res.data)
+    except Exception:
+        # If the dedup check fails, prefer not writing (better to under-share
+        # than to spam the feed with duplicates).
+        return True
+
+
+def generate_daily_milestones(
+    user_id: str,
+    user_name: str,
+    *,
+    anchor: str,
+    t_rdy: dict,
+    t_sl: dict,
+    t_act: dict,
+    t_sm: dict,
+    rm: dict,
+    slm: dict,
+    am: dict,
+    smm: dict,
+    prediction_streak: Optional[int] = None,
+) -> list[dict]:
+    """Detect and record today's milestone events. Returns the new event rows."""
+    if not user_id:
+        return []
+    sb = _sb()
+    written: list[dict] = []
+
+    def _emit(event_type: str, payload: dict) -> None:
+        if _has_event_today(sb, user_id, event_type, anchor):
+            return
+        try:
+            row = {
+                "user_id":    user_id,
+                "user_name":  user_name or "Friend",
+                "event_type": event_type,
+                "payload":    {**_trim_payload(payload), "date": anchor},
+            }
+            res = sb.table("activity_events").insert(row).execute()
+            if res.data:
+                written.append(res.data[0])
+        except Exception:
+            pass
+
+    # 1. Great sleep
+    sleep_score = (t_sl or {}).get("score")
+    if isinstance(sleep_score, (int, float)) and sleep_score >= MILESTONE_SLEEP_THRESHOLD:
+        _emit("great_sleep", {"score": int(sleep_score)})
+
+    # 2. Great readiness
+    rdy_score = (t_rdy or {}).get("score")
+    if isinstance(rdy_score, (int, float)) and rdy_score >= MILESTONE_READINESS_THRESHOLD:
+        _emit("great_readiness", {"score": int(rdy_score)})
+
+    # 3. Great activity
+    act_score = (t_act or {}).get("score")
+    if isinstance(act_score, (int, float)) and act_score >= MILESTONE_ACTIVITY_THRESHOLD:
+        _emit("great_activity", {"score": int(act_score)})
+
+    # 4. HRV rebound — today is meaningfully higher than yesterday
+    today_hrv = (t_sm or {}).get("hrv")
+    if today_hrv:
+        # Find the most recent prior day with HRV data
+        prior_days = [d for d in sorted(smm.keys(), reverse=True) if d < anchor]
+        for pd in prior_days[:3]:  # walk back up to 3 days to handle gaps
+            prev_hrv = (smm.get(pd) or {}).get("hrv")
+            if prev_hrv:
+                delta = today_hrv - prev_hrv
+                if delta > 0 and delta / prev_hrv >= MILESTONE_HRV_REBOUND_PCT:
+                    _emit("hrv_rebound", {
+                        "hrv":       int(today_hrv),
+                        "prev_hrv":  int(prev_hrv),
+                        "delta":     int(delta),
+                        "delta_pct": round(delta / prev_hrv * 100),
+                    })
+                break
+
+    # 5. Personal best sleep — today is the 30-day high
+    if isinstance(sleep_score, (int, float)):
+        prior_scores = [
+            (slm.get(d) or {}).get("score")
+            for d in sorted(slm.keys(), reverse=True)
+            if d < anchor
+        ]
+        prior_scores = [s for s in prior_scores if isinstance(s, (int, float)) and s > 0]
+        if prior_scores and sleep_score > max(prior_scores[:30]):
+            _emit("personal_best_sleep", {
+                "score":    int(sleep_score),
+                "previous": int(max(prior_scores[:30])),
+            })
+
+    # 6. Prediction streak — broadcast the same milestones we track privately
+    if prediction_streak and prediction_streak in {3, 5, 7, 14, 30, 60, 100}:
+        _emit("prediction_streak", {"streak": int(prediction_streak)})
+
+    return written
+
+
 def _summarize_event(row: dict) -> str:
     """Turn an event row into a single-line human summary for the feed."""
     et = row.get("event_type") or ""
@@ -490,4 +619,32 @@ def _summarize_event(row: dict) -> str:
         if n:
             return f"{name} hit a {int(n)}-day {kind}"
         return f"{name} extended a streak"
+
+    # ── Auto-generated milestone events ──
+    if et == "great_sleep":
+        s = p.get("score")
+        return f"{name} had a strong night — sleep {s}" if s else f"{name} slept well"
+    if et == "great_readiness":
+        s = p.get("score")
+        return f"{name} is primed today — readiness {s}" if s else f"{name} is feeling primed"
+    if et == "great_activity":
+        s = p.get("score")
+        return f"{name} crushed it — activity {s}" if s else f"{name} had a big day"
+    if et == "hrv_rebound":
+        h = p.get("hrv")
+        d = p.get("delta")
+        if h and d:
+            return f"{name}'s HRV bounced back to {h} (+{d} from yesterday)"
+        return f"{name}'s HRV bounced back"
+    if et == "personal_best_sleep":
+        s = p.get("score")
+        if s:
+            return f"{name}'s best sleep in 30 days ({s})"
+        return f"{name} set a sleep personal best"
+    if et == "prediction_streak":
+        s = p.get("streak")
+        if s:
+            return f"{name} hit a {int(s)}-day prediction streak 🔥"
+        return f"{name} extended their streak"
+
     return f"{name} did something"

@@ -49,7 +49,78 @@ function eventEmoji(t: string): string {
     case "challenge_joined":    return "🏆";
     case "challenge_completed": return "🎉";
     case "streak_milestone":    return "🔥";
+    case "great_sleep":         return "😴";
+    case "great_readiness":     return "💚";
+    case "great_activity":      return "💪";
+    case "hrv_rebound":         return "📈";
+    case "personal_best_sleep": return "🏅";
+    case "prediction_streak":   return "🔥";
     default:                    return "✨";
+  }
+}
+
+// Milestone events deserve a visual lift — these are "wins" worth celebrating.
+const MILESTONE_TYPES = new Set([
+  "great_sleep",
+  "great_readiness",
+  "great_activity",
+  "hrv_rebound",
+  "personal_best_sleep",
+  "prediction_streak",
+  "streak_milestone",
+  "challenge_completed",
+]);
+
+// Build the array of stat pills shown under the summary. Each pill is a tiny
+// label+value box. Order matters — most important pill first.
+function statPills(eventType: string, payload: Record<string, unknown>): { label: string; value: string }[] {
+  const get = (k: string) => payload[k];
+  const num = (k: string) => {
+    const v = get(k);
+    return typeof v === "number" ? v : null;
+  };
+
+  switch (eventType) {
+    case "great_sleep":         return [{ label: "Sleep",     value: String(num("score") ?? "—") }];
+    case "great_readiness":     return [{ label: "Readiness", value: String(num("score") ?? "—") }];
+    case "great_activity":      return [{ label: "Activity",  value: String(num("score") ?? "—") }];
+    case "hrv_rebound": {
+      const h = num("hrv");
+      const d = num("delta");
+      const pills = [{ label: "HRV", value: String(h ?? "—") }];
+      if (d) pills.push({ label: "vs yesterday", value: `+${d}` });
+      return pills;
+    }
+    case "personal_best_sleep": {
+      const s = num("score");
+      const prev = num("previous");
+      const pills = [{ label: "Sleep", value: String(s ?? "—") }];
+      if (prev) pills.push({ label: "prev best", value: String(prev) });
+      return pills;
+    }
+    case "prediction_streak":
+    case "streak_milestone": {
+      const n = num("streak") ?? num("days");
+      return n ? [{ label: "Streak", value: `${n} days` }] : [];
+    }
+    case "workout_logged": {
+      const dur = num("duration_min");
+      return dur ? [{ label: "Duration", value: `${Math.round(dur)} min` }] : [];
+    }
+    case "weight_logged": {
+      const lbs = num("weight_lbs");
+      const bf  = num("body_fat_pct");
+      const pills = [];
+      if (lbs) pills.push({ label: "Weight",  value: `${lbs} lbs` });
+      if (bf)  pills.push({ label: "Body fat", value: `${bf}%` });
+      return pills;
+    }
+    case "challenge_joined":
+    case "challenge_completed": {
+      const name = typeof get("challenge_name") === "string" ? (get("challenge_name") as string) : null;
+      return name ? [{ label: "Challenge", value: name }] : [];
+    }
+    default: return [];
   }
 }
 
@@ -194,33 +265,69 @@ export default function PulseFeed({ onInviteFriend }: Props) {
         </button>
       </div>
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
-        {events.map(e => (
-          <article
-            key={e.id}
-            className="shrink-0 w-64 rounded-2xl border border-gray-200 bg-white p-3 flex flex-col gap-2"
-          >
-            {/* Top row: avatar + name + time */}
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="relative shrink-0">
-                <span className="w-8 h-8 rounded-full bg-[#1B3829] text-white text-xs font-semibold flex items-center justify-center">
-                  {(e.user_name || "?").slice(0, 1).toUpperCase()}
-                </span>
-                <span className="absolute -bottom-1 -right-1 text-[11px] bg-white rounded-full px-0.5 leading-none">
-                  {eventEmoji(e.event_type)}
-                </span>
+        {events.map(e => {
+          const isMilestone = MILESTONE_TYPES.has(e.event_type);
+          const pills = statPills(e.event_type, e.payload);
+          return (
+            <article
+              key={e.id}
+              className={`shrink-0 w-64 rounded-2xl p-3 flex flex-col gap-2 border ${
+                isMilestone
+                  ? "border-green-200 bg-gradient-to-br from-green-50/60 to-white"
+                  : "border-gray-200 bg-white"
+              }`}
+            >
+              {/* Top row: avatar + name + time */}
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="relative shrink-0">
+                  <span className="w-8 h-8 rounded-full bg-[#1B3829] text-white text-xs font-semibold flex items-center justify-center">
+                    {(e.user_name || "?").slice(0, 1).toUpperCase()}
+                  </span>
+                  <span className="absolute -bottom-1 -right-1 text-[11px] bg-white rounded-full px-0.5 leading-none">
+                    {eventEmoji(e.event_type)}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-semibold text-gray-900 truncate">{e.user_name || "Friend"}</p>
+                  <p className="text-[10px] text-gray-400">{timeAgo(e.created_at)}</p>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[11px] font-semibold text-gray-900 truncate">{e.user_name || "BackNine user"}</p>
-                <p className="text-[10px] text-gray-400">{timeAgo(e.created_at)}</p>
-              </div>
-            </div>
 
-            {/* Summary */}
-            <p className="text-[12px] text-gray-700 leading-snug line-clamp-2 flex-1">
-              {e.summary}
-            </p>
+              {/* Summary */}
+              <p className="text-[12px] text-gray-700 leading-snug line-clamp-2">
+                {e.summary}
+              </p>
 
-            {/* Reaction chips */}
+              {/* Stat pills — prominent numeric badges from event payload */}
+              {pills.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {pills.map((p, i) => (
+                    <div
+                      key={i}
+                      className={`rounded-lg px-2 py-1 ${
+                        isMilestone
+                          ? "bg-green-100/80 border border-green-200/80"
+                          : "bg-gray-50 border border-gray-200"
+                      }`}
+                    >
+                      <p className={`text-[8px] uppercase tracking-wide font-semibold leading-none ${
+                        isMilestone ? "text-green-700" : "text-gray-400"
+                      }`}>
+                        {p.label}
+                      </p>
+                      <p className={`text-[12px] font-bold leading-tight mt-0.5 ${
+                        isMilestone ? "text-green-900" : "text-gray-800"
+                      }`}>
+                        {p.value}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex-1" />
+
+              {/* Reaction chips */}
             <div className="flex items-center gap-1 flex-wrap">
               {REACTIONS.map(emoji => {
                 const r = e.reactions.find(x => x.emoji === emoji);
@@ -252,7 +359,8 @@ export default function PulseFeed({ onInviteFriend }: Props) {
                 ))}
             </div>
           </article>
-        ))}
+          );
+        })}
       </div>
     </section>
   );
