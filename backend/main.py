@@ -1977,29 +1977,59 @@ async def get_morning_briefing(request: Request, refresh: bool = False):
     profile = _get_profile(user_id)
 
     # Daily milestone events for the Pulse feed — only positive wins broadcast
-    # to friends. Dedup'd by (user_id, event_type, anchor) so each milestone
-    # fires at most once per day. Bad news (HRV drops, poor sleep) stays
-    # private in coach_observations above.
+    # to friends. Dedup'd by (user_id, kind, anchor_date) via payload.date so
+    # each milestone fires at most once per day. Bad news (HRV drops, poor
+    # sleep) stays private in coach_observations above.
+    #
+    # Backfill: when we run for a user, we replay the last 7 days of their
+    # data through the detector to catch milestones that should have fired
+    # but didn't (e.g., the milestone code didn't exist yet, or the user
+    # didn't open the dashboard that day). Backfilled events are timestamped
+    # on the actual anchor date so the feed reads chronologically.
     try:
-        # Re-resolve the anchor so milestones reference the same date as the
-        # rest of the briefing context (the helper above already did this work).
-        m_anchor, m_rdy, m_sl, m_act, m_sm = _resolve_oura_anchor(user_id, rm, slm, am, smm)
-        frd.generate_daily_milestones(
+        m_anchor, _m_rdy, _m_sl, _m_act, _m_sm = _resolve_oura_anchor(user_id, rm, slm, am, smm)
+        frd.generate_milestones_with_backfill(
             user_id,
             (profile or {}).get("name") or "Friend",
-            anchor=m_anchor,
-            t_rdy=m_rdy,
-            t_sl=m_sl,
-            t_act=m_act,
-            t_sm=m_sm,
-            rm=rm,
-            slm=slm,
-            am=am,
-            smm=smm,
+            rm=rm, slm=slm, am=am, smm=smm,
+            today=m_anchor,
+            backfill_days=7,
             prediction_streak=prediction_status.get("streak"),
         )
     except Exception:
         pass
+
+    # ── Friend milestone backfill ───────────────────────────────────────────
+    # Pulse goes from empty to alive: every time the current user opens their
+    # dashboard, we also run the milestone detector across each of their
+    # friends' cached Oura data. The friend doesn't need to log in for their
+    # great-sleep / HRV-rebound / personal-best events to surface in our user's
+    # feed — they're already in oura_daily_cache (webhooks keep it warm).
+    #
+    # Cost is bounded: small friend count × 7-day window × cheap dedup query.
+    # All best-effort; one slow friend lookup can't block the briefing response.
+    try:
+        my_friends = frd.list_friends(user_id)
+    except Exception:
+        my_friends = []
+    for friend in my_friends:
+        try:
+            f_uid  = friend.get("user_id")
+            f_name = friend.get("name") or "Friend"
+            if not f_uid:
+                continue
+            f_rm, f_slm, f_am, f_smm = oc.get_days(f_uid, days=10)
+            f_anchor, _, _, _, _ = _resolve_oura_anchor(f_uid, f_rm, f_slm, f_am, f_smm)
+            frd.generate_milestones_with_backfill(
+                f_uid,
+                f_name,
+                rm=f_rm, slm=f_slm, am=f_am, smm=f_smm,
+                today=f_anchor,
+                backfill_days=7,
+                prediction_streak=None,  # we don't track other users' streaks here
+            )
+        except Exception:
+            continue
 
     # Generate the narrative
     try:

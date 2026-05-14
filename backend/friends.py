@@ -14,7 +14,7 @@ verify auth — callers (main.py routes) handle that.
 import os
 import random
 import string
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 
@@ -479,16 +479,18 @@ MILESTONE_ACTIVITY_THRESHOLD  = 85
 MILESTONE_HRV_REBOUND_PCT     = 0.15  # +15% vs yesterday
 
 
-def _has_event_today(sb, user_id: str, event_type: str, today: str) -> bool:
-    """True if a milestone of this type was already written for this user today."""
+def _has_event_for_date(sb, user_id: str, event_type: str, anchor: str) -> bool:
+    """True if a milestone of this type was already written for this user on
+    this anchor date. Uses the payload.date field so backfilled events
+    (whose created_at sits on the actual day, not 'today') dedup correctly.
+    """
     try:
         res = (
             sb.table("activity_events")
             .select("id")
             .eq("user_id", user_id)
             .eq("event_type", event_type)
-            .gte("created_at", f"{today}T00:00:00")
-            .lt("created_at",  f"{today}T23:59:59.999")
+            .filter("payload->>date", "eq", anchor)
             .limit(1)
             .execute()
         )
@@ -513,23 +515,31 @@ def generate_daily_milestones(
     am: dict,
     smm: dict,
     prediction_streak: Optional[int] = None,
+    created_at_override: Optional[str] = None,
 ) -> list[dict]:
-    """Detect and record today's milestone events. Returns the new event rows."""
+    """Detect and record milestone events for the given anchor date.
+
+    When backfilling historical days, pass `created_at_override` (ISO8601) so
+    the event's timestamp lands on the actual day rather than 'now' — keeps
+    the feed sorted in chronological order.
+    """
     if not user_id:
         return []
     sb = _sb()
     written: list[dict] = []
 
     def _emit(event_type: str, payload: dict) -> None:
-        if _has_event_today(sb, user_id, event_type, anchor):
+        if _has_event_for_date(sb, user_id, event_type, anchor):
             return
         try:
-            row = {
+            row: dict = {
                 "user_id":    user_id,
                 "user_name":  user_name or "Friend",
                 "event_type": event_type,
                 "payload":    {**_trim_payload(payload), "date": anchor},
             }
+            if created_at_override:
+                row["created_at"] = created_at_override
             res = sb.table("activity_events").insert(row).execute()
             if res.data:
                 written.append(res.data[0])
@@ -588,6 +598,64 @@ def generate_daily_milestones(
         _emit("prediction_streak", {"streak": int(prediction_streak)})
 
     return written
+
+
+def generate_milestones_with_backfill(
+    user_id: str,
+    user_name: str,
+    *,
+    rm: dict,
+    slm: dict,
+    am: dict,
+    smm: dict,
+    today: str,
+    backfill_days: int = 7,
+    prediction_streak: Optional[int] = None,
+) -> int:
+    """Run the milestone detector for `today` plus the prior `backfill_days`.
+
+    This is the engine for catching up a friend's Pulse feed when they haven't
+    logged in for a while — every dashboard load fans this across the user
+    *and* each of their friends, so a single login fills in a week of history.
+
+    Backfilled events get their created_at set to noon on the actual anchor
+    date so the feed sorts naturally; only today's events use 'now'. Dedup is
+    keyed by payload.date so re-running is a no-op.
+
+    Returns the total number of events written across all days.
+    """
+    if not user_id:
+        return 0
+    try:
+        today_d = date.fromisoformat(today)
+    except Exception:
+        return 0
+
+    total = 0
+    for d_offset in range(backfill_days + 1):
+        anchor_date = (today_d - timedelta(days=d_offset)).isoformat()
+        # Today gets natural `now` timestamp; backfilled days get noon on that day.
+        created_at = None if d_offset == 0 else f"{anchor_date}T12:00:00+00:00"
+        events = generate_daily_milestones(
+            user_id,
+            user_name,
+            anchor=anchor_date,
+            t_rdy=rm.get(anchor_date, {})  or {},
+            t_sl=slm.get(anchor_date, {}) or {},
+            t_act=am.get(anchor_date, {})  or {},
+            t_sm=smm.get(anchor_date, {}) or {},
+            rm=rm,
+            slm=slm,
+            am=am,
+            smm=smm,
+            # Only broadcast streak milestones for the most recent day. The
+            # streak number is current-state; replaying it across history
+            # would create misleading "you hit a 5-day streak 4 days ago" cards.
+            prediction_streak=prediction_streak if d_offset == 0 else None,
+            created_at_override=created_at,
+        )
+        total += len(events)
+    return total
 
 
 def _summarize_event(row: dict) -> str:
