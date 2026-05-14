@@ -579,6 +579,25 @@ export const api = {
       body: JSON.stringify({ message, history }),
     });
   },
+  chatHistory(limit = 50): Promise<{ messages: ChatMessage[] }> {
+    return request(`/api/chat/history?limit=${limit}`);
+  },
+  clearChat(): Promise<{ cleared: boolean | number }> {
+    return request("/api/chat/history", { method: "DELETE" });
+  },
+
+  // ── Coach Al observations ─────────────────────────────────────────────────
+  observations: {
+    list(): Promise<{ observations: CoachObservation[]; unread_count: number }> {
+      return request("/api/observations");
+    },
+    markRead(id: string): Promise<{ ok: boolean; id: string }> {
+      return request(`/api/observations/${encodeURIComponent(id)}/read`, { method: "POST" });
+    },
+    dismiss(id: string): Promise<{ ok: boolean; id: string }> {
+      return request(`/api/observations/${encodeURIComponent(id)}/dismiss`, { method: "POST" });
+    },
+  },
 
   // ── Morning Briefing ──────────────────────────────────────────────────────
   briefing(refresh = false): Promise<BriefingResponse> {
@@ -622,6 +641,18 @@ export interface BriefingResponse {
   prediction_accuracy: number | null;
   generated_at:        string | null;
   cached:              boolean;
+}
+
+// ── Coach Al observations ────────────────────────────────────────────────────
+export interface CoachObservation {
+  id:         string;
+  kind:       string;     // e.g. "hrv_drop", "prediction_streak_5", "insight_<id>"
+  date:       string;     // YYYY-MM-DD
+  message:    string;     // Coach-Al-voiced opening line
+  payload:    Record<string, unknown>;
+  read:       boolean;
+  dismissed:  boolean;
+  created_at: string;
 }
 
 // ── Friends types ─────────────────────────────────────────────────────────────

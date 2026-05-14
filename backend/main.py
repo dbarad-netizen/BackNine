@@ -35,6 +35,7 @@ import longevity as lon
 import chat as ch
 import briefing as brf
 import friends as frd
+import observations as obs
 
 load_dotenv()
 
@@ -1589,15 +1590,83 @@ async def save_profile(request: Request):
 
 # ── Chat ───────────────────────────────────────────────────────────────────────
 
+# Number of recent turns to send to Claude as conversation context.
+# Matches the historic in-memory cap so token costs are predictable.
+CHAT_HISTORY_LIMIT = 20
+
+
+def _load_chat_history(user_id: str, limit: int = CHAT_HISTORY_LIMIT) -> list[dict]:
+    """Load the most recent N chat turns for the user, oldest-first."""
+    db = get_supabase()
+    if not db:
+        return []
+    try:
+        res = (
+            db.table("chat_messages")
+            .select("role, content")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        rows = res.data or []
+        # rows are newest-first; reverse for chronological order
+        return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
+    except Exception:
+        return []
+
+
+def _save_chat_turn(user_id: str, role: str, content: str) -> None:
+    """Persist a single chat turn. Best-effort — never raises."""
+    db = get_supabase()
+    if not db:
+        return
+    try:
+        db.table("chat_messages").insert({
+            "user_id": user_id,
+            "role":    role,
+            "content": content,
+        }).execute()
+    except Exception:
+        pass
+
+
+@app.get("/api/chat/history")
+def get_chat_history(request: Request, limit: int = 50):
+    """Return the user's recent chat turns, oldest-first (chronological)."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    limit = max(1, min(limit, 200))
+    return {"messages": _load_chat_history(user_id, limit=limit)}
+
+
+@app.delete("/api/chat/history")
+def clear_chat_history(request: Request):
+    """Wipe all of the user's chat history. Used by 'clear conversation'."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    db = get_supabase()
+    if not db:
+        return {"cleared": 0}
+    try:
+        db.table("chat_messages").delete().eq("user_id", user_id).execute()
+        return {"cleared": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/chat")
 async def health_chat(request: Request):
     session = _require_session(request)
     user_id = session["user_id"]
     body = await request.json()
     message = body.get("message", "").strip()
-    history = body.get("history", [])
     if not message:
         raise HTTPException(status_code=400, detail="message is required")
+    # The backend is now the source of truth for conversation history.
+    # We load the most recent turns from the DB and ignore any client-supplied
+    # `history` field (kept here only for response shape compatibility).
+    history = _load_chat_history(user_id)
 
     # Build health context from cached Oura data
     try:
@@ -1665,11 +1734,16 @@ async def health_chat(request: Request):
 
     try:
         reply = ch.chat(message, health_context, profile, history)
-        return {"reply": reply}
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+    # Persist both turns. Save the user message FIRST so order_by created_at
+    # preserves the natural sequence even with millisecond-fast inserts.
+    _save_chat_turn(user_id, "user",      message)
+    _save_chat_turn(user_id, "assistant", reply)
+    return {"reply": reply}
 
 
 # ── Morning Briefing ──────────────────────────────────────────────────────────
@@ -1798,6 +1872,24 @@ async def get_morning_briefing(request: Request, refresh: bool = False):
     except Exception:
         prediction_status = {"streak": 0, "accuracy_pct": None, "last_predicted": None, "last_actual": None}
 
+    # Proactive observations — runs once per dashboard load (dedup'd by date).
+    # Best-effort: a failure here must never block the briefing.
+    try:
+        # Build accuracy shape expected by observation detector
+        accuracy_block = {"streak": prediction_status.get("streak", 0)}
+        # Insights are expensive — skip on the briefing path; the in-app
+        # insights endpoint will surface them. We only feed HRV + streak
+        # detectors here. Empty list is a safe no-op for top_insight.
+        obs.generate_and_upsert(
+            user_id,
+            smm=smm,
+            prediction_accuracy=accuracy_block,
+            insights=[],
+            today=today_str,
+        )
+    except Exception:
+        pass
+
     profile = _get_profile(user_id)
 
     # Generate the narrative
@@ -1902,6 +1994,43 @@ def list_friend_events(request: Request, limit: int = 30):
     user_id = session["user_id"]
     try:
         return {"events": frd.list_friend_events(user_id, limit=min(max(limit, 1), 100))}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Coach Al observations ─────────────────────────────────────────────────────
+
+@app.get("/api/observations")
+def list_observations(request: Request, limit: int = 20, include_dismissed: bool = False):
+    """Return the user's recent Coach Al observations (unread first)."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        items = obs.list_observations(user_id, limit=min(max(limit, 1), 100), include_dismissed=include_dismissed)
+        unread = obs.unread_count(user_id)
+        return {"observations": items, "unread_count": unread}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/observations/{observation_id}/read")
+def mark_observation_read(observation_id: str, request: Request):
+    """Mark a single observation as read."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        return obs.mark_read(user_id, observation_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/observations/{observation_id}/dismiss")
+def dismiss_observation(observation_id: str, request: Request):
+    """Dismiss an observation so it won't be shown again."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        return obs.dismiss(user_id, observation_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
