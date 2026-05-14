@@ -21,6 +21,7 @@ export default function MorningBriefing({ onOpenChat }: Props) {
   const [data,    setData]    = useState<BriefingResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,6 +32,22 @@ export default function MorningBriefing({ onOpenChat }: Props) {
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
+
+  // Force-regenerate using ?refresh=1. Useful when the cached briefing was
+  // generated with stale data (e.g. before today's Oura sync finished) or
+  // when the user wants a fresh take after logging something new.
+  const handleRegenerate = async () => {
+    if (regenerating) return;
+    setRegenerating(true);
+    try {
+      const fresh = await api.briefing(true);
+      setData(fresh);
+    } catch {
+      // Keep the old briefing visible if regenerate fails
+    } finally {
+      setRegenerating(false);
+    }
+  };
 
   // Loading shimmer — keep height stable so the page doesn't jump.
   if (loading) {
@@ -104,14 +121,26 @@ export default function MorningBriefing({ onOpenChat }: Props) {
       </div>
 
       {/* Action footer */}
-      <div className="border-t border-white/10 px-5 py-2.5 flex items-center justify-between">
-        <p className="text-[11px] text-white/50">
-          {data.cached ? "Generated earlier today" : "Just generated"}
-        </p>
+      <div className="border-t border-white/10 px-5 py-2.5 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <p className="text-[11px] text-white/50 truncate">
+            {data.cached ? "Generated earlier today" : "Just generated"}
+          </p>
+          <button
+            onClick={handleRegenerate}
+            disabled={regenerating}
+            className={`text-[11px] text-white/60 hover:text-white/90 transition-colors underline-offset-2 hover:underline disabled:opacity-40 shrink-0 ${
+              regenerating ? "animate-pulse" : ""
+            }`}
+            title="Force a fresh briefing (skips today's cache)"
+          >
+            {regenerating ? "Refreshing…" : "Regenerate"}
+          </button>
+        </div>
         {onOpenChat && (
           <button
             onClick={onOpenChat}
-            className="text-[11px] text-white/80 hover:text-white font-semibold flex items-center gap-1 transition-colors"
+            className="text-[11px] text-white/80 hover:text-white font-semibold flex items-center gap-1 transition-colors shrink-0"
           >
             Talk to Coach Al →
           </button>

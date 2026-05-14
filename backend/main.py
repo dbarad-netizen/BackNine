@@ -79,6 +79,75 @@ def _get_profile(user_id: str) -> dict:
         return {}
 
 
+def _resolve_oura_anchor(user_id: str, rm: dict, slm: dict, am: dict, smm: dict) -> tuple[str, dict, dict, dict, dict]:
+    """Resolve a timezone-safe Oura anchor and pull today's row from each stream.
+
+    Returns (anchor, t_rdy, t_sl, t_act, t_sm). Mirrors the dashboard endpoint's
+    canonical anchor logic — fixes the chat + briefing endpoints which were
+    naively using datetime.now() (server UTC, off by a day after 8 PM ET) and
+    pulling smm at the wrong key. See CONTEXT.md "Timezone-safe today".
+
+    The sleep model row (t_sm) falls back through:
+      1. smm[anchor]                — direct hit
+      2. smm[anchor - 1 day]        — bedtime-date keying (Oura quirk)
+      3. Apple Health for that date — Oura session not yet synced
+    """
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    all_oura_dates = sorted(set(list(rm) + list(slm) + list(am)))
+    oura_today = all_oura_dates[-1] if all_oura_dates else today_str
+    oura_yesterday = (
+        datetime.strptime(oura_today, "%Y-%m-%d") - timedelta(days=1)
+    ).strftime("%Y-%m-%d")
+
+    def _scored(d: str, mapping: dict) -> bool:
+        s = mapping.get(d, {}).get("score")
+        return bool(s and s > 0)
+
+    if _scored(oura_today, slm):
+        anchor = oura_today
+    elif _scored(oura_yesterday, slm):
+        anchor = oura_yesterday
+    elif slm:
+        scored = [d for d in sorted(slm, reverse=True) if slm[d].get("score")]
+        anchor = scored[0] if scored else sorted(slm)[-1]
+    else:
+        anchor = oura_today
+
+    t_rdy = rm.get(anchor, {})
+    t_sl  = slm.get(anchor, {})
+    t_act = am.get(anchor, {})
+
+    # smm lookup with bedtime-offset fallback then AH fallback
+    t_sm = smm.get(anchor, {}) or {}
+    if not t_sm.get("total"):
+        try:
+            prev = (datetime.strptime(anchor, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+            alt = smm.get(prev) or {}
+            if alt.get("total"):
+                t_sm = alt
+        except Exception:
+            pass
+    if not t_sm.get("total"):
+        try:
+            ah_day = ah.get_day(user_id, anchor)
+            if ah_day and (ah_day.get("sleep_hours") or ah_day.get("hrv")):
+                sh  = ah_day.get("sleep_hours") or 0
+                sdh = ah_day.get("sleep_deep_hours") or 0
+                srh = ah_day.get("sleep_rem_hours") or 0
+                t_sm = {
+                    "total":      int(sh  * 3600) if sh  else None,
+                    "deep":       int(sdh * 3600) if sdh else None,
+                    "rem":        int(srh * 3600) if srh else None,
+                    "hrv":        ah_day.get("hrv"),
+                    "rhr":        ah_day.get("resting_hr"),
+                    "_source":    "apple_health",
+                }
+        except Exception:
+            pass
+
+    return anchor, t_rdy, t_sl, t_act, t_sm
+
+
 # ── app ───────────────────────────────────────────────────────────────────────
 app = FastAPI(
     title="BackNine Health API",
@@ -1695,14 +1764,10 @@ async def health_chat(request: Request):
     except Exception:
         rm, slm, am, smm = {}, {}, {}, {}
 
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    anchor = today_str if slm.get(today_str) else (
-        (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d") if slm else today_str
-    )
-    t_rdy = rm.get(anchor, {})
-    t_sl  = slm.get(anchor, {})
-    t_act = am.get(anchor, {})
-    t_sm  = smm.get(anchor, {})
+    # Timezone-safe anchor + smm with bedtime/AH fallbacks. Without this we
+    # were reading server-UTC dates and missing the bedtime-keyed sleep row,
+    # which is how the briefing ended up showing 5.8h when Oura had 8h+.
+    _anchor, t_rdy, t_sl, t_act, t_sm = _resolve_oura_anchor(user_id, rm, slm, am, smm)
 
     # 7-day averages
     recent_days = sorted(smm.keys(), reverse=True)[:7]
@@ -1820,13 +1885,11 @@ async def get_morning_briefing(request: Request, refresh: bool = False):
     except Exception:
         rm, slm, am, smm = {}, {}, {}, {}
 
-    anchor = today_str if slm.get(today_str) else (
-        (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d") if slm else today_str
-    )
-    t_rdy = rm.get(anchor, {})
-    t_sl  = slm.get(anchor, {})
-    t_act = am.get(anchor, {})
-    t_sm  = smm.get(anchor, {})
+    # Timezone-safe anchor + smm with bedtime/AH fallbacks (see helper docstring).
+    # The naive `datetime.now()` approach was reading server UTC and missing the
+    # bedtime-keyed sleep row — that was the source of the 5.8h-when-Oura-says-8h
+    # bug in the briefing.
+    _anchor, t_rdy, t_sl, t_act, t_sm = _resolve_oura_anchor(user_id, rm, slm, am, smm)
 
     recent_days = sorted(smm.keys(), reverse=True)[:7]
     hrv_vals   = [smm[d]["hrv"]   for d in recent_days if smm[d].get("hrv")]
