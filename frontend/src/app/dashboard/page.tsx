@@ -884,19 +884,109 @@ export default function DashboardPage() {
   const deepMin = sm?.deep  ? Math.round((sm.deep as number) / 60) : null;
   const remMin  = sm?.rem   ? Math.round((sm.rem  as number) / 60) : null;
 
-  const tempVal = rdy?.temperature_deviation != null
-    ? `${(rdy.temperature_deviation as number) > 0 ? "+" : ""}${(rdy.temperature_deviation as number).toFixed(1)}°C`
-    : "—";
+  // ── Recovery metrics with 7-day baseline deltas ────────────────────────────
+  // Each metric shows today's value plus a colored arrow indicating direction
+  // versus the user's typical week. Goodness depends on the metric:
+  //   • HRV / Sleep / Deep / REM — higher is better
+  //   • RHR                       — lower is better
+  //   • Temp deviation            — closer to 0 is better (we compare |today| vs |avg|)
+  type DeltaTone = "good" | "bad" | "neutral";
+  interface MetricRow {
+    label: string;
+    value: string;
+    delta: { text: string; tone: DeltaTone } | null;
+  }
 
-  // Recovery metrics — last night's biometrics from Oura/AH (no activity data here)
-  const metrics = [
-    { label: "HRV",   value: sm?.hrv       ? `${sm.hrv} ms`         : "—" },
-    { label: "RHR",   value: sm?.rhr       ? `${sm.rhr} bpm`        : "—" },
-    { label: "Sleep", value: hrsTot != null ? `${hrsTot}h ${hrsMins}m` : "—" },
-    { label: "Deep",  value: deepMin       ? `${deepMin} min`       : "—" },
-    { label: "REM",   value: remMin        ? `${remMin} min`        : "—" },
-    { label: "Temp",  value: tempVal },
-  ];
+  // Avoid Math.abs(0) edge case by treating tiny deltas as neutral.
+  const _tone = (d: number, threshold: number, higherIsBetter: boolean): DeltaTone => {
+    if (Math.abs(d) < threshold) return "neutral";
+    return (d > 0) === higherIsBetter ? "good" : "bad";
+  };
+
+  // 7-day average over the trend slice. Filters nulls and zero-or-negative
+  // sentinels that Oura uses to mean "no data this day".
+  type TrendKey = "hrv" | "rhr" | "total_hrs" | "deep_min" | "rem_min" | "temp_dev";
+  const _avg = (key: TrendKey): number | null => {
+    const vals = trend.slice(-7)
+      .map(d => d[key])
+      .filter((v): v is number => typeof v === "number" && v > 0);
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  };
+
+  const _signed = (n: number) => (n > 0 ? `↑ ${Math.abs(n)}` : n < 0 ? `↓ ${Math.abs(n)}` : "— 0");
+
+  const metrics: MetricRow[] = [];
+
+  if (sm?.hrv) {
+    const today_v  = sm.hrv as number;
+    const baseline = _avg("hrv");
+    let delta: MetricRow["delta"] = null;
+    if (baseline != null) {
+      const d = today_v - baseline;
+      delta = { text: `${_signed(Math.round(d))} vs avg`, tone: _tone(d, 1, true) };
+    }
+    metrics.push({ label: "HRV", value: `${today_v} ms`, delta });
+  }
+
+  if (sm?.rhr) {
+    const today_v  = sm.rhr as number;
+    const baseline = _avg("rhr");
+    let delta: MetricRow["delta"] = null;
+    if (baseline != null) {
+      const d = today_v - baseline;
+      delta = { text: `${_signed(Math.round(d))} vs avg`, tone: _tone(d, 1, false) };
+    }
+    metrics.push({ label: "RHR", value: `${today_v} bpm`, delta });
+  }
+
+  if (hrsTot != null && hrsMins != null) {
+    const todayHrs = hrsTot + hrsMins / 60;
+    const baseline = _avg("total_hrs");
+    let delta: MetricRow["delta"] = null;
+    if (baseline != null) {
+      const d = todayHrs - baseline;
+      const txt = d >= 0 ? `↑ ${d.toFixed(1)}h` : `↓ ${Math.abs(d).toFixed(1)}h`;
+      delta = { text: `${txt} vs avg`, tone: _tone(d, 0.2, true) };
+    }
+    metrics.push({ label: "Sleep", value: `${hrsTot}h ${hrsMins}m`, delta });
+  }
+
+  if (deepMin) {
+    const baseline = _avg("deep_min");
+    let delta: MetricRow["delta"] = null;
+    if (baseline != null) {
+      const d = deepMin - baseline;
+      delta = { text: `${_signed(Math.round(d))} min`, tone: _tone(d, 5, true) };
+    }
+    metrics.push({ label: "Deep", value: `${deepMin} min`, delta });
+  }
+
+  if (remMin) {
+    const baseline = _avg("rem_min");
+    let delta: MetricRow["delta"] = null;
+    if (baseline != null) {
+      const d = remMin - baseline;
+      delta = { text: `${_signed(Math.round(d))} min`, tone: _tone(d, 5, true) };
+    }
+    metrics.push({ label: "REM", value: `${remMin} min`, delta });
+  }
+
+  if (rdy?.temperature_deviation != null) {
+    const today_v  = rdy.temperature_deviation as number;
+    const baseline = _avg("temp_dev");
+    let delta: MetricRow["delta"] = null;
+    if (baseline != null) {
+      // Closer to baseline body temp is better, so we compare absolute deviation.
+      const d = Math.abs(today_v) - Math.abs(baseline);
+      const txt = d >= 0 ? `↑ ${d.toFixed(1)}°` : `↓ ${Math.abs(d).toFixed(1)}°`;
+      delta = { text: `${txt} swing`, tone: _tone(d, 0.05, false) };
+    }
+    metrics.push({
+      label: "Temp",
+      value: `${today_v > 0 ? "+" : ""}${today_v.toFixed(1)}°C`,
+      delta,
+    });
+  }
 
   // Calorie budget calculation — prefer live AH active cal for today's budget
   const liveAct    = today.activity_live;
@@ -989,7 +1079,8 @@ export default function DashboardPage() {
 
           const hasReadiness = displayRdy != null && displayRdy > 0;
           const heroColor  = hasReadiness ? (coaches.overall?.border ?? "#22c55e") : "#d1d5db";
-          const visibleMetrics = metrics.filter(m => m.value !== "—");
+          // Metrics now self-filter (only rows with values are pushed).
+          const visibleMetrics = metrics;
 
           // Yesterday's Performance — only show when the main rings are showing TODAY's data.
           // Use today.calendar_today (Oura's timezone-safe "today") rather than the browser's
@@ -1483,20 +1574,33 @@ export default function DashboardPage() {
               </section>
             )}
 
-            {/* ── Recovery Details (preserved from the removed Tomorrow's Forecast section) ── */}
+            {/* ── Recovery Details — today's biometrics with deltas vs your 7-day baseline ── */}
             {visibleMetrics.length > 0 && (
               <section>
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">
                   Recovery Details
                 </h3>
                 <div className="grid grid-cols-3 gap-2">
-                  {visibleMetrics.map(({ label, value }) => (
-                    <div key={label} className="rounded-xl border border-gray-200 bg-white px-3 py-3 text-center">
-                      <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-1">{label}</p>
-                      <p className="text-sm font-semibold text-gray-900 leading-tight">{value}</p>
-                    </div>
-                  ))}
+                  {visibleMetrics.map(({ label, value, delta }) => {
+                    const deltaColor =
+                      !delta              ? "text-gray-300" :
+                      delta.tone === "good"    ? "text-green-600" :
+                      delta.tone === "bad"     ? "text-red-500"   :
+                                                 "text-gray-400";
+                    return (
+                      <div key={label} className="rounded-xl border border-gray-200 bg-white px-3 py-3 text-center">
+                        <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-1">{label}</p>
+                        <p className="text-sm font-semibold text-gray-900 leading-tight">{value}</p>
+                        <p className={`text-[10px] mt-1 leading-tight font-medium ${deltaColor}`}>
+                          {delta ? delta.text : "no baseline yet"}
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
+                <p className="text-[10px] text-gray-300 mt-2 italic text-right">
+                  Δ vs your last 7 days
+                </p>
               </section>
             )}
 
