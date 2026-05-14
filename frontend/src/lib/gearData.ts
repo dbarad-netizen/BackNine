@@ -28,7 +28,7 @@ const GEAR: GearCategory[] = [
         brand: "Thorne",
         description: "Supports deep sleep, muscle recovery, and stress response. One of the most bioavailable forms of magnesium.",
         price: "$34",
-        link: "https://www.amazon.com",
+        link: "https://www.amazon.com/s?k=thorne+magnesium+bisglycinate",
         badge: "Editor's Pick",
       },
       {
@@ -37,7 +37,7 @@ const GEAR: GearCategory[] = [
         brand: "Nordic Naturals",
         description: "High-potency EPA/DHA for cardiovascular health, inflammation reduction, and cognitive function.",
         price: "$40",
-        link: "https://www.amazon.com",
+        link: "https://www.amazon.com/s?k=nordic+naturals+ultimate+omega",
       },
       {
         id: "vitamin-d",
@@ -45,7 +45,7 @@ const GEAR: GearCategory[] = [
         brand: "Thorne",
         description: "Essential for immune function, bone density, and mood. K2 ensures calcium goes to bones, not arteries.",
         price: "$28",
-        link: "https://www.amazon.com",
+        link: "https://www.amazon.com/s?k=thorne+vitamin+d+k2",
       },
       {
         id: "creatine",
@@ -53,7 +53,7 @@ const GEAR: GearCategory[] = [
         brand: "Momentous",
         description: "5g daily for strength, power output, and cognitive performance. One of the most researched supplements.",
         price: "$40",
-        link: "https://www.amazon.com",
+        link: "https://www.livemomentous.com/products/creatine",
         badge: "Popular",
       },
     ],
@@ -69,7 +69,7 @@ const GEAR: GearCategory[] = [
         brand: "Oura",
         description: "The gold standard for sleep and recovery tracking. Tracks HRV, sleep stages, body temperature, and readiness.",
         price: "$349",
-        link: "https://ouraring.com",
+        link: "https://ouraring.com/product/rings/oura-ring-4",
         badge: "Editor's Pick",
       },
       {
@@ -78,7 +78,7 @@ const GEAR: GearCategory[] = [
         brand: "Manta",
         description: "100% blackout, zero eye pressure. Dramatically improves sleep quality in any environment.",
         price: "$35",
-        link: "https://www.amazon.com",
+        link: "https://www.amazon.com/s?k=manta+sleep+mask",
       },
       {
         id: "magtech",
@@ -86,7 +86,7 @@ const GEAR: GearCategory[] = [
         brand: "Natural Stacks",
         description: "Three forms of magnesium for relaxation and deep sleep. Take 30 minutes before bed.",
         price: "$39",
-        link: "https://www.amazon.com",
+        link: "https://www.amazon.com/s?k=natural+stacks+magtech",
       },
     ],
   },
@@ -101,7 +101,7 @@ const GEAR: GearCategory[] = [
         brand: "Therabody",
         description: "Percussive therapy for muscle soreness, tight spots, and post-workout recovery.",
         price: "$249",
-        link: "https://www.amazon.com",
+        link: "https://www.therabody.com/us/en-us/theragun-prime.html",
       },
       {
         id: "foam-roller",
@@ -109,7 +109,7 @@ const GEAR: GearCategory[] = [
         brand: "TriggerPoint",
         description: "Multi-density surface for targeted myofascial release. A daily recovery staple.",
         price: "$36",
-        link: "https://www.amazon.com",
+        link: "https://www.amazon.com/s?k=triggerpoint+grid+foam+roller",
         badge: "Popular",
       },
       {
@@ -118,7 +118,7 @@ const GEAR: GearCategory[] = [
         brand: "HigherDOSE",
         description: "Infrared sauna at home. Supports detox, recovery, and relaxation without a full sauna setup.",
         price: "$599",
-        link: "https://www.amazon.com",
+        link: "https://higherdose.com/products/infrared-sauna-blanket",
       },
       {
         id: "cold-plunge",
@@ -141,7 +141,7 @@ const GEAR: GearCategory[] = [
         brand: "Bowflex",
         description: "Replace 15 sets of weights. Quick-change dial system from 5 to 52.5 lbs per dumbbell.",
         price: "$429",
-        link: "https://www.amazon.com",
+        link: "https://www.amazon.com/s?k=bowflex+selecttech+552",
         badge: "Popular",
       },
       {
@@ -150,7 +150,7 @@ const GEAR: GearCategory[] = [
         brand: "Rogue",
         description: "Sturdy, permanent pull-up station for upper body and core strength. Essential home gym piece.",
         price: "$120",
-        link: "https://www.rogueeurope.eu",
+        link: "https://www.roguefitness.com/p-3-pull-up-bar",
       },
       {
         id: "kettlebell",
@@ -158,7 +158,7 @@ const GEAR: GearCategory[] = [
         brand: "Titan Fitness",
         description: "Single piece cast iron. Perfect for swings, Turkish get-ups, and full-body conditioning.",
         price: "$65",
-        link: "https://www.amazon.com",
+        link: "https://www.amazon.com/s?k=titan+competition+kettlebell",
       },
     ],
   },
@@ -181,7 +181,7 @@ const GEAR: GearCategory[] = [
         brand: "InBody",
         description: "Clinical-grade body composition analysis at home. Measures muscle mass, body fat %, and more. Syncs to Apple Health.",
         price: "$150",
-        link: "https://www.amazon.com",
+        link: "https://www.amazon.com/s?k=inbody+h20n+smart+scale",
         badge: "Editor's Pick",
       },
       {

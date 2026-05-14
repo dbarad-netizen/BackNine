@@ -152,10 +152,12 @@ export default function GearPicks({ hasOura, longevityKeys, sleepAvg7d, onJump }
       </div>
       <div className="grid grid-cols-2 gap-2">
         {picks.map(({ item, trigger, benefit }) => (
-          <button
+          <a
             key={item.id}
-            onClick={onJump}
-            className="text-left rounded-2xl border border-gray-200 bg-white p-3 hover:border-[#1B3829]/30 hover:shadow-sm transition-all flex flex-col gap-1.5"
+            href={item.link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-left rounded-2xl border border-gray-200 bg-white p-3 hover:border-[#1B3829]/30 hover:shadow-sm transition-all flex flex-col gap-1.5 no-underline"
           >
             <div className="flex items-start justify-between gap-2">
               <p className="text-[13px] font-semibold text-gray-900 leading-snug">{item.name}</p>
@@ -178,8 +180,11 @@ export default function GearPicks({ hasOura, longevityKeys, sleepAvg7d, onJump }
             {/* Benefit — what the product does */}
             <p className="text-[11px] text-gray-500 leading-snug flex-1">{benefit}</p>
 
-            <p className="text-[11px] font-semibold text-[#1B3829] mt-0.5">{item.price}</p>
-          </button>
+            <div className="flex items-center justify-between mt-0.5">
+              <p className="text-[11px] font-semibold text-[#1B3829]">{item.price}</p>
+              <span className="text-[10px] text-gray-400" title="Opens in a new tab">↗</span>
+            </div>
+          </a>
         ))}
       </div>
     </section>
