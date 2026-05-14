@@ -127,7 +127,10 @@ def accept_invite(code: str, accepter_id: str, accepter_name: str) -> dict:
     user_a_name = inviter_name if user_a == inviter_id else (accepter_name or "Friend")
     user_b_name = inviter_name if user_b == inviter_id else (accepter_name or "Friend")
 
-    # Idempotent: if already friends, just return the existing row
+    # Idempotent: if a row already exists for this pair, either it's still
+    # active (no-op) or it was soft-deleted (auto-restore by clearing
+    # deleted_at and refreshing the captured names). This is the "I removed
+    # them by accident, here's a fresh invite" recovery path.
     existing = (
         sb.table("friendships")
         .select("*")
@@ -136,12 +139,30 @@ def accept_invite(code: str, accepter_id: str, accepter_name: str) -> dict:
         .execute()
     )
     if existing.data:
-        # Still mark the invite consumed
+        existing_row = existing.data[0]
+        # Mark the invite consumed regardless of restore outcome
         sb.table("friend_invites").update({
             "used_by": accepter_id,
             "used_at": _now().isoformat(),
         }).eq("code", code).execute()
-        return existing.data[0]
+        if existing_row.get("deleted_at"):
+            # Auto-restore: clear deleted_at and refresh names from the
+            # current invite (which may have a better name than the original
+            # row captured if a user has since set their display name).
+            sb.table("friendships").update({
+                "deleted_at":   None,
+                "user_a_name":  user_a_name,
+                "user_b_name":  user_b_name,
+            }).eq("user_id_a", user_a).eq("user_id_b", user_b).execute()
+            refreshed = (
+                sb.table("friendships")
+                .select("*")
+                .eq("user_id_a", user_a)
+                .eq("user_id_b", user_b)
+                .execute()
+            )
+            return (refreshed.data or [existing_row])[0]
+        return existing_row
 
     insert_res = sb.table("friendships").insert({
         "user_id_a":    user_a,
@@ -163,10 +184,10 @@ def accept_invite(code: str, accepter_id: str, accepter_name: str) -> dict:
 # ── Friends list ──────────────────────────────────────────────────────────────
 
 def list_friends(user_id: str) -> list[dict]:
-    """Return the user's accepted friendships as a list of friend dicts."""
+    """Return the user's currently-active friendships (filters soft-deleted rows)."""
     sb = _sb()
-    a = sb.table("friendships").select("*").eq("user_id_a", user_id).execute()
-    b = sb.table("friendships").select("*").eq("user_id_b", user_id).execute()
+    a = sb.table("friendships").select("*").eq("user_id_a", user_id).is_("deleted_at", "null").execute()
+    b = sb.table("friendships").select("*").eq("user_id_b", user_id).is_("deleted_at", "null").execute()
     rows = (a.data or []) + (b.data or [])
     friends: list[dict] = []
     for r in rows:
@@ -188,11 +209,33 @@ def list_friends(user_id: str) -> list[dict]:
 
 
 def remove_friend(user_id: str, friend_user_id: str) -> dict:
-    """Delete the friendship between user_id and friend_user_id."""
+    """Soft-delete the friendship between user_id and friend_user_id.
+
+    The row is kept in place with deleted_at = now() so the friendship can
+    be recovered later (via restore_friend, or auto-restored when one side
+    accepts a fresh invite from the other).
+    """
     a, b = _ordered_pair(user_id, friend_user_id)
     sb = _sb()
-    sb.table("friendships").delete().eq("user_id_a", a).eq("user_id_b", b).execute()
+    sb.table("friendships").update({
+        "deleted_at": _now().isoformat(),
+    }).eq("user_id_a", a).eq("user_id_b", b).is_("deleted_at", "null").execute()
     return {"removed": True, "friend_user_id": friend_user_id}
+
+
+def restore_friend(user_id: str, friend_user_id: str) -> dict:
+    """Clear deleted_at on a previously soft-deleted friendship.
+
+    Used for forensic recovery (e.g. "I accidentally removed my friend and
+    can't re-invite right now"). The auto-restore path on accept_invite
+    handles the common case.
+    """
+    a, b = _ordered_pair(user_id, friend_user_id)
+    sb = _sb()
+    res = sb.table("friendships").update({
+        "deleted_at": None,
+    }).eq("user_id_a", a).eq("user_id_b", b).execute()
+    return {"restored": bool(res.data), "friend_user_id": friend_user_id}
 
 
 # ── Activity events ───────────────────────────────────────────────────────────

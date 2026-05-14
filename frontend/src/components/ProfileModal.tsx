@@ -264,6 +264,10 @@ function FriendsPanel() {
   const [accepting,     setAccepting]     = useState(false);
   const [acceptMsg,     setAcceptMsg]     = useState<{ ok: boolean; text: string } | null>(null);
 
+  // Tracks which friend the X is "armed" on. A second tap on the same X
+  // within 3 seconds actually removes; otherwise the arm state resets.
+  const [removeArmed,   setRemoveArmed]   = useState<string | null>(null);
+
   const loadFriends = useCallback(async () => {
     setLoading(true);
     try {
@@ -317,6 +321,17 @@ function FriendsPanel() {
   };
 
   const handleRemove = async (friend_user_id: string) => {
+    // Two-tap confirmation. First tap arms the button; second tap (within 3s)
+    // actually deletes. Prevents accidental friend removal — a single
+    // misclick used to wipe the friendship instantly.
+    if (removeArmed !== friend_user_id) {
+      setRemoveArmed(friend_user_id);
+      setTimeout(() => {
+        setRemoveArmed(prev => prev === friend_user_id ? null : prev);
+      }, 3000);
+      return;
+    }
+    setRemoveArmed(null);
     try {
       await api.friends.remove(friend_user_id);
       setFriends(prev => prev.filter(f => f.user_id !== friend_user_id));
@@ -339,23 +354,30 @@ function FriendsPanel() {
           <p className="text-xs text-gray-400 italic">No friends yet — invite one below.</p>
         ) : (
           <div className="space-y-1.5">
-            {friends.map(f => (
-              <div key={f.user_id} className="flex items-center justify-between rounded-xl bg-gray-50 border border-gray-100 px-3 py-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="w-7 h-7 rounded-full bg-[#1B3829] text-white text-xs font-semibold flex items-center justify-center shrink-0">
-                    {(f.name || "?").slice(0, 1).toUpperCase()}
-                  </span>
-                  <p className="text-sm font-medium text-gray-900 truncate">{f.name}</p>
+            {friends.map(f => {
+              const armed = removeArmed === f.user_id;
+              return (
+                <div key={f.user_id} className="flex items-center justify-between rounded-xl bg-gray-50 border border-gray-100 px-3 py-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-7 h-7 rounded-full bg-[#1B3829] text-white text-xs font-semibold flex items-center justify-center shrink-0">
+                      {(f.name || "?").slice(0, 1).toUpperCase()}
+                    </span>
+                    <p className="text-sm font-medium text-gray-900 truncate">{f.name}</p>
+                  </div>
+                  <button
+                    onClick={() => handleRemove(f.user_id)}
+                    className={`text-xs px-2 py-1 rounded-md transition-colors leading-none ${
+                      armed
+                        ? "bg-red-500 hover:bg-red-600 text-white font-semibold"
+                        : "text-gray-300 hover:text-red-400 text-base"
+                    }`}
+                    title={armed ? "Tap again to confirm removal" : "Remove friend"}
+                  >
+                    {armed ? "Confirm?" : "✕"}
+                  </button>
                 </div>
-                <button
-                  onClick={() => handleRemove(f.user_id)}
-                  className="text-gray-300 hover:text-red-400 transition-colors text-base leading-none"
-                  title="Remove friend"
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

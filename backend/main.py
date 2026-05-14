@@ -1999,11 +1999,27 @@ def list_friends(request: Request):
 
 @app.delete("/api/friends/{friend_user_id}")
 def remove_friend(friend_user_id: str, request: Request):
-    """Remove an existing friendship."""
+    """Soft-remove an existing friendship (sets deleted_at; recoverable)."""
     session = _require_session(request)
     user_id = session["user_id"]
     try:
         return frd.remove_friend(user_id, friend_user_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/friends/restore/{friend_user_id}")
+def restore_friend(friend_user_id: str, request: Request):
+    """Restore a soft-deleted friendship by clearing deleted_at.
+
+    Useful when the auto-restore-on-re-accept path isn't available (e.g.,
+    your friend can't re-invite right now). Idempotent — restoring an
+    already-active friendship is a no-op.
+    """
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        return frd.restore_friend(user_id, friend_user_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
