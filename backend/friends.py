@@ -58,8 +58,8 @@ def _now() -> datetime:
 
 def create_invite(inviter_id: str, inviter_name: str) -> dict:
     """Create a one-time invite code for inviter_id to share."""
-    if not inviter_name:
-        inviter_name = "A BackNine friend"
+    if not inviter_name or inviter_name.strip().lower() in {"backnine user", "a backnine friend", ""}:
+        inviter_name = "Friend"
 
     sb = _sb()
     code = _short_code()
@@ -183,27 +183,61 @@ def accept_invite(code: str, accepter_id: str, accepter_name: str) -> dict:
 
 # ── Friends list ──────────────────────────────────────────────────────────────
 
+def _names_for(sb, user_ids: list[str]) -> dict[str, str]:
+    """Look up the live display name for each user_id from user_profiles.
+
+    Returns a map of user_id -> name. Users missing from user_profiles or
+    with a null/empty `name` column are simply absent from the map; callers
+    should fall back to the denormalized name on the source row.
+    """
+    if not user_ids:
+        return {}
+    try:
+        res = sb.table("user_profiles").select("user_id, name").in_("user_id", user_ids).execute()
+    except Exception:
+        return {}
+    out: dict[str, str] = {}
+    for r in (res.data or []):
+        n = (r.get("name") or "").strip()
+        if n:
+            out[r["user_id"]] = n
+    return out
+
+
 def list_friends(user_id: str) -> list[dict]:
-    """Return the user's currently-active friendships (filters soft-deleted rows)."""
+    """Return the user's currently-active friendships (filters soft-deleted rows).
+
+    The friend's display name is resolved live from user_profiles every read,
+    so updates to a friend's profile name surface immediately in your list
+    instead of waiting for the denormalized cache to be refreshed. Falls back
+    to the cached row name, then to "Friend".
+    """
     sb = _sb()
     a = sb.table("friendships").select("*").eq("user_id_a", user_id).is_("deleted_at", "null").execute()
     b = sb.table("friendships").select("*").eq("user_id_b", user_id).is_("deleted_at", "null").execute()
     rows = (a.data or []) + (b.data or [])
+    # Single IN-query for all friend names rather than N+1 individual lookups.
+    friend_ids = [
+        (r["user_id_b"] if r["user_id_a"] == user_id else r["user_id_a"])
+        for r in rows
+    ]
+    live_names = _names_for(sb, friend_ids)
+
     friends: list[dict] = []
     for r in rows:
         if r["user_id_a"] == user_id:
-            friends.append({
-                "user_id":   r["user_id_b"],
-                "name":      r.get("user_b_name") or "Friend",
-                "since":     r.get("created_at"),
-            })
+            fid    = r["user_id_b"]
+            cached = r.get("user_b_name")
         else:
-            friends.append({
-                "user_id":   r["user_id_a"],
-                "name":      r.get("user_a_name") or "Friend",
-                "since":     r.get("created_at"),
-            })
-    # newest first
+            fid    = r["user_id_a"]
+            cached = r.get("user_a_name")
+        # Prefer the live profile name; ignore stale "BackNine user" cached values.
+        name = live_names.get(fid) or (cached if cached and cached != "BackNine user" else None) or "Friend"
+        friends.append({
+            "user_id": fid,
+            "name":    name,
+            "since":   r.get("created_at"),
+        })
     friends.sort(key=lambda f: f.get("since") or "", reverse=True)
     return friends
 
@@ -270,7 +304,7 @@ def record_event(
         sb = _sb()
         row = {
             "user_id":    user_id,
-            "user_name":  user_name or "BackNine user",
+            "user_name":  user_name or "Friend",
             "event_type": event_type,
             "payload":    _trim_payload(payload or {}),
         }
@@ -306,6 +340,11 @@ def list_friend_events(user_id: str, limit: int = 30) -> list[dict]:
     if not rows:
         return []
 
+    # Live-join author names so a recent profile rename shows up immediately
+    # in the feed instead of waiting for the denormalized fan-out.
+    author_ids = list({r["user_id"] for r in rows})
+    live_names = _names_for(sb, author_ids)
+
     # Fetch reactions for these events in one round-trip
     event_ids = [r["id"] for r in rows]
     react_res = (
@@ -329,10 +368,19 @@ def list_friend_events(user_id: str, limit: int = 30) -> list[dict]:
     out: list[dict] = []
     for r in rows:
         agg = react_by_event.get(r["id"], {})
+        # Prefer live profile name; ignore stale "BackNine user" cached value.
+        cached_name = r.get("user_name")
+        live_name = live_names.get(r["user_id"])
+        author_name = (
+            live_name
+            or (cached_name if cached_name and cached_name != "BackNine user" else None)
+            or "Friend"
+        )
         out.append({
             **r,
+            "user_name": author_name,
             "is_me":     r["user_id"] == user_id,
-            "summary":   _summarize_event(r),
+            "summary":   _summarize_event({**r, "user_name": author_name}),
             "reactions": [
                 {"emoji": e, "count": v["count"], "i_reacted": v["i_reacted"]}
                 for e, v in agg.items()

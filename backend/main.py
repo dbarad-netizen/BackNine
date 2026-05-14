@@ -1950,12 +1950,18 @@ async def get_morning_briefing(request: Request, refresh: bool = False):
 # ── Friends ───────────────────────────────────────────────────────────────────
 
 def _display_name_for(user_id: str) -> str:
-    """Pull the user's display name from their profile, falling back to a default."""
+    """Pull the user's display name from their profile, falling back to a default.
+
+    The fallback used to be "BackNine user", which surfaced awkwardly in friend
+    lists and the Pulse feed when a user hadn't filled in their profile yet.
+    "Friend" reads more naturally; read paths (list_friends, list_friend_events)
+    also live-join against user_profiles so a name set later surfaces immediately.
+    """
     try:
         prof = _get_profile(user_id)
-        return prof.get("name") or "BackNine user"
+        return (prof.get("name") or "").strip() or "Friend"
     except Exception:
-        return "BackNine user"
+        return "Friend"
 
 
 @app.post("/api/friends/invite")
