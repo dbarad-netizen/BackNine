@@ -317,7 +317,7 @@ def _get_session(request: Request) -> Optional[dict]:
     token = request.cookies.get(_session_cookie_name())
     if token:
         return _decode_session(token)
-    # Fall back to Authorization header (cross-origin: Netlify → Render)
+    # Fall back to Authorization header (cross-origin: Vercel → Render)
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Bearer "):
         return _decode_session(auth[7:])
@@ -605,7 +605,7 @@ async def oura_auth_callback(
         except Exception:
             pass
 
-        # Pass token in URL for cross-origin compatibility (Netlify + Render)
+        # Pass token in URL for cross-origin compatibility (Vercel + Render)
         jwt_token = _encode_session(session_data)
         redirect = RedirectResponse(f"{FRONTEND_URL}/dashboard?token={jwt_token}")
         _set_session_cookie(redirect, session_data)  # also set cookie as fallback
