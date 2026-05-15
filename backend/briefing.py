@@ -15,7 +15,12 @@ import os
 from typing import Optional
 
 
-def _build_system_prompt(health_context: dict, profile: dict, prediction_status: Optional[dict]) -> str:
+def _build_system_prompt(
+    health_context: dict,
+    profile: dict,
+    prediction_status: Optional[dict],
+    yesterday_mood: Optional[str] = None,
+) -> str:
     """Build the system prompt for the morning briefing.
 
     Args mirror chat._build_system_prompt with one addition:
@@ -109,6 +114,22 @@ def _build_system_prompt(health_context: dict, profile: dict, prediction_status:
         parts.append("\n=== TODAY'S CODED FOCUS ITEMS ===")
         parts.append(f"  {coaching['short_term']}")
 
+    if yesterday_mood:
+        # Map our mood codes to natural language Coach Al can echo.
+        mood_descriptors = {
+            "great": "great",
+            "okay":  "okay",
+            "tired": "tired",
+            "off":   "off / not themselves",
+        }
+        descriptor = mood_descriptors.get(yesterday_mood, yesterday_mood)
+        parts.append("\n=== YESTERDAY'S CHECK-IN ===")
+        parts.append(f"  • The user reported feeling {descriptor} yesterday.")
+        parts.append(
+            "  (You MAY reference this in paragraph 1 if today's metrics either "
+            "confirm or contrast with how they felt. Only mention if it adds insight.)"
+        )
+
     if prediction_status:
         streak = prediction_status.get("streak")
         last_pred = prediction_status.get("last_predicted")
@@ -135,6 +156,7 @@ def generate(
     health_context: dict,
     profile: dict,
     prediction_status: Optional[dict] = None,
+    yesterday_mood: Optional[str] = None,
 ) -> str:
     """Generate today's morning briefing.
 
@@ -154,7 +176,7 @@ def generate(
         raise RuntimeError("anthropic package not installed — run: pip install anthropic")
 
     client = anthropic.Anthropic(api_key=api_key)
-    system = _build_system_prompt(health_context, profile, prediction_status)
+    system = _build_system_prompt(health_context, profile, prediction_status, yesterday_mood)
 
     # The "user" turn is a meta-instruction — Claude treats it as the prompt to
     # respond to. We don't have anything user-typed; this is a generation task.

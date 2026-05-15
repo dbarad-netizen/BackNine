@@ -79,6 +79,124 @@ def _get_profile(user_id: str) -> dict:
         return {}
 
 
+# ── Daily streak (derived from daily_briefings) ───────────────────────────────
+#
+# A row in daily_briefings exists for every day the user has opened BackNine
+# (the briefing endpoint writes one on first dashboard load each day). Counting
+# consecutive dates from today backwards gives us the user's app-open streak
+# for free — no new table required.
+
+def _compute_app_streak(user_id: str, today_str: str) -> int:
+    """Return the user's consecutive-days-opened streak ending today.
+
+    A day is 'opened' if there's a daily_briefings row for that date. We walk
+    backwards from `today_str` until we hit the first gap; that gap's count
+    is the streak. If the user hasn't opened today yet (no briefing row),
+    the streak still includes yesterday and back, since today is in progress.
+    """
+    db = get_supabase()
+    if not db:
+        return 0
+    try:
+        # Fetch dates from the last ~100 days (more than enough to bound
+        # any sane streak, while capping the read).
+        cutoff = (datetime.strptime(today_str, "%Y-%m-%d") - timedelta(days=100)).strftime("%Y-%m-%d")
+        res = (
+            db.table("daily_briefings")
+            .select("date")
+            .eq("user_id", user_id)
+            .gte("date", cutoff)
+            .order("date", desc=True)
+            .execute()
+        )
+    except Exception:
+        return 0
+    dates = {str(r["date"]) for r in (res.data or [])}
+    if not dates:
+        return 0
+    streak = 0
+    # Walk from today backwards. If today isn't in the set, start from yesterday
+    # so an in-progress day doesn't reset the streak.
+    cursor = datetime.strptime(today_str, "%Y-%m-%d").date()
+    if cursor.isoformat() not in dates:
+        cursor -= timedelta(days=1)
+    while cursor.isoformat() in dates:
+        streak += 1
+        cursor -= timedelta(days=1)
+    return streak
+
+
+# ── Daily check-in (mood / energy) ────────────────────────────────────────────
+
+ALLOWED_MOODS = {"great", "okay", "tired", "off"}
+
+
+def _get_checkin(user_id: str, date_str: str) -> Optional[dict]:
+    """Return the user's check-in for a specific date, or None."""
+    db = get_supabase()
+    if not db:
+        return None
+    try:
+        res = (
+            db.table("daily_checkins")
+            .select("mood, created_at, date")
+            .eq("user_id", user_id)
+            .eq("date", date_str)
+            .limit(1)
+            .execute()
+        )
+        return (res.data or [None])[0]
+    except Exception:
+        return None
+
+
+@app.get("/api/checkin/today")
+def get_checkin_today(request: Request):
+    """Return today's mood if logged, plus yesterday's for context display."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        from backports.zoneinfo import ZoneInfo  # type: ignore
+    today = datetime.now(tz=ZoneInfo("America/New_York")).date()
+    yesterday = today - timedelta(days=1)
+    return {
+        "today":     _get_checkin(user_id, today.isoformat()),
+        "yesterday": _get_checkin(user_id, yesterday.isoformat()),
+    }
+
+
+@app.post("/api/checkin")
+async def save_checkin(request: Request):
+    """Upsert today's mood. Body: { mood }. mood ∈ great|okay|tired|off."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    body = await request.json()
+    mood = (body.get("mood") or "").strip().lower()
+    if mood not in ALLOWED_MOODS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"mood must be one of {sorted(ALLOWED_MOODS)}",
+        )
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        from backports.zoneinfo import ZoneInfo  # type: ignore
+    today_str = datetime.now(tz=ZoneInfo("America/New_York")).date().isoformat()
+    db = get_supabase()
+    if not db:
+        raise HTTPException(status_code=503, detail="storage unavailable")
+    try:
+        db.table("daily_checkins").upsert(
+            {"user_id": user_id, "date": today_str, "mood": mood},
+            on_conflict="user_id,date",
+        ).execute()
+        return {"ok": True, "mood": mood, "date": today_str}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 def _resolve_oura_anchor(user_id: str, rm: dict, slm: dict, am: dict, smm: dict) -> tuple[str, dict, dict, dict, dict]:
     """Resolve a timezone-safe Oura anchor and pull today's row from each stream.
 
@@ -1878,6 +1996,7 @@ async def get_morning_briefing(request: Request, refresh: bool = False):
                     "prediction_accuracy": row.get("prediction_accuracy"),
                     "generated_at":        row.get("generated_at"),
                     "cached":              True,
+                    "app_streak":          _compute_app_streak(user_id, today_str),
                 }
         except Exception:
             pass  # fall through to regenerate
@@ -2030,9 +2149,24 @@ async def get_morning_briefing(request: Request, refresh: bool = False):
         except Exception:
             continue
 
+    # Pull yesterday's mood check-in (if any) so Coach Al can reference how
+    # the user actually felt yesterday vs what their watch said.
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        from backports.zoneinfo import ZoneInfo  # type: ignore
+    _y = (datetime.strptime(today_str, "%Y-%m-%d").date() - timedelta(days=1)).isoformat()
+    yesterday_checkin = _get_checkin(user_id, _y)
+    yesterday_mood = (yesterday_checkin or {}).get("mood")
+
     # Generate the narrative
     try:
-        narrative = brf.generate(health_context, profile, prediction_status)
+        narrative = brf.generate(
+            health_context,
+            profile,
+            prediction_status,
+            yesterday_mood=yesterday_mood,
+        )
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
@@ -2061,6 +2195,7 @@ async def get_morning_briefing(request: Request, refresh: bool = False):
         "prediction_accuracy": prediction_status.get("accuracy_pct"),
         "generated_at":        None,
         "cached":              False,
+        "app_streak":          _compute_app_streak(user_id, today_str),
     }
 
 

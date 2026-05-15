@@ -605,6 +605,17 @@ export const api = {
     return request(`/api/briefing/today${refresh ? "?refresh=1" : ""}`);
   },
 
+  // ── Daily check-in ────────────────────────────────────────────────────────
+  getCheckinToday(): Promise<CheckinSnapshot> {
+    return request("/api/checkin/today");
+  },
+  postCheckin(mood: Mood): Promise<{ ok: boolean; mood: Mood; date: string }> {
+    return request("/api/checkin", {
+      method: "POST",
+      body: JSON.stringify({ mood }),
+    });
+  },
+
   // ── Friends ────────────────────────────────────────────────────────────────
   friends: {
     invite(): Promise<FriendInvite> {
@@ -651,6 +662,21 @@ export interface BriefingResponse {
   prediction_accuracy: number | null;
   generated_at:        string | null;
   cached:              boolean;
+  app_streak:          number;     // consecutive days the user has opened BackNine
+}
+
+// ── Daily check-in types ──────────────────────────────────────────────────────
+export type Mood = "great" | "okay" | "tired" | "off";
+
+export interface DailyCheckin {
+  mood:       Mood;
+  date:       string;
+  created_at: string;
+}
+
+export interface CheckinSnapshot {
+  today:     DailyCheckin | null;
+  yesterday: DailyCheckin | null;
 }
 
 // ── Coach Al observations ────────────────────────────────────────────────────

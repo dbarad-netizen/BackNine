@@ -9,8 +9,15 @@
  */
 
 import { useEffect, useState } from "react";
-import { api, type BriefingResponse } from "@/lib/api";
+import { api, type BriefingResponse, type Mood } from "@/lib/api";
 import CoachAlAvatar from "@/components/CoachAlAvatar";
+
+const MOODS: { value: Mood; emoji: string; label: string }[] = [
+  { value: "great", emoji: "😊", label: "Great"  },
+  { value: "okay",  emoji: "😐", label: "Okay"   },
+  { value: "tired", emoji: "😴", label: "Tired"  },
+  { value: "off",   emoji: "😣", label: "Off"    },
+];
 
 interface Props {
   /** Optional callback to open the main Coach Al chat drawer. */
@@ -23,15 +30,43 @@ export default function MorningBriefing({ onOpenChat }: Props) {
   const [error,   setError]   = useState<string | null>(null);
   const [regenerating, setRegenerating] = useState(false);
 
+  // Today's check-in. null = not yet loaded, undefined = loaded but not logged.
+  const [todayMood, setTodayMood] = useState<Mood | null | undefined>(null);
+  const [savingMood, setSavingMood] = useState(false);
+  const [editingMood, setEditingMood] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    api.briefing()
-      .then(res => { if (!cancelled) setData(res); })
-      .catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : "Briefing unavailable"); })
+    Promise.allSettled([api.briefing(), api.getCheckinToday()])
+      .then(([brRes, ckRes]) => {
+        if (cancelled) return;
+        if (brRes.status === "fulfilled") setData(brRes.value);
+        else setError(brRes.reason instanceof Error ? brRes.reason.message : "Briefing unavailable");
+        if (ckRes.status === "fulfilled") {
+          setTodayMood(ckRes.value.today?.mood ?? undefined);
+        } else {
+          setTodayMood(undefined);
+        }
+      })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
+
+  const handleMoodTap = async (mood: Mood) => {
+    if (savingMood) return;
+    setSavingMood(true);
+    const prev = todayMood;
+    setTodayMood(mood);          // optimistic
+    setEditingMood(false);
+    try {
+      await api.postCheckin(mood);
+    } catch {
+      setTodayMood(prev);        // rollback
+    } finally {
+      setSavingMood(false);
+    }
+  };
 
   // Force-regenerate using ?refresh=1. Useful when the cached briefing was
   // generated with stale data (e.g. before today's Oura sync finished) or
@@ -80,8 +115,12 @@ export default function MorningBriefing({ onOpenChat }: Props) {
     .map(p => p.trim())
     .filter(Boolean);
 
-  const streak = data.prediction_streak ?? 0;
-  const showStreak = streak >= 3;
+  const predictionStreak = data.prediction_streak ?? 0;
+  const showPredictionStreak = predictionStreak >= 3;
+  const appStreak = data.app_streak ?? 0;
+  const showAppStreak = appStreak >= 2;
+  const moodLogged = todayMood !== undefined && todayMood !== null;
+  const showCheckin = !moodLogged || editingMood;
 
   return (
     <section
@@ -91,11 +130,20 @@ export default function MorningBriefing({ onOpenChat }: Props) {
       <div className="px-5 pt-5 pb-4 flex items-start gap-4">
         <CoachAlAvatar size={52} className="rounded-full ring-2 ring-white/30 shrink-0" />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
             <p className="text-[10px] text-white/60 uppercase tracking-widest font-semibold">
               Coach Al · Today&apos;s Briefing
             </p>
-            {showStreak && (
+            {showAppStreak && (
+              <span
+                className="text-[10px] text-white bg-orange-500/40 backdrop-blur-sm rounded-full px-2 py-0.5 font-semibold flex items-center gap-1 border border-orange-300/30"
+                title={`You've opened BackNine ${appStreak} days in a row`}
+              >
+                <span>🔥</span>
+                <span>{appStreak}-day streak</span>
+              </span>
+            )}
+            {showPredictionStreak && (
               <span
                 className="text-[10px] text-white bg-white/15 backdrop-blur-sm rounded-full px-2 py-0.5 font-semibold flex items-center gap-1"
                 title={
@@ -104,11 +152,54 @@ export default function MorningBriefing({ onOpenChat }: Props) {
                     : "Daily prediction streak"
                 }
               >
-                <span>🔥</span>
-                <span>{streak}-day streak</span>
+                <span>🎯</span>
+                <span>{predictionStreak}d predicting</span>
               </span>
             )}
           </div>
+
+          {/* Daily check-in — one tap, becomes context for tomorrow's briefing */}
+          {showCheckin ? (
+            <div className="mb-3 rounded-xl bg-white/10 border border-white/15 px-3 py-2.5">
+              <p className="text-[11px] text-white/70 mb-1.5">How are you feeling this morning?</p>
+              <div className="flex gap-1.5">
+                {MOODS.map(m => (
+                  <button
+                    key={m.value}
+                    onClick={() => handleMoodTap(m.value)}
+                    disabled={savingMood}
+                    className={`flex-1 rounded-lg py-2 transition-all flex flex-col items-center gap-0.5 ${
+                      todayMood === m.value
+                        ? "bg-white/30 ring-2 ring-white/50"
+                        : "bg-white/5 hover:bg-white/15"
+                    } disabled:opacity-50`}
+                    title={m.label}
+                  >
+                    <span className="text-lg leading-none">{m.emoji}</span>
+                    <span className="text-[9px] text-white/70 font-medium uppercase tracking-wide">{m.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : moodLogged && (
+            <div className="mb-3 flex items-center gap-2 text-[11px] text-white/60">
+              <span>
+                ✓ You said{" "}
+                <span className="text-white font-semibold">
+                  {MOODS.find(m => m.value === todayMood)?.emoji}{" "}
+                  {MOODS.find(m => m.value === todayMood)?.label.toLowerCase()}
+                </span>{" "}
+                today
+              </span>
+              <button
+                onClick={() => setEditingMood(true)}
+                className="text-white/50 hover:text-white/90 underline-offset-2 hover:underline"
+              >
+                change
+              </button>
+            </div>
+          )}
+
           {paragraphs.map((p, i) => (
             <p
               key={i}
