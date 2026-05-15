@@ -1091,15 +1091,24 @@ async def get_dashboard(request: Request, days: int = 120):
         _profile = _get_profile(user_id)
         _ah_sum  = ah.get_summary(user_id, days=30)
 
-        # Body fat: Apple Health → weight_entries (Body Composition card)
-        _ah_body_fat = _ah_sum.get("today", {}).get("body_fat_percentage") or _ah_sum.get("latest_body_fat_pct")
-        if _ah_body_fat is None:
-            try:
-                _we = nutr.get_weight_entries(user_id)
-                _we_with_bf = [e for e in reversed(_we) if e.get("body_fat_pct") is not None]
-                _ah_body_fat = _we_with_bf[0]["body_fat_pct"] if _we_with_bf else None
-            except Exception:
-                _ah_body_fat = None
+        # Body fat: most recent manual weight log (BackNine Body & Weight card)
+        # wins over Apple Health. Same precedence model as VO2 max — when a user
+        # logs a fresh measurement in BackNine, that's a deliberate action and
+        # should immediately update the Longevity Score instead of being shadowed
+        # by an older AH reading from a scale sync.
+        _we_body_fat: Optional[float] = None
+        try:
+            _we = nutr.get_weight_entries(user_id)
+            _we_with_bf = [e for e in reversed(_we) if e.get("body_fat_pct") is not None]
+            _we_body_fat = _we_with_bf[0]["body_fat_pct"] if _we_with_bf else None
+        except Exception:
+            _we_body_fat = None
+
+        _ah_body_fat = (
+            _we_body_fat
+            or _ah_sum.get("today", {}).get("body_fat_percentage")
+            or _ah_sum.get("latest_body_fat_pct")
+        )
 
         # VO2 Max: manual profile entry → Apple Health → Oura cardiovascular_age.
         # Manual override wins so the "edit" button on the Longevity card actually

@@ -131,9 +131,11 @@ export default function PulseFeed({ onInviteFriend }: Props) {
   const [hasFriends, setHasFriends] = useState<boolean | null>(null); // null = unknown
   const [refreshing, setRefreshing] = useState(false);
 
-  // Which card's comment thread is currently expanded. One at a time keeps
-  // the horizontal scroll readable.
-  const [openComments, setOpenComments] = useState<string | null>(null);
+  // Set of event IDs whose comment thread is currently expanded. Events with
+  // at least one comment auto-expand on load so existing conversations are
+  // visible without an extra tap; cards with zero comments stay collapsed
+  // until the user opens them.
+  const [openComments, setOpenComments] = useState<Set<string>>(new Set());
 
   const load = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true);
@@ -143,9 +145,19 @@ export default function PulseFeed({ onInviteFriend }: Props) {
         api.friends.events(30),
         api.friends.list(),
       ]);
-      setEvents(evRes.events.filter(e => !e.is_me));
+      const visible = evRes.events.filter(e => !e.is_me);
+      setEvents(visible);
       setFriends(frRes.friends);
       setHasFriends(frRes.friends.length > 0);
+      // Auto-expand any card that already has comments — surface the
+      // conversation by default rather than hiding it behind a 💬 tap.
+      setOpenComments(prev => {
+        const next = new Set(prev);
+        for (const ev of visible) {
+          if (ev.comment_count > 0) next.add(ev.id);
+        }
+        return next;
+      });
     } catch {
       setEvents([]);
       setFriends([]);
@@ -155,6 +167,15 @@ export default function PulseFeed({ onInviteFriend }: Props) {
       setRefreshing(false);
     }
   }, []);
+
+  const toggleCommentThread = (eventId: string) => {
+    setOpenComments(prev => {
+      const next = new Set(prev);
+      if (next.has(eventId)) next.delete(eventId);
+      else next.add(eventId);
+      return next;
+    });
+  };
 
   useEffect(() => { load(false); }, [load]);
 
@@ -384,13 +405,13 @@ export default function PulseFeed({ onInviteFriend }: Props) {
 
               {/* Comment toggle */}
               <button
-                onClick={() => setOpenComments(prev => prev === e.id ? null : e.id)}
+                onClick={() => toggleCommentThread(e.id)}
                 className={`text-[11px] rounded-full px-2 py-0.5 transition-all border ml-auto ${
-                  openComments === e.id
+                  openComments.has(e.id)
                     ? "bg-[#1B3829]/10 border-[#1B3829]/30 text-[#1B3829]"
                     : "bg-gray-50 border-gray-200 text-gray-500 hover:border-gray-400"
                 }`}
-                title={openComments === e.id ? "Hide comments" : "Show comments"}
+                title={openComments.has(e.id) ? "Hide comments" : "Show comments"}
               >
                 💬
                 {e.comment_count > 0 && (
@@ -400,7 +421,7 @@ export default function PulseFeed({ onInviteFriend }: Props) {
             </div>
 
             {/* Expandable comment thread */}
-            {openComments === e.id && (
+            {openComments.has(e.id) && (
               <CommentThread
                 eventId={e.id}
                 onCountChange={(n) => {
