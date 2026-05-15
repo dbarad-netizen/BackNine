@@ -13,10 +13,11 @@ import { api, type BriefingResponse, type Mood } from "@/lib/api";
 import CoachAlAvatar from "@/components/CoachAlAvatar";
 
 const MOODS: { value: Mood; emoji: string; label: string }[] = [
-  { value: "great", emoji: "😊", label: "Great"  },
-  { value: "okay",  emoji: "😐", label: "Okay"   },
-  { value: "tired", emoji: "😴", label: "Tired"  },
-  { value: "off",   emoji: "😣", label: "Off"    },
+  { value: "great", emoji: "😊", label: "Great" },
+  { value: "good",  emoji: "🙂", label: "Good"  },
+  { value: "okay",  emoji: "😐", label: "Okay"  },
+  { value: "tired", emoji: "😴", label: "Tired" },
+  { value: "off",   emoji: "😣", label: "Off"   },
 ];
 
 interface Props {
@@ -33,7 +34,8 @@ export default function MorningBriefing({ onOpenChat }: Props) {
   // Today's check-in. null = not yet loaded, undefined = loaded but not logged.
   const [todayMood, setTodayMood] = useState<Mood | null | undefined>(null);
   const [savingMood, setSavingMood] = useState(false);
-  const [editingMood, setEditingMood] = useState(false);
+  // 'saved' shows ✓ briefly; 'error' shows a retry hint. Cleared after ~2s.
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle");
 
   useEffect(() => {
     let cancelled = false;
@@ -56,13 +58,19 @@ export default function MorningBriefing({ onOpenChat }: Props) {
   const handleMoodTap = async (mood: Mood) => {
     if (savingMood) return;
     setSavingMood(true);
+    setSaveStatus("idle");
     const prev = todayMood;
-    setTodayMood(mood);          // optimistic
-    setEditingMood(false);
+    // Optimistic local update so the highlighted emoji shows immediately.
+    setTodayMood(mood);
     try {
       await api.postCheckin(mood);
+      setSaveStatus("saved");
+      // Clear the "✓ Saved" indicator after a beat so it doesn't linger.
+      setTimeout(() => setSaveStatus(prevStatus => prevStatus === "saved" ? "idle" : prevStatus), 2000);
     } catch {
-      setTodayMood(prev);        // rollback
+      // Roll back the optimistic selection and surface a retry hint.
+      setTodayMood(prev);
+      setSaveStatus("error");
     } finally {
       setSavingMood(false);
     }
@@ -120,7 +128,6 @@ export default function MorningBriefing({ onOpenChat }: Props) {
   const appStreak = data.app_streak ?? 0;
   const showAppStreak = appStreak >= 2;
   const moodLogged = todayMood !== undefined && todayMood !== null;
-  const showCheckin = !moodLogged || editingMood;
 
   return (
     <section
@@ -158,47 +165,47 @@ export default function MorningBriefing({ onOpenChat }: Props) {
             )}
           </div>
 
-          {/* Daily check-in — one tap, becomes context for tomorrow's briefing */}
-          {showCheckin ? (
-            <div className="mb-3 rounded-xl bg-white/10 border border-white/15 px-3 py-2.5">
-              <p className="text-[11px] text-white/70 mb-1.5">How are you feeling this morning?</p>
-              <div className="flex gap-1.5">
-                {MOODS.map(m => (
+          {/* Daily check-in — always visible. Selected emoji stays highlighted
+              with a strong contrast pill so the tap registers clearly.
+              Tapping a different one updates the selection in place. */}
+          <div className="mb-3 rounded-xl bg-white/10 border border-white/15 px-3 py-2.5">
+            <p className="text-[11px] text-white/70 mb-1.5">
+              {moodLogged ? "How you're feeling today" : "How are you feeling this morning?"}
+            </p>
+            <div className="flex gap-1.5">
+              {MOODS.map(m => {
+                const selected = todayMood === m.value;
+                return (
                   <button
                     key={m.value}
                     onClick={() => handleMoodTap(m.value)}
                     disabled={savingMood}
-                    className={`flex-1 rounded-lg py-2 transition-all flex flex-col items-center gap-0.5 ${
-                      todayMood === m.value
-                        ? "bg-white/30 ring-2 ring-white/50"
-                        : "bg-white/5 hover:bg-white/15"
-                    } disabled:opacity-50`}
+                    className={`flex-1 rounded-lg py-2 transition-all flex flex-col items-center gap-0.5 disabled:opacity-60 ${
+                      selected
+                        ? "bg-white text-[#1B3829] ring-2 ring-white shadow-lg scale-105"
+                        : "bg-white/5 hover:bg-white/15 active:scale-95"
+                    }`}
                     title={m.label}
                   >
                     <span className="text-lg leading-none">{m.emoji}</span>
-                    <span className="text-[9px] text-white/70 font-medium uppercase tracking-wide">{m.label}</span>
+                    <span className={`text-[9px] font-semibold uppercase tracking-wide ${
+                      selected ? "text-[#1B3829]" : "text-white/70"
+                    }`}>
+                      {m.label}
+                    </span>
                   </button>
-                ))}
-              </div>
+                );
+              })}
             </div>
-          ) : moodLogged && (
-            <div className="mb-3 flex items-center gap-2 text-[11px] text-white/60">
-              <span>
-                ✓ You said{" "}
-                <span className="text-white font-semibold">
-                  {MOODS.find(m => m.value === todayMood)?.emoji}{" "}
-                  {MOODS.find(m => m.value === todayMood)?.label.toLowerCase()}
-                </span>{" "}
-                today
-              </span>
-              <button
-                onClick={() => setEditingMood(true)}
-                className="text-white/50 hover:text-white/90 underline-offset-2 hover:underline"
-              >
-                change
-              </button>
-            </div>
-          )}
+            {/* Save status — small confirmation/error line below the row */}
+            <p className="text-[10px] text-white/60 mt-1.5 min-h-[1em]">
+              {savingMood && "Saving…"}
+              {!savingMood && saveStatus === "saved" && "✓ Saved · Coach Al will use this in tomorrow's note"}
+              {!savingMood && saveStatus === "error" && (
+                <span className="text-red-200">Couldn&apos;t save — tap again to retry</span>
+              )}
+            </p>
+          </div>
 
           {paragraphs.map((p, i) => (
             <p

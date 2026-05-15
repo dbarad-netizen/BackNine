@@ -118,6 +118,7 @@ def _build_system_prompt(
         # Map our mood codes to natural language Coach Al can echo.
         mood_descriptors = {
             "great": "great",
+            "good":  "good",
             "okay":  "okay",
             "tired": "tired",
             "off":   "off / not themselves",

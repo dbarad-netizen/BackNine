@@ -666,7 +666,7 @@ export interface BriefingResponse {
 }
 
 // ── Daily check-in types ──────────────────────────────────────────────────────
-export type Mood = "great" | "okay" | "tired" | "off";
+export type Mood = "great" | "good" | "okay" | "tired" | "off";
 
 export interface DailyCheckin {
   mood:       Mood;

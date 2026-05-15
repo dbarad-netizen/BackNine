@@ -128,7 +128,7 @@ def _compute_app_streak(user_id: str, today_str: str) -> int:
 
 # ── Daily check-in (mood / energy) ────────────────────────────────────────────
 
-ALLOWED_MOODS = {"great", "okay", "tired", "off"}
+ALLOWED_MOODS = {"great", "good", "okay", "tired", "off"}
 
 
 def _get_checkin(user_id: str, date_str: str) -> Optional[dict]:
@@ -150,51 +150,11 @@ def _get_checkin(user_id: str, date_str: str) -> Optional[dict]:
         return None
 
 
-@app.get("/api/checkin/today")
-def get_checkin_today(request: Request):
-    """Return today's mood if logged, plus yesterday's for context display."""
-    session = _require_session(request)
-    user_id = session["user_id"]
-    try:
-        from zoneinfo import ZoneInfo
-    except ImportError:
-        from backports.zoneinfo import ZoneInfo  # type: ignore
-    today = datetime.now(tz=ZoneInfo("America/New_York")).date()
-    yesterday = today - timedelta(days=1)
-    return {
-        "today":     _get_checkin(user_id, today.isoformat()),
-        "yesterday": _get_checkin(user_id, yesterday.isoformat()),
-    }
-
-
-@app.post("/api/checkin")
-async def save_checkin(request: Request):
-    """Upsert today's mood. Body: { mood }. mood ∈ great|okay|tired|off."""
-    session = _require_session(request)
-    user_id = session["user_id"]
-    body = await request.json()
-    mood = (body.get("mood") or "").strip().lower()
-    if mood not in ALLOWED_MOODS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"mood must be one of {sorted(ALLOWED_MOODS)}",
-        )
-    try:
-        from zoneinfo import ZoneInfo
-    except ImportError:
-        from backports.zoneinfo import ZoneInfo  # type: ignore
-    today_str = datetime.now(tz=ZoneInfo("America/New_York")).date().isoformat()
-    db = get_supabase()
-    if not db:
-        raise HTTPException(status_code=503, detail="storage unavailable")
-    try:
-        db.table("daily_checkins").upsert(
-            {"user_id": user_id, "date": today_str, "mood": mood},
-            on_conflict="user_id,date",
-        ).execute()
-        return {"ok": True, "mood": mood, "date": today_str}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# NOTE: The @app.get / @app.post route registrations for /api/checkin/today
+# and /api/checkin live further down in this file (after `app = FastAPI(...)`
+# is created). Don't move them back up here — decorators run at import time,
+# and using `app` before it's defined will NameError and prevent the backend
+# from booting on Render.
 
 
 def _resolve_oura_anchor(user_id: str, rm: dict, slm: dict, am: dict, smm: dict) -> tuple[str, dict, dict, dict, dict]:
@@ -1806,6 +1766,58 @@ async def save_profile(request: Request):
             pass
 
     return {"ok": True}
+
+
+# ── Daily check-in (mood / energy) endpoints ──────────────────────────────────
+# Helpers (_get_checkin, ALLOWED_MOODS) are defined near the top of the file
+# above _resolve_oura_anchor; only the route registrations live here so the
+# `app` instance is in scope by the time the decorators execute.
+
+@app.get("/api/checkin/today")
+def get_checkin_today(request: Request):
+    """Return today's mood if logged, plus yesterday's for context display."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        from backports.zoneinfo import ZoneInfo  # type: ignore
+    today = datetime.now(tz=ZoneInfo("America/New_York")).date()
+    yesterday = today - timedelta(days=1)
+    return {
+        "today":     _get_checkin(user_id, today.isoformat()),
+        "yesterday": _get_checkin(user_id, yesterday.isoformat()),
+    }
+
+
+@app.post("/api/checkin")
+async def save_checkin(request: Request):
+    """Upsert today's mood. Body: { mood }. mood ∈ great|okay|tired|off."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    body = await request.json()
+    mood = (body.get("mood") or "").strip().lower()
+    if mood not in ALLOWED_MOODS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"mood must be one of {sorted(ALLOWED_MOODS)}",
+        )
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        from backports.zoneinfo import ZoneInfo  # type: ignore
+    today_str = datetime.now(tz=ZoneInfo("America/New_York")).date().isoformat()
+    db = get_supabase()
+    if not db:
+        raise HTTPException(status_code=503, detail="storage unavailable")
+    try:
+        db.table("daily_checkins").upsert(
+            {"user_id": user_id, "date": today_str, "mood": mood},
+            on_conflict="user_id,date",
+        ).execute()
+        return {"ok": True, "mood": mood, "date": today_str}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ── Chat ───────────────────────────────────────────────────────────────────────
