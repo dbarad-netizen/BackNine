@@ -345,8 +345,9 @@ def list_friend_events(user_id: str, limit: int = 30) -> list[dict]:
     author_ids = list({r["user_id"] for r in rows})
     live_names = _names_for(sb, author_ids)
 
-    # Fetch reactions for these events in one round-trip
+    # Fetch reactions + comment counts for these events in one round-trip each.
     event_ids = [r["id"] for r in rows]
+    comment_counts = _comment_counts_for(sb, event_ids)
     react_res = (
         sb.table("event_reactions")
         .select("event_id, user_id, emoji")
@@ -378,9 +379,10 @@ def list_friend_events(user_id: str, limit: int = 30) -> list[dict]:
         )
         out.append({
             **r,
-            "user_name": author_name,
-            "is_me":     r["user_id"] == user_id,
-            "summary":   _summarize_event({**r, "user_name": author_name}),
+            "user_name":     author_name,
+            "is_me":         r["user_id"] == user_id,
+            "summary":       _summarize_event({**r, "user_name": author_name}),
+            "comment_count": comment_counts.get(r["id"], 0),
             "reactions": [
                 {"emoji": e, "count": v["count"], "i_reacted": v["i_reacted"]}
                 for e, v in agg.items()
@@ -656,6 +658,110 @@ def generate_milestones_with_backfill(
         )
         total += len(events)
     return total
+
+
+# ── Per-event comments (Pulse reply threads) ─────────────────────────────────
+#
+# Comments are scoped to a single activity_event. Tapping a Pulse card on the
+# Scorecard expands an inline reply thread; this is the storage + read layer.
+# Author display names are live-joined from user_profiles at read time so a
+# friend who later sets their display name updates retroactively.
+
+MAX_COMMENT_CHARS = 500
+
+
+def _comment_counts_for(sb, event_ids: list[str]) -> dict[str, int]:
+    """Aggregate comment counts per event in a single round-trip."""
+    if not event_ids:
+        return {}
+    try:
+        res = (
+            sb.table("event_comments")
+            .select("event_id")
+            .in_("event_id", event_ids)
+            .execute()
+        )
+    except Exception:
+        return {}
+    counts: dict[str, int] = {}
+    for r in (res.data or []):
+        eid = r["event_id"]
+        counts[eid] = counts.get(eid, 0) + 1
+    return counts
+
+
+def list_event_comments(event_id: str, current_user_id: str, limit: int = 50) -> list[dict]:
+    """Return all comments for an event, oldest-first. Live-joins user names."""
+    if not event_id:
+        return []
+    sb = _sb()
+    try:
+        res = (
+            sb.table("event_comments")
+            .select("id, event_id, user_id, user_name, text, created_at")
+            .eq("event_id", event_id)
+            .order("created_at", desc=False)
+            .limit(limit)
+            .execute()
+        )
+    except Exception:
+        return []
+    rows = res.data or []
+    if not rows:
+        return []
+    user_ids = list({r["user_id"] for r in rows})
+    live_names = _names_for(sb, user_ids)
+    out: list[dict] = []
+    for r in rows:
+        cached = r.get("user_name")
+        live = live_names.get(r["user_id"])
+        author = (
+            live
+            or (cached if cached and cached not in {"BackNine user", "A BackNine friend"} else None)
+            or "Friend"
+        )
+        out.append({
+            **r,
+            "user_name": author,
+            "is_me":     r["user_id"] == current_user_id,
+        })
+    return out
+
+
+def post_event_comment(event_id: str, user_id: str, user_name: str, text: str) -> dict:
+    """Post a comment on an event. Server-side enforces length cap.
+
+    Raises ValueError if text is empty or the event doesn't exist.
+    """
+    if not event_id:
+        raise ValueError("event_id is required")
+    cleaned = (text or "").strip()
+    if not cleaned:
+        raise ValueError("Comment cannot be empty")
+    cleaned = cleaned[:MAX_COMMENT_CHARS]
+
+    sb = _sb()
+
+    # Verify the event exists so we can't accumulate orphaned comments via
+    # a stale event_id from a deleted post.
+    evt = (
+        sb.table("activity_events")
+        .select("id")
+        .eq("id", event_id)
+        .limit(1)
+        .execute()
+    )
+    if not evt.data:
+        raise ValueError("event not found")
+
+    row = {
+        "event_id":  event_id,
+        "user_id":   user_id,
+        "user_name": user_name or "Friend",
+        "text":      cleaned,
+    }
+    res = sb.table("event_comments").insert(row).execute()
+    return (res.data or [row])[0]
 
 
 def _summarize_event(row: dict) -> str:

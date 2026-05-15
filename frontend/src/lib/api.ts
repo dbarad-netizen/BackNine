@@ -631,6 +631,15 @@ export const api = {
         body: JSON.stringify({ emoji }),
       });
     },
+    comments(event_id: string): Promise<{ comments: EventComment[] }> {
+      return request(`/api/friends/events/${encodeURIComponent(event_id)}/comments`);
+    },
+    postComment(event_id: string, text: string): Promise<EventComment> {
+      return request(`/api/friends/events/${encodeURIComponent(event_id)}/comments`, {
+        method: "POST",
+        body: JSON.stringify({ text }),
+      });
+    },
   },
 };
 
@@ -676,15 +685,26 @@ export interface ReactionSummary {
 }
 
 export interface FriendActivityEvent {
+  id:             string;
+  user_id:        string;
+  user_name:      string | null;
+  event_type:     string;
+  payload:        Record<string, unknown>;
+  created_at:     string;
+  is_me:          boolean;
+  summary:        string;
+  reactions:      ReactionSummary[];
+  comment_count:  number;
+}
+
+export interface EventComment {
   id:         string;
+  event_id:   string;
   user_id:    string;
   user_name:  string | null;
-  event_type: string;
-  payload:    Record<string, unknown>;
+  text:       string;
   created_at: string;
   is_me:      boolean;
-  summary:    string;
-  reactions:  ReactionSummary[];
 }
 
 // ── Insight types ─────────────────────────────────────────────────────────────

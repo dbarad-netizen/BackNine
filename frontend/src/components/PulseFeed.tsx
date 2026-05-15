@@ -19,8 +19,8 @@
  * costs low. Tap "Refresh" in the header to pull fresh data.
  */
 
-import { useCallback, useEffect, useState } from "react";
-import { api, type FriendActivityEvent, type ReactionSummary } from "@/lib/api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { api, type FriendActivityEvent, type ReactionSummary, type EventComment, type Friend } from "@/lib/api";
 
 const REACTIONS = ["🔥", "💪", "👀"] as const;
 
@@ -126,9 +126,14 @@ function statPills(eventType: string, payload: Record<string, unknown>): { label
 
 export default function PulseFeed({ onInviteFriend }: Props) {
   const [events,  setEvents]  = useState<FriendActivityEvent[]>([]);
+  const [friends, setFriends] = useState<Friend[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasFriends, setHasFriends] = useState<boolean | null>(null); // null = unknown
   const [refreshing, setRefreshing] = useState(false);
+
+  // Which card's comment thread is currently expanded. One at a time keeps
+  // the horizontal scroll readable.
+  const [openComments, setOpenComments] = useState<string | null>(null);
 
   const load = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true);
@@ -138,11 +143,12 @@ export default function PulseFeed({ onInviteFriend }: Props) {
         api.friends.events(30),
         api.friends.list(),
       ]);
-      // Filter self events — the feed is for friends' activity
       setEvents(evRes.events.filter(e => !e.is_me));
+      setFriends(frRes.friends);
       setHasFriends(frRes.friends.length > 0);
     } catch {
       setEvents([]);
+      setFriends([]);
       setHasFriends(false);
     } finally {
       setLoading(false);
@@ -249,17 +255,35 @@ export default function PulseFeed({ onInviteFriend }: Props) {
     );
   }
 
+  // Friend names worth showing in the section header — skip generic "Friend"
+  // entries that just mean "this person hasn't set their display name yet".
+  const namedFriends = friends
+    .map(f => (f.name || "").trim())
+    .filter(n => n && n !== "Friend" && n !== "BackNine user");
+
   // ── Normal feed ──
   return (
     <section>
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+      <div className="flex items-center justify-between mb-2 gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400 truncate">
           Friend Pulse
+          {namedFriends.length > 0 && (
+            <span className="ml-1 normal-case font-normal text-gray-400">
+              · with <span className="text-[#1B3829] font-semibold">
+                {namedFriends.length === 1 ? namedFriends[0] : namedFriends.length <= 3 ? namedFriends.join(", ") : `${namedFriends[0]} +${namedFriends.length - 1}`}
+              </span>
+            </span>
+          )}
+          {namedFriends.length === 0 && friends.length > 0 && (
+            <span className="ml-1 normal-case font-normal text-gray-300">
+              · {friends.length} {friends.length === 1 ? "friend" : "friends"}
+            </span>
+          )}
         </h3>
         <button
           onClick={() => load(true)}
           disabled={refreshing}
-          className={`text-[11px] text-gray-400 hover:text-[#1B3829] transition-colors font-medium ${refreshing ? "animate-pulse" : ""}`}
+          className={`shrink-0 text-[11px] text-gray-400 hover:text-[#1B3829] transition-colors font-medium ${refreshing ? "animate-pulse" : ""}`}
         >
           {refreshing ? "…" : "Refresh"}
         </button>
@@ -327,7 +351,7 @@ export default function PulseFeed({ onInviteFriend }: Props) {
 
               <div className="flex-1" />
 
-              {/* Reaction chips */}
+              {/* Reaction chips + comment toggle */}
             <div className="flex items-center gap-1 flex-wrap">
               {REACTIONS.map(emoji => {
                 const r = e.reactions.find(x => x.emoji === emoji);
@@ -357,11 +381,152 @@ export default function PulseFeed({ onInviteFriend }: Props) {
                     {r.emoji} <span className="text-[10px] font-semibold">{r.count}</span>
                   </span>
                 ))}
+
+              {/* Comment toggle */}
+              <button
+                onClick={() => setOpenComments(prev => prev === e.id ? null : e.id)}
+                className={`text-[11px] rounded-full px-2 py-0.5 transition-all border ml-auto ${
+                  openComments === e.id
+                    ? "bg-[#1B3829]/10 border-[#1B3829]/30 text-[#1B3829]"
+                    : "bg-gray-50 border-gray-200 text-gray-500 hover:border-gray-400"
+                }`}
+                title={openComments === e.id ? "Hide comments" : "Show comments"}
+              >
+                💬
+                {e.comment_count > 0 && (
+                  <span className="ml-1 text-[10px] font-semibold">{e.comment_count}</span>
+                )}
+              </button>
             </div>
+
+            {/* Expandable comment thread */}
+            {openComments === e.id && (
+              <CommentThread
+                eventId={e.id}
+                onCountChange={(n) => {
+                  // Reflect the new count locally so the chip stays in sync
+                  setEvents(prev => prev.map(ev =>
+                    ev.id === e.id ? { ...ev, comment_count: n } : ev
+                  ));
+                }}
+              />
+            )}
           </article>
           );
         })}
       </div>
     </section>
+  );
+}
+
+
+// ── Inline comment thread shown when a Pulse card is expanded ───────────────
+function CommentThread({
+  eventId,
+  onCountChange,
+}: {
+  eventId: string;
+  onCountChange: (n: number) => void;
+}) {
+  const [comments, setComments] = useState<EventComment[] | null>(null);
+  const [text, setText]         = useState("");
+  const [sending, setSending]   = useState(false);
+  const [error, setError]       = useState<string | null>(null);
+  const bottomRef               = useRef<HTMLDivElement>(null);
+
+  // Load on mount
+  useEffect(() => {
+    let cancelled = false;
+    api.friends.comments(eventId)
+      .then(res => {
+        if (cancelled) return;
+        setComments(res.comments);
+        onCountChange(res.comments.length);
+      })
+      .catch(() => { if (!cancelled) setComments([]); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId]);
+
+  // Auto-scroll to newest comment when the list grows
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [comments?.length]);
+
+  const send = async () => {
+    const t = text.trim();
+    if (!t || sending) return;
+    setSending(true);
+    setError(null);
+    try {
+      const created = await api.friends.postComment(eventId, t);
+      setComments(prev => {
+        const next = [...(prev || []), { ...created, is_me: true }];
+        onCountChange(next.length);
+        return next;
+      });
+      setText("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't send. Try again.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const fmt = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  };
+
+  return (
+    <div className="mt-2 border-t border-gray-100 pt-2 space-y-2">
+      {/* Comment list */}
+      <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+        {comments === null && (
+          <p className="text-[11px] text-gray-400 italic">Loading…</p>
+        )}
+        {comments !== null && comments.length === 0 && (
+          <p className="text-[11px] text-gray-400 italic">Be the first to say something.</p>
+        )}
+        {comments?.map(c => (
+          <div key={c.id} className={`flex flex-col ${c.is_me ? "items-end" : "items-start"}`}>
+            <div className={`max-w-[88%] rounded-2xl px-2.5 py-1.5 text-[12px] leading-snug break-words ${
+              c.is_me
+                ? "bg-[#1B3829] text-white rounded-br-sm"
+                : "bg-gray-100 text-gray-800 rounded-bl-sm"
+            }`}>
+              {c.text}
+            </div>
+            <p className="text-[9px] text-gray-400 mt-0.5 px-0.5">
+              {c.is_me ? "You" : (c.user_name || "Friend")} · {fmt(c.created_at)}
+            </p>
+          </div>
+        ))}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Compose */}
+      <div className="flex gap-1.5">
+        <input
+          type="text"
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && send()}
+          placeholder="Reply…"
+          maxLength={500}
+          className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-[12px] text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#1B3829] focus:ring-1 focus:ring-[#1B3829]/20"
+        />
+        <button
+          onClick={send}
+          disabled={!text.trim() || sending}
+          className="rounded-lg bg-[#1B3829] hover:bg-[#2D6A4F] disabled:opacity-40 text-white text-[11px] font-semibold px-3 transition-colors"
+        >
+          {sending ? "…" : "Send"}
+        </button>
+      </div>
+      {error && (
+        <p className="text-[10px] text-red-500 bg-red-50 rounded px-2 py-1">{error}</p>
+      )}
+    </div>
   );
 }

@@ -2212,6 +2212,39 @@ async def react_to_event(event_id: str, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/friends/events/{event_id}/comments")
+def list_event_comments(event_id: str, request: Request):
+    """Recent comments on a Pulse event (oldest-first)."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        return {"comments": frd.list_event_comments(event_id, user_id)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/friends/events/{event_id}/comments")
+async def post_event_comment(event_id: str, request: Request):
+    """Post a comment on a Pulse event. Body: { text }."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    body = await request.json()
+    text = (body.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="text is required")
+    try:
+        return frd.post_event_comment(
+            event_id,
+            user_id,
+            _display_name_for(user_id),
+            text,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ── Apple Health ──────────────────────────────────────────────────────────────
 
 @app.get("/api/apple-health/key")
