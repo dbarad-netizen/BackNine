@@ -660,6 +660,83 @@ def generate_milestones_with_backfill(
     return total
 
 
+# ── Cheers (single-tap acknowledgment between friends) ───────────────────────
+#
+# A cheer is a lightweight, single-tap event a user sends to a friend from
+# the daily leaderboard. It writes an activity_event with event_type='cheer'
+# and payload {target_user_id, target_name, date}. Dedup: one cheer per
+# (cheerer, target, day). Shows up in the recipient's Pulse feed.
+
+def send_cheer(
+    cheerer_id: str,
+    target_id: str,
+    cheerer_name: str,
+    target_name: str,
+    today: str,
+) -> Optional[dict]:
+    """Record a cheer from cheerer_id to target_id for `today`.
+
+    Idempotent — if a cheer for this triple already exists today, returns
+    the existing row instead of creating a duplicate. Returns None on
+    failure (best-effort, never raises).
+    """
+    if not cheerer_id or not target_id or cheerer_id == target_id:
+        return None
+    sb = _sb()
+    try:
+        existing = (
+            sb.table("activity_events")
+            .select("id, payload, created_at")
+            .eq("user_id", cheerer_id)
+            .eq("event_type", "cheer")
+            .filter("payload->>date",            "eq", today)
+            .filter("payload->>target_user_id",  "eq", target_id)
+            .limit(1)
+            .execute()
+        )
+        if existing.data:
+            return existing.data[0]
+        row = {
+            "user_id":    cheerer_id,
+            "user_name":  cheerer_name or "Friend",
+            "event_type": "cheer",
+            "payload": {
+                "target_user_id": target_id,
+                "target_name":    target_name or "Friend",
+                "date":           today,
+            },
+        }
+        res = sb.table("activity_events").insert(row).execute()
+        return (res.data or [row])[0]
+    except Exception:
+        return None
+
+
+def cheers_sent_today(cheerer_id: str, today: str) -> set[str]:
+    """Return the set of target_user_ids the cheerer has cheered on `today`."""
+    if not cheerer_id:
+        return set()
+    sb = _sb()
+    try:
+        res = (
+            sb.table("activity_events")
+            .select("payload")
+            .eq("user_id", cheerer_id)
+            .eq("event_type", "cheer")
+            .filter("payload->>date", "eq", today)
+            .execute()
+        )
+    except Exception:
+        return set()
+    out: set[str] = set()
+    for r in (res.data or []):
+        p = r.get("payload") or {}
+        tid = p.get("target_user_id")
+        if tid:
+            out.add(tid)
+    return out
+
+
 # ── Per-event comments (Pulse reply threads) ─────────────────────────────────
 #
 # Comments are scoped to a single activity_event. Tapping a Pulse card on the
@@ -820,5 +897,9 @@ def _summarize_event(row: dict) -> str:
         if s:
             return f"{name} hit a {int(s)}-day prediction streak 🔥"
         return f"{name} extended their streak"
+
+    if et == "cheer":
+        target = p.get("target_name") or "a friend"
+        return f"{name} cheered {target} 👏"
 
     return f"{name} did something"

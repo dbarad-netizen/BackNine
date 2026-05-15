@@ -2368,6 +2368,103 @@ async def react_to_event(event_id: str, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/friends/leaderboard")
+def friend_leaderboard(request: Request, metric: str = "steps"):
+    """Daily leaderboard: self + friends ranked by today's value for a metric.
+
+    metric ∈ {steps, sleep, activity}. Returns entries ordered by value desc
+    with a per-entry i_cheered flag so the UI can render the cheer button
+    state without a second fetch.
+    """
+    session = _require_session(request)
+    user_id = session["user_id"]
+    metric  = metric.lower()
+    if metric not in {"steps", "sleep", "activity"}:
+        raise HTTPException(status_code=400, detail="metric must be steps|sleep|activity")
+
+    def _value_for(uid: str) -> tuple[Optional[float], str]:
+        """Resolve the metric value for a user. Returns (value, anchor_date)."""
+        try:
+            rm, slm, am, smm = oc.get_days(uid, days=2)
+        except Exception:
+            return None, ""
+        anchor, t_rdy, t_sl, t_act, t_sm = _resolve_oura_anchor(uid, rm, slm, am, smm)
+        if metric == "steps":
+            return (t_act.get("steps") if t_act else None), anchor
+        if metric == "sleep":
+            return (t_sl.get("score") if t_sl else None), anchor
+        if metric == "activity":
+            return (t_act.get("score") if t_act else None), anchor
+        return None, anchor
+
+    # Pull today's cheer set up-front to flag friends the user has cheered.
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        from backports.zoneinfo import ZoneInfo  # type: ignore
+    today_str = datetime.now(tz=ZoneInfo("America/New_York")).date().isoformat()
+    cheered_today = frd.cheers_sent_today(user_id, today_str)
+
+    entries: list[dict] = []
+    me_value, me_anchor = _value_for(user_id)
+    entries.append({
+        "user_id":   user_id,
+        "name":      _display_name_for(user_id),
+        "value":     me_value,
+        "anchor":    me_anchor,
+        "is_me":     True,
+        "i_cheered": False,  # you can't cheer yourself
+    })
+    try:
+        friends = frd.list_friends(user_id)
+    except Exception:
+        friends = []
+    for f in friends:
+        f_value, f_anchor = _value_for(f["user_id"])
+        entries.append({
+            "user_id":   f["user_id"],
+            "name":      f.get("name") or "Friend",
+            "value":     f_value,
+            "anchor":    f_anchor,
+            "is_me":     False,
+            "i_cheered": f["user_id"] in cheered_today,
+        })
+
+    # Sort: real values first (desc), nulls at the bottom.
+    entries.sort(key=lambda e: (e["value"] is None, -(e["value"] or 0)))
+    return {"metric": metric, "entries": entries, "date": today_str}
+
+
+@app.post("/api/friends/cheer/{friend_user_id}")
+def cheer_friend(friend_user_id: str, request: Request):
+    """Send a single-tap cheer to a friend. Idempotent per (you, target, today)."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    if user_id == friend_user_id:
+        raise HTTPException(status_code=400, detail="cannot cheer yourself")
+
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        from backports.zoneinfo import ZoneInfo  # type: ignore
+    today_str = datetime.now(tz=ZoneInfo("America/New_York")).date().isoformat()
+
+    # Resolve names for nicer event payloads.
+    me_name = _display_name_for(user_id)
+    try:
+        friends = frd.list_friends(user_id)
+    except Exception:
+        friends = []
+    target_name = "Friend"
+    for f in friends:
+        if f["user_id"] == friend_user_id:
+            target_name = f.get("name") or "Friend"
+            break
+
+    row = frd.send_cheer(user_id, friend_user_id, me_name, target_name, today_str)
+    return {"ok": bool(row), "cheered_user_id": friend_user_id, "event": row}
+
+
 @app.get("/api/friends/events/{event_id}/comments")
 def list_event_comments(event_id: str, request: Request):
     """Recent comments on a Pulse event (oldest-first)."""

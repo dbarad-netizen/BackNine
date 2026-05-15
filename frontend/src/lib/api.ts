@@ -651,6 +651,18 @@ export const api = {
         body: JSON.stringify({ text }),
       });
     },
+    leaderboard(metric: LeaderboardMetric = "steps"): Promise<{
+      metric: LeaderboardMetric;
+      entries: LeaderboardEntry[];
+      date: string;
+    }> {
+      return request(`/api/friends/leaderboard?metric=${metric}`);
+    },
+    cheer(friend_user_id: string): Promise<{ ok: boolean; cheered_user_id: string }> {
+      return request(`/api/friends/cheer/${encodeURIComponent(friend_user_id)}`, {
+        method: "POST",
+      });
+    },
   },
 };
 
@@ -689,6 +701,18 @@ export interface CoachObservation {
   read:       boolean;
   dismissed:  boolean;
   created_at: string;
+}
+
+// ── Leaderboard types ────────────────────────────────────────────────────────
+export type LeaderboardMetric = "steps" | "sleep" | "activity";
+
+export interface LeaderboardEntry {
+  user_id:   string;
+  name:      string;
+  value:     number | null;
+  anchor:    string;
+  is_me:     boolean;
+  i_cheered: boolean;
 }
 
 // ── Friends types ─────────────────────────────────────────────────────────────

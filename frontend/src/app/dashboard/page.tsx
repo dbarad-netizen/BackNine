@@ -30,6 +30,7 @@ import MorningBriefing from "@/components/MorningBriefing";
 import ActiveCompetitions from "@/components/ActiveCompetitions";
 import GearPicks from "@/components/GearPicks";
 import PulseFeed from "@/components/PulseFeed";
+import FriendLeaderboard from "@/components/FriendLeaderboard";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts";
@@ -1401,6 +1402,9 @@ export default function DashboardPage() {
                 </section>
               );
             })()}
+
+            {/* ── Today's Leaderboard (self + friends ranked) ── */}
+            <FriendLeaderboard />
 
             {/* ── Friend Pulse feed ── */}
             <PulseFeed onInviteFriend={() => { setProfileInitialTab("friends"); setShowProfile(true); }} />
