@@ -2383,14 +2383,28 @@ def friend_leaderboard(request: Request, metric: str = "steps"):
         raise HTTPException(status_code=400, detail="metric must be steps|sleep|activity")
 
     def _value_for(uid: str) -> tuple[Optional[float], str]:
-        """Resolve the metric value for a user. Returns (value, anchor_date)."""
+        """Resolve the metric value for a user. Returns (value, anchor_date).
+
+        For steps we prefer Apple Health (updates throughout the day) over
+        Oura's daily_activity which scores at end-of-day. Sleep and activity
+        scores still come from Oura since AH doesn't compute those.
+        """
         try:
             rm, slm, am, smm = oc.get_days(uid, days=2)
         except Exception:
             return None, ""
         anchor, t_rdy, t_sl, t_act, t_sm = _resolve_oura_anchor(uid, rm, slm, am, smm)
+
         if metric == "steps":
+            # Try Apple Health first (most up-to-date)
+            try:
+                ah_day = ah.get_day(uid, anchor)
+                if ah_day and ah_day.get("steps"):
+                    return float(ah_day["steps"]), anchor
+            except Exception:
+                pass
             return (t_act.get("steps") if t_act else None), anchor
+
         if metric == "sleep":
             return (t_sl.get("score") if t_sl else None), anchor
         if metric == "activity":
