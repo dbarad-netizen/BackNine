@@ -2385,30 +2385,61 @@ def friend_leaderboard(request: Request, metric: str = "steps"):
     def _value_for(uid: str) -> tuple[Optional[float], str]:
         """Resolve the metric value for a user. Returns (value, anchor_date).
 
-        For steps we prefer Apple Health (updates throughout the day) over
-        Oura's daily_activity which scores at end-of-day. Sleep and activity
-        scores still come from Oura since AH doesn't compute those.
+        Robust to today's data not being in the cache yet. For each metric we
+        try today's anchor first, then walk backwards through the last 7 days
+        looking for a real value. This is what keeps the leaderboard from
+        going dark first thing in the morning before Oura/AH have synced.
+
+        Steps prefer Apple Health (live throughout the day); sleep and
+        activity scores come from Oura since AH doesn't compute those.
         """
         try:
-            rm, slm, am, smm = oc.get_days(uid, days=2)
+            rm, slm, am, smm = oc.get_days(uid, days=8)
         except Exception:
             return None, ""
         anchor, t_rdy, t_sl, t_act, t_sm = _resolve_oura_anchor(uid, rm, slm, am, smm)
 
-        if metric == "steps":
-            # Try Apple Health first (most up-to-date)
+        def _walk_back(days_to_check: int = 7):
+            """Yield (date_str) from anchor walking backwards."""
             try:
-                ah_day = ah.get_day(uid, anchor)
-                if ah_day and ah_day.get("steps"):
-                    return float(ah_day["steps"]), anchor
+                cursor = datetime.strptime(anchor, "%Y-%m-%d").date()
             except Exception:
-                pass
-            return (t_act.get("steps") if t_act else None), anchor
+                return
+            for i in range(days_to_check):
+                yield (cursor - timedelta(days=i)).isoformat()
+
+        if metric == "steps":
+            for d in _walk_back():
+                # AH first for each day in the walk (live data wins)
+                try:
+                    ah_day = ah.get_day(uid, d)
+                    if ah_day and ah_day.get("steps"):
+                        return float(ah_day["steps"]), d
+                except Exception:
+                    pass
+                # Oura fallback for this day
+                am_day = am.get(d) or {}
+                if am_day.get("steps"):
+                    return float(am_day["steps"]), d
+            return None, anchor
 
         if metric == "sleep":
-            return (t_sl.get("score") if t_sl else None), anchor
+            for d in _walk_back():
+                sl_day = slm.get(d) or {}
+                score = sl_day.get("score")
+                # score=0 means ring not worn — skip
+                if score and score > 0:
+                    return float(score), d
+            return None, anchor
+
         if metric == "activity":
-            return (t_act.get("score") if t_act else None), anchor
+            for d in _walk_back():
+                a_day = am.get(d) or {}
+                score = a_day.get("score")
+                if score and score > 0:
+                    return float(score), d
+            return None, anchor
+
         return None, anchor
 
     # Pull today's cheer set up-front to flag friends the user has cheered.

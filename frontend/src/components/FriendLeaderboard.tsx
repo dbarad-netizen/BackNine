@@ -34,6 +34,21 @@ function fmtValue(value: number | null, metric: LeaderboardMetric): string {
   return String(Math.round(value)); // scores
 }
 
+function freshnessLabel(anchor: string, todayStr: string): string | null {
+  if (!anchor || anchor === todayStr) return null;
+  // Different day — show how stale the value is.
+  try {
+    const a = new Date(anchor + "T12:00:00Z").getTime();
+    const t = new Date(todayStr + "T12:00:00Z").getTime();
+    const diffDays = Math.round((t - a) / (1000 * 60 * 60 * 24));
+    if (diffDays === 1) return "yesterday";
+    if (diffDays > 1)   return `${diffDays}d ago`;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export default function FriendLeaderboard() {
   const [metric,  setMetric]  = useState<LeaderboardMetric>("steps");
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
@@ -41,12 +56,15 @@ export default function FriendLeaderboard() {
   const [error,   setError]   = useState<string | null>(null);
   const [cheeringIds, setCheeringIds] = useState<Set<string>>(new Set());
 
+  const [todayStr, setTodayStr] = useState<string>("");
+
   const load = useCallback(async (m: LeaderboardMetric) => {
     setLoading(true);
     setError(null);
     try {
       const res = await api.friends.leaderboard(m);
       setEntries(res.entries);
+      setTodayStr(res.date);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't load leaderboard");
       setEntries([]);
@@ -148,6 +166,9 @@ export default function FriendLeaderboard() {
                 </p>
                 <p className={`text-[11px] ${hasValue ? "text-gray-500" : "text-gray-300 italic"}`}>
                   {fmtValue(e.value, metric)}
+                  {hasValue && freshnessLabel(e.anchor, todayStr) && (
+                    <span className="text-gray-300 ml-1">· {freshnessLabel(e.anchor, todayStr)}</span>
+                  )}
                 </p>
               </div>
               {!e.is_me && (
