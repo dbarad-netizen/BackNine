@@ -2451,10 +2451,78 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None):
     today_str = datetime.now(tz=ZoneInfo("America/New_York")).date().isoformat()
     taunts_today = frd.taunts_sent_today(user_id, today_str)  # {target_user_id: kind}
 
+    def _per_day_values(uid: str, days: int = 7) -> dict[str, dict]:
+        """Return {date_str: {steps, sleep, activity}} for the last N days.
+        Used for the head-to-head tally — single fetch per user, then iterate.
+        """
+        try:
+            rm, slm, am, smm = oc.get_days(uid, days=days + 2)
+        except Exception:
+            return {}
+        try:
+            from zoneinfo import ZoneInfo
+        except ImportError:
+            from backports.zoneinfo import ZoneInfo  # type: ignore
+        today = datetime.now(tz=ZoneInfo("America/New_York")).date()
+        out: dict[str, dict] = {}
+        for i in range(days):
+            d = (today - timedelta(days=i)).isoformat()
+            # AH-first for steps
+            steps = None
+            try:
+                ah_day = ah.get_day(uid, d)
+                if ah_day and ah_day.get("steps"):
+                    steps = float(ah_day["steps"])
+            except Exception:
+                pass
+            if steps is None:
+                am_day = am.get(d) or {}
+                if am_day.get("steps"):
+                    steps = float(am_day["steps"])
+            sleep_score = (slm.get(d) or {}).get("score")
+            act_score   = (am.get(d)  or {}).get("score")
+            out[d] = {
+                "steps":    steps,
+                "sleep":    float(sleep_score) if sleep_score and sleep_score > 0 else None,
+                "activity": float(act_score)   if act_score and act_score > 0   else None,
+            }
+        return out
+
+    def _head_to_head(me_days: dict[str, dict], friend_days: dict[str, dict]) -> dict:
+        """Tally weekly W/L/T for each metric — me vs friend.
+        Only counts days where BOTH have data. A 'tie' is identical values.
+        """
+        result = {"steps": {"w": 0, "l": 0, "t": 0},
+                  "sleep": {"w": 0, "l": 0, "t": 0},
+                  "activity": {"w": 0, "l": 0, "t": 0}}
+        for d, my in me_days.items():
+            theirs = friend_days.get(d)
+            if not theirs:
+                continue
+            for m in ("steps", "sleep", "activity"):
+                mv = my.get(m)
+                tv = theirs.get(m)
+                if mv is None or tv is None:
+                    continue
+                if mv > tv:   result[m]["w"] += 1
+                elif mv < tv: result[m]["l"] += 1
+                else:         result[m]["t"] += 1
+        return result
+
+    # Cache the current user's 7-day data once — each friend pairing uses it.
+    me_days_cache = _per_day_values(user_id)
+
     def _entry_for(uid: str, name: str, is_me: bool) -> dict:
         steps_v, steps_a    = _value_for(uid, "steps")
         sleep_v, sleep_a    = _value_for(uid, "sleep")
         act_v,   act_a      = _value_for(uid, "activity")
+        h2h = None
+        if not is_me:
+            try:
+                friend_days = _per_day_values(uid)
+                h2h = _head_to_head(me_days_cache, friend_days)
+            except Exception:
+                h2h = None
         return {
             "user_id":  uid,
             "name":     name,
@@ -2464,7 +2532,9 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None):
             "sleep":    {"value": sleep_v, "anchor": sleep_a},
             "activity": {"value": act_v,   "anchor": act_a},
             # If you've taunted this friend today, surface which kind (else None).
-            "taunt_sent": None if is_me else taunts_today.get(uid),
+            "taunt_sent":   None if is_me else taunts_today.get(uid),
+            # 7-day head-to-head tally vs the current user (null for self).
+            "head_to_head": h2h,
         }
 
     entries: list[dict] = [
@@ -2542,6 +2612,191 @@ async def cheer_friend(friend_user_id: str, request: Request):
 
     row = frd.send_taunt(user_id, friend_user_id, me_name, target_name, today_str, kind=kind)
     return {"ok": bool(row), "cheered_user_id": friend_user_id, "kind": kind, "event": row}
+
+
+# ── Notification inbox ───────────────────────────────────────────────────────
+# Aggregates "things that happened involving you" from four sources:
+#   1. DMs received (dm_messages where recipient_id = me)
+#   2. Taunts received (activity_events with payload.target_user_id = me)
+#   3. Comments on your events (event_comments on activity_events you authored)
+#   4. Reactions on your events (event_reactions on your activity_events)
+#
+# Unread state is derived from user_profiles.notifications_last_read_at —
+# anything created after that timestamp counts as unread. POST to mark-read
+# sets the timestamp to now.
+
+@app.get("/api/notifications")
+def list_notifications(request: Request, limit: int = 40):
+    """Return recent social events involving the current user, plus unread count."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    db = get_supabase()
+    if not db:
+        return {"notifications": [], "unread_count": 0}
+
+    # Resolve last_read_at; default to epoch if never set.
+    try:
+        prof_res = (
+            db.table("user_profiles")
+            .select("notifications_last_read_at")
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        last_read = (prof_res.data or [{}])[0].get("notifications_last_read_at")
+    except Exception:
+        last_read = None
+    last_read = last_read or "1970-01-01T00:00:00+00:00"
+
+    items: list[dict] = []
+    cutoff = (datetime.now(tz=timezone.utc) - timedelta(days=14)).isoformat()
+    limit  = min(max(limit, 1), 100)
+
+    # 1. DMs received
+    try:
+        dms = (
+            db.table("dm_messages")
+            .select("id, sender_id, text, created_at")
+            .eq("recipient_id", user_id)
+            .gte("created_at", cutoff)
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        sender_ids = list({r["sender_id"] for r in (dms.data or [])})
+        sender_names = frd._names_for(db, sender_ids) if sender_ids else {}
+        for r in (dms.data or []):
+            items.append({
+                "id":         f"dm-{r['id']}",
+                "kind":       "dm",
+                "actor_id":   r["sender_id"],
+                "actor_name": sender_names.get(r["sender_id"]) or "Friend",
+                "preview":    (r.get("text") or "")[:120],
+                "created_at": r["created_at"],
+            })
+    except Exception:
+        pass
+
+    # 2. Taunts received (cheer event_type with target_user_id = me)
+    try:
+        taunts = (
+            db.table("activity_events")
+            .select("id, user_id, user_name, payload, created_at")
+            .eq("event_type", "cheer")
+            .filter("payload->>target_user_id", "eq", user_id)
+            .gte("created_at", cutoff)
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        for r in (taunts.data or []):
+            p = r.get("payload") or {}
+            kind = p.get("kind") or "cheer"
+            items.append({
+                "id":         f"taunt-{r['id']}",
+                "kind":       f"taunt:{kind}",
+                "actor_id":   r["user_id"],
+                "actor_name": r.get("user_name") or "Friend",
+                "preview":    "",
+                "created_at": r["created_at"],
+            })
+    except Exception:
+        pass
+
+    # 3. Comments on your events
+    try:
+        # First find your events
+        my_events = (
+            db.table("activity_events")
+            .select("id")
+            .eq("user_id", user_id)
+            .gte("created_at", cutoff)
+            .execute()
+        )
+        my_event_ids = [r["id"] for r in (my_events.data or [])]
+        if my_event_ids:
+            cmts = (
+                db.table("event_comments")
+                .select("id, event_id, user_id, user_name, text, created_at")
+                .in_("event_id", my_event_ids)
+                .neq("user_id", user_id)
+                .gte("created_at", cutoff)
+                .order("created_at", desc=True)
+                .limit(limit)
+                .execute()
+            )
+            commenter_ids = list({r["user_id"] for r in (cmts.data or [])})
+            commenter_names = frd._names_for(db, commenter_ids) if commenter_ids else {}
+            for r in (cmts.data or []):
+                items.append({
+                    "id":         f"comment-{r['id']}",
+                    "kind":       "comment",
+                    "actor_id":   r["user_id"],
+                    "actor_name": commenter_names.get(r["user_id"]) or r.get("user_name") or "Friend",
+                    "preview":    (r.get("text") or "")[:120],
+                    "event_id":   r.get("event_id"),
+                    "created_at": r["created_at"],
+                })
+
+            # 4. Reactions on your events
+            reacts = (
+                db.table("event_reactions")
+                .select("id, event_id, user_id, emoji, created_at")
+                .in_("event_id", my_event_ids)
+                .neq("user_id", user_id)
+                .gte("created_at", cutoff)
+                .order("created_at", desc=True)
+                .limit(limit)
+                .execute()
+            )
+            reactor_ids = list({r["user_id"] for r in (reacts.data or [])})
+            reactor_names = frd._names_for(db, reactor_ids) if reactor_ids else {}
+            for r in (reacts.data or []):
+                items.append({
+                    "id":         f"react-{r['id']}",
+                    "kind":       "reaction",
+                    "actor_id":   r["user_id"],
+                    "actor_name": reactor_names.get(r["user_id"]) or "Friend",
+                    "preview":    r.get("emoji") or "",
+                    "event_id":   r.get("event_id"),
+                    "created_at": r["created_at"],
+                })
+    except Exception:
+        pass
+
+    # Sort by created_at desc and cap
+    items.sort(key=lambda x: x["created_at"], reverse=True)
+    items = items[:limit]
+
+    # Mark unread state per item
+    unread_count = 0
+    for it in items:
+        it["unread"] = it["created_at"] > last_read
+        if it["unread"]:
+            unread_count += 1
+
+    return {"notifications": items, "unread_count": unread_count}
+
+
+@app.post("/api/notifications/mark-read")
+def mark_notifications_read(request: Request):
+    """Set the user's notifications_last_read_at to now."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    db = get_supabase()
+    if not db:
+        return {"ok": False}
+    try:
+        db.table("user_profiles").upsert(
+            {
+                "user_id":                     user_id,
+                "notifications_last_read_at":  datetime.now(tz=timezone.utc).isoformat(),
+            },
+            on_conflict="user_id",
+        ).execute()
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/friends/dm/{friend_user_id}")

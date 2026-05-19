@@ -587,6 +587,16 @@ export const api = {
     return request("/api/chat/history", { method: "DELETE" });
   },
 
+  // ── Notification inbox ────────────────────────────────────────────────────
+  notifications: {
+    list(): Promise<NotificationsResponse> {
+      return request("/api/notifications");
+    },
+    markRead(): Promise<{ ok: boolean }> {
+      return request("/api/notifications/mark-read", { method: "POST" });
+    },
+  },
+
   // ── Coach Al observations ─────────────────────────────────────────────────
   observations: {
     list(): Promise<{ observations: CoachObservation[]; unread_count: number }> {
@@ -725,15 +735,29 @@ export interface MetricValue {
   anchor: string;
 }
 
+export interface HeadToHeadTally {
+  w: number;
+  l: number;
+  t: number;
+}
+
+export interface HeadToHead {
+  steps:    HeadToHeadTally;
+  sleep:    HeadToHeadTally;
+  activity: HeadToHeadTally;
+}
+
 export interface LeaderboardEntry {
-  user_id:    string;
-  name:       string;
-  is_me:      boolean;
-  steps:      MetricValue;
-  sleep:      MetricValue;
-  activity:   MetricValue;
+  user_id:       string;
+  name:          string;
+  is_me:         boolean;
+  steps:         MetricValue;
+  sleep:         MetricValue;
+  activity:      MetricValue;
   /** Which taunt (if any) the current user has sent to this friend today. */
-  taunt_sent: TauntKind | null;
+  taunt_sent:    TauntKind | null;
+  /** Weekly head-to-head tally vs the current user. Null for self. */
+  head_to_head:  HeadToHead | null;
 }
 
 export interface LeaderboardResponse {
@@ -741,6 +765,23 @@ export interface LeaderboardResponse {
   /** user_id of the per-metric leader, or null if no one has a value yet. */
   leaders: { steps: string | null; sleep: string | null; activity: string | null };
   date:    string;
+}
+
+// ── Notification types ──────────────────────────────────────────────────────
+export interface Notification {
+  id:         string;
+  kind:       string;   // 'dm' | 'taunt:cheer' | 'taunt:catch_me' | … | 'comment' | 'reaction'
+  actor_id:   string;
+  actor_name: string;
+  preview:    string;   // first message excerpt, emoji, etc.
+  event_id?:  string;   // for comment/reaction kinds
+  created_at: string;
+  unread:     boolean;
+}
+
+export interface NotificationsResponse {
+  notifications: Notification[];
+  unread_count:  number;
 }
 
 // ── DM types ────────────────────────────────────────────────────────────────

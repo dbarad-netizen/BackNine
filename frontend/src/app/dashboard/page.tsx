@@ -31,6 +31,7 @@ import ActiveCompetitions from "@/components/ActiveCompetitions";
 import GearPicks from "@/components/GearPicks";
 import PulseFeed from "@/components/PulseFeed";
 import FriendLeaderboard from "@/components/FriendLeaderboard";
+import NotificationBell from "@/components/NotificationBell";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts";
@@ -1040,6 +1041,7 @@ export default function DashboardPage() {
             <span className="hidden sm:block text-xs text-gray-400">
               {new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
             </span>
+            <NotificationBell />
             <button
               onClick={() => setShowProfile(true)}
               title="Edit health profile"

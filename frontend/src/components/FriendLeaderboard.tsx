@@ -206,6 +206,37 @@ export default function FriendLeaderboard() {
                   )}
                 </div>
 
+                {/* Weekly head-to-head — only for friend rows */}
+                {!e.is_me && e.head_to_head && (() => {
+                  const h2h = e.head_to_head;
+                  const cell = (label: string, tally: { w: number; l: number; t: number }) => {
+                    const total = tally.w + tally.l + tally.t;
+                    if (total === 0) return null;
+                    const outcome = tally.w > tally.l ? "w" : tally.l > tally.w ? "l" : "t";
+                    const color = outcome === "w" ? "text-green-700" : outcome === "l" ? "text-red-600" : "text-gray-400";
+                    const tag   = outcome === "w" ? "W" : outcome === "l" ? "L" : "T";
+                    return (
+                      <span key={label} className="inline-flex items-center gap-1">
+                        <span className="text-gray-400">{label}</span>
+                        <span className={`font-semibold ${color}`}>{tally.w}–{tally.l}</span>
+                        <span className={`text-[9px] font-bold ${color}`}>{tag}</span>
+                      </span>
+                    );
+                  };
+                  const cells = [
+                    cell("Steps",    h2h.steps),
+                    cell("Sleep",    h2h.sleep),
+                    cell("Activity", h2h.activity),
+                  ].filter(Boolean);
+                  if (cells.length === 0) return null;
+                  return (
+                    <p className="text-[10px] text-gray-500 mb-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
+                      <span className="text-gray-400 italic">This week:</span>
+                      {cells}
+                    </p>
+                  );
+                })()}
+
                 {/* Three metrics inline */}
                 <div className="grid grid-cols-3 gap-2 mb-2">
                   {(["steps", "sleep", "activity"] as MetricKey[]).map(m => {
