@@ -174,19 +174,19 @@ export default function FriendLeaderboard() {
           <p className="text-[13px] font-semibold text-gray-800 leading-snug">{headerLine}</p>
         </div>
 
-        {/* One card per person */}
-        <div className="divide-y divide-gray-100">
+        {/* One row per person — all share the same plain background so the
+            container reads as one card. "You" is differentiated by the name
+            color + a small YOU pill, not a full-row tint that creates the
+            "two cards stacked" illusion. */}
+        <div className="divide-y divide-gray-200">
           {data.entries.map(e => {
             const winsCount = tally[e.user_id] ?? 0;
             const sending   = sendingIds.has(e.user_id);
             return (
-              <div
-                key={e.user_id}
-                className={`px-4 py-3 ${e.is_me ? "bg-[#1B3829]/5" : "bg-white"}`}
-              >
+              <div key={e.user_id} className="px-4 py-2.5">
                 {/* Header row */}
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="w-8 h-8 rounded-full bg-[#1B3829] text-white text-xs font-semibold flex items-center justify-center shrink-0">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="w-7 h-7 rounded-full bg-[#1B3829] text-white text-[11px] font-semibold flex items-center justify-center shrink-0">
                     {(e.name || "?").slice(0, 1).toUpperCase()}
                   </span>
                   <p className={`flex-1 min-w-0 text-sm font-semibold truncate ${
@@ -194,9 +194,14 @@ export default function FriendLeaderboard() {
                   }`}>
                     {e.is_me ? "You" : e.name}
                   </p>
+                  {e.is_me && (
+                    <span className="text-[9px] bg-[#1B3829]/10 border border-[#1B3829]/20 text-[#1B3829] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full">
+                      You
+                    </span>
+                  )}
                   {winsCount > 0 && (
-                    <span className="text-[10px] bg-amber-50 border border-amber-200 text-amber-800 font-bold px-2 py-0.5 rounded-full">
-                      🏅 leading {winsCount}/{totalContested || 3}
+                    <span className="text-[10px] bg-amber-50 border border-amber-200 text-amber-800 font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
+                      🏅 {winsCount}/{totalContested || 3}
                     </span>
                   )}
                 </div>
@@ -234,40 +239,35 @@ export default function FriendLeaderboard() {
                   })}
                 </div>
 
-                {/* Taunts + chat — only for friends */}
+                {/* Taunts + chat — only for friends. One compact action row. */}
                 {!e.is_me && (
-                  <div className="space-y-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     {e.taunt_sent ? (
-                      <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 inline-flex items-center gap-1">
+                      <span className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 inline-flex items-center gap-1 font-semibold">
                         ✓ {TAUNTS.find(t => t.kind === e.taunt_sent)?.emoji}{" "}
-                        <span className="font-semibold">
-                          {TAUNTS.find(t => t.kind === e.taunt_sent)?.sentLabel}
-                        </span>
-                        <span className="text-amber-500/70 ml-1">· comes back tomorrow</span>
-                      </div>
+                        {TAUNTS.find(t => t.kind === e.taunt_sent)?.sentLabel}
+                      </span>
                     ) : (
-                      <div className="flex flex-wrap gap-1.5">
-                        {TAUNTS.map(t => (
-                          <button
-                            key={t.kind}
-                            onClick={() => handleTaunt(e.user_id, t.kind)}
-                            disabled={sending}
-                            className="text-[11px] px-2.5 py-1 rounded-lg border border-gray-200 bg-white text-gray-700 font-medium hover:border-[#1B3829]/40 hover:bg-[#1B3829]/5 active:scale-95 transition-all disabled:opacity-50"
-                            title={`Send ${t.emoji} ${t.label} to ${e.name}`}
-                          >
-                            <span>{t.emoji}</span>
-                            <span className="ml-1">{t.label}</span>
-                          </button>
-                        ))}
-                      </div>
+                      TAUNTS.map(t => (
+                        <button
+                          key={t.kind}
+                          onClick={() => handleTaunt(e.user_id, t.kind)}
+                          disabled={sending}
+                          className="text-[11px] px-2 py-1 rounded-lg border border-gray-200 bg-white text-gray-700 font-medium hover:border-[#1B3829]/40 hover:bg-[#1B3829]/5 active:scale-95 transition-all disabled:opacity-50"
+                          title={`Send ${t.emoji} ${t.label} to ${e.name}`}
+                        >
+                          <span>{t.emoji}</span>
+                          <span className="ml-1">{t.label}</span>
+                        </button>
+                      ))
                     )}
-                    {/* Chat — private 1:1 DM thread (always available) */}
+                    {/* Chat — private 1:1 DM thread (always available, sits at end) */}
                     <button
                       onClick={() => setDmFriend({ user_id: e.user_id, name: e.name })}
-                      className="text-[11px] px-2.5 py-1 rounded-lg border border-[#1B3829]/30 bg-white text-[#1B3829] font-semibold hover:bg-[#1B3829]/5 active:scale-95 transition-all"
+                      className="text-[11px] px-2 py-1 rounded-lg border border-[#1B3829]/30 bg-white text-[#1B3829] font-semibold hover:bg-[#1B3829]/5 active:scale-95 transition-all inline-flex items-center gap-1"
                       title={`Open private chat with ${e.name}`}
                     >
-                      💬 Chat with {e.name.split(" ")[0]}
+                      💬 Chat
                     </button>
                   </div>
                 )}
