@@ -651,16 +651,17 @@ export const api = {
         body: JSON.stringify({ text }),
       });
     },
-    leaderboard(metric: LeaderboardMetric = "steps"): Promise<{
-      metric: LeaderboardMetric;
-      entries: LeaderboardEntry[];
-      date: string;
-    }> {
-      return request(`/api/friends/leaderboard?metric=${metric}`);
+    leaderboard(): Promise<LeaderboardResponse> {
+      return request("/api/friends/leaderboard");
     },
-    cheer(friend_user_id: string): Promise<{ ok: boolean; cheered_user_id: string }> {
+    cheer(friend_user_id: string, kind: TauntKind = "cheer"): Promise<{
+      ok: boolean;
+      cheered_user_id: string;
+      kind: TauntKind;
+    }> {
       return request(`/api/friends/cheer/${encodeURIComponent(friend_user_id)}`, {
         method: "POST",
+        body: JSON.stringify({ kind }),
       });
     },
   },
@@ -706,13 +707,29 @@ export interface CoachObservation {
 // ── Leaderboard types ────────────────────────────────────────────────────────
 export type LeaderboardMetric = "steps" | "sleep" | "activity";
 
+export type TauntKind = "cheer" | "catch_me" | "race_me" | "slow_today";
+
+export interface MetricValue {
+  value:  number | null;
+  anchor: string;
+}
+
 export interface LeaderboardEntry {
-  user_id:   string;
-  name:      string;
-  value:     number | null;
-  anchor:    string;
-  is_me:     boolean;
-  i_cheered: boolean;
+  user_id:    string;
+  name:       string;
+  is_me:      boolean;
+  steps:      MetricValue;
+  sleep:      MetricValue;
+  activity:   MetricValue;
+  /** Which taunt (if any) the current user has sent to this friend today. */
+  taunt_sent: TauntKind | null;
+}
+
+export interface LeaderboardResponse {
+  entries: LeaderboardEntry[];
+  /** user_id of the per-metric leader, or null if no one has a value yet. */
+  leaders: { steps: string | null; sleep: string | null; activity: string | null };
+  date:    string;
 }
 
 // ── Friends types ─────────────────────────────────────────────────────────────

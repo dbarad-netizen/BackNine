@@ -2369,20 +2369,20 @@ async def react_to_event(event_id: str, request: Request):
 
 
 @app.get("/api/friends/leaderboard")
-def friend_leaderboard(request: Request, metric: str = "steps"):
-    """Daily leaderboard: self + friends ranked by today's value for a metric.
-
-    metric ∈ {steps, sleep, activity}. Returns entries ordered by value desc
-    with a per-entry i_cheered flag so the UI can render the cheer button
-    state without a second fetch.
+def friend_leaderboard(request: Request, metric: Optional[str] = None):
+    """Daily multi-metric leaderboard: self + each friend with all three
+    metric values (steps, sleep score, activity score) plus per-metric leader
+    flags. The `metric` query param is accepted for backwards compatibility
+    but the response now contains every metric so the UI can render all three
+    in one card without re-querying.
     """
     session = _require_session(request)
     user_id = session["user_id"]
-    metric  = metric.lower()
-    if metric not in {"steps", "sleep", "activity"}:
-        raise HTTPException(status_code=400, detail="metric must be steps|sleep|activity")
+    # `metric` is kept for backward compat / future per-metric sort needs,
+    # but the response always includes all three metric values per entry.
+    _ = (metric or "").lower()
 
-    def _value_for(uid: str) -> tuple[Optional[float], str]:
+    def _value_for(uid: str, metric: str) -> tuple[Optional[float], str]:
         """Resolve the metric value for a user. Returns (value, anchor_date).
 
         Robust to today's data not being in the cache yet. For each metric we
@@ -2442,51 +2442,85 @@ def friend_leaderboard(request: Request, metric: str = "steps"):
 
         return None, anchor
 
-    # Pull today's cheer set up-front to flag friends the user has cheered.
+    # Pull today's taunt set up-front so the UI knows which preset (if any)
+    # the user already sent to each friend today.
     try:
         from zoneinfo import ZoneInfo
     except ImportError:
         from backports.zoneinfo import ZoneInfo  # type: ignore
     today_str = datetime.now(tz=ZoneInfo("America/New_York")).date().isoformat()
-    cheered_today = frd.cheers_sent_today(user_id, today_str)
+    taunts_today = frd.taunts_sent_today(user_id, today_str)  # {target_user_id: kind}
 
-    entries: list[dict] = []
-    me_value, me_anchor = _value_for(user_id)
-    entries.append({
-        "user_id":   user_id,
-        "name":      _display_name_for(user_id),
-        "value":     me_value,
-        "anchor":    me_anchor,
-        "is_me":     True,
-        "i_cheered": False,  # you can't cheer yourself
-    })
+    def _entry_for(uid: str, name: str, is_me: bool) -> dict:
+        steps_v, steps_a    = _value_for(uid, "steps")
+        sleep_v, sleep_a    = _value_for(uid, "sleep")
+        act_v,   act_a      = _value_for(uid, "activity")
+        return {
+            "user_id":  uid,
+            "name":     name,
+            "is_me":    is_me,
+            # Per-metric value + anchor
+            "steps":    {"value": steps_v, "anchor": steps_a},
+            "sleep":    {"value": sleep_v, "anchor": sleep_a},
+            "activity": {"value": act_v,   "anchor": act_a},
+            # If you've taunted this friend today, surface which kind (else None).
+            "taunt_sent": None if is_me else taunts_today.get(uid),
+        }
+
+    entries: list[dict] = [
+        _entry_for(user_id, _display_name_for(user_id), True),
+    ]
     try:
         friends = frd.list_friends(user_id)
     except Exception:
         friends = []
     for f in friends:
-        f_value, f_anchor = _value_for(f["user_id"])
-        entries.append({
-            "user_id":   f["user_id"],
-            "name":      f.get("name") or "Friend",
-            "value":     f_value,
-            "anchor":    f_anchor,
-            "is_me":     False,
-            "i_cheered": f["user_id"] in cheered_today,
-        })
+        entries.append(_entry_for(f["user_id"], f.get("name") or "Friend", False))
 
-    # Sort: real values first (desc), nulls at the bottom.
-    entries.sort(key=lambda e: (e["value"] is None, -(e["value"] or 0)))
-    return {"metric": metric, "entries": entries, "date": today_str}
+    # Per-metric leader: id of the entry with the highest non-null value.
+    def _leader_id(metric_key: str) -> Optional[str]:
+        scored = [e for e in entries if (e[metric_key].get("value") or 0) > 0]
+        if not scored:
+            return None
+        winner = max(scored, key=lambda e: e[metric_key]["value"])
+        return winner["user_id"]
+
+    leaders = {
+        "steps":    _leader_id("steps"),
+        "sleep":    _leader_id("sleep"),
+        "activity": _leader_id("activity"),
+    }
+
+    # Default sort: by steps desc with nulls last. Frontend can re-sort.
+    entries.sort(key=lambda e: (
+        (e["steps"].get("value") or 0) <= 0,
+        -(e["steps"].get("value") or 0),
+    ))
+
+    return {
+        "entries": entries,
+        "leaders": leaders,
+        "date":    today_str,
+    }
 
 
 @app.post("/api/friends/cheer/{friend_user_id}")
-def cheer_friend(friend_user_id: str, request: Request):
-    """Send a single-tap cheer to a friend. Idempotent per (you, target, today)."""
+async def cheer_friend(friend_user_id: str, request: Request):
+    """Send a taunt to a friend. Body: { kind?: "cheer"|"catch_me"|"race_me"|"slow_today" }.
+    Defaults to cheer for backwards compatibility. Dedup is one taunt per
+    (you, target, today) total — pick one kind per day per friend.
+    """
     session = _require_session(request)
     user_id = session["user_id"]
     if user_id == friend_user_id:
-        raise HTTPException(status_code=400, detail="cannot cheer yourself")
+        raise HTTPException(status_code=400, detail="cannot taunt yourself")
+
+    # Parse optional body for the kind. Tolerate empty bodies (old clients).
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    kind = (body.get("kind") or "cheer").lower()
 
     try:
         from zoneinfo import ZoneInfo
@@ -2506,8 +2540,8 @@ def cheer_friend(friend_user_id: str, request: Request):
             target_name = f.get("name") or "Friend"
             break
 
-    row = frd.send_cheer(user_id, friend_user_id, me_name, target_name, today_str)
-    return {"ok": bool(row), "cheered_user_id": friend_user_id, "event": row}
+    row = frd.send_taunt(user_id, friend_user_id, me_name, target_name, today_str, kind=kind)
+    return {"ok": bool(row), "cheered_user_id": friend_user_id, "kind": kind, "event": row}
 
 
 @app.get("/api/friends/events/{event_id}/comments")

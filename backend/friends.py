@@ -667,27 +667,41 @@ def generate_milestones_with_backfill(
 # and payload {target_user_id, target_name, date}. Dedup: one cheer per
 # (cheerer, target, day). Shows up in the recipient's Pulse feed.
 
-def send_cheer(
-    cheerer_id: str,
+# Single 'cheer' event_type carries different `kind`s in payload so the row
+# stays unified in activity_events. Dedup is one taunt per (sender, target,
+# day) regardless of kind — picking one CTA per day per friend keeps the
+# preset row simple ("you already taunted Sarah today") and the feed clean.
+TAUNT_KINDS = {"cheer", "catch_me", "race_me", "slow_today"}
+
+
+def send_taunt(
+    sender_id: str,
     target_id: str,
-    cheerer_name: str,
+    sender_name: str,
     target_name: str,
     today: str,
+    kind: str = "cheer",
 ) -> Optional[dict]:
-    """Record a cheer from cheerer_id to target_id for `today`.
+    """Record a taunt (cheer / catch_me / race_me / slow_today) from
+    sender_id to target_id for `today`.
 
-    Idempotent — if a cheer for this triple already exists today, returns
-    the existing row instead of creating a duplicate. Returns None on
-    failure (best-effort, never raises).
+    Dedup: one taunt per (sender, target, day) total, regardless of kind.
+    If the user already sent a taunt today, returns that row instead of
+    inserting a new one (idempotent — the UI's optimistic flip won't end up
+    with duplicate events even if the user double-taps).
     """
-    if not cheerer_id or not target_id or cheerer_id == target_id:
+    if not sender_id or not target_id or sender_id == target_id:
         return None
+    kind = (kind or "cheer").lower()
+    if kind not in TAUNT_KINDS:
+        kind = "cheer"
+
     sb = _sb()
     try:
         existing = (
             sb.table("activity_events")
-            .select("id, payload, created_at")
-            .eq("user_id", cheerer_id)
+            .select("id, payload, created_at, event_type")
+            .eq("user_id", sender_id)
             .eq("event_type", "cheer")
             .filter("payload->>date",            "eq", today)
             .filter("payload->>target_user_id",  "eq", target_id)
@@ -697,10 +711,11 @@ def send_cheer(
         if existing.data:
             return existing.data[0]
         row = {
-            "user_id":    cheerer_id,
-            "user_name":  cheerer_name or "Friend",
+            "user_id":    sender_id,
+            "user_name":  sender_name or "Friend",
             "event_type": "cheer",
             "payload": {
+                "kind":           kind,
                 "target_user_id": target_id,
                 "target_name":    target_name or "Friend",
                 "date":           today,
@@ -712,29 +727,52 @@ def send_cheer(
         return None
 
 
-def cheers_sent_today(cheerer_id: str, today: str) -> set[str]:
-    """Return the set of target_user_ids the cheerer has cheered on `today`."""
-    if not cheerer_id:
-        return set()
+# Back-compat alias — older callers still invoke send_cheer.
+def send_cheer(
+    cheerer_id: str,
+    target_id: str,
+    cheerer_name: str,
+    target_name: str,
+    today: str,
+) -> Optional[dict]:
+    return send_taunt(cheerer_id, target_id, cheerer_name, target_name, today, kind="cheer")
+
+
+def taunts_sent_today(sender_id: str, today: str) -> dict[str, str]:
+    """Return {target_user_id: kind} for taunts sent today.
+
+    Lets the frontend collapse the preset row to '✓ Sent 🔥 Catch me' for
+    the friends already taunted, while keeping the row interactive for the
+    rest. Empty dict on any failure (best-effort, never raises).
+    """
+    if not sender_id:
+        return {}
     sb = _sb()
     try:
         res = (
             sb.table("activity_events")
             .select("payload")
-            .eq("user_id", cheerer_id)
+            .eq("user_id", sender_id)
             .eq("event_type", "cheer")
             .filter("payload->>date", "eq", today)
             .execute()
         )
     except Exception:
-        return set()
-    out: set[str] = set()
+        return {}
+    out: dict[str, str] = {}
     for r in (res.data or []):
         p = r.get("payload") or {}
-        tid = p.get("target_user_id")
+        tid  = p.get("target_user_id")
+        kind = p.get("kind") or "cheer"
         if tid:
-            out.add(tid)
+            out[tid] = kind
     return out
+
+
+# Back-compat alias used by the existing /api/friends/leaderboard wrapper
+# until callers migrate to taunts_sent_today.
+def cheers_sent_today(cheerer_id: str, today: str) -> set[str]:
+    return set(taunts_sent_today(cheerer_id, today).keys())
 
 
 # ── Per-event comments (Pulse reply threads) ─────────────────────────────────
@@ -900,6 +938,13 @@ def _summarize_event(row: dict) -> str:
 
     if et == "cheer":
         target = p.get("target_name") or "a friend"
+        kind   = p.get("kind") or "cheer"
+        if kind == "catch_me":
+            return f"{name} told {target} to catch up 🔥"
+        if kind == "race_me":
+            return f"{name} challenged {target} to a race 💪"
+        if kind == "slow_today":
+            return f"{name} called {target} out for being slow 🐌"
         return f"{name} cheered {target} 👏"
 
     return f"{name} did something"
