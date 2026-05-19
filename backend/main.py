@@ -2544,6 +2544,37 @@ async def cheer_friend(friend_user_id: str, request: Request):
     return {"ok": bool(row), "cheered_user_id": friend_user_id, "kind": kind, "event": row}
 
 
+@app.get("/api/friends/dm/{friend_user_id}")
+def get_dm_thread(friend_user_id: str, request: Request, limit: int = 100):
+    """Return the DM thread between you and a specific friend, oldest first.
+    Only the two participants can read — enforced inside frd.list_dm via
+    the friendship check.
+    """
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        return {"messages": frd.list_dm(user_id, friend_user_id, limit=min(max(limit, 1), 200))}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/friends/dm/{friend_user_id}")
+async def post_dm(friend_user_id: str, request: Request):
+    """Send a DM to a friend. Body: { text }."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    body = await request.json()
+    text = (body.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="text is required")
+    try:
+        return frd.send_dm(user_id, friend_user_id, text)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/friends/events/{event_id}/comments")
 def list_event_comments(event_id: str, request: Request):
     """Recent comments on a Pulse event (oldest-first)."""

@@ -654,6 +654,17 @@ export const api = {
     leaderboard(): Promise<LeaderboardResponse> {
       return request("/api/friends/leaderboard");
     },
+    dm: {
+      list(friend_user_id: string): Promise<{ messages: DirectMessage[] }> {
+        return request(`/api/friends/dm/${encodeURIComponent(friend_user_id)}`);
+      },
+      send(friend_user_id: string, text: string): Promise<DirectMessage> {
+        return request(`/api/friends/dm/${encodeURIComponent(friend_user_id)}`, {
+          method: "POST",
+          body: JSON.stringify({ text }),
+        });
+      },
+    },
     cheer(friend_user_id: string, kind: TauntKind = "cheer"): Promise<{
       ok: boolean;
       cheered_user_id: string;
@@ -730,6 +741,17 @@ export interface LeaderboardResponse {
   /** user_id of the per-metric leader, or null if no one has a value yet. */
   leaders: { steps: string | null; sleep: string | null; activity: string | null };
   date:    string;
+}
+
+// ── DM types ────────────────────────────────────────────────────────────────
+export interface DirectMessage {
+  id:            string;
+  sender_id:     string;
+  recipient_id:  string;
+  text:          string;
+  created_at:    string;
+  user_name?:    string;
+  is_me:         boolean;
 }
 
 // ── Friends types ─────────────────────────────────────────────────────────────

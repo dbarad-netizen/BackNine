@@ -20,6 +20,7 @@ import {
   type LeaderboardResponse,
   type TauntKind,
 } from "@/lib/api";
+import FriendDmDrawer from "@/components/FriendDmDrawer";
 
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -76,6 +77,8 @@ export default function FriendLeaderboard() {
   const [error,   setError]   = useState<string | null>(null);
   /** Tracks in-flight taunts per friend so double-taps don't fire twice. */
   const [sendingIds, setSendingIds] = useState<Set<string>>(new Set());
+  /** Currently-open DM friend, or null when the drawer is closed. */
+  const [dmFriend, setDmFriend] = useState<{ user_id: string; name: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -231,32 +234,42 @@ export default function FriendLeaderboard() {
                   })}
                 </div>
 
-                {/* Taunt presets — only for friends, only if not already sent */}
+                {/* Taunts + chat — only for friends */}
                 {!e.is_me && (
-                  e.taunt_sent ? (
-                    <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 inline-flex items-center gap-1">
-                      ✓ {TAUNTS.find(t => t.kind === e.taunt_sent)?.emoji}{" "}
-                      <span className="font-semibold">
-                        {TAUNTS.find(t => t.kind === e.taunt_sent)?.sentLabel}
-                      </span>
-                      <span className="text-amber-500/70 ml-1">· comes back tomorrow</span>
-                    </div>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {TAUNTS.map(t => (
-                        <button
-                          key={t.kind}
-                          onClick={() => handleTaunt(e.user_id, t.kind)}
-                          disabled={sending}
-                          className="text-[11px] px-2.5 py-1 rounded-lg border border-gray-200 bg-white text-gray-700 font-medium hover:border-[#1B3829]/40 hover:bg-[#1B3829]/5 active:scale-95 transition-all disabled:opacity-50"
-                          title={`Send ${t.emoji} ${t.label} to ${e.name}`}
-                        >
-                          <span>{t.emoji}</span>
-                          <span className="ml-1">{t.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )
+                  <div className="space-y-1.5">
+                    {e.taunt_sent ? (
+                      <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 inline-flex items-center gap-1">
+                        ✓ {TAUNTS.find(t => t.kind === e.taunt_sent)?.emoji}{" "}
+                        <span className="font-semibold">
+                          {TAUNTS.find(t => t.kind === e.taunt_sent)?.sentLabel}
+                        </span>
+                        <span className="text-amber-500/70 ml-1">· comes back tomorrow</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {TAUNTS.map(t => (
+                          <button
+                            key={t.kind}
+                            onClick={() => handleTaunt(e.user_id, t.kind)}
+                            disabled={sending}
+                            className="text-[11px] px-2.5 py-1 rounded-lg border border-gray-200 bg-white text-gray-700 font-medium hover:border-[#1B3829]/40 hover:bg-[#1B3829]/5 active:scale-95 transition-all disabled:opacity-50"
+                            title={`Send ${t.emoji} ${t.label} to ${e.name}`}
+                          >
+                            <span>{t.emoji}</span>
+                            <span className="ml-1">{t.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {/* Chat — private 1:1 DM thread (always available) */}
+                    <button
+                      onClick={() => setDmFriend({ user_id: e.user_id, name: e.name })}
+                      className="text-[11px] px-2.5 py-1 rounded-lg border border-[#1B3829]/30 bg-white text-[#1B3829] font-semibold hover:bg-[#1B3829]/5 active:scale-95 transition-all"
+                      title={`Open private chat with ${e.name}`}
+                    >
+                      💬 Chat with {e.name.split(" ")[0]}
+                    </button>
+                  </div>
                 )}
               </div>
             );
@@ -267,6 +280,9 @@ export default function FriendLeaderboard() {
       {error && (
         <p className="text-[10px] text-red-500 mt-1 italic">{error}</p>
       )}
+
+      {/* Private 1:1 chat drawer — fixed-positioned, overlays the page */}
+      <FriendDmDrawer friend={dmFriend} onClose={() => setDmFriend(null)} />
     </section>
   );
 }

@@ -775,6 +775,113 @@ def cheers_sent_today(cheerer_id: str, today: str) -> set[str]:
     return set(taunts_sent_today(cheerer_id, today).keys())
 
 
+# ── Direct messages between friend pairs ─────────────────────────────────────
+#
+# Private 1:1 chat scoped to a single friend pair. Distinct from per-event
+# Pulse comments (which are public to anyone who can see the event).
+# Authorization: only the two participants can read or write the thread —
+# enforced server-side on every call.
+
+MAX_DM_CHARS = 2000
+
+
+def _are_friends(sb, user_id_a: str, user_id_b: str) -> bool:
+    """True if there's an active (non-deleted) friendship between the two."""
+    a, b = _ordered_pair(user_id_a, user_id_b)
+    try:
+        res = (
+            sb.table("friendships")
+            .select("user_id_a")
+            .eq("user_id_a", a)
+            .eq("user_id_b", b)
+            .is_("deleted_at", "null")
+            .limit(1)
+            .execute()
+        )
+        return bool(res.data)
+    except Exception:
+        return False
+
+
+def list_dm(viewer_id: str, friend_id: str, limit: int = 100) -> list[dict]:
+    """Return DMs between viewer_id and friend_id, oldest-first.
+
+    Each row carries `is_me` so the UI can right-align the sender's bubble,
+    and a live-resolved author display name in case names changed.
+    """
+    if not viewer_id or not friend_id or viewer_id == friend_id:
+        return []
+    sb = _sb()
+    if not _are_friends(sb, viewer_id, friend_id):
+        return []
+
+    # Query both directions and merge. Supabase doesn't expose Postgres OR
+    # easily — two queries is fine for a 1:1 chat.
+    try:
+        sent = (
+            sb.table("dm_messages")
+            .select("id, sender_id, recipient_id, text, created_at")
+            .eq("sender_id", viewer_id)
+            .eq("recipient_id", friend_id)
+            .order("created_at", desc=False)
+            .limit(limit)
+            .execute()
+        )
+        recv = (
+            sb.table("dm_messages")
+            .select("id, sender_id, recipient_id, text, created_at")
+            .eq("sender_id", friend_id)
+            .eq("recipient_id", viewer_id)
+            .order("created_at", desc=False)
+            .limit(limit)
+            .execute()
+        )
+    except Exception:
+        return []
+
+    rows = (sent.data or []) + (recv.data or [])
+    rows.sort(key=lambda r: r.get("created_at") or "")
+    if len(rows) > limit:
+        rows = rows[-limit:]
+
+    # Live-join author display names so a name change shows up immediately.
+    author_ids = list({r["sender_id"] for r in rows})
+    names = _names_for(sb, author_ids)
+    out: list[dict] = []
+    for r in rows:
+        out.append({
+            **r,
+            "user_name": names.get(r["sender_id"]) or "Friend",
+            "is_me":     r["sender_id"] == viewer_id,
+        })
+    return out
+
+
+def send_dm(sender_id: str, recipient_id: str, text: str) -> dict:
+    """Send a DM. Raises ValueError on invalid input or non-friends."""
+    if not sender_id or not recipient_id:
+        raise ValueError("sender_id and recipient_id are required")
+    if sender_id == recipient_id:
+        raise ValueError("Can't message yourself")
+    cleaned = (text or "").strip()
+    if not cleaned:
+        raise ValueError("Message cannot be empty")
+    cleaned = cleaned[:MAX_DM_CHARS]
+
+    sb = _sb()
+    if not _are_friends(sb, sender_id, recipient_id):
+        raise ValueError("You're not friends with this user")
+
+    row = {
+        "sender_id":    sender_id,
+        "recipient_id": recipient_id,
+        "text":         cleaned,
+    }
+    res = sb.table("dm_messages").insert(row).execute()
+    inserted = (res.data or [row])[0]
+    return {**inserted, "is_me": True}
+
+
 # ── Per-event comments (Pulse reply threads) ─────────────────────────────────
 #
 # Comments are scoped to a single activity_event. Tapping a Pulse card on the
