@@ -37,6 +37,7 @@ import chat as ch
 import briefing as brf
 import weekly_insight as wins
 import friends as frd
+import leagues as lg
 import observations as obs
 
 load_dotenv()
@@ -2627,6 +2628,26 @@ async def accept_friend_referral(request: Request):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"could not accept referral: {e}")
+
+
+# ── Weekly Leagues ────────────────────────────────────────────────────────────
+
+@app.get("/api/leagues/current")
+def get_current_league(request: Request):
+    """Join (or fetch) this week's league for the current user and return live
+    standings ranked by weekly step count. Soft-fails to an empty payload so a
+    league hiccup never breaks the Scorecard."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        from backports.zoneinfo import ZoneInfo  # type: ignore
+    today_et = datetime.now(tz=ZoneInfo("America/New_York")).date().isoformat()
+    try:
+        return lg.get_current_league(user_id, today_et)
+    except Exception:
+        return {"league": None, "standings": [], "me_rank": None, "days_left": None, "member_count": 0}
 
 
 @app.get("/api/friends")

@@ -752,6 +752,10 @@ export const api = {
     leaderboard(): Promise<LeaderboardResponse> {
       return request("/api/friends/leaderboard");
     },
+    /** This week's auto-grouped league standings (Duolingo-style). */
+    league(): Promise<LeagueResponse> {
+      return request("/api/leagues/current");
+    },
     /** Stable, reusable referral code for shareable invite cards. */
     referral(): Promise<ReferralCode> {
       return request("/api/friends/referral");
@@ -888,6 +892,27 @@ export interface LeaderboardEntry {
 export interface ReferralCode {
   code: string;
   name: string;
+}
+
+export interface LeagueStanding {
+  user_id: string;
+  name:    string;
+  score:   number;   // weekly steps
+  rank:    number;
+  is_me:   boolean;
+}
+
+export interface LeagueResponse {
+  league: {
+    tier:       number;
+    tier_name:  string;   // Bronze / Silver / …
+    week_start: string;
+    week_end:   string;
+  } | null;
+  standings:    LeagueStanding[];
+  me_rank:      number | null;
+  days_left:    number | null;
+  member_count: number;
 }
 
 export interface LeaderboardResponse {

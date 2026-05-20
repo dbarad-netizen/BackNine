@@ -33,6 +33,7 @@ import ActiveCompetitions from "@/components/ActiveCompetitions";
 import GearPicks from "@/components/GearPicks";
 import PulseFeed from "@/components/PulseFeed";
 import FriendLeaderboard from "@/components/FriendLeaderboard";
+import WeeklyLeague from "@/components/WeeklyLeague";
 import NotificationBell from "@/components/NotificationBell";
 import ShareCardModal from "@/components/ShareCardModal";
 import OnboardingModal from "@/components/OnboardingModal";
@@ -1574,6 +1575,9 @@ export default function DashboardPage() {
                 </section>
               );
             })()}
+
+            {/* ── Weekly League (auto-grouped competition) ── */}
+            <WeeklyLeague onInvite={() => setShowShare(true)} />
 
             {/* ── Today's Leaderboard (self + friends ranked) ── */}
             <FriendLeaderboard />
