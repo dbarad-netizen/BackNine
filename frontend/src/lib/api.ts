@@ -159,6 +159,14 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface MeResponse {
+  user_id:          string;
+  email:            string | null;
+  provider:         string;
+  has_oura:         boolean;
+  needs_onboarding: boolean;
+}
+
 export interface DashboardData {
   generated:            string;
   data_through:         string;
@@ -563,6 +571,14 @@ export const api = {
   // ── Progress ──────────────────────────────────────────────────────────────
   progress(): Promise<ProgressReport> {
     return request("/api/progress");
+  },
+
+  // ── Identity / onboarding ───────────────────────────────────────────────────
+  me(): Promise<MeResponse> {
+    return request("/api/me");
+  },
+  completeOnboarding(): Promise<{ ok: boolean }> {
+    return request("/api/me/complete-onboarding", { method: "POST" });
   },
 
   // ── Profile ───────────────────────────────────────────────────────────────

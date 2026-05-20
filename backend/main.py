@@ -1674,12 +1674,40 @@ def get_me(request: Request):
                 has_oura = "oura" in providers
             except Exception:
                 pass
+
+    # Onboarding status — null onboarded_at means the user hasn't been
+    # through the first-time flow yet.
+    profile = _get_profile(user_id)
+    needs_onboarding = not bool(profile.get("onboarded_at"))
+
     return {
-        "user_id":  user_id,
-        "email":    session.get("email"),
-        "provider": session.get("provider", "oura"),
-        "has_oura": has_oura,
+        "user_id":          user_id,
+        "email":            session.get("email"),
+        "provider":         session.get("provider", "oura"),
+        "has_oura":         has_oura,
+        "needs_onboarding": needs_onboarding,
     }
+
+
+@app.post("/api/me/complete-onboarding")
+def complete_onboarding(request: Request):
+    """Mark the user's onboarding as complete (sets onboarded_at = now)."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    db = get_supabase()
+    if not db:
+        return {"ok": False}
+    try:
+        db.table("user_profiles").upsert(
+            {
+                "user_id":      user_id,
+                "onboarded_at": datetime.now(tz=timezone.utc).isoformat(),
+            },
+            on_conflict="user_id",
+        ).execute()
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ── Progress ──────────────────────────────────────────────────────────────────

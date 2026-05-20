@@ -32,6 +32,7 @@ import GearPicks from "@/components/GearPicks";
 import PulseFeed from "@/components/PulseFeed";
 import FriendLeaderboard from "@/components/FriendLeaderboard";
 import NotificationBell from "@/components/NotificationBell";
+import OnboardingModal from "@/components/OnboardingModal";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts";
@@ -754,6 +755,7 @@ export default function DashboardPage() {
   const [section,    setSection]    = useState<Section>("coaching");
   const [showProfile, setShowProfile] = useState(false);
   const [profileInitialTab, setProfileInitialTab] = useState<"profile" | "friends">("profile");
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const openChatRef = useRef<(() => void) | null>(null);
 
   // Nutrition state
@@ -775,6 +777,11 @@ export default function DashboardPage() {
     // Pre-load weight entries so Body Composition card is ready on Scorecard
     api.weightEntries()
       .then(w => setWeightLog(w.entries))
+      .catch(() => {});
+    // Check onboarding status independently of the (possibly empty) dashboard
+    // payload — a brand-new user with no data still needs the welcome flow.
+    api.me()
+      .then(me => { if (me.needs_onboarding) setShowOnboarding(true); })
       .catch(() => {});
   }, []);
 
@@ -871,9 +878,16 @@ export default function DashboardPage() {
     } catch (e) { console.error(e); }
   };
 
-  if (loading) return <LoadingState />;
-  if (error)   return <ErrorState error={error} />;
-  if (!data)   return null;
+  // Onboarding overlay renders on top of whatever state the dashboard is in —
+  // a brand-new user may have empty/failed dashboard data but still needs the
+  // welcome flow. So we render it alongside the loading/error/empty states too.
+  const onboardingOverlay = showOnboarding ? (
+    <OnboardingModal onDone={() => { setShowOnboarding(false); window.location.reload(); }} />
+  ) : null;
+
+  if (loading) return <>{onboardingOverlay}<LoadingState /></>;
+  if (error)   return <>{onboardingOverlay}<ErrorState error={error} /></>;
+  if (!data)   return <>{onboardingOverlay}</>;
 
   const { today, trend, coaches, coaching, training_load, readiness_forecast, prediction_accuracy } = data;
   const sm  = today.sleep_model   as Record<string, number | null>;
@@ -1844,6 +1858,7 @@ export default function DashboardPage() {
 
       {/* ── Profile modal ── */}
       {showProfile && <ProfileModal onClose={() => setShowProfile(false)} initialTab={profileInitialTab} />}
+      {showOnboarding && <OnboardingModal onDone={() => { setShowOnboarding(false); window.location.reload(); }} />}
 
     </div>
   );
