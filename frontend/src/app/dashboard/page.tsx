@@ -10,6 +10,7 @@ import {
   type FoodItem,
   type Meal,
   type NutritionSettings,
+  type LongevityHistory,
 } from "@/lib/api";
 import { scoreColor, fmtDate } from "@/lib/utils";
 import ScoreRing from "@/components/ScoreRing";
@@ -65,6 +66,43 @@ function CalorieRing({
         <span className="text-[10px] text-gray-400 mt-0.5">/ {budget}</span>
       </div>
     </div>
+  );
+}
+
+// ── Longevity Score sparkline ───────────────────────────────────────────────────
+function LongevitySparkline({
+  points, color,
+}: { points: { date: string; score: number }[]; color: string }) {
+  const W = 300, H = 44, P = 5;
+  const scores = points.map(p => p.score);
+  const min = Math.min(...scores);
+  const max = Math.max(...scores);
+  const range = Math.max(1, max - min);
+  const n = points.length;
+  const x = (i: number) => P + (n === 1 ? (W - 2 * P) / 2 : (i / (n - 1)) * (W - 2 * P));
+  const y = (v: number) => P + (1 - (v - min) / range) * (H - 2 * P);
+  const line = points
+    .map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.score).toFixed(1)}`)
+    .join(" ");
+  const area = `${line} L${x(n - 1).toFixed(1)},${(H - P).toFixed(1)} L${x(0).toFixed(1)},${(H - P).toFixed(1)} Z`;
+  const lastX = x(n - 1), lastY = y(points[n - 1].score);
+  const gid = "lon-spark-grad";
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }} preserveAspectRatio="none">
+      <defs>
+        <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"   stopColor={color} stopOpacity="0.22" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill={`url(#${gid})`} stroke="none" />
+      <path
+        d={line} fill="none" stroke={color} strokeWidth={2}
+        strokeLinecap="round" strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
+      <circle cx={lastX} cy={lastY} r={3} fill={color} vectorEffect="non-scaling-stroke" />
+    </svg>
   );
 }
 
@@ -749,6 +787,7 @@ function SettingsPanel({ settings, onSave }: { settings: NutritionSettings; onSa
 // ── Main dashboard ─────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const [data,       setData]       = useState<DashboardData | null>(null);
+  const [lonHistory, setLonHistory] = useState<LongevityHistory | null>(null);
   const [error,      setError]      = useState<string | null>(null);
   const [loading,    setLoading]    = useState(true);
   const [tab,        setTab]        = useState<Tab>("scores");
@@ -771,7 +810,12 @@ export default function DashboardPage() {
 
   useEffect(() => {
     api.dashboard()
-      .then(setData)
+      .then((d) => {
+        setData(d);
+        // Fetch the Longevity trend AFTER the dashboard resolves so today's
+        // score has been recorded (and any first-time backfill has run).
+        api.longevityHistory().then(setLonHistory).catch(() => {});
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
     // Pre-load weight entries so Body Composition card is ready on Scorecard
@@ -870,6 +914,8 @@ export default function DashboardPage() {
       // Refresh dashboard so longevity score recalculates with the new VO2 max
       const fresh = await api.dashboard();
       setData(fresh);
+      // The reload re-records today's score; refresh the trend to match.
+      api.longevityHistory().then(setLonHistory).catch(() => {});
       setTimeout(() => setVo2Saved(false), 3000);
     } catch (e) { console.error(e); }
     finally { setVo2Saving(false); }
@@ -1333,6 +1379,41 @@ export default function DashboardPage() {
                       <p className="text-[10px] text-gray-300 mt-1">{lon.data_coverage} available</p>
                     </div>
                   </div>
+
+                  {/* ── Score trend over time ── */}
+                  {lonHistory && lonHistory.history.length >= 2 ? (() => {
+                    const delta = lonHistory.summary.delta_30d ?? lonHistory.summary.delta_7d;
+                    const deltaWindow = lonHistory.summary.delta_30d != null ? 30 : 7;
+                    const deltaColor = delta == null ? "text-gray-400"
+                      : delta > 0 ? "text-green-600"
+                      : delta < 0 ? "text-red-500" : "text-gray-500";
+                    const firstDate = lonHistory.history[0].date;
+                    const [, fm, fd] = firstDate.split("-");
+                    return (
+                      <div className="pt-3 border-t border-gray-100">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-[10px] text-gray-400 uppercase tracking-widest">Score trend</p>
+                          {delta != null && (
+                            <span className={`text-[11px] font-semibold ${deltaColor}`}>
+                              {delta > 0 ? "▲" : delta < 0 ? "▼" : "—"} {Math.abs(delta)} pts vs {deltaWindow}d ago
+                            </span>
+                          )}
+                        </div>
+                        <LongevitySparkline points={lonHistory.history} color={gradeColor} />
+                        <div className="flex justify-between text-[9px] text-gray-300 mt-0.5">
+                          <span>{parseInt(fm)}/{parseInt(fd)}</span>
+                          <span>Today</span>
+                        </div>
+                      </div>
+                    );
+                  })() : lonHistory && lonHistory.history.length === 1 ? (
+                    <div className="pt-3 border-t border-gray-100">
+                      <p className="text-[10px] text-gray-400 leading-snug">
+                        📈 Now tracking your Longevity Score — a trend line appears here as your history builds.
+                      </p>
+                    </div>
+                  ) : null}
+
                   {/* Component breakdown — scored metrics */}
                   {Object.keys(lon.components).length > 0 && (
                     <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">

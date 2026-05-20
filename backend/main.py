@@ -32,6 +32,7 @@ import insights as ins
 import progress as prog
 import predictions as prd
 import longevity as lon
+import longevity_history as lonh
 import chat as ch
 import briefing as brf
 import friends as frd
@@ -1136,6 +1137,15 @@ async def get_dashboard(request: Request, days: int = 120):
             ),
         }
         longevity_score = lon.compute(_lon_metrics, _profile)
+
+        # Persist today's score for the trend line, and (once) backfill history
+        # from the Oura cache so the user sees a real curve immediately.
+        # Keyed on the Oura anchor date so the live point lines up with the
+        # backfilled series. Best-effort — never breaks the dashboard.
+        lonh.ensure_history(
+            user_id, anchor, longevity_score, _profile,
+            vo2_max=_vo2, body_fat=_ah_body_fat,
+        )
     except Exception:
         longevity_score = {"score": None, "grade": None, "components": {}}
 
@@ -1187,6 +1197,62 @@ async def get_dashboard(request: Request, days: int = 120):
         return resp
 
     return payload
+
+
+# ── Longevity Score history ─────────────────────────────────────────────────
+
+@app.get("/api/longevity/history")
+def get_longevity_history(request: Request, days: int = 90):
+    """Return the user's Longevity Score trend plus convenience deltas.
+
+    Shape:
+      {
+        "history": [{date, score, grade, biological_age_delta}, ...],  # asc
+        "summary": {current, delta_7d, delta_30d, count, first_date}
+      }
+    """
+    session = _require_session(request)
+    user_id = session["user_id"]
+
+    try:
+        history = lonh.get_history(user_id, days=days)
+    except Exception:
+        history = []
+
+    summary = {
+        "current":    None,
+        "delta_7d":   None,
+        "delta_30d":  None,
+        "count":      len(history),
+        "first_date": history[0]["date"] if history else None,
+    }
+
+    if history:
+        current = history[-1]["score"]
+        summary["current"] = current
+
+        def _score_near(days_ago: int):
+            """Score from the point closest to `days_ago` days before the latest."""
+            target = datetime.strptime(history[-1]["date"], "%Y-%m-%d").date() - timedelta(days=days_ago)
+            best = None
+            best_gap = None
+            for h in history[:-1]:
+                d = datetime.strptime(h["date"], "%Y-%m-%d").date()
+                gap = abs((d - target).days)
+                # Only count points at/older than the target window so we compare
+                # against the past, not a day just before today.
+                if d <= target + timedelta(days=2) and (best_gap is None or gap < best_gap):
+                    best, best_gap = h["score"], gap
+            return best
+
+        s7  = _score_near(7)
+        s30 = _score_near(30)
+        if s7 is not None:
+            summary["delta_7d"] = current - s7
+        if s30 is not None:
+            summary["delta_30d"] = current - s30
+
+    return {"history": history, "summary": summary}
 
 
 # ── Wearables ─────────────────────────────────────────────────────────────────

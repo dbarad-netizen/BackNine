@@ -146,6 +146,24 @@ export interface LongevityScore {
   data_coverage:        string;
 }
 
+export interface LongevityHistoryPoint {
+  date:                 string;
+  score:                number;
+  grade:                string | null;
+  biological_age_delta: number | null;
+}
+
+export interface LongevityHistory {
+  history: LongevityHistoryPoint[];
+  summary: {
+    current:    number | null;
+    delta_7d:   number | null;
+    delta_30d:  number | null;
+    count:      number;
+    first_date: string | null;
+  };
+}
+
 export interface UserProfile {
   name?:           string | null;
   age?:            number | null;
@@ -452,6 +470,11 @@ export const api = {
       ? `https://backnine-hu60.onrender.com/auth/oura?link_user_id=${encodeURIComponent(userId)}`
       : "https://backnine-hu60.onrender.com/auth/oura";
     window.location.href = url;
+  },
+
+  // ── Longevity history ────────────────────────────────────────────────────────
+  longevityHistory(days = 90): Promise<LongevityHistory> {
+    return request(`/api/longevity/history?days=${days}`);
   },
 
   // ── Nutrition ──────────────────────────────────────────────────────────────
