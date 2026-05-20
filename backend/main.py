@@ -1271,7 +1271,7 @@ def list_wearables(request: Request):
         ],
         "available": [
             {"provider": "oura",        "name": "Oura Ring",     "status": "connected" if session["provider"] == "oura" else "available"},
-            {"provider": "apple_health","name": "Apple Health",  "status": "coming_soon"},
+            {"provider": "apple_health","name": "Apple Health",  "status": "available"},
             {"provider": "garmin",      "name": "Garmin",        "status": "coming_soon"},
             {"provider": "whoop",       "name": "WHOOP",         "status": "coming_soon"},
             {"provider": "fitbit",      "name": "Fitbit",        "status": "coming_soon"},
