@@ -754,6 +754,46 @@ async def delete_oura_webhook_subscription(subscription_id: str, request: Reques
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
+def _empty_dashboard_payload(session: dict) -> dict:
+    """Complete dashboard shape with empty/null values, for authenticated users
+    who haven't connected Oura. Every key the frontend destructures is present
+    so the dashboard renders its empty states rather than throwing on a missing
+    `today` / `coaches` / `trend`.
+    """
+    _empty_coach = {"color": "#111827", "border": "#d1d5db", "icon": "", "title": "", "msg": ""}
+    return {
+        "generated":    datetime.now(timezone.utc).isoformat(),
+        "data_through": None,
+        "provider":     session.get("provider", "supabase"),
+        "has_oura":     False,
+        "today": {
+            "date":               None,
+            "calendar_today":     None,
+            "readiness":          {},
+            "sleep":              {},
+            "activity":           {},
+            "yesterday_activity": {},
+            "activity_live":      None,
+            "today_activity":     {},
+            "sleep_model":        {},
+        },
+        "training_load": {
+            "acwr": None, "acute_avg": None, "chronic_avg": None,
+            "zone": "unknown", "label": "Not enough data", "color": "#6b7280",
+            "acute_days": 7, "chronic_days": 28,
+        },
+        "readiness_forecast": {
+            "score": 0, "label": "—", "color": "#6b7280",
+            "hrv_adj": 0, "sleep_adj": 0, "base": 0,
+        },
+        "prediction_accuracy": None,
+        "longevity_score":     {"score": None, "grade": None, "components": {}},
+        "trend":    [],
+        "coaches":  {"overall": _empty_coach, "sleep": _empty_coach, "activity": _empty_coach},
+        "coaching": {"short": [], "mid": [], "long": [], "meta": {}},
+    }
+
+
 @app.get("/api/dashboard")
 async def get_dashboard(request: Request, days: int = 120):
     session = _require_session(request)
@@ -780,12 +820,10 @@ async def get_dashboard(request: Request, days: int = 120):
                 pass
 
     if not session.get("access_token"):
-        # User is authenticated but hasn't connected Oura yet
-        return {
-            "generated": datetime.now(timezone.utc).isoformat(),
-            "has_oura":  False,
-            "provider":  session.get("provider", "supabase"),
-        }
+        # User is authenticated but hasn't connected Oura yet. Return a COMPLETE
+        # empty payload (every key the frontend destructures) so the dashboard
+        # renders its empty states instead of crashing on `today.sleep_model`.
+        return _empty_dashboard_payload(session)
 
     access_token, refreshed_session = await _ensure_valid_token(session)
     if refreshed_session:
