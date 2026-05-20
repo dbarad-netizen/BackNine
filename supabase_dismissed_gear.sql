@@ -1,11 +1,5 @@
--- Per-user dismissed gear items.
---
--- When a user taps "not for me" on a Scorecard "Picked For You" card, the
--- item id is stored here so it stops appearing in their recommendations.
--- The Gear shop tab still shows every item — dismissal only affects the
--- Scorecard picks.
---
--- Idempotent — safe to re-run.
-
-alter table public.user_profiles
-  add column if not exists dismissed_gear jsonb not null default '[]'::jsonb;
+-- DEPRECATED — not needed. The gear "dismiss" feature was replaced by a
+-- client-side "Give me more suggestions" button, which requires no database
+-- changes. Safe to delete this file (git rm supabase_dismissed_gear.sql).
+-- If you already ran it, the unused dismissed_gear column on user_profiles
+-- is harmless and can be left in place.

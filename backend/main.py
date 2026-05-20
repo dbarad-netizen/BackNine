@@ -1749,43 +1749,6 @@ def complete_onboarding(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ── Gear (Picked For You dismissals) ──────────────────────────────────────────
-
-@app.get("/api/gear/dismissed")
-def get_dismissed_gear(request: Request):
-    """Return the gear item IDs the user has removed from their Scorecard picks."""
-    session = _require_session(request)
-    profile = _get_profile(session["user_id"])
-    return {"dismissed": profile.get("dismissed_gear") or []}
-
-
-@app.post("/api/gear/dismiss")
-async def dismiss_gear(request: Request):
-    """Add a gear item to the user's dismissed list (hides it from Scorecard
-    picks; the Gear shop still shows it)."""
-    session = _require_session(request)
-    user_id = session["user_id"]
-    body = await request.json()
-    item_id = (body.get("item_id") or "").strip()
-    if not item_id:
-        raise HTTPException(status_code=400, detail="item_id is required")
-    db = get_supabase()
-    if not db:
-        return {"ok": False, "dismissed": []}
-    profile = _get_profile(user_id)
-    dismissed = profile.get("dismissed_gear") or []
-    if item_id not in dismissed:
-        dismissed.append(item_id)
-    try:
-        db.table("user_profiles").upsert(
-            {"user_id": user_id, "dismissed_gear": dismissed},
-            on_conflict="user_id",
-        ).execute()
-        return {"ok": True, "dismissed": dismissed}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 # ── Progress ──────────────────────────────────────────────────────────────────
 
 @app.get("/api/progress")

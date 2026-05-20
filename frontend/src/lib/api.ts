@@ -573,19 +573,6 @@ export const api = {
     return request("/api/progress");
   },
 
-  // ── Gear (Picked For You dismissals) ────────────────────────────────────────
-  gear: {
-    dismissed(): Promise<{ dismissed: string[] }> {
-      return request("/api/gear/dismissed");
-    },
-    dismiss(item_id: string): Promise<{ ok: boolean; dismissed: string[] }> {
-      return request("/api/gear/dismiss", {
-        method: "POST",
-        body: JSON.stringify({ item_id }),
-      });
-    },
-  },
-
   // ── Identity / onboarding ───────────────────────────────────────────────────
   me(): Promise<MeResponse> {
     return request("/api/me");
