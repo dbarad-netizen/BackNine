@@ -106,11 +106,11 @@ const GEAR: GearCategory[] = [
       },
       {
         id: "eight-sleep",
-        name: "Pod 4 Cover",
+        name: "Pod 5",
         brand: "Eight Sleep",
-        description: "Active temperature-regulating mattress cover. Heats and cools each side through the night to improve deep sleep.",
-        price: "$2,049",
-        link: "https://www.eightsleep.com/product/pod-cover/",
+        description: "Active temperature-regulating bed system. Heats and cools each side through the night to improve deep sleep.",
+        price: "From $2,849",
+        link: "https://www.eightsleep.com/product/pod5ultra/",
         badge: "Editor's Pick",
       },
       {
@@ -267,11 +267,11 @@ const GEAR: GearCategory[] = [
     items: [
       {
         id: "apple-watch",
-        name: "Apple Watch Series 10",
+        name: "Apple Watch Series 11",
         brand: "Apple",
         description: "The most capable health wearable for iPhone users. ECG, blood oxygen, sleep tracking, and more.",
         price: "$399",
-        link: "https://www.apple.com/apple-watch-series-10/",
+        link: "https://www.apple.com/apple-watch-series-11/",
       },
       {
         id: "inbody-scale",
@@ -284,10 +284,10 @@ const GEAR: GearCategory[] = [
       },
       {
         id: "whoop",
-        name: "WHOOP 4.0",
+        name: "WHOOP 5.0",
         brand: "WHOOP",
-        description: "Screenless strain and recovery tracker. Worn 24/7 for continuous HRV, sleep, and recovery data.",
-        price: "$30/mo",
+        description: "Screenless strain and recovery tracker, now with 14+ day battery. Worn 24/7 for continuous HRV, sleep, and recovery data.",
+        price: "From $199/yr",
         link: "https://www.whoop.com",
       },
       {
