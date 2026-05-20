@@ -35,6 +35,37 @@ export function clearToken(): void {
   if (typeof window !== "undefined") localStorage.removeItem("bn_token");
 }
 
+// ── Pending referral (shareable invite cards) ───────────────────────────────────
+// A shared card link is https://<app>/?ref=CODE. We stash the code in
+// localStorage as early as possible (before any auth redirect — e.g. the Oura
+// OAuth round trip leaves and returns to the origin), then the dashboard
+// auto-accepts it once the user is signed in. localStorage survives the redirect.
+const PENDING_REF_KEY = "bn_pending_ref";
+
+/** Read ?ref= from the URL, persist it, and strip it from the address bar. */
+export function captureReferralFromUrl(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get("ref");
+    if (ref) {
+      localStorage.setItem(PENDING_REF_KEY, ref.trim().toUpperCase());
+      const url = new URL(window.location.href);
+      url.searchParams.delete("ref");
+      window.history.replaceState({}, "", url.toString());
+    }
+  } catch { /* no-op */ }
+}
+
+export function getPendingReferral(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(PENDING_REF_KEY);
+}
+
+export function clearPendingReferral(): void {
+  if (typeof window !== "undefined") localStorage.removeItem(PENDING_REF_KEY);
+}
+
 export interface ActivityLive {
   date:       string;
   steps:      number | null;
@@ -721,6 +752,17 @@ export const api = {
     leaderboard(): Promise<LeaderboardResponse> {
       return request("/api/friends/leaderboard");
     },
+    /** Stable, reusable referral code for shareable invite cards. */
+    referral(): Promise<ReferralCode> {
+      return request("/api/friends/referral");
+    },
+    /** Auto-connect via a referral code captured from a shared link. */
+    acceptReferral(code: string): Promise<{ ok: boolean; self?: boolean }> {
+      return request("/api/friends/referral/accept", {
+        method: "POST",
+        body: JSON.stringify({ code }),
+      });
+    },
     dm: {
       list(friend_user_id: string): Promise<{ messages: DirectMessage[] }> {
         return request(`/api/friends/dm/${encodeURIComponent(friend_user_id)}`);
@@ -841,6 +883,11 @@ export interface LeaderboardEntry {
   taunt_sent:    TauntKind | null;
   /** Weekly head-to-head tally vs the current user. Null for self. */
   head_to_head:  HeadToHead | null;
+}
+
+export interface ReferralCode {
+  code: string;
+  name: string;
 }
 
 export interface LeaderboardResponse {

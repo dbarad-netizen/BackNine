@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase, storeSupabaseToken } from "@/lib/supabase";
+import { captureReferralFromUrl } from "@/lib/api";
 
 const BACKEND = "https://backnine-hu60.onrender.com";
 
@@ -19,6 +20,11 @@ export default function Home() {
 
   // If already authenticated, go straight to dashboard
   useEffect(() => {
+    // Stash any ?ref= invite code BEFORE we redirect anywhere — the dashboard
+    // auto-accepts it once the user is signed in. Runs first so it survives the
+    // Oura OAuth round trip (localStorage persists across the redirect).
+    captureReferralFromUrl();
+
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) {
         storeSupabaseToken(data.session.access_token);

@@ -84,9 +84,66 @@ def create_invite(inviter_id: str, inviter_name: str) -> dict:
     raise RuntimeError("Could not generate a unique invite code after 3 tries")
 
 
+def _create_friendship(
+    sb,
+    inviter_id: str,
+    inviter_name: str,
+    accepter_id: str,
+    accepter_name: str,
+) -> dict:
+    """
+    Create (or restore) a bidirectional friendship between two users.
+
+    Shared by accept_invite (one-time codes) and accept_referral (reusable
+    codes). Idempotent: if a row already exists for the pair it's either a
+    no-op (still active) or an auto-restore (was soft-deleted) — the "I removed
+    them by accident, here's a fresh invite" recovery path.
+    """
+    inviter_name  = inviter_name  or "Friend"
+    accepter_name = accepter_name or "Friend"
+
+    user_a, user_b = _ordered_pair(inviter_id, accepter_id)
+    user_a_name = inviter_name if user_a == inviter_id else accepter_name
+    user_b_name = inviter_name if user_b == inviter_id else accepter_name
+
+    existing = (
+        sb.table("friendships")
+        .select("*")
+        .eq("user_id_a", user_a)
+        .eq("user_id_b", user_b)
+        .execute()
+    )
+    if existing.data:
+        existing_row = existing.data[0]
+        if existing_row.get("deleted_at"):
+            sb.table("friendships").update({
+                "deleted_at":   None,
+                "user_a_name":  user_a_name,
+                "user_b_name":  user_b_name,
+            }).eq("user_id_a", user_a).eq("user_id_b", user_b).execute()
+            refreshed = (
+                sb.table("friendships")
+                .select("*")
+                .eq("user_id_a", user_a)
+                .eq("user_id_b", user_b)
+                .execute()
+            )
+            return (refreshed.data or [existing_row])[0]
+        return existing_row
+
+    insert_res = sb.table("friendships").insert({
+        "user_id_a":    user_a,
+        "user_id_b":    user_b,
+        "user_a_name":  user_a_name,
+        "user_b_name":  user_b_name,
+        "initiated_by": inviter_id,
+    }).execute()
+    return (insert_res.data or [{}])[0]
+
+
 def accept_invite(code: str, accepter_id: str, accepter_name: str) -> dict:
     """
-    Consume an invite code and create the friendship.
+    Consume a one-time invite code and create the friendship.
 
     Returns the new friendship row. Raises ValueError if the code is missing,
     expired, already used, or self-targeted.
@@ -123,54 +180,7 @@ def accept_invite(code: str, accepter_id: str, accepter_name: str) -> dict:
     if inviter_id == accepter_id:
         raise ValueError("You can't friend yourself")
 
-    user_a, user_b = _ordered_pair(inviter_id, accepter_id)
-    user_a_name = inviter_name if user_a == inviter_id else (accepter_name or "Friend")
-    user_b_name = inviter_name if user_b == inviter_id else (accepter_name or "Friend")
-
-    # Idempotent: if a row already exists for this pair, either it's still
-    # active (no-op) or it was soft-deleted (auto-restore by clearing
-    # deleted_at and refreshing the captured names). This is the "I removed
-    # them by accident, here's a fresh invite" recovery path.
-    existing = (
-        sb.table("friendships")
-        .select("*")
-        .eq("user_id_a", user_a)
-        .eq("user_id_b", user_b)
-        .execute()
-    )
-    if existing.data:
-        existing_row = existing.data[0]
-        # Mark the invite consumed regardless of restore outcome
-        sb.table("friend_invites").update({
-            "used_by": accepter_id,
-            "used_at": _now().isoformat(),
-        }).eq("code", code).execute()
-        if existing_row.get("deleted_at"):
-            # Auto-restore: clear deleted_at and refresh names from the
-            # current invite (which may have a better name than the original
-            # row captured if a user has since set their display name).
-            sb.table("friendships").update({
-                "deleted_at":   None,
-                "user_a_name":  user_a_name,
-                "user_b_name":  user_b_name,
-            }).eq("user_id_a", user_a).eq("user_id_b", user_b).execute()
-            refreshed = (
-                sb.table("friendships")
-                .select("*")
-                .eq("user_id_a", user_a)
-                .eq("user_id_b", user_b)
-                .execute()
-            )
-            return (refreshed.data or [existing_row])[0]
-        return existing_row
-
-    insert_res = sb.table("friendships").insert({
-        "user_id_a":    user_a,
-        "user_id_b":    user_b,
-        "user_a_name":  user_a_name,
-        "user_b_name":  user_b_name,
-        "initiated_by": inviter_id,
-    }).execute()
+    friendship = _create_friendship(sb, inviter_id, inviter_name, accepter_id, accepter_name)
 
     # Mark the invite consumed
     sb.table("friend_invites").update({
@@ -178,7 +188,68 @@ def accept_invite(code: str, accepter_id: str, accepter_name: str) -> dict:
         "used_at": _now().isoformat(),
     }).eq("code", code).execute()
 
-    return (insert_res.data or [{}])[0]
+    return friendship
+
+
+# ── Reusable referral codes (shareable invite cards) ──────────────────────────
+
+def get_or_create_referral(user_id: str, name: str) -> dict:
+    """Return the user's stable, reusable referral code, creating it if needed.
+
+    Returns {"code", "name"}. Refreshes the stored name if the user has since
+    set/updated their display name.
+    """
+    if not name or name.strip().lower() in {"backnine user", "a backnine friend", ""}:
+        name = "Friend"
+
+    sb = _sb()
+    res = sb.table("referral_codes").select("*").eq("user_id", user_id).execute()
+    if res.data:
+        row = res.data[0]
+        if name and name != (row.get("name") or ""):
+            try:
+                sb.table("referral_codes").update({"name": name}).eq("user_id", user_id).execute()
+            except Exception:
+                pass
+        return {"code": row["code"], "name": name}
+
+    code = _short_code()
+    for _ in range(4):
+        try:
+            sb.table("referral_codes").insert({
+                "user_id": user_id,
+                "code":    code,
+                "name":    name,
+            }).execute()
+            return {"code": code, "name": name}
+        except Exception:
+            code = _short_code()
+            continue
+    raise RuntimeError("Could not generate a unique referral code after 4 tries")
+
+
+def accept_referral(code: str, accepter_id: str, accepter_name: str) -> dict:
+    """Connect the accepter to the owner of a reusable referral code.
+
+    Unlike accept_invite, the code is NOT consumed (it's reusable). Tapping your
+    own link is a harmless no-op rather than an error.
+    """
+    if not code:
+        raise ValueError("Missing referral code")
+    code = code.strip().upper()
+
+    sb = _sb()
+    res = sb.table("referral_codes").select("*").eq("code", code).execute()
+    row = (res.data or [None])[0]
+    if not row:
+        raise ValueError("Referral code not found")
+
+    inviter_id   = row["user_id"]
+    inviter_name = row.get("name") or "Friend"
+    if inviter_id == accepter_id:
+        return {"self": True}
+
+    return _create_friendship(sb, inviter_id, inviter_name, accepter_id, accepter_name)
 
 
 # ── Friends list ──────────────────────────────────────────────────────────────

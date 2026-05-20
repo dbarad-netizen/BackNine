@@ -3,6 +3,8 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
   api,
+  getPendingReferral,
+  clearPendingReferral,
   type DashboardData,
   type NutritionToday,
   type NutritionSummary,
@@ -32,6 +34,7 @@ import GearPicks from "@/components/GearPicks";
 import PulseFeed from "@/components/PulseFeed";
 import FriendLeaderboard from "@/components/FriendLeaderboard";
 import NotificationBell from "@/components/NotificationBell";
+import ShareCardModal from "@/components/ShareCardModal";
 import OnboardingModal from "@/components/OnboardingModal";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
@@ -794,6 +797,7 @@ export default function DashboardPage() {
   const [showProfile, setShowProfile] = useState(false);
   const [profileInitialTab, setProfileInitialTab] = useState<"profile" | "friends">("profile");
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showShare, setShowShare] = useState(false);
   const openChatRef = useRef<(() => void) | null>(null);
 
   // Nutrition state
@@ -829,6 +833,15 @@ export default function DashboardPage() {
       .then(me => {
         const locallyDone = typeof window !== "undefined" && localStorage.getItem("bn_onboarded") === "1";
         if (me.needs_onboarding && !locallyDone) setShowOnboarding(true);
+        // Auto-connect via a referral link the user arrived through (shared
+        // invite card). The code was stashed in localStorage before any auth
+        // redirect; now that we're signed in, consume it once.
+        const pendingRef = getPendingReferral();
+        if (pendingRef) {
+          api.friends.acceptReferral(pendingRef)
+            .catch(() => {})
+            .finally(() => clearPendingReferral());
+        }
       })
       .catch(() => {});
   }, []);
@@ -1106,6 +1119,13 @@ export default function DashboardPage() {
               {new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
             </span>
             <NotificationBell />
+            <button
+              onClick={() => setShowShare(true)}
+              title="Invite friends"
+              className="text-gray-400 hover:text-[#1B3829] transition-colors text-base leading-none"
+            >
+              📣
+            </button>
             <button
               onClick={() => setShowProfile(true)}
               title="Edit health profile"
@@ -2002,6 +2022,18 @@ export default function DashboardPage() {
 
       {/* ── Profile modal ── */}
       {showProfile && <ProfileModal onClose={() => setShowProfile(false)} initialTab={profileInitialTab} />}
+      {showShare && (
+        <ShareCardModal
+          onClose={() => setShowShare(false)}
+          longevity={data?.longevity_score
+            ? {
+                score: data.longevity_score.score ?? null,
+                grade: data.longevity_score.grade ?? null,
+                biological_age_delta: data.longevity_score.biological_age_delta ?? null,
+              }
+            : null}
+        />
+      )}
       {showOnboarding && <OnboardingModal onDone={() => { setShowOnboarding(false); window.location.reload(); }} />}
 
     </div>

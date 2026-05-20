@@ -2600,6 +2600,35 @@ async def accept_friend_invite(request: Request):
         raise HTTPException(status_code=500, detail=f"could not accept invite: {e}")
 
 
+@app.get("/api/friends/referral")
+def get_friend_referral(request: Request):
+    """Return the current user's stable, reusable referral code for share cards."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        return frd.get_or_create_referral(user_id, _display_name_for(user_id))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"could not create referral: {e}")
+
+
+@app.post("/api/friends/referral/accept")
+async def accept_friend_referral(request: Request):
+    """Auto-connect via a reusable referral code from a shared card. Body: { code }."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    body = await request.json()
+    code = (body.get("code") or "").strip().upper()
+    if not code:
+        raise HTTPException(status_code=400, detail="code is required")
+    try:
+        result = frd.accept_referral(code, user_id, _display_name_for(user_id))
+        return {"ok": True, **(result if isinstance(result, dict) else {})}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"could not accept referral: {e}")
+
+
 @app.get("/api/friends")
 def list_friends(request: Request):
     """List the current user's accepted friendships."""
