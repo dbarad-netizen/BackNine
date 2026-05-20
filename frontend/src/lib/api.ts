@@ -713,6 +713,7 @@ export interface BriefingResponse {
   generated_at:        string | null;
   cached:              boolean;
   app_streak:          number;     // consecutive days the user has opened BackNine
+  has_data?:           boolean;    // false = welcome state for users with no metrics yet
 }
 
 // ── Daily check-in types ──────────────────────────────────────────────────────

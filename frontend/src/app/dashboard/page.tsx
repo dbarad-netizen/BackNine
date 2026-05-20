@@ -1125,20 +1125,44 @@ export default function DashboardPage() {
 
           return (
           <div className="space-y-6">
-            {/* No-Oura banner */}
+            {/* Getting Started card — shown until a data source is connected.
+                Frames all three paths (Oura / Apple Health / manual) so a
+                no-wearable user feels guided rather than blocked. */}
             {data.has_oura === false && (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 flex items-start gap-4">
-                <span className="text-2xl mt-0.5">💍</span>
-                <div className="flex-1">
-                  <p className="font-semibold text-amber-900 text-sm">Connect your Oura Ring</p>
-                  <p className="text-xs text-amber-700 mt-0.5">
-                    Link your ring to unlock readiness scores, HRV trends, sleep analysis, and personalized coaching.
-                  </p>
+              <div className="rounded-2xl border border-[#1B3829]/15 bg-white p-5 shadow-sm">
+                <p className="font-bold text-gray-900 text-sm mb-1">👋 Let&apos;s get your data flowing</p>
+                <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+                  BackNine gets more useful with every source you connect — but you can start with any of these:
+                </p>
+                <div className="space-y-2">
+                  <a href="/connect"
+                    className="flex items-center gap-3 rounded-xl border border-gray-200 hover:border-[#1B3829]/40 px-3 py-2.5 transition-colors">
+                    <span className="text-xl shrink-0">💍</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900">Connect Oura Ring</p>
+                      <p className="text-[11px] text-gray-500">Readiness, sleep, HRV, recovery</p>
+                    </div>
+                    <span className="text-gray-400 text-sm shrink-0">→</span>
+                  </a>
+                  <button onClick={() => setSection("apple-health")}
+                    className="w-full flex items-center gap-3 rounded-xl border border-gray-200 hover:border-[#1B3829]/40 px-3 py-2.5 transition-colors text-left">
+                    <span className="text-xl shrink-0">🍎</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900">Set up Apple Health</p>
+                      <p className="text-[11px] text-gray-500">Steps, sleep &amp; HRV from your iPhone / Watch</p>
+                    </div>
+                    <span className="text-gray-400 text-sm shrink-0">→</span>
+                  </button>
+                  <button onClick={() => openChatRef.current?.()}
+                    className="w-full flex items-center gap-3 rounded-xl border border-gray-200 hover:border-[#1B3829]/40 px-3 py-2.5 transition-colors text-left">
+                    <span className="text-xl shrink-0">✏️</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900">Start manually</p>
+                      <p className="text-[11px] text-gray-500">Log a workout or weigh-in, or ask Coach Al anything</p>
+                    </div>
+                    <span className="text-gray-400 text-sm shrink-0">→</span>
+                  </button>
                 </div>
-                <a href="/connect"
-                  className="shrink-0 mt-0.5 bg-amber-500 hover:bg-amber-400 text-white rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors">
-                  Connect →
-                </a>
               </div>
             )}
 
@@ -1230,6 +1254,33 @@ export default function DashboardPage() {
                 </section>
               );
             })()}
+
+            {/* ── Longevity Score teaser — shown when no score is computable yet ── */}
+            {data.longevity_score?.score == null && (
+              <section className="rounded-2xl border border-dashed border-gray-300 bg-white p-5">
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-2xl">🧬</span>
+                  <div>
+                    <p className="text-sm font-bold text-gray-900">Longevity Score</p>
+                    <p className="text-[11px] text-gray-400">Your vitality, scored against age &amp; sex norms</p>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 leading-relaxed mb-3">
+                  We compute this from six markers — HRV, resting heart rate, VO2 max, sleep,
+                  body fat, and daily steps. Connect a tracker or add a couple of numbers manually to unlock it.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <a href="/connect"
+                    className="text-[11px] font-semibold text-[#1B3829] border border-[#1B3829]/30 rounded-lg px-2.5 py-1 hover:bg-[#1B3829]/5 transition-colors">
+                    Connect a tracker
+                  </a>
+                  <button onClick={() => setShowProfile(true)}
+                    className="text-[11px] font-semibold text-[#1B3829] border border-[#1B3829]/30 rounded-lg px-2.5 py-1 hover:bg-[#1B3829]/5 transition-colors">
+                    Add age &amp; sex
+                  </button>
+                </div>
+              </section>
+            )}
 
             {/* ── Longevity Score ── */}
             {data.longevity_score?.score != null && (() => {

@@ -2046,6 +2046,7 @@ async def get_morning_briefing(request: Request, refresh: bool = False):
                     "generated_at":        row.get("generated_at"),
                     "cached":              True,
                     "app_streak":          _compute_app_streak(user_id, today_str),
+                    "has_data":            True,
                 }
         except Exception:
             pass  # fall through to regenerate
@@ -2111,6 +2112,33 @@ async def get_morning_briefing(request: Request, refresh: bool = False):
         },
         "coaching": {"short_term": short_text},
     }
+
+    # No-data short-circuit: if there's nothing meaningful in today's metrics
+    # OR the 7-day context, skip the Claude call and return a friendly static
+    # welcome. Avoids an awkward AI "I have no data" note and saves the API
+    # call for brand-new / manual-only users.
+    _today_metrics = health_context.get("today") or {}
+    _seven = health_context.get("seven_day") or {}
+    _has_any_data = any(v is not None for v in _today_metrics.values()) or \
+                    any(v is not None for v in (_seven.get("hrv_avg"), _seven.get("sleep_avg"), _seven.get("readiness_avg")))
+    if not _has_any_data:
+        welcome = (
+            "Welcome to BackNine! Once you connect a tracker or log your first "
+            "workout or weigh-in, I'll open every day with a briefing tailored to "
+            "your numbers right here.\n\n"
+            "In the meantime — tap below to chat with me about your goals, or head "
+            "to the Metrics tab to set up Apple Health."
+        )
+        return {
+            "date":                today_str,
+            "narrative":           welcome,
+            "prediction_streak":   None,
+            "prediction_accuracy": None,
+            "generated_at":        None,
+            "cached":              False,
+            "app_streak":          _compute_app_streak(user_id, today_str),
+            "has_data":            False,
+        }
 
     # Prediction status — used both for the prompt AND returned to the client
     try:
@@ -2245,6 +2273,7 @@ async def get_morning_briefing(request: Request, refresh: bool = False):
         "generated_at":        None,
         "cached":              False,
         "app_streak":          _compute_app_streak(user_id, today_str),
+        "has_data":            True,
     }
 
 

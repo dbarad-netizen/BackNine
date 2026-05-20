@@ -221,19 +221,25 @@ export default function MorningBriefing({ onOpenChat }: Props) {
       {/* Action footer */}
       <div className="border-t border-white/10 px-5 py-2.5 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <p className="text-[11px] text-white/50 truncate">
-            {data.cached ? "Generated earlier today" : "Just generated"}
-          </p>
-          <button
-            onClick={handleRegenerate}
-            disabled={regenerating}
-            className={`text-[11px] text-white/60 hover:text-white/90 transition-colors underline-offset-2 hover:underline disabled:opacity-40 shrink-0 ${
-              regenerating ? "animate-pulse" : ""
-            }`}
-            title="Force a fresh briefing (skips today's cache)"
-          >
-            {regenerating ? "Refreshing…" : "Regenerate"}
-          </button>
+          {/* In the no-data welcome state there's nothing to regenerate, so
+              hide the timestamp + Regenerate link and just keep the chat CTA. */}
+          {data.has_data !== false && (
+            <>
+              <p className="text-[11px] text-white/50 truncate">
+                {data.cached ? "Generated earlier today" : "Just generated"}
+              </p>
+              <button
+                onClick={handleRegenerate}
+                disabled={regenerating}
+                className={`text-[11px] text-white/60 hover:text-white/90 transition-colors underline-offset-2 hover:underline disabled:opacity-40 shrink-0 ${
+                  regenerating ? "animate-pulse" : ""
+                }`}
+                title="Force a fresh briefing (skips today's cache)"
+              >
+                {regenerating ? "Refreshing…" : "Regenerate"}
+              </button>
+            </>
+          )}
         </div>
         {onOpenChat && (
           <button
