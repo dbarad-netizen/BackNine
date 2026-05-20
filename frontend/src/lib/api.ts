@@ -667,6 +667,11 @@ export const api = {
     return request(`/api/briefing/today${refresh ? "?refresh=1" : ""}`);
   },
 
+  // ── Coach Al Weekly Insight ───────────────────────────────────────────────
+  weeklyInsight(refresh = false): Promise<WeeklyInsightResponse> {
+    return request(`/api/insight/weekly${refresh ? "?refresh=1" : ""}`);
+  },
+
   // ── Daily check-in ────────────────────────────────────────────────────────
   getCheckinToday(): Promise<CheckinSnapshot> {
     return request("/api/checkin/today");
@@ -750,6 +755,31 @@ export interface BriefingResponse {
   cached:              boolean;
   app_streak:          number;     // consecutive days the user has opened BackNine
   has_data?:           boolean;    // false = welcome state for users with no metrics yet
+}
+
+export interface WeeklyInsightStat {
+  title:         string | null;
+  magnitude:     number | null;
+  unit:          string | null;
+  direction:     "positive" | "negative" | "neutral" | null;
+  n:             number | null;
+  r:             number | null;
+  group_a_label: string | null;
+  group_a_avg:   number | null;
+  group_b_label: string | null;
+  group_b_avg:   number | null;
+}
+
+export interface WeeklyInsightResponse {
+  week_start:   string;
+  headline:     string;
+  narrative:    string;
+  experiment:   string;
+  insight_id:   string | null;
+  stat:         WeeklyInsightStat | null;
+  generated_at: string | null;
+  cached:       boolean;
+  has_data:     boolean;
 }
 
 // ── Daily check-in types ──────────────────────────────────────────────────────

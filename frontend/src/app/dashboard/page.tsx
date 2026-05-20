@@ -15,19 +15,18 @@ import {
 import { scoreColor, fmtDate } from "@/lib/utils";
 import ScoreRing from "@/components/ScoreRing";
 import CoachCard from "@/components/CoachCard";
-import CoachingItem from "@/components/CoachingItem";
 import TrendChart from "@/components/TrendChart";
 import TrainingTab from "@/components/TrainingTab";
 import LabsTab from "@/components/LabsTab";
 import ChallengeTab from "@/components/ChallengeTab";
 import AppleHealthTab from "@/components/AppleHealthTab";
 import GearTab from "@/components/GearTab";
-import InsightsSection from "@/components/InsightsSection";
 import ProgressSection from "@/components/ProgressSection";
 import ChatWidget from "@/components/ChatWidget";
 import ProfileModal from "@/components/ProfileModal";
 import CoachAlAvatar from "@/components/CoachAlAvatar";
 import MorningBriefing from "@/components/MorningBriefing";
+import WeeklyInsight from "@/components/WeeklyInsight";
 import ActiveCompetitions from "@/components/ActiveCompetitions";
 import GearPicks from "@/components/GearPicks";
 import PulseFeed from "@/components/PulseFeed";
@@ -940,7 +939,7 @@ export default function DashboardPage() {
   if (error)   return <>{onboardingOverlay}<ErrorState error={error} /></>;
   if (!data)   return <>{onboardingOverlay}</>;
 
-  const { today, trend, coaches, coaching, training_load, readiness_forecast, prediction_accuracy } = data;
+  const { today, trend, coaches, training_load, readiness_forecast, prediction_accuracy } = data;
   const sm  = today.sleep_model   as Record<string, number | null>;
   const rdy = today.readiness     as Record<string, number | null>;
   const sl  = today.sleep         as Record<string, number | null>;
@@ -1599,23 +1598,8 @@ export default function DashboardPage() {
               onJump={() => setSection("gear")}
             />
 
-            {/* ── Coaching Insights (collapsible) ── */}
-            <CollapsibleSection title="Coaching Insights" icon="💡">
-              {(() => {
-                const shortLabels = new Set(
-                  (coaching.short as { label?: string }[]).map(i => i.label).filter(Boolean)
-                );
-                const midUniq  = (coaching.mid  as { label?: string }[]).filter(i => !shortLabels.has(i.label));
-                const longUniq = (coaching.long as { label?: string }[]).filter(i => !shortLabels.has(i.label));
-                return (
-                  <>
-                    <CoachingSection title="This Week"       items={midUniq}  />
-                    <CoachingSection title="Long-Term Watch" items={longUniq} />
-                  </>
-                );
-              })()}
-              <InsightsSection />
-            </CollapsibleSection>
+            {/* ── Coach Al's Weekly Insight ── */}
+            <WeeklyInsight onOpenChat={() => openChatRef.current?.()} />
 
             {/* ── Body & Weight (collapsible) ── */}
             <CollapsibleSection
@@ -2061,20 +2045,6 @@ function CollapsibleSection({
         </div>
       )}
     </div>
-  );
-}
-
-function CoachingSection({ title, items }: { title: string; items: unknown[] }) {
-  if (!items?.length) return null;
-  return (
-    <section>
-      <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">{title}</h2>
-      <div className="space-y-2.5">
-        {(items as Parameters<typeof CoachingItem>[0]["item"][]).map((item, i) => (
-          <CoachingItem key={i} item={item} />
-        ))}
-      </div>
-    </section>
   );
 }
 

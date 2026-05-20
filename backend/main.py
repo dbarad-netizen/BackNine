@@ -35,6 +35,7 @@ import longevity as lon
 import longevity_history as lonh
 import chat as ch
 import briefing as brf
+import weekly_insight as wins
 import friends as frd
 import observations as obs
 
@@ -1890,6 +1891,142 @@ def get_insights(request: Request, days: int = 60):
         return {"insights": results, "days_analyzed": days}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def _insight_stat(d: dict) -> dict:
+    """Compact evidence chip for the Weekly Insight card from a raw insight dict."""
+    return {
+        "title":         d.get("title"),
+        "magnitude":     d.get("magnitude"),
+        "unit":          d.get("unit"),
+        "direction":     d.get("direction"),
+        "n":             d.get("n"),
+        "r":             d.get("r"),
+        "group_a_label": d.get("group_a_label"),
+        "group_a_avg":   d.get("group_a_avg"),
+        "group_b_label": d.get("group_b_label"),
+        "group_b_avg":   d.get("group_b_avg"),
+    }
+
+
+@app.get("/api/insight/weekly")
+def get_weekly_insight(request: Request, refresh: bool = False):
+    """Coach Al's Weekly Insight — the strongest data pattern this week + an experiment.
+
+    Cache strategy: one row per (user_id, week_start) in public.weekly_insights,
+    where week_start is the Monday (ET) of the current week. First call of the
+    week runs the correlation engine, picks the strongest pattern, and generates
+    a narrative via Claude Haiku; later calls return the cached row. ?refresh=1
+    forces a regenerate (costs one Anthropic call).
+    """
+    import concurrent.futures
+
+    session = _require_session(request)
+    user_id = session["user_id"]
+
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        from backports.zoneinfo import ZoneInfo  # type: ignore
+    today_et   = datetime.now(tz=ZoneInfo("America/New_York")).date()
+    week_start = (today_et - timedelta(days=today_et.weekday())).isoformat()  # Monday
+
+    db = get_supabase()
+
+    # Cache hit?
+    if db and not refresh:
+        try:
+            cached = (
+                db.table("weekly_insights")
+                .select("headline, narrative, experiment, insight_id, source, generated_at")
+                .eq("user_id", user_id)
+                .eq("week_start", week_start)
+                .execute()
+            )
+            if cached.data:
+                row = cached.data[0]
+                return {
+                    "week_start":   week_start,
+                    "headline":     row["headline"],
+                    "narrative":    row["narrative"],
+                    "experiment":   row.get("experiment") or "",
+                    "insight_id":   row.get("insight_id"),
+                    "stat":         _insight_stat(row.get("source") or {}),
+                    "generated_at": row.get("generated_at"),
+                    "cached":       True,
+                    "has_data":     True,
+                }
+        except Exception:
+            pass  # fall through to regenerate
+
+    # Find the strongest pattern (engine already ranks by effect size).
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(ins.get_insights, user_id, 60)
+            try:
+                candidates = future.result(timeout=8)
+            except concurrent.futures.TimeoutError:
+                candidates = []
+    except Exception:
+        candidates = []
+
+    if not candidates:
+        # No-data / not-enough-data: friendly placeholder, no Claude call.
+        return {
+            "week_start": week_start,
+            "headline":   "Your first weekly insight is on the way",
+            "narrative":  (
+                "Once you've logged a few weeks across sleep, activity, and nutrition, "
+                "I'll surface the single strongest pattern in your data each week — "
+                "and an experiment to test it. Keep logging and check back."
+            ),
+            "experiment": "",
+            "insight_id": None,
+            "stat":       None,
+            "generated_at": None,
+            "cached":     False,
+            "has_data":   False,
+        }
+
+    strongest = candidates[0]
+    profile = _get_profile(user_id)
+
+    try:
+        gen = wins.generate(strongest, profile)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"weekly insight generation failed: {e}")
+
+    # Save to cache (best-effort).
+    if db:
+        try:
+            db.table("weekly_insights").upsert(
+                {
+                    "user_id":    user_id,
+                    "week_start": week_start,
+                    "insight_id": strongest.get("id"),
+                    "headline":   gen["headline"],
+                    "narrative":  gen["narrative"],
+                    "experiment": gen.get("experiment") or "",
+                    "source":     strongest,
+                },
+                on_conflict="user_id,week_start",
+            ).execute()
+        except Exception:
+            pass
+
+    return {
+        "week_start":   week_start,
+        "headline":     gen["headline"],
+        "narrative":    gen["narrative"],
+        "experiment":   gen.get("experiment") or "",
+        "insight_id":   strongest.get("id"),
+        "stat":         _insight_stat(strongest),
+        "generated_at": None,
+        "cached":       False,
+        "has_data":     True,
+    }
 
 
 # ── Profile ───────────────────────────────────────────────────────────────────
