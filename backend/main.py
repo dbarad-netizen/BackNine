@@ -2757,6 +2757,34 @@ async def post_group_message(group_id: str, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/groups/{group_id}/standings")
+def get_group_standings(group_id: str, request: Request):
+    session = _require_session(request)
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        from backports.zoneinfo import ZoneInfo  # type: ignore
+    today_et = datetime.now(tz=ZoneInfo("America/New_York")).date().isoformat()
+    try:
+        return grp.get_standings(session["user_id"], group_id, today_et)
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Not a member of this group")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/groups/{group_id}/goal")
+async def set_group_goal(group_id: str, request: Request):
+    session = _require_session(request)
+    body = await request.json()
+    try:
+        return grp.set_goal(session["user_id"], group_id, body.get("goal"))
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Not a member of this group")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/friends")
 def list_friends(request: Request):
     """List the current user's accepted friendships."""

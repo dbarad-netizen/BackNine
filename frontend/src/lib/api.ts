@@ -744,6 +744,15 @@ export const api = {
         body: JSON.stringify({ text }),
       });
     },
+    standings(group_id: string): Promise<GroupStandings> {
+      return request(`/api/groups/${encodeURIComponent(group_id)}/standings`);
+    },
+    setGoal(group_id: string, goal: number | null): Promise<{ ok: boolean; weekly_goal: number | null }> {
+      return request(`/api/groups/${encodeURIComponent(group_id)}/goal`, {
+        method: "POST",
+        body: JSON.stringify({ goal }),
+      });
+    },
   },
 
   // ── Daily check-in ────────────────────────────────────────────────────────
@@ -960,6 +969,22 @@ export interface GroupMessage {
   text:       string;
   created_at: string;
   is_me:      boolean;
+}
+
+export interface GroupStandingMember {
+  user_id: string;
+  name:    string;
+  points:  number;
+  rank:    number;
+  is_me:   boolean;
+}
+
+export interface GroupStandings {
+  name:       string;
+  members:    GroupStandingMember[];
+  total:      number;
+  goal:       number | null;
+  week_start: string;
 }
 
 export interface LeagueStanding {

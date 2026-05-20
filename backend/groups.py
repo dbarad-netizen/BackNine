@@ -14,6 +14,8 @@ import random
 import string
 from datetime import datetime, timezone
 
+import leagues as _lg
+
 
 JOIN_CODE_LEN = 6
 
@@ -173,6 +175,69 @@ def list_messages(user_id: str, group_id: str, limit: int = 100) -> list[dict]:
         }
         for r in rows
     ]
+
+
+def get_standings(user_id: str, group_id: str, today_str: str) -> dict:
+    """Rank group members by this week's engagement points + the shared goal.
+
+    Returns { members: [{user_id, name, points, rank, is_me}], total, goal,
+    week_start, name }. Membership-checked.
+    """
+    sb = _sb()
+    if not _is_member(sb, group_id, user_id):
+        raise PermissionError("Not a member of this group")
+
+    grow = sb.table("groups").select("*").eq("id", group_id).execute()
+    group = (grow.data or [None])[0]
+    if not group:
+        raise ValueError("Group not found")
+
+    members = _members(sb, group_id)
+    ids = [m["user_id"] for m in members]
+    try:
+        points = _lg.weekly_points(ids, today_str)
+    except Exception:
+        points = {}
+
+    standings = [
+        {
+            "user_id": m["user_id"],
+            "name":    m["name"],
+            "points":  int(points.get(m["user_id"], 0)),
+            "is_me":   m["user_id"] == user_id,
+        }
+        for m in members
+    ]
+    standings.sort(key=lambda s: (-s["points"], s["name"].lower()))
+    for i, s in enumerate(standings):
+        s["rank"] = i + 1
+
+    from datetime import date, timedelta
+    today = date.fromisoformat(today_str)
+    week_start = (today - timedelta(days=today.weekday())).isoformat()
+
+    return {
+        "name":       group["name"],
+        "members":    standings,
+        "total":      sum(s["points"] for s in standings),
+        "goal":       group.get("weekly_goal"),
+        "week_start": week_start,
+    }
+
+
+def set_goal(user_id: str, group_id: str, goal) -> dict:
+    """Set (or clear) the group's shared weekly points goal. Membership-checked."""
+    sb = _sb()
+    if not _is_member(sb, group_id, user_id):
+        raise PermissionError("Not a member of this group")
+    val = None
+    if goal is not None:
+        try:
+            val = max(0, int(goal))
+        except (TypeError, ValueError):
+            val = None
+    sb.table("groups").update({"weekly_goal": val}).eq("id", group_id).execute()
+    return {"ok": True, "weekly_goal": val}
 
 
 def post_message(user_id: str, group_id: str, text: str) -> dict:
