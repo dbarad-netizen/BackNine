@@ -3,9 +3,20 @@ Weekly Leagues — Duolingo-style auto-grouped competition for BackNine.
 
 Every Mon–Sun week, each user is placed into the league at their tier (V1: tier
 1 for everyone — no promotion yet). Leagues fill organically as users hit
-/api/leagues/current during the week; ranking is by total steps summed across
-the week. This gives even a user with zero friends a live, refreshing race —
-the cold-start fix for community.
+/api/leagues/current during the week.
+
+Ranking is by ENGAGEMENT POINTS, not steps — so it works for every user, not
+just those with a wearable (Apple Health was never wired up, and not everyone
+has Oura). Points reward the daily habits we want:
+
+  • Daily check-in        +10  per day
+  • Logged a workout      +20  per day with ≥1 workout
+  • Logged a meal          +5  per day with ≥1 meal
+  • Logged a weigh-in     +10  per day with a weigh-in
+  • Steps (tracker bonus)  +1  per 1,000 steps that week (Oura)
+
+This gives even a user with zero friends and no wearable a live, refreshing
+race — the cold-start fix for community.
 
 Schema: supabase_leagues.sql (leagues + league_members).
 
@@ -68,14 +79,37 @@ def _names_for(sb, ids: list[str]) -> dict[str, str]:
         return {}
 
 
-def _weekly_steps(sb, ids: list[str], start: str, end: str) -> dict[str, int]:
-    """Total steps per user from `start`..`end` (inclusive). Prefers Apple Health
-    steps for a given day, falling back to Oura — same precedence as the
-    friend leaderboard. Two batched queries regardless of member count."""
-    if not ids:
-        return {}
+# Engagement point values (see module docstring).
+PTS_CHECKIN   = 10   # per day checked in
+PTS_WORKOUT   = 20   # per day with ≥1 workout
+PTS_MEAL      = 5    # per day with ≥1 meal logged
+PTS_WEIGHIN   = 10   # per day with a weigh-in
+PTS_PER_KSTEP = 1    # per 1,000 steps that week (Oura tracker bonus)
 
-    oura: dict[str, dict[str, int]] = {}
+
+def _distinct_dates_by_user(sb, table: str, ids: list[str], start: str, end: str) -> dict[str, set]:
+    """Map user_id -> set of distinct dates with ≥1 row in `table` over the week."""
+    out: dict[str, set] = {}
+    try:
+        res = (
+            sb.table(table)
+            .select("user_id, date")
+            .in_("user_id", ids)
+            .gte("date", start)
+            .lte("date", end)
+            .execute()
+        )
+        for r in (res.data or []):
+            out.setdefault(r["user_id"], set()).add(str(r["date"]))
+    except Exception:
+        pass
+    return out
+
+
+def _weekly_steps_total(sb, ids: list[str], start: str, end: str) -> dict[str, int]:
+    """Total Oura steps per user over the week (tracker bonus only — Apple
+    Health is not wired up, so non-tracker users simply skip this bonus)."""
+    totals: dict[str, int] = {}
     try:
         res = (
             sb.table("oura_daily_cache")
@@ -88,36 +122,35 @@ def _weekly_steps(sb, ids: list[str], start: str, end: str) -> dict[str, int]:
         for r in (res.data or []):
             uid = r["user_id"]
             steps = ((r.get("activity") or {}).get("steps")) or 0
-            oura.setdefault(uid, {})[str(r["date"])] = int(steps or 0)
+            totals[uid] = totals.get(uid, 0) + int(steps or 0)
     except Exception:
         pass
-
-    ah: dict[str, dict[str, int]] = {}
-    try:
-        res2 = (
-            sb.table("apple_health_daily")
-            .select("user_id, date, steps")
-            .in_("user_id", ids)
-            .gte("date", start)
-            .lte("date", end)
-            .execute()
-        )
-        for r in (res2.data or []):
-            uid = r["user_id"]
-            ah.setdefault(uid, {})[str(r["date"])] = int(r.get("steps") or 0)
-    except Exception:
-        pass
-
-    totals: dict[str, int] = {}
-    for uid in ids:
-        days = set(list(oura.get(uid, {}).keys()) + list(ah.get(uid, {}).keys()))
-        tot = 0
-        for d in days:
-            a = ah.get(uid, {}).get(d)
-            o = oura.get(uid, {}).get(d)
-            tot += (a if a else (o or 0))
-        totals[uid] = int(tot)
     return totals
+
+
+def _weekly_scores(sb, ids: list[str], start: str, end: str) -> dict[str, int]:
+    """Engagement points per user from `start`..`end` (inclusive). Works for
+    everyone regardless of wearable; five batched queries total."""
+    if not ids:
+        return {}
+
+    checkins = _distinct_dates_by_user(sb, "daily_checkins",    ids, start, end)
+    workouts = _distinct_dates_by_user(sb, "training_workouts", ids, start, end)
+    meals    = _distinct_dates_by_user(sb, "nutrition_meals",   ids, start, end)
+    weighins = _distinct_dates_by_user(sb, "nutrition_weight",  ids, start, end)
+    steps    = _weekly_steps_total(sb, ids, start, end)
+
+    out: dict[str, int] = {}
+    for uid in ids:
+        pts = (
+            len(checkins.get(uid, set())) * PTS_CHECKIN
+            + len(workouts.get(uid, set())) * PTS_WORKOUT
+            + len(meals.get(uid, set()))    * PTS_MEAL
+            + len(weighins.get(uid, set())) * PTS_WEIGHIN
+            + (steps.get(uid, 0) // 1000)   * PTS_PER_KSTEP
+        )
+        out[uid] = int(pts)
+    return out
 
 
 # ── Main entry point ──────────────────────────────────────────────────────────
@@ -142,7 +175,7 @@ def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
     if user_id not in ids:
         ids.append(user_id)
 
-    scores = _weekly_steps(sb, ids, week_start, today_str)
+    scores = _weekly_scores(sb, ids, week_start, today_str)
     names = _names_for(sb, ids)
 
     # Refresh cached scores (best-effort) so other surfaces can read them cheaply.

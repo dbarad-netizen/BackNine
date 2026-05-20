@@ -897,7 +897,7 @@ export interface ReferralCode {
 export interface LeagueStanding {
   user_id: string;
   name:    string;
-  score:   number;   // weekly steps
+  score:   number;   // weekly engagement points
   rank:    number;
   is_me:   boolean;
 }

@@ -4,9 +4,10 @@
  * WeeklyLeague — Duolingo-style weekly competition on the Scorecard.
  *
  * Everyone is auto-grouped into a league for the Mon–Sun week and ranked by
- * total steps. Pulls /api/leagues/current on mount (which also joins the user
- * into the week's league). Gives even a friendless user a live, refreshing
- * race — the community cold-start fix.
+ * engagement points (daily check-in, logging workouts/meals/weigh-ins, plus a
+ * step bonus for tracker users). Pulls /api/leagues/current on mount (which
+ * also joins the user into the week's league). Gives even a friendless user
+ * with no wearable a live, refreshing race — the community cold-start fix.
  */
 
 import { useEffect, useState } from "react";
@@ -89,7 +90,7 @@ export default function WeeklyLeague({ onInvite }: Props) {
               <span className="text-sm font-semibold text-gray-900 shrink-0">
                 {s.score.toLocaleString()}
               </span>
-              <span className="text-[11px] text-gray-400 shrink-0">👟</span>
+              <span className="text-[11px] text-gray-400 shrink-0">pts</span>
             </div>
           );
         })}
@@ -101,8 +102,8 @@ export default function WeeklyLeague({ onInvite }: Props) {
           {me_rank != null
             ? soloOrTiny
               ? "You're first in — invite friends to make it a race"
-              : `You're #${me_rank} of ${member_count} · ranked by weekly steps`
-            : "Ranked by total steps this week"}
+              : `You're #${me_rank} of ${member_count} · check in & log to earn points`
+            : "Earn points: check in, log workouts, meals & weigh-ins"}
         </p>
         {onInvite && soloOrTiny && (
           <button
