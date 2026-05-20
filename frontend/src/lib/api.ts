@@ -356,6 +356,15 @@ export interface WorkoutSet {
   weight_lbs: number;
   reps:       number;
   rpe?:       number;
+  done?:      boolean;   // UI-only: marked complete during the session
+}
+
+export interface WorkoutTemplate {
+  id:        string;
+  name:      string;
+  type:      "lifting" | "stretching" | "mobility";
+  exercises: WorkoutExercise[];
+  created_at?: string;
 }
 
 export interface WorkoutExercise {
@@ -541,6 +550,15 @@ export const api = {
   },
   deleteWorkout(id: string): Promise<void> {
     return request(`/api/training/workouts/${id}`, { method: "DELETE" });
+  },
+  trainingTemplates(): Promise<{ templates: WorkoutTemplate[] }> {
+    return request("/api/training/templates");
+  },
+  saveTemplate(t: { name: string; type: string; exercises: WorkoutExercise[] }): Promise<WorkoutTemplate> {
+    return request("/api/training/templates", { method: "POST", body: JSON.stringify(t) });
+  },
+  deleteTemplate(id: string): Promise<void> {
+    return request(`/api/training/templates/${id}`, { method: "DELETE" });
   },
   trainingRecommendation(): Promise<TrainingRecommendation> {
     return request("/api/training/recommendation");

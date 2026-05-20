@@ -453,6 +453,57 @@ def delete_workout(user_id: str, workout_id: str) -> bool:
         return False
 
 
+# ── Reusable routines / templates ─────────────────────────────────────────────
+
+def get_templates(user_id: str) -> List[dict]:
+    """Return the user's saved workout routines, newest-first."""
+    if not user_id:
+        return []
+    try:
+        sb = _sb()
+        res = (
+            sb.table("training_templates")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        return res.data or []
+    except Exception:
+        return []
+
+
+def add_template(user_id: str, name: str, workout_type: str, exercises: List[dict]) -> dict:
+    """Save a reusable routine. Returns the inserted row."""
+    entry = {
+        "user_id":   user_id,
+        "name":      (name or "My Routine").strip()[:60],
+        "type":      workout_type or "lifting",
+        "exercises": exercises or [],
+    }
+    sb = _sb()
+    res = sb.table("training_templates").insert(entry).execute()
+    return (res.data or [entry])[0]
+
+
+def delete_template(user_id: str, template_id: str) -> bool:
+    """Delete one of the user's routines. Returns True if a row was removed."""
+    if not user_id or not template_id:
+        return False
+    try:
+        sb = _sb()
+        res = (
+            sb.table("training_templates")
+            .delete()
+            .eq("user_id", user_id)
+            .eq("id", template_id)
+            .execute()
+        )
+        return bool(res.data)
+    except Exception:
+        return False
+
+
 # ── Settings ──────────────────────────────────────────────────────────────────
 
 DEFAULT_SETTINGS = {

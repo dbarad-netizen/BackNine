@@ -1490,6 +1490,36 @@ def remove_workout(workout_id: str, request: Request):
     return {"status": "deleted"}
 
 
+@app.get("/api/training/templates")
+def list_training_templates(request: Request):
+    session = _require_session(request)
+    return {"templates": trn.get_templates(session["user_id"])}
+
+
+@app.post("/api/training/templates")
+async def save_training_template(request: Request):
+    session = _require_session(request)
+    body = await request.json()
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+    return trn.add_template(
+        session["user_id"],
+        name,
+        body.get("type", "lifting"),
+        body.get("exercises", []),
+    )
+
+
+@app.delete("/api/training/templates/{template_id}")
+def remove_training_template(template_id: str, request: Request):
+    session = _require_session(request)
+    ok = trn.delete_template(session["user_id"], template_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Routine not found")
+    return {"status": "deleted"}
+
+
 @app.get("/api/training/recommendation")
 async def get_training_recommendation(request: Request):
     session = _require_session(request)
