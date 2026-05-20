@@ -38,6 +38,7 @@ import briefing as brf
 import weekly_insight as wins
 import friends as frd
 import leagues as lg
+import groups as grp
 import observations as obs
 
 load_dotenv()
@@ -2678,6 +2679,82 @@ def get_current_league(request: Request):
         return lg.get_current_league(user_id, today_et)
     except Exception:
         return {"league": None, "standings": [], "me_rank": None, "days_left": None, "member_count": 0}
+
+
+# ── Groups (Crews) ────────────────────────────────────────────────────────────
+
+@app.get("/api/groups")
+def list_user_groups(request: Request):
+    session = _require_session(request)
+    try:
+        return {"groups": grp.list_groups(session["user_id"])}
+    except Exception:
+        return {"groups": []}
+
+
+@app.post("/api/groups")
+async def create_user_group(request: Request):
+    session = _require_session(request)
+    user_id = session["user_id"]
+    body = await request.json()
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+    try:
+        return grp.create_group(user_id, name, _display_name_for(user_id))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"could not create group: {e}")
+
+
+@app.post("/api/groups/join")
+async def join_user_group(request: Request):
+    session = _require_session(request)
+    user_id = session["user_id"]
+    body = await request.json()
+    code = (body.get("code") or "").strip().upper()
+    if not code:
+        raise HTTPException(status_code=400, detail="code is required")
+    try:
+        return grp.join_group(code, user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"could not join group: {e}")
+
+
+@app.post("/api/groups/{group_id}/leave")
+def leave_user_group(group_id: str, request: Request):
+    session = _require_session(request)
+    grp.leave_group(session["user_id"], group_id)
+    return {"status": "left"}
+
+
+@app.get("/api/groups/{group_id}/messages")
+def get_group_messages(group_id: str, request: Request):
+    session = _require_session(request)
+    try:
+        return {"messages": grp.list_messages(session["user_id"], group_id)}
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Not a member of this group")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/groups/{group_id}/messages")
+async def post_group_message(group_id: str, request: Request):
+    session = _require_session(request)
+    body = await request.json()
+    text = (body.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="text is required")
+    try:
+        return grp.post_message(session["user_id"], group_id, text)
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Not a member of this group")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/friends")

@@ -35,6 +35,7 @@ import GearPicks from "@/components/GearPicks";
 import PulseFeed from "@/components/PulseFeed";
 import FriendLeaderboard from "@/components/FriendLeaderboard";
 import WeeklyLeague from "@/components/WeeklyLeague";
+import GroupsSection from "@/components/GroupsSection";
 import NotificationBell from "@/components/NotificationBell";
 import ShareCardModal from "@/components/ShareCardModal";
 import OnboardingModal from "@/components/OnboardingModal";
@@ -1599,6 +1600,9 @@ export default function DashboardPage() {
 
             {/* ── Today's Leaderboard (self + friends ranked) ── */}
             <FriendLeaderboard />
+
+            {/* ── Groups (Crews) — shared group chat ── */}
+            <GroupsSection />
 
             {/* ── Friend Pulse feed ── */}
             <PulseFeed onInviteFriend={() => { setProfileInitialTab("friends"); setShowProfile(true); }} />

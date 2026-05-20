@@ -721,6 +721,31 @@ export const api = {
     return request(`/api/insight/weekly${refresh ? "?refresh=1" : ""}`);
   },
 
+  // ── Groups (Crews) ─────────────────────────────────────────────────────────
+  groups: {
+    list(): Promise<{ groups: Group[] }> {
+      return request("/api/groups");
+    },
+    create(name: string): Promise<Group> {
+      return request("/api/groups", { method: "POST", body: JSON.stringify({ name }) });
+    },
+    join(code: string): Promise<Group> {
+      return request("/api/groups/join", { method: "POST", body: JSON.stringify({ code }) });
+    },
+    leave(group_id: string): Promise<{ status: string }> {
+      return request(`/api/groups/${encodeURIComponent(group_id)}/leave`, { method: "POST" });
+    },
+    messages(group_id: string): Promise<{ messages: GroupMessage[] }> {
+      return request(`/api/groups/${encodeURIComponent(group_id)}/messages`);
+    },
+    postMessage(group_id: string, text: string): Promise<GroupMessage> {
+      return request(`/api/groups/${encodeURIComponent(group_id)}/messages`, {
+        method: "POST",
+        body: JSON.stringify({ text }),
+      });
+    },
+  },
+
   // ── Daily check-in ────────────────────────────────────────────────────────
   getCheckinToday(): Promise<CheckinSnapshot> {
     return request("/api/checkin/today");
@@ -912,6 +937,29 @@ export interface LeaderboardEntry {
 export interface ReferralCode {
   code: string;
   name: string;
+}
+
+export interface GroupMember {
+  user_id: string;
+  name:    string;
+}
+
+export interface Group {
+  id:           string;
+  name:         string;
+  join_code:    string;
+  created_by:   string;
+  member_count: number;
+  members:      GroupMember[];
+}
+
+export interface GroupMessage {
+  id:         string;
+  user_id:    string;
+  user_name:  string;
+  text:       string;
+  created_at: string;
+  is_me:      boolean;
 }
 
 export interface LeagueStanding {
