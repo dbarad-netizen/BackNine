@@ -799,6 +799,7 @@ export default function DashboardPage() {
   const [profileInitialTab, setProfileInitialTab] = useState<"profile" | "friends">("profile");
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showShare, setShowShare] = useState(false);
+  const [autoLogWorkout, setAutoLogWorkout] = useState(false);
   const openChatRef = useRef<(() => void) | null>(null);
 
   // Nutrition state
@@ -1576,6 +1577,15 @@ export default function DashboardPage() {
               );
             })()}
 
+            {/* ── Quick action: log a workout (jumps to Training with logger open) ── */}
+            <button
+              onClick={() => { setAutoLogWorkout(true); setSection("training"); }}
+              className="w-full py-3 rounded-2xl border border-[#1B3829]/25 bg-white text-sm font-semibold text-[#1B3829] hover:bg-[#1B3829]/5 transition-colors flex items-center justify-center gap-2 shadow-sm"
+            >
+              <span className="text-base leading-none">🏋️</span>
+              Log a workout
+            </button>
+
             {/* ── Weekly League (auto-grouped competition) ── */}
             <WeeklyLeague onInvite={() => setShowShare(true)} />
 
@@ -1974,7 +1984,7 @@ export default function DashboardPage() {
                 {training_load.zone === "unknown"   && "Need more activity data for a full analysis. Keep wearing your ring."}
               </p>
             </section>
-            <TrainingTab />
+            <TrainingTab autoOpenLogger={autoLogWorkout} onLoggerOpened={() => setAutoLogWorkout(false)} />
           </div>
         )}
 

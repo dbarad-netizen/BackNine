@@ -242,14 +242,25 @@ function WorkoutLogger({
 
   const removeExercise = (idx: number) => setExercises(prev => prev.filter((_, i) => i !== idx));
 
-  const loadTemplate = (t: WorkoutTemplate) => {
-    setWorkoutType(t.type);
-    setExercises(t.exercises.map(ex => ({
+  const loadExercises = (exs: WorkoutExercise[]) => {
+    setExercises(exs.map(ex => ({
       name: ex.name,
       ...(ex.sets ? { sets: ex.sets.map(s => ({ weight_lbs: s.weight_lbs || 0, reps: s.reps || 0 })) } : {}),
       ...(ex.duration_sec ? { duration_sec: ex.duration_sec } : {}),
     })));
   };
+
+  const loadTemplate = (t: WorkoutTemplate) => {
+    setWorkoutType(t.type);
+    loadExercises(t.exercises);
+  };
+
+  // Most recent workout matching the selected type — for one-tap "repeat".
+  const lastWorkoutOfType = useMemo(() => {
+    const sorted = [...recentWorkouts].sort((a, b) =>
+      (b.logged_at || b.date).localeCompare(a.logged_at || a.date));
+    return sorted.find(w => w.type === workoutType) || null;
+  }, [recentWorkouts, workoutType]);
 
   const saveAsRoutine = async () => {
     if (!tplName.trim() || exercises.length === 0) return;
@@ -317,6 +328,14 @@ function WorkoutLogger({
           </button>
         ))}
       </div>
+
+      {/* Repeat last — one tap to start from your previous session of this type */}
+      {lastWorkoutOfType && (
+        <button onClick={() => loadExercises(lastWorkoutOfType.exercises)}
+          className="w-full py-2 rounded-lg border border-[#1B3829]/30 bg-[#1B3829]/5 text-xs font-semibold text-[#1B3829] hover:bg-[#1B3829]/10 transition-colors">
+          ↻ Repeat last {TYPE_LABEL[workoutType]} workout · {lastWorkoutOfType.date}
+        </button>
+      )}
 
       {/* Saved routines — one tap to start from a template */}
       {typeTemplates.length > 0 && (
@@ -601,14 +620,28 @@ function TrainingSettingsPanel({ settings, onSave }: { settings: TrainingSetting
 }
 
 // ── Main TrainingTab ──────────────────────────────────────────────────────────
-export default function TrainingTab() {
+export default function TrainingTab({
+  autoOpenLogger = false,
+  onLoggerOpened,
+}: {
+  autoOpenLogger?: boolean;
+  onLoggerOpened?: () => void;
+} = {}) {
   const [rec,          setRec]          = useState<TrainingRecommendation | null>(null);
   const [weeklyPlan,   setWeeklyPlan]   = useState<WeeklyPlan | null>(null);
   const [workouts,     setWorkouts]     = useState<Workout[]>([]);
   const [stretchR,     setStretchR]     = useState<StretchRoutine | null>(null);
-  const [showLogger,   setShowLogger]   = useState(false);
+  const [showLogger,   setShowLogger]   = useState(autoOpenLogger);
   const [showSettings, setShowSettings] = useState(false);
   const [loading,      setLoading]      = useState(true);
+
+  // Quick-log from the Scorecard opens the logger straight away.
+  useEffect(() => {
+    if (autoOpenLogger) {
+      setShowLogger(true);
+      onLoggerOpened?.();
+    }
+  }, [autoOpenLogger, onLoggerOpened]);
 
   useEffect(() => {
     Promise.all([
