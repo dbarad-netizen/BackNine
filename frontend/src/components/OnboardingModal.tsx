@@ -181,7 +181,7 @@ export default function OnboardingModal({ onDone }: Props) {
                               : "bg-gray-50 text-gray-600 border-gray-200 hover:border-gray-400"
                           }`}
                         >
-                          {s === "male" ? "♂" : "♀"}
+                          {s === "male" ? "Male" : "Female"}
                         </button>
                       ))}
                     </div>

@@ -173,7 +173,7 @@ export default function ProfileModal({ onClose, initialTab = "profile" }: Props)
                           : "bg-gray-50 text-gray-600 border-gray-200 hover:border-gray-400"
                       }`}
                     >
-                      {sex === "male" ? "♂ Male" : "♀ Female"}
+                      {sex === "male" ? "Male" : "Female"}
                     </button>
                   ))}
                 </div>
