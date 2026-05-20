@@ -1454,22 +1454,22 @@ async def get_stretch_routine(request: Request):
 
 @app.get("/api/training/weekly-plan")
 def get_weekly_plan(request: Request):
-    _require_session(request)
-    settings = trn.get_settings()
+    session = _require_session(request)
+    settings = trn.get_settings(session["user_id"])
     return trn.generate_weekly_plan(settings)
 
 
 @app.get("/api/training/settings")
 def get_training_settings(request: Request):
-    _require_session(request)
-    return trn.get_settings()
+    session = _require_session(request)
+    return trn.get_settings(session["user_id"])
 
 
 @app.post("/api/training/settings")
 async def update_training_settings(request: Request):
-    _require_session(request)
+    session = _require_session(request)
     body = await request.json()
-    return trn.save_settings(body)
+    return trn.save_settings(session["user_id"], body)
 
 
 # ── Labs ──────────────────────────────────────────────────────────────────────

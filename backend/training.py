@@ -464,16 +464,43 @@ DEFAULT_SETTINGS = {
 }
 
 
-def get_settings() -> dict:
-    data = _load()
-    return {**DEFAULT_SETTINGS, **data.get("settings", {})}
+def get_settings(user_id: str) -> dict:
+    """Return the user's training preferences merged over the defaults."""
+    if not user_id:
+        return dict(DEFAULT_SETTINGS)
+    try:
+        sb = _sb()
+        res = (
+            sb.table("user_training_settings")
+            .select("settings")
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        stored = (res.data or [{}])[0].get("settings") or {}
+        return {**DEFAULT_SETTINGS, **stored}
+    except Exception:
+        return dict(DEFAULT_SETTINGS)
 
 
-def save_settings(settings: dict) -> dict:
-    data = _load()
-    data["settings"] = settings
-    _save(data)
-    return settings
+def save_settings(user_id: str, settings: dict) -> dict:
+    """Upsert the user's training preferences. Returns the merged settings."""
+    merged = {**DEFAULT_SETTINGS, **(settings or {})}
+    if not user_id:
+        return merged
+    try:
+        sb = _sb()
+        sb.table("user_training_settings").upsert(
+            {
+                "user_id":    user_id,
+                "settings":   merged,
+                "updated_at": datetime.now().isoformat(),
+            },
+            on_conflict="user_id",
+        ).execute()
+    except Exception:
+        pass
+    return merged
 
 
 # ── Daily training recommendation ─────────────────────────────────────────────
