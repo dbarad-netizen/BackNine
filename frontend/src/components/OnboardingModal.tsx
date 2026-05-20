@@ -49,11 +49,28 @@ export default function OnboardingModal({ onDone }: Props) {
     } catch { /* ignore */ }
   };
 
+  // localStorage backstop — guarantees onboarding can't re-loop even if the
+  // backend write fails (e.g. the onboarded_at column hasn't been migrated yet).
+  const markOnboardedLocally = () => {
+    try { localStorage.setItem("bn_onboarded", "1"); } catch { /* ignore */ }
+  };
+
   const finish = async () => {
     setFinishing(true);
     await saveProfile();
+    markOnboardedLocally();
     try { await api.completeOnboarding(); } catch { /* ignore */ }
     onDone();
+  };
+
+  // Connecting Oura navigates the browser away, so we MUST persist the
+  // onboarding-complete state before redirecting — otherwise returning from
+  // Oura re-triggers the whole flow.
+  const handleConnectOura = async () => {
+    await saveProfile();
+    markOnboardedLocally();
+    try { await api.completeOnboarding(); } catch { /* ignore */ }
+    window.location.href = `${BACKEND}/auth/oura`;
   };
 
   const handleGenerateInvite = async () => {
@@ -189,10 +206,10 @@ export default function OnboardingModal({ onDone }: Props) {
                   </p>
                 </div>
 
-                {/* Oura */}
-                <a
-                  href={`${BACKEND}/auth/oura`}
-                  className="block rounded-xl border border-gray-200 hover:border-[#1B3829]/40 p-3 transition-colors"
+                {/* Oura — marks onboarding done before redirecting away */}
+                <button
+                  onClick={handleConnectOura}
+                  className="w-full text-left block rounded-xl border border-gray-200 hover:border-[#1B3829]/40 p-3 transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     <span className="text-2xl">💍</span>
@@ -202,7 +219,7 @@ export default function OnboardingModal({ onDone }: Props) {
                     </div>
                     <span className="text-gray-400 text-sm">→</span>
                   </div>
-                </a>
+                </button>
 
                 {/* Apple Health */}
                 <div className="rounded-xl border border-gray-200 p-3">

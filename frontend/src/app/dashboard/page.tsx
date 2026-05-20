@@ -780,8 +780,13 @@ export default function DashboardPage() {
       .catch(() => {});
     // Check onboarding status independently of the (possibly empty) dashboard
     // payload — a brand-new user with no data still needs the welcome flow.
+    // localStorage backstop prevents an infinite loop if the backend write
+    // ever fails (e.g. the onboarded_at column hasn't been migrated yet).
     api.me()
-      .then(me => { if (me.needs_onboarding) setShowOnboarding(true); })
+      .then(me => {
+        const locallyDone = typeof window !== "undefined" && localStorage.getItem("bn_onboarded") === "1";
+        if (me.needs_onboarding && !locallyDone) setShowOnboarding(true);
+      })
       .catch(() => {});
   }, []);
 
