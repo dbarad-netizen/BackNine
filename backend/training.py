@@ -350,15 +350,45 @@ def search_exercises(query: str, limit: int = 10) -> List[dict]:
     return results[:limit]
 
 
+# ── Supabase storage ────────────────────────────────────────────────────────
+# Workouts live in the training_workouts table, scoped by user_id. Previously
+# they were written to a local JSON file on Render's ephemeral disk and were
+# wiped on every cold start — that's the "workouts aren't saving" bug.
+
+def _sb():
+    import os
+    from supabase import create_client
+    url = os.getenv("SUPABASE_URL", "")
+    key = os.getenv("SUPABASE_SERVICE_KEY", "")
+    if not url or not key:
+        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY must be set")
+    return create_client(url, key)
+
+
 # ── Workout CRUD ──────────────────────────────────────────────────────────────
 
-def get_workouts(days: int = 30) -> List[dict]:
-    data  = _load()
+def get_workouts(user_id: str, days: int = 30) -> List[dict]:
+    """Return the user's workouts from the last `days`, newest-first."""
+    if not user_id:
+        return []
     cutoff = (date.today() - timedelta(days=days)).isoformat()
-    return [w for w in data.get("workouts", []) if w["date"] >= cutoff]
+    try:
+        sb = _sb()
+        res = (
+            sb.table("training_workouts")
+            .select("*")
+            .eq("user_id", user_id)
+            .gte("date", cutoff)
+            .order("date", desc=True)
+            .execute()
+        )
+        return res.data or []
+    except Exception:
+        return []
 
 
 def add_workout(
+    user_id: str,
     date_str: str,
     workout_type: str,          # "lifting" | "stretching" | "mobility"
     exercises: List[dict],      # see schema below
@@ -366,13 +396,13 @@ def add_workout(
     notes: str = "",
 ) -> dict:
     """
+    Persist a workout for the user. Returns the inserted row.
+
     Exercise schema (lifting):
       { name, sets: [{weight_lbs, reps, rpe?}] }
     Exercise schema (stretching):
       { name, duration_sec }
     """
-    data = _load()
-
     # Compute totals for lifting sessions
     total_volume = 0
     muscle_groups: List[str] = []
@@ -389,30 +419,38 @@ def add_workout(
 
     entry: dict = {
         "id":            str(uuid.uuid4())[:8],
+        "user_id":       user_id,
         "date":          date_str,
         "type":          workout_type,
         "exercises":     exercises,
         "muscle_groups": muscle_groups,
         "duration_min":  duration_min,
         "notes":         notes,
+        "total_volume_lbs": round(total_volume) if workout_type == "lifting" else None,
         "logged_at":     datetime.now().isoformat(),
     }
-    if workout_type == "lifting":
-        entry["total_volume_lbs"] = round(total_volume)
 
-    data["workouts"].append(entry)
-    _save(data)
-    return entry
+    sb = _sb()
+    res = sb.table("training_workouts").insert(entry).execute()
+    return (res.data or [entry])[0]
 
 
-def delete_workout(workout_id: str) -> bool:
-    data = _load()
-    orig = data.get("workouts", [])
-    data["workouts"] = [w for w in orig if w["id"] != workout_id]
-    if len(data["workouts"]) == len(orig):
+def delete_workout(user_id: str, workout_id: str) -> bool:
+    """Delete one of the user's workouts. Returns True if a row was removed."""
+    if not user_id or not workout_id:
         return False
-    _save(data)
-    return True
+    try:
+        sb = _sb()
+        res = (
+            sb.table("training_workouts")
+            .delete()
+            .eq("user_id", user_id)
+            .eq("id", workout_id)
+            .execute()
+        )
+        return bool(res.data)
+    except Exception:
+        return False
 
 
 # ── Settings ──────────────────────────────────────────────────────────────────

@@ -1378,8 +1378,8 @@ def search_exercises(request: Request, q: str = ""):
 
 @app.get("/api/training/workouts")
 def get_workouts(request: Request, days: int = 30):
-    _require_session(request)
-    return {"workouts": trn.get_workouts(days)}
+    session = _require_session(request)
+    return {"workouts": trn.get_workouts(session["user_id"], days)}
 
 
 @app.post("/api/training/workouts")
@@ -1389,6 +1389,7 @@ async def log_workout(request: Request):
     body = await request.json()
     today = datetime.now().strftime("%Y-%m-%d")
     entry = trn.add_workout(
+        user_id      = user_id,
         date_str     = body.get("date", today),
         workout_type = body.get("type", "lifting"),
         exercises    = body.get("exercises", []),
@@ -1414,8 +1415,8 @@ async def log_workout(request: Request):
 
 @app.delete("/api/training/workouts/{workout_id}")
 def remove_workout(workout_id: str, request: Request):
-    _require_session(request)
-    ok = trn.delete_workout(workout_id)
+    session = _require_session(request)
+    ok = trn.delete_workout(session["user_id"], workout_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Workout not found")
     return {"status": "deleted"}
@@ -1438,7 +1439,7 @@ async def get_training_recommendation(request: Request):
         hrv = sm.get("hrv")
     except Exception:
         pass
-    recent = trn.get_workouts(days=7)
+    recent = trn.get_workouts(session["user_id"], days=7)
     return trn.daily_recommendation(readiness_score, hrv, recent)
 
 
