@@ -1486,11 +1486,34 @@ export default function DashboardPage() {
 
             {/* ── Picked For You (smart gear recommendations) ── */}
             <GearPicks
-              hasOura={data.has_oura !== false}
-              longevityKeys={Object.keys(data.longevity_score?.components ?? {})}
-              sleepAvg7d={(() => {
-                const vals = trend.slice(-7).map(t => t.sleep).filter((s): s is number => s != null && s > 0);
-                return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+              signals={(() => {
+                const recent = trend.slice(-7);
+                const avg = (key: keyof typeof recent[number]): number | null => {
+                  const vals = recent
+                    .map(d => d[key])
+                    .filter((v): v is number => typeof v === "number" && v > 0);
+                  return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+                };
+                // HRV direction: compare first vs second half of the week
+                const hrvVals = recent.map(d => d.hrv).filter((v): v is number => typeof v === "number" && v > 0);
+                let hrvDirection: "rising" | "falling" | "stable" | null = null;
+                if (hrvVals.length >= 4) {
+                  const half = Math.floor(hrvVals.length / 2);
+                  const firstAvg  = hrvVals.slice(0, half).reduce((a, b) => a + b, 0) / half;
+                  const secondAvg = hrvVals.slice(half).reduce((a, b) => a + b, 0) / (hrvVals.length - half);
+                  hrvDirection = secondAvg > firstAvg + 1 ? "rising" : secondAvg < firstAvg - 1 ? "falling" : "stable";
+                }
+                return {
+                  hasOura:          data.has_oura !== false,
+                  longevityKeys:    Object.keys(data.longevity_score?.components ?? {}),
+                  sleepScoreAvg7d:  avg("sleep"),
+                  sleepHrsAvg7d:    avg("total_hrs"),
+                  stepsAvg7d:       avg("steps"),
+                  hrvDirection,
+                  rhrAvg7d:         avg("rhr"),
+                  readinessAvg7d:   avg("readiness"),
+                  trainingLoadZone: training_load?.zone ?? null,
+                };
               })()}
               onJump={() => setSection("gear")}
             />
