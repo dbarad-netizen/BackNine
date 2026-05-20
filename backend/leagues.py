@@ -155,6 +155,22 @@ def _weekly_scores(sb, ids: list[str], start: str, end: str) -> dict[str, int]:
 
 # ── Main entry point ──────────────────────────────────────────────────────────
 
+def weekly_points(user_ids: list[str], today_str: str) -> dict[str, int]:
+    """Engagement points for each user for the current Mon–Sun week.
+
+    Public helper so other surfaces (e.g. the friend leaderboard) can rank by
+    the same inclusive metric Leagues use.
+    """
+    if not user_ids:
+        return {}
+    today = date.fromisoformat(today_str)
+    monday = today - timedelta(days=today.weekday())
+    try:
+        return _weekly_scores(_sb(), list(user_ids), monday.isoformat(), today_str)
+    except Exception:
+        return {}
+
+
 def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
     """Join (or fetch) the user's current-week league and return live standings."""
     sb = _sb()

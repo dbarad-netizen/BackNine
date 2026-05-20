@@ -901,6 +901,8 @@ export interface LeaderboardEntry {
   steps:         MetricValue;
   sleep:         MetricValue;
   activity:      MetricValue;
+  /** Weekly engagement points — the inclusive ranking metric (works without a wearable). */
+  points:        number;
   /** Which taunt (if any) the current user has sent to this friend today. */
   taunt_sent:    TauntKind | null;
   /** Weekly head-to-head tally vs the current user. Null for self. */

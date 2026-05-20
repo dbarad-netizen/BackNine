@@ -27,7 +27,7 @@ function AlAvatar({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
 }
 
 interface Props {
-  onRegisterOpen?: (opener: () => void) => void;
+  onRegisterOpen?: (opener: (seed?: string) => void) => void;
 }
 
 export default function ChatWidget({ onRegisterOpen }: Props) {
@@ -39,10 +39,16 @@ export default function ChatWidget({ onRegisterOpen }: Props) {
   const [hydrating,    setHydrating]    = useState(true);    // initial history+obs load
   const [error,        setError]        = useState<string | null>(null);
   const [clearConfirm, setClearConfirm] = useState(false);
+  // A seed message to auto-send once the drawer is open + history hydrated
+  // (e.g. "Ask Coach Al about this" on the Weekly Insight card).
+  const [pendingSeed, setPendingSeed] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLTextAreaElement>(null);
 
-  const openDrawer = useCallback(() => setOpen(true), []);
+  const openDrawer = useCallback((seed?: string) => {
+    setOpen(true);
+    if (seed && seed.trim()) setPendingSeed(seed.trim());
+  }, []);
   useEffect(() => { onRegisterOpen?.(openDrawer); }, [onRegisterOpen, openDrawer]);
 
   // ── Hydrate from server on mount ──
@@ -77,6 +83,17 @@ export default function ChatWidget({ onRegisterOpen }: Props) {
   useEffect(() => {
     if (open) setTimeout(() => inputRef.current?.focus(), 150);
   }, [open]);
+
+  // Fire a seeded question (from "Ask Coach Al about this") once the drawer is
+  // open and history has hydrated, so it appends after any prior conversation.
+  useEffect(() => {
+    if (open && !hydrating && pendingSeed && !loading) {
+      const s = pendingSeed;
+      setPendingSeed(null);
+      sendMessage(s);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, hydrating, pendingSeed]);
 
   const sendMessage = async (text?: string) => {
     const msg = (text ?? input).trim();

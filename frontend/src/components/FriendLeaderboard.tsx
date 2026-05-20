@@ -145,6 +145,9 @@ export default function FriendLeaderboard() {
   }
 
   const tally = leaderTally(data.leaders);
+  // Top weekly-points total — used to crown the points leader (the inclusive
+  // ranking everyone earns, wearable or not).
+  const maxPoints = Math.max(0, ...data.entries.map(e => e.points || 0));
 
   // ── Header line: how many metrics am I leading? ──
   const me = data.entries.find(e => e.is_me);
@@ -152,6 +155,8 @@ export default function FriendLeaderboard() {
   const totalContested = Object.values(data.leaders).filter(Boolean).length;
   const headerLine = totalContested > 0
     ? `You're leading in ${myWins} of ${totalContested} today`
+    : maxPoints > 0
+    ? "Ranked by weekly engagement points"
     : "Waiting on data — check back later";
 
   return (
@@ -194,6 +199,17 @@ export default function FriendLeaderboard() {
                   }`}>
                     {e.is_me ? "You" : e.name}
                   </p>
+                  {/* Weekly engagement points — the headline ranking everyone earns */}
+                  <span
+                    title="Engagement points this week"
+                    className={`text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 ${
+                      (e.points || 0) > 0 && e.points === maxPoints
+                        ? "bg-amber-100 border border-amber-300 text-amber-800"
+                        : "bg-[#1B3829]/8 text-[#1B3829]"
+                    }`}
+                  >
+                    {(e.points || 0) > 0 && e.points === maxPoints ? "👑 " : ""}{e.points} pts
+                  </span>
                   {e.is_me && (
                     <span className="text-[9px] bg-[#1B3829]/10 border border-[#1B3829]/20 text-[#1B3829] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full">
                       You

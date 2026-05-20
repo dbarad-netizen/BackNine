@@ -15,8 +15,8 @@ import { api, type WeeklyInsightResponse } from "@/lib/api";
 import CoachAlAvatar from "@/components/CoachAlAvatar";
 
 interface Props {
-  /** Optional callback to open the main Coach Al chat drawer. */
-  onOpenChat?: () => void;
+  /** Open the main Coach Al chat drawer, optionally seeding a first question. */
+  onOpenChat?: (seed?: string) => void;
 }
 
 export default function WeeklyInsight({ onOpenChat }: Props) {
@@ -166,7 +166,12 @@ export default function WeeklyInsight({ onOpenChat }: Props) {
         </button>
         {onOpenChat && (
           <button
-            onClick={onOpenChat}
+            onClick={() => {
+              const parts = [`Tell me more about this week's insight: "${data.headline}".`];
+              if (data.experiment) parts.push(`You suggested I try: ${data.experiment}`);
+              parts.push("Why is this happening, and how do I make the most of it?");
+              onOpenChat(parts.join(" "));
+            }}
             className="text-[11px] font-semibold flex items-center gap-1 transition-colors"
             style={{ color: accent }}
           >

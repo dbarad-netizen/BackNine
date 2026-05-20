@@ -2946,19 +2946,30 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None):
             "steps":    {"value": steps_v, "anchor": steps_a},
             "sleep":    {"value": sleep_v, "anchor": sleep_a},
             "activity": {"value": act_v,   "anchor": act_a},
+            # Weekly engagement points — the inclusive metric everyone earns
+            # (check-in, workouts, meals, weigh-ins + step bonus). Non-wearable
+            # users still rank here instead of showing all-zero.
+            "points":   int(points_map.get(uid, 0)),
             # If you've taunted this friend today, surface which kind (else None).
             "taunt_sent":   None if is_me else taunts_today.get(uid),
             # 7-day head-to-head tally vs the current user (null for self).
             "head_to_head": h2h,
         }
 
-    entries: list[dict] = [
-        _entry_for(user_id, _display_name_for(user_id), True),
-    ]
     try:
         friends = frd.list_friends(user_id)
     except Exception:
         friends = []
+
+    # Weekly engagement points for everyone in one batched pass (works for
+    # non-wearable users too). _entry_for reads points_map from this scope.
+    all_uids = [user_id] + [f["user_id"] for f in friends]
+    try:
+        points_map = lg.weekly_points(all_uids, today_str)
+    except Exception:
+        points_map = {}
+
+    entries: list[dict] = [_entry_for(user_id, _display_name_for(user_id), True)]
     for f in friends:
         entries.append(_entry_for(f["user_id"], f.get("name") or "Friend", False))
 
@@ -2976,9 +2987,10 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None):
         "activity": _leader_id("activity"),
     }
 
-    # Default sort: by steps desc with nulls last. Frontend can re-sort.
+    # Default sort: weekly engagement points desc (the inclusive ranking),
+    # then steps as a tiebreaker. Frontend can re-sort.
     entries.sort(key=lambda e: (
-        (e["steps"].get("value") or 0) <= 0,
+        -(e.get("points") or 0),
         -(e["steps"].get("value") or 0),
     ))
 

@@ -802,7 +802,7 @@ export default function DashboardPage() {
   const [showShare, setShowShare] = useState(false);
   const [autoLogWorkout, setAutoLogWorkout] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const openChatRef = useRef<(() => void) | null>(null);
+  const openChatRef = useRef<((seed?: string) => void) | null>(null);
 
   // Nutrition state
   const [nutToday,   setNutToday]   = useState<NutritionToday | null>(null);
@@ -1641,7 +1641,7 @@ export default function DashboardPage() {
             />
 
             {/* ── Coach Al's Weekly Insight ── */}
-            <WeeklyInsight onOpenChat={() => openChatRef.current?.()} />
+            <WeeklyInsight onOpenChat={(seed) => openChatRef.current?.(seed)} />
 
             {/* ── Body & Weight (collapsible) ── */}
             <CollapsibleSection
