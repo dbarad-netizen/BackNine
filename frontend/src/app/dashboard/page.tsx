@@ -13,6 +13,7 @@ import {
   type Meal,
   type NutritionSettings,
   type LongevityHistory,
+  type UserProfile,
 } from "@/lib/api";
 import { scoreColor, fmtDate } from "@/lib/utils";
 import ScoreRing from "@/components/ScoreRing";
@@ -800,6 +801,7 @@ export default function DashboardPage() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [autoLogWorkout, setAutoLogWorkout] = useState(false);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const openChatRef = useRef<(() => void) | null>(null);
 
   // Nutrition state
@@ -826,6 +828,10 @@ export default function DashboardPage() {
     // Pre-load weight entries so Body Composition card is ready on Scorecard
     api.weightEntries()
       .then(w => setWeightLog(w.entries))
+      .catch(() => {});
+    // Profile — used to hide the "add age & sex" nudge once it's filled in
+    api.getProfile()
+      .then(setProfile)
       .catch(() => {});
     // Check onboarding status independently of the (possibly empty) dashboard
     // payload — a brand-new user with no data still needs the welcome flow.
@@ -1570,9 +1576,11 @@ export default function DashboardPage() {
                     );
                   })()}
 
-                  <p className="text-[10px] text-gray-400 border-t border-gray-50 pt-2">
-                    💡 Add your age &amp; sex in <button onClick={() => setShowProfile(true)} className="underline hover:text-gray-600">Profile</button> for more accurate norms.
-                  </p>
+                  {profile != null && (profile.age == null || !profile.biological_sex) && (
+                    <p className="text-[10px] text-gray-400 border-t border-gray-50 pt-2">
+                      💡 Add your age &amp; sex in <button onClick={() => setShowProfile(true)} className="underline hover:text-gray-600">Profile</button> for more accurate norms.
+                    </p>
+                  )}
                 </section>
               );
             })()}
@@ -2035,7 +2043,16 @@ export default function DashboardPage() {
       <ChatWidget onRegisterOpen={opener => { openChatRef.current = opener; }} />
 
       {/* ── Profile modal ── */}
-      {showProfile && <ProfileModal onClose={() => setShowProfile(false)} initialTab={profileInitialTab} />}
+      {showProfile && (
+        <ProfileModal
+          onClose={() => {
+            setShowProfile(false);
+            // Refresh so the "add age & sex" nudge clears once they've filled it in.
+            api.getProfile().then(setProfile).catch(() => {});
+          }}
+          initialTab={profileInitialTab}
+        />
+      )}
       {showShare && (
         <ShareCardModal
           onClose={() => setShowShare(false)}
