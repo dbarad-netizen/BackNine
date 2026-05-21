@@ -87,9 +87,6 @@ export default function GearTab() {
         </p>
       </div>
 
-      {/* Coach Al gear finder */}
-      <GearFinder summary={summary} onOpenReviews={setReviewItem} />
-
       {/* Category filter pills */}
       <div className="flex flex-wrap gap-2">
         <FilterPill label="All" icon="✦" active={activeCategory === "all"} onClick={() => setActiveCategory("all")} />
@@ -125,6 +122,9 @@ export default function GearTab() {
           </div>
         </section>
       ))}
+
+      {/* Coach Al gear finder — at the bottom of the shop */}
+      <GearFinder summary={summary} onOpenReviews={setReviewItem} />
 
       {/* Owner-only: what people are searching for (renders only for admins) */}
       <GearDemandPanel />
