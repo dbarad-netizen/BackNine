@@ -265,13 +265,21 @@ function WorkoutLogger({
     setParsing(true); setParseError(null);
     try {
       const p = await api.parseWorkout(t);
-      if (p.exercises.length === 0 && !p.notes) {
-        setParseError("Couldn't read that — try e.g. \"bench 3x8 @135, squats 5x5 @225\".");
-      } else {
+      if (p.exercises.length > 0) {
+        // Structured workout — fill the editable exercise list to review.
         setWorkoutType(p.type || "lifting");
         loadExercises(p.exercises);
         if (p.duration_min) setDuration(String(p.duration_min));
         if (p.notes) setNotes(prev => prev ? `${prev}; ${p.notes}` : p.notes);
+        setDescribe("");
+      } else {
+        // Generic session (e.g. "30 min upper body lifting") — no itemized
+        // sets to review. Log it as a freeform workout: keep the description
+        // as the title/notes and capture the duration. Still fully saveable.
+        if (p.type) setWorkoutType(p.type);
+        if (p.duration_min) setDuration(String(p.duration_min));
+        const freeform = p.notes && p.notes.trim().length > 2 ? p.notes.trim() : t;
+        setNotes(prev => prev ? `${prev}; ${freeform}` : freeform);
         setDescribe("");
       }
     } catch (e) {
@@ -313,8 +321,16 @@ function WorkoutLogger({
     } catch (e) { console.error(e); }
   };
 
+  // A workout is saveable if it has itemized exercises OR enough to stand on its
+  // own as a quick log: a description, a note, or a duration.
+  const describeTrimmed = describe.trim();
+  const canSave = exercises.length > 0 || !!notes.trim() || !!duration || !!describeTrimmed;
+
   const save = async () => {
-    if (exercises.length === 0) return;
+    // Fall back to whatever the user typed in the "describe" box if they hit
+    // Save before pressing Add — log it as a freeform session.
+    const effectiveNotes = notes.trim() || (exercises.length === 0 ? describeTrimmed : "");
+    if (exercises.length === 0 && !effectiveNotes && !duration) return;
     setSaving(true);
     try {
       // Don't persist UI-only "done" flags on the workout record.
@@ -328,10 +344,10 @@ function WorkoutLogger({
         type:         workoutType,
         exercises:    clean,
         duration_min: duration ? parseInt(duration) : undefined,
-        notes,
+        notes:        effectiveNotes,
       });
       onSaved(w);
-      setExercises([]); setDuration(""); setNotes("");
+      setExercises([]); setDuration(""); setNotes(""); setDescribe("");
     } catch (e) { console.error(e); }
     finally { setSaving(false); }
   };
@@ -518,10 +534,15 @@ function WorkoutLogger({
         </div>
       </div>
 
-      <button disabled={exercises.length === 0 || saving} onClick={save}
+      <button disabled={!canSave || saving} onClick={save}
         className="w-full py-2.5 rounded-xl bg-[#1B3829] hover:bg-[#2D6A4F] disabled:opacity-30 text-white text-sm font-semibold transition-colors">
         {saving ? "Saving…" : "Save workout"}
       </button>
+      {exercises.length === 0 && (notes.trim() || duration || describeTrimmed) && (
+        <p className="text-[11px] text-gray-400 -mt-2 text-center">
+          No exercises added — this will be logged as a quick session.
+        </p>
+      )}
     </div>
   );
 }
@@ -595,9 +616,15 @@ function RecentWorkouts({
                     </span>
                     <span className="text-xs text-gray-400">{w.date}</span>
                   </div>
-                  <p className="text-sm text-gray-700 capitalize">
-                    {w.exercises.map(e => e.name).join(", ")}
-                  </p>
+                  {w.exercises.length > 0 ? (
+                    <p className="text-sm text-gray-700 capitalize">
+                      {w.exercises.map(e => e.name).join(", ")}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-gray-700">
+                      {w.notes?.trim() || "Quick session"}
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-xs text-gray-400">
                     {w.duration_min ? <span>⏱ {w.duration_min} min</span> : null}
                     {vol && vol > 0 ? <span>📦 {vol.toLocaleString()} lbs vol</span> : null}

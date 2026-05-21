@@ -28,8 +28,12 @@ _SYSTEM = (
     "Anything that isn't sets-by-reps strength work (e.g. '20 min run', 'stretching', a walk) goes into "
     "\"notes\" as a short phrase — do NOT invent sets for it. "
     "duration_min = total session minutes if stated, else null. "
+    "If the description names NO specific exercises but does describe a session "
+    "(e.g. 'upper body lifting', 'leg day', 'full body', '30 min cardio'), return "
+    "exercises:[] and put a short clean title of the session in \"notes\" (e.g. "
+    "'Upper body lifting') — do NOT invent exercises. "
     "Always set type to 'lifting'. Return {\"type\":\"lifting\",\"exercises\":[],\"duration_min\":null,\"notes\":\"\"} "
-    "if you can't parse any exercises."
+    "only if there is truly nothing to capture."
 )
 
 
