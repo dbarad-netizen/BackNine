@@ -25,6 +25,8 @@ const GLYPHS: [RegExp, string][] = [
   [/inbody|smart scale|body scale|\bscale\b/, "⚖️"],
   [/blood pressure|withings bp/, "🩺"],
   [/glucose|cgm|stelo|dexcom|levels/, "🩸"],
+  [/blood test|biomarker|finger.?prick|siphox|phlebotomy/, "🩸"],
+  [/function health|superpower|insidetracker|inside ?tracker|quest|labcorp|everlywell|lab work|lab test|lab panel|test kit|diagnostic/, "🧪"],
   [/protein bar|\bbars?\b/, "🍫"],
   [/whey|protein|shake|isolate/, "🥤"],
   [/electrolyte|lmnt|hydration mix/, "🧂"],
