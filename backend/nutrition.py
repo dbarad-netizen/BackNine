@@ -156,6 +156,39 @@ def delete_meal(date_str: str, meal_id: str, user_id: str = "default") -> bool:
     return bool(res.data)
 
 
+def recent_foods(user_id: str, limit: int = 12) -> List[dict]:
+    """Distinct recently-logged foods for one-tap re-logging (most recent first)."""
+    sb = _sb()
+    try:
+        res = (
+            sb.table("nutrition_meals")
+            .select("name, calories, protein, carbs, fat, logged_at")
+            .eq("user_id", user_id)
+            .order("logged_at", desc=True)
+            .limit(200)
+            .execute()
+        )
+    except Exception:
+        return []
+    seen: set = set()
+    out: List[dict] = []
+    for r in (res.data or []):
+        key = (r.get("name") or "").strip().lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append({
+            "name":     r["name"],
+            "calories": r.get("calories") or 0,
+            "protein":  r.get("protein") or 0,
+            "carbs":    r.get("carbs") or 0,
+            "fat":      r.get("fat") or 0,
+        })
+        if len(out) >= limit:
+            break
+    return out
+
+
 # ── Weight / body composition ─────────────────────────────────────────────────
 
 def get_weight_entries(user_id: str = "default") -> List[dict]:

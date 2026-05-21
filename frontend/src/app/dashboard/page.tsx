@@ -38,6 +38,7 @@ import FriendLeaderboard from "@/components/FriendLeaderboard";
 import WeeklyLeague from "@/components/WeeklyLeague";
 import GroupsSection from "@/components/GroupsSection";
 import Achievements from "@/components/Achievements";
+import MealQuickAdd from "@/components/MealQuickAdd";
 import NotificationBell from "@/components/NotificationBell";
 import ShareCardModal from "@/components/ShareCardModal";
 import OnboardingModal from "@/components/OnboardingModal";
@@ -1768,6 +1769,12 @@ export default function DashboardPage() {
                 {settings?.fasting_enabled && (
                   <FastingClock start={settings.eating_start} end={settings.eating_end} />
                 )}
+
+                {/* ─ Quick add (natural language / photo / recents) ─ */}
+                <MealQuickAdd
+                  date={nutToday.date}
+                  onLogged={() => api.nutritionToday().then(setNutToday).catch(() => {})}
+                />
 
                 {/* ─ Meal log ─ */}
                 <section className="rounded-2xl border border-gray-200 bg-white p-4">

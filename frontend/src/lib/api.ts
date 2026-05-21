@@ -260,6 +260,15 @@ export interface Meal {
   logged_at: string;
 }
 
+/** A draft food item (from AI parse, recents) before it's logged as a Meal. */
+export interface MealDraftItem {
+  name:     string;
+  calories: number;
+  protein:  number;
+  carbs:    number;
+  fat:      number;
+}
+
 export interface MacroTotals {
   calories: number;
   protein:  number;
@@ -523,6 +532,24 @@ export const api = {
   searchFoods(q: string): Promise<{ results: FoodItem[] }> { return request(`/api/nutrition/foods/search?q=${encodeURIComponent(q)}`); },
   logMeal(meal: Omit<Meal, "id" | "logged_at"> & { date?: string }): Promise<Meal> {
     return request("/api/nutrition/meals", { method: "POST", body: JSON.stringify(meal) });
+  },
+  logMealsBatch(meals: MealDraftItem[], date?: string): Promise<{ meals: Meal[] }> {
+    return request("/api/nutrition/meals/batch", {
+      method: "POST",
+      body: JSON.stringify({ meals, date }),
+    });
+  },
+  recentFoods(): Promise<{ foods: MealDraftItem[] }> {
+    return request("/api/nutrition/recent");
+  },
+  parseMealText(text: string): Promise<{ items: MealDraftItem[] }> {
+    return request("/api/nutrition/parse-text", { method: "POST", body: JSON.stringify({ text }) });
+  },
+  parseMealPhoto(image: string, media_type: string): Promise<{ items: MealDraftItem[] }> {
+    return request("/api/nutrition/parse-photo", {
+      method: "POST",
+      body: JSON.stringify({ image, media_type }),
+    });
   },
   deleteMeal(id: string, date?: string): Promise<void> {
     const qs = date ? `?date=${date}` : "";

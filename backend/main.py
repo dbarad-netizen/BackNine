@@ -42,6 +42,7 @@ import groups as grp
 import goals as gl
 import achievements as ach
 import gear_reviews as gr
+import nutrition_ai as nai
 import observations as obs
 
 load_dotenv()
@@ -1355,6 +1356,69 @@ async def log_meal(request: Request):
         user_id=uid,
     )
     return entry
+
+
+@app.post("/api/nutrition/meals/batch")
+async def log_meals_batch(request: Request):
+    """Log several food items at once (from AI parse, recents, etc.)."""
+    session = _require_session(request)
+    uid     = session["user_id"]
+    body    = await request.json()
+    today   = datetime.now().strftime("%Y-%m-%d")
+    date_str = body.get("date", today)
+    out = []
+    for m in (body.get("meals") or []):
+        name = (m.get("name") or "").strip()
+        if not name:
+            continue
+        out.append(nutr.add_meal(
+            date_str, name,
+            m.get("calories") or 0, m.get("protein") or 0,
+            m.get("carbs") or 0, m.get("fat") or 0,
+            "meal", user_id=uid,
+        ))
+    return {"meals": out}
+
+
+@app.get("/api/nutrition/recent")
+def get_recent_foods(request: Request):
+    """Distinct recently-logged foods for one-tap re-logging."""
+    session = _require_session(request)
+    return {"foods": nutr.recent_foods(session["user_id"])}
+
+
+@app.post("/api/nutrition/parse-text")
+async def parse_meal_text(request: Request):
+    """Turn a free-text meal description into draft food items via Claude."""
+    _require_session(request)
+    body = await request.json()
+    text = (body.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="text is required")
+    try:
+        return {"items": nai.parse_text(text)}
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"could not parse meal: {e}")
+
+
+@app.post("/api/nutrition/parse-photo")
+async def parse_meal_photo(request: Request):
+    """Turn a meal photo into draft food items via Claude vision.
+    Body: { image: <base64 string>, media_type: "image/jpeg" }."""
+    _require_session(request)
+    body = await request.json()
+    image = body.get("image") or ""
+    media_type = body.get("media_type") or "image/jpeg"
+    if not image:
+        raise HTTPException(status_code=400, detail="image is required")
+    try:
+        return {"items": nai.parse_photo(image, media_type)}
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"could not read photo: {e}")
 
 
 @app.delete("/api/nutrition/meals/{meal_id}")
