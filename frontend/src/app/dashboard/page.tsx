@@ -1765,18 +1765,7 @@ export default function DashboardPage() {
                   </div>
                 </section>
 
-                {/* ─ Fasting tracker ─ */}
-                {settings?.fasting_enabled && (
-                  <FastingClock start={settings.eating_start} end={settings.eating_end} />
-                )}
-
-                {/* ─ Quick add (natural language / photo / recents) ─ */}
-                <MealQuickAdd
-                  date={nutToday.date}
-                  onLogged={() => api.nutritionToday().then(setNutToday).catch(() => {})}
-                />
-
-                {/* ─ Meal log ─ */}
+                {/* ─ Meal log (directly under macros) ─ */}
                 <section className="rounded-2xl border border-gray-200 bg-white p-4">
                   <p className="text-sm font-semibold text-gray-900 mb-3">Today's Meals</p>
                   {nutToday.meals.length === 0 ? (
@@ -1801,8 +1790,16 @@ export default function DashboardPage() {
                   )}
                 </section>
 
-                {/* ─ Add meal ─ */}
-                <AddMealForm onAdd={handleAddMeal} />
+                {/* ─ Add a meal (natural language / photo / recents / search) ─ */}
+                <MealQuickAdd
+                  date={nutToday.date}
+                  onLogged={() => api.nutritionToday().then(setNutToday).catch(() => {})}
+                />
+
+                {/* ─ Fasting tracker ─ */}
+                {settings?.fasting_enabled && (
+                  <FastingClock start={settings.eating_start} end={settings.eating_end} />
+                )}
 
                 {/* ─ Weekly summary ─ */}
                 {nutSummary && nutSummary.days_logged > 0 && (
