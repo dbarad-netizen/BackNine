@@ -375,11 +375,12 @@ function ChallengeChat({ challengeId, myDisplayName }: { challengeId: string; my
 
 // ── Challenge card ────────────────────────────────────────────────────────────
 function ChallengeCard({
-  challenge, onRefresh, onLog,
+  challenge, onRefresh, onLog, onArchive,
 }: {
   challenge: Challenge;
   onRefresh: (id: string) => Promise<void>;
   onLog: (c: Challenge) => void;
+  onArchive?: (id: string, archived: boolean) => void;
 }) {
   const [copied, setCopied]       = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -441,6 +442,16 @@ function ChallengeCard({
             >
               ↻
             </button>
+            {/* Archive — only for ended competitions (or restore if archived) */}
+            {onArchive && (challenge.archived || !challenge.is_active) && (
+              <button
+                onClick={() => onArchive(challenge.id, !challenge.archived)}
+                className="text-[11px] text-gray-400 hover:text-gray-700 px-1.5 py-1 rounded-lg hover:bg-gray-100 transition-colors"
+                title={challenge.archived ? "Restore to your active list" : "Archive this ended competition"}
+              >
+                {challenge.archived ? "Restore" : "Archive"}
+              </button>
+            )}
           </div>
         </div>
 
@@ -718,6 +729,7 @@ export default function ChallengeTab() {
   const [loading, setLoading]       = useState(true);
   const [view, setView]             = useState<View>("list");
   const [logTarget, setLogTarget]   = useState<Challenge | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -748,6 +760,11 @@ export default function ChallengeTab() {
   const handleLogged = (updated: Challenge) => {
     setChallenges(prev => prev.map(c => c.id === updated.id ? updated : c));
     setLogTarget(null);
+  };
+
+  const handleArchive = async (id: string, archived: boolean) => {
+    setChallenges(prev => prev.map(c => c.id === id ? { ...c, archived } : c));
+    try { await api.archiveChallenge(id, archived); } catch { /* keep optimistic */ }
   };
 
   if (loading) return (
@@ -789,13 +806,38 @@ export default function ChallengeTab() {
             <p className="text-gray-500 text-sm font-medium">No challenges yet</p>
             <p className="text-gray-400 text-xs">Create one and share the code with a friend</p>
           </div>
-        ) : (
-          <div className="space-y-4">
-            {challenges.map(c => (
-              <ChallengeCard key={c.id} challenge={c} onRefresh={handleRefresh} onLog={setLogTarget} />
-            ))}
-          </div>
-        )
+        ) : (() => {
+          const visible  = challenges.filter(c => !c.archived);
+          const archived = challenges.filter(c => c.archived);
+          return (
+            <div className="space-y-4">
+              {visible.map(c => (
+                <ChallengeCard key={c.id} challenge={c} onRefresh={handleRefresh} onLog={setLogTarget} onArchive={handleArchive} />
+              ))}
+              {visible.length === 0 && (
+                <p className="text-center text-xs text-gray-400 py-4">All competitions archived.</p>
+              )}
+
+              {archived.length > 0 && (
+                <div className="pt-1">
+                  <button
+                    onClick={() => setShowArchived(s => !s)}
+                    className="w-full py-2 text-[11px] font-semibold uppercase tracking-widest text-gray-400 hover:text-gray-700 transition-colors"
+                  >
+                    {showArchived ? "▲ Hide archived" : `▼ Archived (${archived.length})`}
+                  </button>
+                  {showArchived && (
+                    <div className="space-y-4 mt-1">
+                      {archived.map(c => (
+                        <ChallengeCard key={c.id} challenge={c} onRefresh={handleRefresh} onLog={setLogTarget} onArchive={handleArchive} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()
       )}
     </div>
   );

@@ -1809,7 +1809,37 @@ def my_challenges(request: Request):
     _auto_sync_oura_steps(user_id, challenges)
     # Re-fetch so the returned data reflects the auto-filled values
     challenges = chl.list_my_challenges(user_id=user_id)
+    # Flag which ones the user has archived (ended competitions tucked away).
+    archived = set(_get_profile(user_id).get("archived_challenges") or [])
+    for c in challenges:
+        c["archived"] = c.get("id") in archived
     return {"challenges": challenges, "user_id": user_id}
+
+
+@app.post("/api/challenges/{challenge_id}/archive")
+async def archive_challenge(challenge_id: str, request: Request):
+    """Archive (or restore) a competition from the user's Compete list."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    body = await request.json()
+    archived = bool(body.get("archived", True))
+    cid = challenge_id.upper()
+    db = get_supabase()
+    if not db:
+        return {"ok": False, "archived_challenges": []}
+    arr = list(_get_profile(user_id).get("archived_challenges") or [])
+    if archived and cid not in arr:
+        arr.append(cid)
+    elif not archived:
+        arr = [x for x in arr if x != cid]
+    try:
+        db.table("user_profiles").upsert(
+            {"user_id": user_id, "archived_challenges": arr},
+            on_conflict="user_id",
+        ).execute()
+        return {"ok": True, "archived_challenges": arr}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/challenges")

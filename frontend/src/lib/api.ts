@@ -649,6 +649,12 @@ export const api = {
   getChallenge(id: string): Promise<Challenge> {
     return request(`/api/challenges/${id}`);
   },
+  archiveChallenge(id: string, archived: boolean): Promise<{ ok: boolean; archived_challenges: string[] }> {
+    return request(`/api/challenges/${id}/archive`, {
+      method: "POST",
+      body: JSON.stringify({ archived }),
+    });
+  },
   logChallengeProgress(challenge_id: string, value: number, date?: string): Promise<Challenge> {
     return request(`/api/challenges/${challenge_id}/progress`, {
       method: "POST",
@@ -1346,6 +1352,7 @@ export interface Challenge {
   total_days:    number;
   is_active:     boolean;
   is_mine:       boolean;
+  archived?:     boolean;
   participants:  ChallengeParticipant[];
   type_info:     { label: string; unit: string; icon: string };
 }
