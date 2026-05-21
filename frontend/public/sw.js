@@ -8,7 +8,7 @@
  *     content-hashed by Next so this is safe.
  * Bump CACHE to invalidate on a breaking change.
  */
-const CACHE = "backnine-v1";
+const CACHE = "backnine-v2";
 const OFFLINE_URL = "/offline.html";
 
 self.addEventListener("install", (event) => {
