@@ -37,6 +37,7 @@ import PulseFeed from "@/components/PulseFeed";
 import FriendLeaderboard from "@/components/FriendLeaderboard";
 import WeeklyLeague from "@/components/WeeklyLeague";
 import GroupsSection from "@/components/GroupsSection";
+import Achievements from "@/components/Achievements";
 import NotificationBell from "@/components/NotificationBell";
 import ShareCardModal from "@/components/ShareCardModal";
 import OnboardingModal from "@/components/OnboardingModal";
@@ -1610,6 +1611,9 @@ export default function DashboardPage() {
 
             {/* ── Active Competitions strip ── */}
             <ActiveCompetitions onJump={() => setSection("challenges")} />
+
+            {/* ── Achievements / badges ── */}
+            <Achievements />
 
             {/* ── Picked For You (smart gear recommendations) ── */}
             <GearPicks

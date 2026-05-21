@@ -721,6 +721,11 @@ export const api = {
     return request(`/api/insight/weekly${refresh ? "?refresh=1" : ""}`);
   },
 
+  // ── Achievements / badges ──────────────────────────────────────────────────
+  achievements(): Promise<AchievementsResponse> {
+    return request("/api/achievements");
+  },
+
   // ── Groups (Crews) ─────────────────────────────────────────────────────────
   groups: {
     list(): Promise<{ groups: Group[] }> {
@@ -900,6 +905,24 @@ export interface WeeklyInsightResponse {
   generated_at: string | null;
   cached:       boolean;
   has_data:     boolean;
+}
+
+export interface Badge {
+  id:          string;
+  name:        string;
+  emoji:       string;
+  category:    string;
+  description: string;
+  earned:      boolean;
+  earned_at:   string | null;
+  progress:    { current: number; target: number } | null;
+}
+
+export interface AchievementsResponse {
+  badges:         Badge[];
+  earned_count:   number;
+  total:          number;
+  newly_unlocked: string[];
 }
 
 // ── Daily check-in types ──────────────────────────────────────────────────────

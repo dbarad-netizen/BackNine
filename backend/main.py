@@ -40,6 +40,7 @@ import friends as frd
 import leagues as lg
 import groups as grp
 import goals as gl
+import achievements as ach
 import observations as obs
 
 load_dotenv()
@@ -2869,6 +2870,17 @@ def abandon_goal(goal_id: str, request: Request):
     session = _require_session(request)
     gl.set_status(session["user_id"], goal_id, "abandoned")
     return {"status": "abandoned"}
+
+
+# ── Achievements / badges ─────────────────────────────────────────────────────
+
+@app.get("/api/achievements")
+def get_achievements(request: Request):
+    session = _require_session(request)
+    try:
+        return ach.evaluate(session["user_id"])
+    except Exception:
+        return {"badges": [], "earned_count": 0, "total": 0, "newly_unlocked": []}
 
 
 @app.get("/api/friends")
