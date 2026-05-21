@@ -197,7 +197,8 @@ export interface LongevityHistory {
 
 export interface UserProfile {
   name?:           string | null;
-  age?:            number | null;
+  age?:            number | null;     // derived from birthdate when set
+  birthdate?:      string | null;     // ISO YYYY-MM-DD
   biological_sex?: "male" | "female" | null;
   health_goals?:   string[];
   vo2_max?:        number | null;

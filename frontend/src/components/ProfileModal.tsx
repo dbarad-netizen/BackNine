@@ -36,7 +36,7 @@ export default function ProfileModal({ onClose, initialTab = "profile" }: Props)
   const [tab, setTab] = useState<Tab>(initialTab);
 
   // ── Profile state ──
-  const [profile,  setProfile]  = useState<UserProfile>({ name: null, age: null, biological_sex: null, health_goals: [] });
+  const [profile,  setProfile]  = useState<UserProfile>({ name: null, age: null, birthdate: null, biological_sex: null, health_goals: [] });
   const [loading,  setLoading]  = useState(true);
   const [saving,   setSaving]   = useState(false);
   const [saved,    setSaved]    = useState(false);
@@ -47,6 +47,7 @@ export default function ProfileModal({ onClose, initialTab = "profile" }: Props)
       .then(p => setProfile({
         name:           p.name ?? null,
         age:            p.age ?? null,
+        birthdate:      p.birthdate ?? null,
         biological_sex: p.biological_sex ?? null,
         health_goals:   p.health_goals ?? [],
       }))
@@ -144,19 +145,34 @@ export default function ProfileModal({ onClose, initialTab = "profile" }: Props)
                 </p>
               </div>
 
-              {/* Age */}
+              {/* Date of birth (age derives from this and stays current) */}
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1.5">Age</label>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1.5">Date of Birth</label>
                 <input
-                  type="number"
-                  min={10}
-                  max={120}
-                  placeholder="e.g. 42"
+                  type="date"
+                  max={new Date().toISOString().slice(0, 10)}
                   className={inp}
-                  value={profile.age ?? ""}
-                  onChange={e => setProfile(prev => ({ ...prev, age: parseInt(e.target.value) || null }))}
+                  value={profile.birthdate ?? ""}
+                  onChange={e => setProfile(prev => ({ ...prev, birthdate: e.target.value || null }))}
                 />
-                <p className="text-[10px] text-gray-400 mt-1">Used to age-adjust your HRV norms and longevity score.</p>
+                {(() => {
+                  let dobAge: number | null = profile.age ?? null;
+                  if (profile.birthdate) {
+                    const b = new Date(profile.birthdate);
+                    const t = new Date();
+                    let a = t.getFullYear() - b.getFullYear();
+                    const m = t.getMonth() - b.getMonth();
+                    if (m < 0 || (m === 0 && t.getDate() < b.getDate())) a--;
+                    dobAge = a >= 0 && a <= 130 ? a : null;
+                  }
+                  return (
+                    <p className="text-[10px] text-gray-400 mt-1">
+                      {dobAge != null
+                        ? `Age ${dobAge} · keeps your HRV norms & longevity score age-accurate automatically.`
+                        : "Optional. Used to age-adjust your HRV norms and longevity score — and it stays current as you age."}
+                    </p>
+                  );
+                })()}
               </div>
 
               {/* Biological sex */}

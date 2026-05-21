@@ -75,14 +75,38 @@ def get_supabase():
     return _supabase
 
 
+def _age_from_birthdate(birthdate) -> Optional[int]:
+    """Compute current age (years) from an ISO birthdate string/date."""
+    try:
+        from datetime import date as _date
+        b = _date.fromisoformat(str(birthdate)[:10])
+        t = _date.today()
+        age = t.year - b.year - ((t.month, t.day) < (b.month, b.day))
+        return age if 0 <= age <= 130 else None
+    except Exception:
+        return None
+
+
 def _get_profile(user_id: str) -> dict:
-    """Return the user's profile row, or {} if not found."""
+    """Return the user's profile row, or {} if not found.
+
+    If a birthdate is set, age is derived from it (always current) and written
+    onto the profile's `age` field — so every consumer (longevity score, chat,
+    briefing) keeps reading `age` but never sees a stale number. Falls back to
+    the stored `age` for users who haven't entered a birthday.
+    """
     try:
         db = get_supabase()
         if not db:
             return {}
         res = db.table("user_profiles").select("*").eq("user_id", user_id).execute()
-        return res.data[0] if res.data else {}
+        prof = res.data[0] if res.data else {}
+        bd = prof.get("birthdate")
+        if bd:
+            derived = _age_from_birthdate(bd)
+            if derived is not None:
+                prof["age"] = derived
+        return prof
     except Exception:
         return {}
 
@@ -2200,8 +2224,11 @@ async def save_profile(request: Request):
     session = _require_session(request)
     user_id = session["user_id"]
     body = await request.json()
-    allowed = {"name", "age", "biological_sex", "height_cm", "health_goals", "vo2_max"}
+    allowed = {"name", "age", "biological_sex", "height_cm", "health_goals", "vo2_max", "birthdate"}
     data = {k: v for k, v in body.items() if k in allowed}
+    # Empty birthdate string clears it (Postgres date column rejects "").
+    if "birthdate" in data and not data["birthdate"]:
+        data["birthdate"] = None
     data["user_id"] = user_id
     try:
         db = get_supabase()

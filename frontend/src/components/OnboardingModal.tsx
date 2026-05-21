@@ -30,7 +30,7 @@ export default function OnboardingModal({ onDone }: Props) {
 
   // Profile fields
   const [name, setName] = useState("");
-  const [age, setAge]   = useState("");
+  const [birthdate, setBirthdate] = useState("");
   const [sex, setSex]   = useState<"male" | "female" | null>(null);
 
   // Invite
@@ -43,7 +43,7 @@ export default function OnboardingModal({ onDone }: Props) {
     try {
       await api.saveProfile({
         name: name.trim() || null,
-        age: age ? parseInt(age) : null,
+        birthdate: birthdate || null,
         biological_sex: sex,
       });
     } catch { /* ignore */ }
@@ -157,15 +157,13 @@ export default function OnboardingModal({ onDone }: Props) {
                 </div>
                 <div className="flex gap-2">
                   <div className="flex-1">
-                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1.5">Age</label>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1.5">Date of Birth</label>
                     <input
                       className={inp}
-                      type="number"
-                      min={10}
-                      max={120}
-                      placeholder="42"
-                      value={age}
-                      onChange={e => setAge(e.target.value)}
+                      type="date"
+                      max={new Date().toISOString().slice(0, 10)}
+                      value={birthdate}
+                      onChange={e => setBirthdate(e.target.value)}
                     />
                   </div>
                   <div className="flex-[1.5]">
