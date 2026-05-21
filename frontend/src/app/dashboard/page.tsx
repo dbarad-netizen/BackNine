@@ -1105,10 +1105,15 @@ export default function DashboardPage() {
         style={{ paddingTop: "env(safe-area-inset-top)" }}
       >
         <div className="max-w-5xl mx-auto px-4 sm:px-6 flex items-center h-12">
-          {/* Logo */}
-          <span className="font-bold text-sm tracking-tight shrink-0 mr-3">
+          {/* Logo — taps back to the Scorecard (home) */}
+          <button
+            onClick={() => { setSection("coaching"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+            title="Go to Scorecard"
+            aria-label="Go to Scorecard"
+            className="font-bold text-sm tracking-tight shrink-0 mr-3 rounded-md hover:opacity-80 active:scale-95 transition-all"
+          >
             <span className="text-[#1B3829]">Back</span><span className="text-[#2D6A4F]">Nine</span>
-          </span>
+          </button>
           {/* Divider */}
           <div className="w-px h-5 bg-gray-200 shrink-0 mr-1" />
           {/* Tabs */}
