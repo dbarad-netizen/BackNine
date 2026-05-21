@@ -8,6 +8,7 @@ import {
   type GearReviewSummary,
   type GearFinderResult,
   type GearFinderPick,
+  type GearDemand,
 } from "@/lib/api";
 
 // Flat lookup: catalog id -> { item, category icon }. Lets the Coach Al finder
@@ -125,6 +126,9 @@ export default function GearTab() {
         </section>
       ))}
 
+      {/* Owner-only: what people are searching for (renders only for admins) */}
+      <GearDemandPanel />
+
       {reviewItem && (
         <GearReviewsModal
           item={reviewItem}
@@ -133,6 +137,109 @@ export default function GearTab() {
         />
       )}
     </div>
+  );
+}
+
+// ── Owner demand panel ───────────────────────────────────────────────────────
+// Loads the demand list; the endpoint 403s for non-admins, so this silently
+// renders nothing for everyone except the project owner.
+function GearDemandPanel() {
+  const [demand, setDemand] = useState<GearDemand | null>(null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    api.gear.demand().then(setDemand).catch(() => setDemand(null));
+  }, []);
+
+  if (!demand) return null;
+
+  const pct = demand.match_rate != null ? Math.round(demand.match_rate * 100) : null;
+
+  return (
+    <section className="rounded-2xl border border-amber-300/60 bg-amber-50/40 p-5 space-y-3">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between text-left"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-lg">📈</span>
+          <div>
+            <p className="text-sm font-bold text-gray-900">What people are searching for</p>
+            <p className="text-[11px] text-gray-500">
+              Owner view · {demand.total_searches} search{demand.total_searches !== 1 ? "es" : ""}
+              {pct != null ? ` · ${pct}% had a catalog match` : ""}
+            </p>
+          </div>
+        </div>
+        <span className="text-gray-400 text-sm">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div className="space-y-4 pt-1">
+          {demand.total_searches === 0 ? (
+            <p className="text-[13px] text-gray-500">
+              No searches logged yet. As people use the gear finder, demand shows up here.
+            </p>
+          ) : (
+            <>
+              {demand.gaps.length > 0 && (
+                <div>
+                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                    Most-requested gaps (not in catalog)
+                  </p>
+                  <div className="space-y-1">
+                    {demand.gaps.map((g, i) => (
+                      <div key={i} className="flex items-center justify-between rounded-lg bg-white border border-amber-100 px-3 py-1.5">
+                        <span className="text-[13px] text-gray-800">{g.title}</span>
+                        <span className="text-[11px] font-semibold text-amber-700 shrink-0 ml-2">
+                          ×{g.count}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {demand.unmatched_queries.length > 0 && (
+                <div>
+                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                    Searches with no match
+                  </p>
+                  <div className="space-y-1">
+                    {demand.unmatched_queries.map((u, i) => (
+                      <div key={i} className="flex items-center justify-between rounded-lg bg-white border border-gray-100 px-3 py-1.5">
+                        <span className="text-[13px] text-gray-700 truncate">&ldquo;{u.query}&rdquo;</span>
+                        {u.count > 1 && (
+                          <span className="text-[11px] text-gray-400 shrink-0 ml-2">×{u.count}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {demand.recent.length > 0 && (
+                <div>
+                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                    Recent searches
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {demand.recent.map((r, i) => (
+                      <span key={i}
+                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] ${
+                          r.had_match ? "bg-[#2D6A4F]/10 text-[#2D6A4F]" : "bg-gray-100 text-gray-500"
+                        }`}>
+                        {r.had_match ? "✓" : "—"} {r.query}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
 

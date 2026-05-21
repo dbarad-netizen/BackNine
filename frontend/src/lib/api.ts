@@ -736,6 +736,10 @@ export const api = {
         body: JSON.stringify({ query, catalog, context: context || "" }),
       });
     },
+    // Owner-only demand list — what people are searching for. 403s for non-admins.
+    demand(): Promise<GearDemand> {
+      return request("/api/gear/demand");
+    },
   },
 
   // ── Identity / onboarding ───────────────────────────────────────────────────
@@ -1036,6 +1040,15 @@ export interface GearFinderResult {
   intro:       string;
   picks:       GearFinderPick[];
   suggestions: GearFinderSuggestion[];
+}
+
+// Owner-only gear demand list (what people are searching for).
+export interface GearDemand {
+  total_searches: number;
+  match_rate: number | null;
+  gaps: { title: string; count: number }[];
+  unmatched_queries: { query: string; count: number }[];
+  recent: { query: string; had_match: boolean; created_at: string | null }[];
 }
 
 // ── Daily check-in types ──────────────────────────────────────────────────────

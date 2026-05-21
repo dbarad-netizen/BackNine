@@ -43,6 +43,7 @@ import goals as gl
 import achievements as ach
 import gear_reviews as gr
 import gear_ai as gai
+import gear_demand as gd
 import nutrition_ai as nai
 import training_ai as tai
 import observations as obs
@@ -703,6 +704,30 @@ def _check_admin(request: Request) -> None:
         raise HTTPException(status_code=500, detail="ADMIN_KEY not configured")
     if request.headers.get("X-Admin-Key", "") != ADMIN_KEY:
         raise HTTPException(status_code=403, detail="Forbidden")
+
+
+# Owner identification for in-app admin views (e.g. the gear demand panel).
+# Admin if the signed-in email is in ADMIN_EMAILS, or the user_id is in
+# ADMIN_USER_IDS. Defaults to the project owner so it works out of the box.
+ADMIN_EMAILS = {
+    e.strip().lower()
+    for e in os.getenv("ADMIN_EMAILS", "dbarad@yahoo.com").split(",")
+    if e.strip()
+}
+ADMIN_USER_IDS = {
+    i.strip()
+    for i in os.getenv("ADMIN_USER_IDS", "").split(",")
+    if i.strip()
+}
+
+
+def _is_admin(session: dict) -> bool:
+    email = (session.get("email") or "").strip().lower()
+    if email and email in ADMIN_EMAILS:
+        return True
+    if str(session.get("user_id") or "") in ADMIN_USER_IDS:
+        return True
+    return False
 
 
 @app.post("/admin/oura/register-webhook")
@@ -2087,7 +2112,7 @@ async def ask_gear_finder(request: Request):
     """Coach Al gear finder — recommend catalog items for the user's goal and,
     when the catalog falls short, give honest 'what to look for' guidance.
     The frontend sends the catalog so there's a single source of truth."""
-    _require_session(request)
+    session = _require_session(request)
     body = await request.json()
     query = (body.get("query") or "").strip()
     if not query:
@@ -2097,11 +2122,31 @@ async def ask_gear_finder(request: Request):
         catalog = []
     context = (body.get("context") or "").strip()[:500]
     try:
-        return gai.find_gear(query, catalog, context)
+        result = gai.find_gear(query, catalog, context)
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"could not run gear finder: {e}")
+
+    # Log the search as a demand signal (best-effort — never breaks the finder).
+    gd.log_search(
+        session["user_id"],
+        query,
+        had_match=bool(result.get("picks")),
+        pick_ids=[p.get("id") for p in result.get("picks", [])],
+        suggestion_titles=[s.get("title") for s in result.get("suggestions", [])],
+    )
+    return result
+
+
+@app.get("/api/gear/demand")
+def gear_demand(request: Request):
+    """Owner-only: aggregated 'what people are searching for' to guide catalog
+    expansion. Gated to admin users (see _is_admin)."""
+    session = _require_session(request)
+    if not _is_admin(session):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    return gd.top_demand()
 
 
 # ── Progress ──────────────────────────────────────────────────────────────────
