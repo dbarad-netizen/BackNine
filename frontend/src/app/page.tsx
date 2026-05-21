@@ -192,8 +192,11 @@ export default function Home() {
           </button>
         </div>
 
-        <p className="text-center text-zinc-700 text-xs px-4">
-          By continuing you agree to BackNine's terms of service and privacy policy.
+        <p className="text-center text-zinc-500 text-xs px-4 leading-relaxed">
+          By continuing you agree to BackNine&apos;s{" "}
+          <a href="/terms" className="underline hover:text-zinc-300">Terms of Use</a>,{" "}
+          <a href="/privacy" className="underline hover:text-zinc-300">Privacy Policy</a>, and{" "}
+          <a href="/disclaimer" className="underline hover:text-zinc-300">Health Disclaimer</a>.
         </p>
       </div>
     </main>

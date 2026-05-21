@@ -42,6 +42,7 @@ import MealQuickAdd from "@/components/MealQuickAdd";
 import NotificationBell from "@/components/NotificationBell";
 import ShareCardModal from "@/components/ShareCardModal";
 import OnboardingModal from "@/components/OnboardingModal";
+import Footer from "@/components/Footer";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts";
@@ -1998,6 +1999,9 @@ export default function DashboardPage() {
         )}
 
       </main>
+
+      {/* ── Footer with legal links ── */}
+      <Footer />
 
       {/* ── Coach Al chat ── */}
       <ChatWidget onRegisterOpen={opener => { openChatRef.current = opener; }} />
