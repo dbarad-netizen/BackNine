@@ -4,6 +4,54 @@ import { useCallback, useEffect, useState } from "react";
 import GEAR, { type GearItem } from "@/lib/gearData";
 import { api, type GearReview, type GearReviewSummary } from "@/lib/api";
 
+// A distinctive glyph per item (derived from its name/brand) so the no-photo
+// placeholder reads as a varied, intentional catalog rather than one repeated
+// category icon. Order matters: specific patterns before general ones.
+const GLYPHS: [RegExp, string][] = [
+  [/oura|\bring\b/, "💍"],
+  [/apple watch|garmin|whoop|smartwatch|\bwatch\b/, "⌚"],
+  [/inbody|smart scale|body scale|\bscale\b/, "⚖️"],
+  [/blood pressure|withings bp/, "🩺"],
+  [/glucose|cgm|stelo|dexcom|levels/, "🩸"],
+  [/protein bar|\bbars?\b/, "🍫"],
+  [/whey|protein|shake|isolate/, "🥤"],
+  [/electrolyte|lmnt|hydration mix/, "🧂"],
+  [/collagen/, "🧴"],
+  [/magnesium|vitamin|omega|fish oil|creatine|\bd3\b|\bk2\b|zinc|nmn|ashwagandha|supplement|probiotic/, "💊"],
+  [/sleep mask|eye mask|\bmask\b/, "😴"],
+  [/pillow/, "🛏️"],
+  [/blanket/, "🛌"],
+  [/hatch|sunrise|wake.?up light|alarm|\blamp\b|\blight\b/, "🌅"],
+  [/rower|rowing/, "🚣"],
+  [/\bbike\b|cycle|peloton|spin/, "🚴"],
+  [/treadmill|running/, "🏃"],
+  [/dumbbell|kettlebell|barbell|adjustable|\bweights?\b/, "🏋️"],
+  [/resistance|exercise band|loop band/, "🎗️"],
+  [/\byoga\b|\bmat\b/, "🧘"],
+  [/foam roll|\broller\b/, "🌀"],
+  [/massage|theragun|percussion/, "💆"],
+  [/sauna|infrared/, "🧖"],
+  [/cold plunge|ice bath|\bplunge\b|chiller/, "🧊"],
+  [/normatec|compression boot|recovery boot/, "🦵"],
+  [/water bottle|\bbottle\b|hydration/, "💧"],
+  [/headphone|earbud|airpod/, "🎧"],
+  [/\bshoes?\b|sneaker/, "👟"],
+  [/\bbook\b|reading/, "📖"],
+];
+
+function glyphFor(item: GearItem, categoryIcon: string): string {
+  const s = `${item.name} ${item.brand}`.toLowerCase();
+  for (const [re, g] of GLYPHS) if (re.test(s)) return g;
+  return categoryIcon;
+}
+
+// Stable pastel hue per brand, so each card's placeholder has its own tint.
+function brandHue(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
+  return h;
+}
+
 export default function GearTab() {
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [summary, setSummary] = useState<Record<string, GearReviewSummary>>({});
@@ -105,14 +153,31 @@ function ProductCard({
   summary?: GearReviewSummary;
   onOpenReviews: () => void;
 }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const glyph = glyphFor(item, categoryIcon);
+  const hue = brandHue(item.brand || item.name);
+
   return (
     <div className="flex flex-col rounded-2xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition overflow-hidden">
       <a href={item.link} target="_blank" rel="noopener noreferrer" className="group block">
-        {item.image ? (
-          <img src={item.image} alt={item.name} className="w-full h-40 object-cover" />
+        {item.image && !imgFailed ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={item.image}
+            alt={item.name}
+            className="w-full h-40 object-cover"
+            onError={() => setImgFailed(true)}
+          />
         ) : (
-          <div className="w-full h-32 bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center text-4xl">
-            {categoryIcon}
+          <div
+            className="w-full h-36 flex flex-col items-center justify-center gap-1.5"
+            style={{ background: `linear-gradient(135deg, hsl(${hue} 45% 96%) 0%, hsl(${hue} 42% 88%) 100%)` }}
+          >
+            <span className="text-5xl leading-none">{glyph}</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wider"
+              style={{ color: `hsl(${hue} 35% 40%)` }}>
+              {item.brand}
+            </span>
           </div>
         )}
       </a>
