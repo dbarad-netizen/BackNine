@@ -1374,11 +1374,22 @@ def search_foods(request: Request, q: str = ""):
     return {"results": nutr.search_foods(q)}
 
 
+def _valid_ymd(s: str) -> bool:
+    try:
+        datetime.strptime(s, "%Y-%m-%d")
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
 @app.get("/api/nutrition/today")
-def get_today_nutrition(request: Request):
+def get_today_nutrition(request: Request, date: Optional[str] = None):
     session  = _require_session(request)
     uid      = session["user_id"]
-    today    = datetime.now().strftime("%Y-%m-%d")
+    # Prefer the caller's local date (the client knows the user's timezone).
+    # Falling back to server time would use UTC and roll over too early/late,
+    # which made evening meals reappear as "today" the next morning.
+    today    = date if (date and _valid_ymd(date)) else datetime.now().strftime("%Y-%m-%d")
     meals    = nutr.get_meals(today, uid)
     settings = nutr.get_settings(uid)
     totals = {

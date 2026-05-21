@@ -8,6 +8,17 @@ import GEAR from "./gearData";
 
 const BASE = "https://backnine-hu60.onrender.com";
 
+// The user's LOCAL calendar date as YYYY-MM-DD. Using this (instead of
+// toISOString(), which is UTC) keeps "today" aligned with the user's timezone —
+// otherwise an evening meal in the US gets the next day's UTC date and shows up
+// as "today" the following morning.
+export function localToday(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 // ── Token storage ─────────────────────────────────────────────────────────────
 // On load, grab token from URL ?token= param (set by backend after OAuth),
 // persist to localStorage, then remove from URL so it's not bookmarked.
@@ -537,16 +548,21 @@ export const api = {
   },
 
   // ── Nutrition ──────────────────────────────────────────────────────────────
-  nutritionToday():     Promise<NutritionToday>    { return request("/api/nutrition/today"); },
+  nutritionToday(date?: string): Promise<NutritionToday> {
+    return request(`/api/nutrition/today?date=${date || localToday()}`);
+  },
   nutritionSummary():   Promise<NutritionSummary>  { return request("/api/nutrition/summary"); },
   searchFoods(q: string): Promise<{ results: FoodItem[] }> { return request(`/api/nutrition/foods/search?q=${encodeURIComponent(q)}`); },
   logMeal(meal: Omit<Meal, "id" | "logged_at"> & { date?: string }): Promise<Meal> {
-    return request("/api/nutrition/meals", { method: "POST", body: JSON.stringify(meal) });
+    return request("/api/nutrition/meals", {
+      method: "POST",
+      body: JSON.stringify({ ...meal, date: meal.date || localToday() }),
+    });
   },
   logMealsBatch(meals: MealDraftItem[], date?: string): Promise<{ meals: Meal[] }> {
     return request("/api/nutrition/meals/batch", {
       method: "POST",
-      body: JSON.stringify({ meals, date }),
+      body: JSON.stringify({ meals, date: date || localToday() }),
     });
   },
   recentFoods(): Promise<{ foods: MealDraftItem[] }> {
@@ -567,7 +583,10 @@ export const api = {
   },
   weightEntries():      Promise<{ entries: WeightEntry[] }> { return request("/api/nutrition/weight"); },
   logWeight(entry: Partial<WeightEntry> & { weight_lbs: number }): Promise<WeightEntry> {
-    return request("/api/nutrition/weight", { method: "POST", body: JSON.stringify(entry) });
+    return request("/api/nutrition/weight", {
+      method: "POST",
+      body: JSON.stringify({ ...entry, date: entry.date || localToday() }),
+    });
   },
   deleteWeight(id: string): Promise<void> { return request(`/api/nutrition/weight/${id}`, { method: "DELETE" }); },
   nutritionSettings():  Promise<NutritionSettings> { return request("/api/nutrition/settings"); },
