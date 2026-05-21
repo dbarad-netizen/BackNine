@@ -156,10 +156,13 @@ export default function ChatWidget({ onRegisterOpen }: Props) {
   return (
     <>
       {/* ── Floating pill ── */}
+      {/* When the drawer is open on mobile, hide the pill so it doesn't sit on
+          top of the drawer's Send button (close via the header ✕ or backdrop).
+          On desktop it stays and becomes a "Close" toggle. */}
       <button
         onClick={() => setOpen(v => !v)}
         aria-label="Chat with Coach Al"
-        className="fixed bottom-5 right-4 z-40 flex items-center gap-2 rounded-full pl-1.5 pr-4 py-1.5 text-white text-sm font-semibold shadow-lg transition-all hover:scale-105 active:scale-95"
+        className={`fixed bottom-5 right-4 z-40 ${open ? "hidden sm:flex" : "flex"} items-center gap-2 rounded-full pl-1.5 pr-4 py-1.5 text-white text-sm font-semibold shadow-lg transition-all hover:scale-105 active:scale-95`}
         style={{
           background: "linear-gradient(135deg, #1B3829 0%, #2D6A4F 100%)",
           boxShadow:  "0 4px 20px rgba(27,56,41,0.4)",
