@@ -42,6 +42,7 @@ import groups as grp
 import goals as gl
 import achievements as ach
 import gear_reviews as gr
+import gear_ai as gai
 import nutrition_ai as nai
 import training_ai as tai
 import observations as obs
@@ -2079,6 +2080,28 @@ def delete_gear_review(item_id: str, request: Request):
     session = _require_session(request)
     gr.delete_review(session["user_id"], item_id)
     return {"status": "deleted"}
+
+
+@app.post("/api/gear/ask")
+async def ask_gear_finder(request: Request):
+    """Coach Al gear finder — recommend catalog items for the user's goal and,
+    when the catalog falls short, give honest 'what to look for' guidance.
+    The frontend sends the catalog so there's a single source of truth."""
+    _require_session(request)
+    body = await request.json()
+    query = (body.get("query") or "").strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="query is required")
+    catalog = body.get("catalog") or []
+    if not isinstance(catalog, list):
+        catalog = []
+    context = (body.get("context") or "").strip()[:500]
+    try:
+        return gai.find_gear(query, catalog, context)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"could not run gear finder: {e}")
 
 
 # ── Progress ──────────────────────────────────────────────────────────────────

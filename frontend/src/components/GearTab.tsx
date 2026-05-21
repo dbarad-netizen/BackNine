@@ -2,7 +2,18 @@
 
 import { useCallback, useEffect, useState } from "react";
 import GEAR, { type GearItem } from "@/lib/gearData";
-import { api, type GearReview, type GearReviewSummary } from "@/lib/api";
+import {
+  api,
+  type GearReview,
+  type GearReviewSummary,
+  type GearFinderResult,
+  type GearFinderPick,
+} from "@/lib/api";
+
+// Flat lookup: catalog id -> { item, category icon }. Lets the Coach Al finder
+// turn the ids it returns back into full product cards.
+const ITEM_BY_ID = new Map<string, { item: GearItem; icon: string }>();
+GEAR.forEach((cat) => cat.items.forEach((it) => ITEM_BY_ID.set(it.id, { item: it, icon: cat.icon })));
 
 // A distinctive glyph per item (derived from its name/brand) so the no-photo
 // placeholder reads as a varied, intentional catalog rather than one repeated
@@ -75,6 +86,9 @@ export default function GearTab() {
         </p>
       </div>
 
+      {/* Coach Al gear finder */}
+      <GearFinder summary={summary} onOpenReviews={setReviewItem} />
+
       {/* Category filter pills */}
       <div className="flex flex-wrap gap-2">
         <FilterPill label="All" icon="✦" active={activeCategory === "all"} onClick={() => setActiveCategory("all")} />
@@ -117,6 +131,182 @@ export default function GearTab() {
           onClose={() => setReviewItem(null)}
           onChanged={loadSummary}
         />
+      )}
+    </div>
+  );
+}
+
+// ── Coach Al gear finder ─────────────────────────────────────────────────────
+const FINDER_EXAMPLES = [
+  "Help me sleep better when I travel",
+  "Recover faster after leg day",
+  "Lower my blood pressure",
+  "Build strength at home",
+];
+
+function GearFinder({
+  summary, onOpenReviews,
+}: {
+  summary: Record<string, GearReviewSummary>;
+  onOpenReviews: (item: GearItem) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<GearFinderResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const ask = async (q?: string) => {
+    const text = (q ?? query).trim();
+    if (!text || loading) return;
+    setQuery(text);
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await api.gear.ask(text);
+      setResult(r);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Coach Al couldn't answer just now — try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Turn the returned ids back into renderable catalog items (drop any unknown).
+  const picks = (result?.picks || [])
+    .map((p) => ({ pick: p, entry: ITEM_BY_ID.get(p.id) }))
+    .filter(
+      (x): x is { pick: GearFinderPick; entry: { item: GearItem; icon: string } } => !!x.entry
+    );
+
+  return (
+    <div className="rounded-2xl border border-[#2D6A4F]/25 bg-gradient-to-br from-[#1B3829]/[0.04] to-white p-5 space-y-3">
+      <div className="flex items-start gap-2">
+        <span className="text-lg leading-none mt-0.5">🧭</span>
+        <div>
+          <p className="text-sm font-bold text-gray-900">Ask Coach Al for gear</p>
+          <p className="text-[12px] text-gray-500 leading-snug">
+            Tell me what you&apos;re trying to do — I&apos;ll find what fits, even if it&apos;s not in our store yet.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") ask(); }}
+          placeholder="e.g. something to help me sleep when I travel"
+          className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#2D6A4F]"
+        />
+        <button
+          onClick={() => ask()}
+          disabled={!query.trim() || loading}
+          className="shrink-0 rounded-lg bg-[#1B3829] hover:bg-[#2D6A4F] px-4 py-2 text-xs font-semibold text-white transition-colors disabled:opacity-40"
+        >
+          {loading ? "…" : "Ask"}
+        </button>
+      </div>
+
+      {!result && !loading && (
+        <div className="flex flex-wrap gap-1.5">
+          {FINDER_EXAMPLES.map((ex) => (
+            <button
+              key={ex}
+              onClick={() => ask(ex)}
+              className="rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] text-gray-500 hover:border-[#2D6A4F] hover:text-[#2D6A4F] transition"
+            >
+              {ex}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {loading && (
+        <div className="flex items-center gap-2 text-xs text-gray-500">
+          <div className="h-4 w-4 rounded-full border-2 border-[#1B3829] border-t-transparent animate-spin" />
+          Coach Al is looking through the gear…
+        </div>
+      )}
+
+      {error && <p className="text-[12px] text-red-500">{error}</p>}
+
+      {result && !loading && (
+        <div className="space-y-4 pt-1">
+          {result.intro && (
+            <p className="text-sm text-gray-700 leading-relaxed">{result.intro}</p>
+          )}
+
+          {picks.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
+                From the BackNine store
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {picks.map(({ pick, entry }) => (
+                  <div key={pick.id} className="space-y-1.5">
+                    {pick.reason && (
+                      <div className="flex gap-1.5 rounded-lg bg-[#2D6A4F]/[0.08] px-3 py-2 text-[12px] text-[#1B3829] leading-snug">
+                        <span className="shrink-0">🧭</span>
+                        <span>{pick.reason}</span>
+                      </div>
+                    )}
+                    <ProductCard
+                      item={entry.item}
+                      categoryIcon={entry.icon}
+                      summary={summary[entry.item.id]}
+                      onOpenReviews={() => onOpenReviews(entry.item)}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {result.suggestions.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
+                Not in our store yet — what to look for
+              </p>
+              <div className="space-y-2">
+                {result.suggestions.map((s, i) => (
+                  <div key={i} className="rounded-xl border border-gray-200 bg-white p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900">{s.title}</p>
+                        {s.detail && (
+                          <p className="text-[12px] text-gray-500 mt-0.5 leading-snug">{s.detail}</p>
+                        )}
+                      </div>
+                      {s.search && (
+                        <a
+                          href={`https://www.amazon.com/s?k=${encodeURIComponent(s.search)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 rounded-lg border border-[#2D6A4F]/40 px-2.5 py-1 text-[11px] font-semibold text-[#2D6A4F] hover:bg-[#2D6A4F]/10 transition"
+                        >
+                          Search →
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {picks.length === 0 && result.suggestions.length === 0 && (
+            <p className="text-[13px] text-gray-400">
+              Coach Al didn&apos;t find a match. Try describing what you want to achieve a different way.
+            </p>
+          )}
+
+          <button
+            onClick={() => { setResult(null); setQuery(""); setError(null); }}
+            className="text-[12px] font-medium text-gray-400 hover:text-gray-700"
+          >
+            ↺ Ask something else
+          </button>
+        </div>
       )}
     </div>
   );

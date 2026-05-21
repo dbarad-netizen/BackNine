@@ -4,6 +4,8 @@
  * Auth token is passed via Authorization header to avoid cross-site cookie issues.
  */
 
+import GEAR from "./gearData";
+
 const BASE = "https://backnine-hu60.onrender.com";
 
 // ── Token storage ─────────────────────────────────────────────────────────────
@@ -716,6 +718,24 @@ export const api = {
     deleteReview(item_id: string): Promise<{ status: string }> {
       return request(`/api/gear/${encodeURIComponent(item_id)}/reviews`, { method: "DELETE" });
     },
+    // Coach Al gear finder — describe what you're trying to do, get matched
+    // catalog picks + honest "what to look for" guidance for anything we don't carry.
+    ask(query: string, context?: string): Promise<GearFinderResult> {
+      const catalog = GEAR.flatMap((cat) =>
+        cat.items.map((it) => ({
+          id: it.id,
+          name: it.name,
+          brand: it.brand,
+          category: cat.label,
+          price: it.price,
+          description: it.description,
+        }))
+      );
+      return request("/api/gear/ask", {
+        method: "POST",
+        body: JSON.stringify({ query, catalog, context: context || "" }),
+      });
+    },
   },
 
   // ── Identity / onboarding ───────────────────────────────────────────────────
@@ -998,6 +1018,24 @@ export interface GearReview {
 export interface GearReviewSummary {
   avg:   number | null;
   count: number;
+}
+
+// ── Coach Al gear finder ──────────────────────────────────────────────────────
+export interface GearFinderPick {
+  id:     string;   // matches a catalog item id
+  reason: string;
+}
+
+export interface GearFinderSuggestion {
+  title:  string;   // product type to look for (not in our catalog)
+  detail: string;
+  search: string;   // search phrase to find it
+}
+
+export interface GearFinderResult {
+  intro:       string;
+  picks:       GearFinderPick[];
+  suggestions: GearFinderSuggestion[];
 }
 
 // ── Daily check-in types ──────────────────────────────────────────────────────
