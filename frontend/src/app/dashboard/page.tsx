@@ -1588,15 +1588,6 @@ export default function DashboardPage() {
               );
             })()}
 
-            {/* ── Quick action: log a workout (jumps to Training with logger open) ── */}
-            <button
-              onClick={() => { setAutoLogWorkout(true); setSection("training"); }}
-              className="w-full py-3 rounded-2xl border border-[#1B3829]/25 bg-white text-sm font-semibold text-[#1B3829] hover:bg-[#1B3829]/5 transition-colors flex items-center justify-center gap-2 shadow-sm"
-            >
-              <span className="text-base leading-none">🏋️</span>
-              Log a workout
-            </button>
-
             {/* ── Weekly League (auto-grouped competition) ── */}
             <WeeklyLeague onInvite={() => setShowShare(true)} />
 
@@ -1609,45 +1600,20 @@ export default function DashboardPage() {
             {/* ── Friend Pulse feed ── */}
             <PulseFeed onInviteFriend={() => { setProfileInitialTab("friends"); setShowProfile(true); }} />
 
+            {/* ── Quick action: log a workout (jumps to Training with logger open) ── */}
+            <button
+              onClick={() => { setAutoLogWorkout(true); setSection("training"); }}
+              className="w-full py-3 rounded-2xl border border-[#1B3829]/25 bg-white text-sm font-semibold text-[#1B3829] hover:bg-[#1B3829]/5 transition-colors flex items-center justify-center gap-2 shadow-sm"
+            >
+              <span className="text-base leading-none">🏋️</span>
+              Log a workout
+            </button>
+
             {/* ── Active Competitions strip ── */}
             <ActiveCompetitions onJump={() => setSection("challenges")} />
 
             {/* ── Achievements / badges ── */}
             <Achievements />
-
-            {/* ── Picked For You (smart gear recommendations) ── */}
-            <GearPicks
-              signals={(() => {
-                const recent = trend.slice(-7);
-                const avg = (key: keyof typeof recent[number]): number | null => {
-                  const vals = recent
-                    .map(d => d[key])
-                    .filter((v): v is number => typeof v === "number" && v > 0);
-                  return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
-                };
-                // HRV direction: compare first vs second half of the week
-                const hrvVals = recent.map(d => d.hrv).filter((v): v is number => typeof v === "number" && v > 0);
-                let hrvDirection: "rising" | "falling" | "stable" | null = null;
-                if (hrvVals.length >= 4) {
-                  const half = Math.floor(hrvVals.length / 2);
-                  const firstAvg  = hrvVals.slice(0, half).reduce((a, b) => a + b, 0) / half;
-                  const secondAvg = hrvVals.slice(half).reduce((a, b) => a + b, 0) / (hrvVals.length - half);
-                  hrvDirection = secondAvg > firstAvg + 1 ? "rising" : secondAvg < firstAvg - 1 ? "falling" : "stable";
-                }
-                return {
-                  hasOura:          data.has_oura !== false,
-                  longevityKeys:    Object.keys(data.longevity_score?.components ?? {}),
-                  sleepScoreAvg7d:  avg("sleep"),
-                  sleepHrsAvg7d:    avg("total_hrs"),
-                  stepsAvg7d:       avg("steps"),
-                  hrvDirection,
-                  rhrAvg7d:         avg("rhr"),
-                  readinessAvg7d:   avg("readiness"),
-                  trainingLoadZone: training_load?.zone ?? null,
-                };
-              })()}
-              onJump={() => setSection("gear")}
-            />
 
             {/* ── Coach Al's Weekly Insight ── */}
             <WeeklyInsight onOpenChat={(seed) => openChatRef.current?.(seed)} />
@@ -1707,6 +1673,40 @@ export default function DashboardPage() {
             {/* ── Log Weigh-In ── */}
             <WeightForm onSave={handleLogWeight} />
             </CollapsibleSection>
+
+            {/* ── Picked For You (smart gear recommendations) — bottom of Scorecard ── */}
+            <GearPicks
+              signals={(() => {
+                const recent = trend.slice(-7);
+                const avg = (key: keyof typeof recent[number]): number | null => {
+                  const vals = recent
+                    .map(d => d[key])
+                    .filter((v): v is number => typeof v === "number" && v > 0);
+                  return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+                };
+                // HRV direction: compare first vs second half of the week
+                const hrvVals = recent.map(d => d.hrv).filter((v): v is number => typeof v === "number" && v > 0);
+                let hrvDirection: "rising" | "falling" | "stable" | null = null;
+                if (hrvVals.length >= 4) {
+                  const half = Math.floor(hrvVals.length / 2);
+                  const firstAvg  = hrvVals.slice(0, half).reduce((a, b) => a + b, 0) / half;
+                  const secondAvg = hrvVals.slice(half).reduce((a, b) => a + b, 0) / (hrvVals.length - half);
+                  hrvDirection = secondAvg > firstAvg + 1 ? "rising" : secondAvg < firstAvg - 1 ? "falling" : "stable";
+                }
+                return {
+                  hasOura:          data.has_oura !== false,
+                  longevityKeys:    Object.keys(data.longevity_score?.components ?? {}),
+                  sleepScoreAvg7d:  avg("sleep"),
+                  sleepHrsAvg7d:    avg("total_hrs"),
+                  stepsAvg7d:       avg("steps"),
+                  hrvDirection,
+                  rhrAvg7d:         avg("rhr"),
+                  readinessAvg7d:   avg("readiness"),
+                  trainingLoadZone: training_load?.zone ?? null,
+                };
+              })()}
+              onJump={() => setSection("gear")}
+            />
 
           </div>
           );

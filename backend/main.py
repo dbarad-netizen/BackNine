@@ -41,6 +41,7 @@ import leagues as lg
 import groups as grp
 import goals as gl
 import achievements as ach
+import gear_reviews as gr
 import observations as obs
 
 load_dotenv()
@@ -1903,6 +1904,46 @@ async def dismiss_gear(request: Request):
         return {"ok": True, "dismissed": dismissed}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Gear reviews (communal) ───────────────────────────────────────────────────
+
+@app.get("/api/gear/reviews/summary")
+def gear_reviews_summary(request: Request):
+    """Aggregate {item_id: {avg, count}} for all gear items — powers the shop grid."""
+    _require_session(request)
+    try:
+        return {"summary": gr.summary()}
+    except Exception:
+        return {"summary": {}}
+
+
+@app.get("/api/gear/{item_id}/reviews")
+def list_gear_reviews(item_id: str, request: Request):
+    session = _require_session(request)
+    try:
+        return {"reviews": gr.list_reviews(item_id, session["user_id"])}
+    except Exception:
+        return {"reviews": []}
+
+
+@app.post("/api/gear/{item_id}/reviews")
+async def post_gear_review(item_id: str, request: Request):
+    session = _require_session(request)
+    body = await request.json()
+    try:
+        return gr.upsert_review(session["user_id"], item_id, body.get("rating"), body.get("text") or "")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/gear/{item_id}/reviews")
+def delete_gear_review(item_id: str, request: Request):
+    session = _require_session(request)
+    gr.delete_review(session["user_id"], item_id)
+    return {"status": "deleted"}
 
 
 # ── Progress ──────────────────────────────────────────────────────────────────

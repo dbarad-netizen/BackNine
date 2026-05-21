@@ -656,6 +656,22 @@ export const api = {
         body: JSON.stringify({ item_id }),
       });
     },
+    // Communal reviews
+    reviewsSummary(): Promise<{ summary: Record<string, GearReviewSummary> }> {
+      return request("/api/gear/reviews/summary");
+    },
+    reviews(item_id: string): Promise<{ reviews: GearReview[] }> {
+      return request(`/api/gear/${encodeURIComponent(item_id)}/reviews`);
+    },
+    postReview(item_id: string, rating: number | null, text: string): Promise<{ ok: boolean }> {
+      return request(`/api/gear/${encodeURIComponent(item_id)}/reviews`, {
+        method: "POST",
+        body: JSON.stringify({ rating, text }),
+      });
+    },
+    deleteReview(item_id: string): Promise<{ status: string }> {
+      return request(`/api/gear/${encodeURIComponent(item_id)}/reviews`, { method: "DELETE" });
+    },
   },
 
   // ── Identity / onboarding ───────────────────────────────────────────────────
@@ -923,6 +939,21 @@ export interface AchievementsResponse {
   earned_count:   number;
   total:          number;
   newly_unlocked: string[];
+}
+
+export interface GearReview {
+  id:         string;
+  user_id:    string;
+  user_name:  string;
+  rating:     number | null;
+  text:       string;
+  created_at: string;
+  is_me:      boolean;
+}
+
+export interface GearReviewSummary {
+  avg:   number | null;
+  count: number;
 }
 
 // ── Daily check-in types ──────────────────────────────────────────────────────
