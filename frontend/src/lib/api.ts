@@ -377,6 +377,13 @@ export interface WorkoutTemplate {
   created_at?: string;
 }
 
+export interface ParsedWorkout {
+  type:         "lifting" | "stretching" | "mobility";
+  exercises:    WorkoutExercise[];
+  duration_min: number | null;
+  notes:        string;
+}
+
 export interface WorkoutExercise {
   name:         string;
   sets?:        WorkoutSet[];   // lifting
@@ -578,6 +585,9 @@ export const api = {
   },
   deleteWorkout(id: string): Promise<void> {
     return request(`/api/training/workouts/${id}`, { method: "DELETE" });
+  },
+  parseWorkout(text: string): Promise<ParsedWorkout> {
+    return request("/api/training/parse-workout", { method: "POST", body: JSON.stringify({ text }) });
   },
   trainingTemplates(): Promise<{ templates: WorkoutTemplate[] }> {
     return request("/api/training/templates");

@@ -164,6 +164,9 @@ function WorkoutLogger({
   const [showSaveTpl, setShowSaveTpl] = useState(false);
   const [tplName, setTplName]         = useState("");
   const [savingTpl, setSavingTpl]     = useState(false);
+  const [describe, setDescribe]       = useState("");
+  const [parsing, setParsing]         = useState(false);
+  const [parseError, setParseError]   = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
@@ -255,6 +258,29 @@ function WorkoutLogger({
     loadExercises(t.exercises);
   };
 
+  // "Describe your workout" → Claude structures it into the editable list.
+  const parseDescribe = async () => {
+    const t = describe.trim();
+    if (!t || parsing) return;
+    setParsing(true); setParseError(null);
+    try {
+      const p = await api.parseWorkout(t);
+      if (p.exercises.length === 0 && !p.notes) {
+        setParseError("Couldn't read that — try e.g. \"bench 3x8 @135, squats 5x5 @225\".");
+      } else {
+        setWorkoutType(p.type || "lifting");
+        loadExercises(p.exercises);
+        if (p.duration_min) setDuration(String(p.duration_min));
+        if (p.notes) setNotes(prev => prev ? `${prev}; ${p.notes}` : p.notes);
+        setDescribe("");
+      }
+    } catch (e) {
+      setParseError(e instanceof Error ? e.message : "Couldn't parse that workout");
+    } finally {
+      setParsing(false);
+    }
+  };
+
   // Most recent workout matching the selected type — for one-tap "repeat".
   const lastWorkoutOfType = useMemo(() => {
     const sorted = [...recentWorkouts].sort((a, b) =>
@@ -316,6 +342,39 @@ function WorkoutLogger({
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-4">
       <p className="text-sm font-semibold text-gray-900">Log Workout</p>
+
+      {/* Describe your workout — AI fills the list below */}
+      <div>
+        <div className="flex items-center gap-2">
+          <input
+            value={describe}
+            onChange={e => setDescribe(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") parseDescribe(); }}
+            placeholder="Describe it: bench 3x8 @135, squats 5x5 @225…"
+            className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#2D6A4F]"
+          />
+          <button onClick={parseDescribe} disabled={!describe.trim() || parsing}
+            className="shrink-0 rounded-lg bg-[#1B3829] hover:bg-[#2D6A4F] px-3 py-2 text-xs font-semibold text-white transition-colors disabled:opacity-40">
+            {parsing ? "…" : "Add"}
+          </button>
+        </div>
+        <p className="text-[10px] text-gray-400 mt-1">
+          Type your whole workout and Coach Al fills in the exercises &amp; sets below to review.
+        </p>
+        {parsing && (
+          <div className="flex items-center gap-2 text-xs text-gray-500 mt-1.5">
+            <div className="h-4 w-4 rounded-full border-2 border-[#1B3829] border-t-transparent animate-spin" />
+            Reading your workout…
+          </div>
+        )}
+        {parseError && <p className="text-[11px] text-red-500 mt-1">{parseError}</p>}
+      </div>
+
+      <div className="flex items-center gap-2">
+        <div className="flex-1 h-px bg-gray-100" />
+        <span className="text-[10px] text-gray-400 uppercase tracking-widest">or build it manually</span>
+        <div className="flex-1 h-px bg-gray-100" />
+      </div>
 
       {/* Type selector */}
       <div className="flex gap-1">

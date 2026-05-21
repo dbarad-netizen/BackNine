@@ -43,6 +43,7 @@ import goals as gl
 import achievements as ach
 import gear_reviews as gr
 import nutrition_ai as nai
+import training_ai as tai
 import observations as obs
 
 load_dotenv()
@@ -1605,6 +1606,22 @@ def remove_workout(workout_id: str, request: Request):
 def list_training_templates(request: Request):
     session = _require_session(request)
     return {"templates": trn.get_templates(session["user_id"])}
+
+
+@app.post("/api/training/parse-workout")
+async def parse_workout(request: Request):
+    """Turn a free-text workout description into structured exercises via Claude."""
+    _require_session(request)
+    body = await request.json()
+    text = (body.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="text is required")
+    try:
+        return tai.parse_workout(text)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"could not parse workout: {e}")
 
 
 @app.post("/api/training/templates")
