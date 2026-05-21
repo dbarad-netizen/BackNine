@@ -39,6 +39,7 @@ import weekly_insight as wins
 import friends as frd
 import leagues as lg
 import groups as grp
+import goals as gl
 import observations as obs
 
 load_dotenv()
@@ -2315,6 +2316,13 @@ async def health_chat(request: Request):
         },
     }
 
+    # Make chat aware of the user's active goal so "how am I doing?" lands in
+    # context. Best-effort — never block a chat reply on it.
+    try:
+        health_context["active_goal"] = gl.get_active_goal(user_id, _et_today())
+    except Exception:
+        health_context["active_goal"] = None
+
     profile = _get_profile(user_id)
 
     try:
@@ -2802,6 +2810,65 @@ async def set_group_goal(group_id: str, request: Request):
         raise HTTPException(status_code=403, detail="Not a member of this group")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Goals (Coach Al program) ──────────────────────────────────────────────────
+
+def _et_today() -> str:
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        from backports.zoneinfo import ZoneInfo  # type: ignore
+    return datetime.now(tz=ZoneInfo("America/New_York")).date().isoformat()
+
+
+@app.get("/api/goals/active")
+def get_active_goal(request: Request):
+    session = _require_session(request)
+    try:
+        return {"goal": gl.get_active_goal(session["user_id"], _et_today())}
+    except Exception:
+        return {"goal": None}
+
+
+@app.get("/api/goals/metrics")
+def get_goal_metrics(request: Request):
+    session = _require_session(request)
+    try:
+        return {"metrics": gl.metrics_snapshot(session["user_id"])}
+    except Exception:
+        return {"metrics": []}
+
+
+@app.post("/api/goals")
+async def create_goal(request: Request):
+    session = _require_session(request)
+    body = await request.json()
+    metric = (body.get("metric") or "").strip()
+    target = body.get("target")
+    duration_weeks = body.get("duration_weeks") or 6
+    if not metric or target is None:
+        raise HTTPException(status_code=400, detail="metric and target are required")
+    try:
+        return gl.create_goal(session["user_id"], metric, float(target), int(duration_weeks), _et_today())
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"could not create goal: {e}")
+
+
+@app.post("/api/goals/{goal_id}/complete")
+def complete_goal(goal_id: str, request: Request):
+    session = _require_session(request)
+    gl.set_status(session["user_id"], goal_id, "completed")
+    return {"status": "completed"}
+
+
+@app.delete("/api/goals/{goal_id}")
+def abandon_goal(goal_id: str, request: Request):
+    session = _require_session(request)
+    gl.set_status(session["user_id"], goal_id, "abandoned")
+    return {"status": "abandoned"}
 
 
 @app.get("/api/friends")

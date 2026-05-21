@@ -30,6 +30,7 @@ import ProfileModal from "@/components/ProfileModal";
 import CoachAlAvatar from "@/components/CoachAlAvatar";
 import MorningBriefing from "@/components/MorningBriefing";
 import WeeklyInsight from "@/components/WeeklyInsight";
+import GoalCard from "@/components/GoalCard";
 import ActiveCompetitions from "@/components/ActiveCompetitions";
 import GearPicks from "@/components/GearPicks";
 import PulseFeed from "@/components/PulseFeed";
@@ -1646,6 +1647,9 @@ export default function DashboardPage() {
 
             {/* ── Coach Al's Weekly Insight ── */}
             <WeeklyInsight onOpenChat={(seed) => openChatRef.current?.(seed)} />
+
+            {/* ── Coach Al Goal / Program ── */}
+            <GoalCard onOpenChat={(seed) => openChatRef.current?.(seed)} />
 
             {/* ── Body & Weight (collapsible) ── */}
             <CollapsibleSection

@@ -164,6 +164,27 @@ def _build_system_prompt(health_context: dict, profile: dict) -> str:
         if long_term:
             prompt_parts.append(f"Long-term Focus:\n  {long_term}")
 
+    # ACTIVE GOAL (the program Coach Al is guiding them through)
+    goal = health_context.get("active_goal")
+    if goal:
+        unit = goal.get("unit") or ""
+        prompt_parts.append("\n=== ACTIVE GOAL (the program you're coaching them through) ===")
+        prompt_parts.append(f"  • Goal: {goal.get('label')} → target {goal.get('target')}{unit}")
+        if goal.get("baseline") is not None:
+            prompt_parts.append(f"  • Started at: {goal.get('baseline')}{unit}")
+        if goal.get("current") is not None:
+            prompt_parts.append(f"  • Currently: {goal.get('current')}{unit}")
+        if goal.get("progress_pct") is not None:
+            prompt_parts.append(
+                f"  • Progress: {goal.get('progress_pct')}% "
+                f"(week {goal.get('week')} of {goal.get('total_weeks')}, {goal.get('days_left')} days left)"
+            )
+        tw = goal.get("this_week")
+        if tw:
+            acts = "; ".join(tw.get("actions", []))
+            prompt_parts.append(f"  • This week's focus: {tw.get('focus')} — {acts}")
+        prompt_parts.append("  When relevant, connect your advice to this goal and how they're tracking toward it.")
+
     # Guidelines
     prompt_parts.append(
         "\n=== COACHING GUIDELINES ===\n"

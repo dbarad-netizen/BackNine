@@ -755,6 +755,28 @@ export const api = {
     },
   },
 
+  // ── Goals (Coach Al program) ───────────────────────────────────────────────
+  goal: {
+    active(): Promise<{ goal: Goal | null }> {
+      return request("/api/goals/active");
+    },
+    metrics(): Promise<{ metrics: GoalMetricOption[] }> {
+      return request("/api/goals/metrics");
+    },
+    create(metric: string, target: number, duration_weeks: number): Promise<Goal> {
+      return request("/api/goals", {
+        method: "POST",
+        body: JSON.stringify({ metric, target, duration_weeks }),
+      });
+    },
+    complete(id: string): Promise<{ status: string }> {
+      return request(`/api/goals/${encodeURIComponent(id)}/complete`, { method: "POST" });
+    },
+    remove(id: string): Promise<{ status: string }> {
+      return request(`/api/goals/${encodeURIComponent(id)}`, { method: "DELETE" });
+    },
+  },
+
   // ── Daily check-in ────────────────────────────────────────────────────────
   getCheckinToday(): Promise<CheckinSnapshot> {
     return request("/api/checkin/today");
@@ -985,6 +1007,41 @@ export interface GroupStandings {
   total:      number;
   goal:       number | null;
   week_start: string;
+}
+
+export interface GoalPlanWeek {
+  week:    number;
+  focus:   string;
+  actions: string[];
+}
+
+export interface GoalMetricOption {
+  metric:        string;
+  label:         string;
+  unit:          string;
+  higher_better: boolean;
+  current:       number | null;
+}
+
+export interface Goal {
+  id:           string;
+  metric:       string;
+  label:        string;
+  unit:         string;
+  baseline:     number | null;
+  current:      number | null;
+  target:       number;
+  progress_pct: number | null;
+  week:         number;
+  total_weeks:  number;
+  days_left:    number;
+  status:       string;
+  start_date:   string;
+  end_date:     string;
+  headline:     string | null;
+  overview:     string | null;
+  weeks:        GoalPlanWeek[];
+  this_week:    GoalPlanWeek | null;
 }
 
 export interface LeagueStanding {
