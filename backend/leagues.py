@@ -128,29 +128,63 @@ def _weekly_steps_total(sb, ids: list[str], start: str, end: str) -> dict[str, i
     return totals
 
 
+def _weekly_maps(sb, ids: list[str], start: str, end: str) -> dict[str, dict]:
+    """Raw per-user activity maps used for scoring (five batched queries)."""
+    return {
+        "checkins": _distinct_dates_by_user(sb, "daily_checkins",    ids, start, end),
+        "workouts": _distinct_dates_by_user(sb, "training_workouts", ids, start, end),
+        "meals":    _distinct_dates_by_user(sb, "nutrition_meals",   ids, start, end),
+        "weighins": _distinct_dates_by_user(sb, "nutrition_weight",  ids, start, end),
+        "steps":    _weekly_steps_total(sb, ids, start, end),
+    }
+
+
+def _score_from_maps(maps: dict, uid: str) -> int:
+    return int(
+        len(maps["checkins"].get(uid, set())) * PTS_CHECKIN
+        + len(maps["workouts"].get(uid, set())) * PTS_WORKOUT
+        + len(maps["meals"].get(uid, set()))    * PTS_MEAL
+        + len(maps["weighins"].get(uid, set())) * PTS_WEIGHIN
+        + (maps["steps"].get(uid, 0) // 1000)   * PTS_PER_KSTEP
+    )
+
+
+def _breakdown_from_maps(maps: dict, uid: str) -> dict:
+    """Per-category point breakdown for one user — same numbers that sum to the
+    user's league score, so the 'How scoring works' panel always reconciles."""
+    checkin_days = len(maps["checkins"].get(uid, set()))
+    workout_days = len(maps["workouts"].get(uid, set()))
+    meal_days    = len(maps["meals"].get(uid, set()))
+    weighin_days = len(maps["weighins"].get(uid, set()))
+    ksteps       = maps["steps"].get(uid, 0) // 1000
+
+    items = [
+        {"key": "checkin", "label": "Daily check-in",   "icon": "✅",
+         "per": PTS_CHECKIN, "per_unit": "day",      "count": checkin_days,
+         "points": checkin_days * PTS_CHECKIN},
+        {"key": "workout", "label": "Log a workout",    "icon": "💪",
+         "per": PTS_WORKOUT, "per_unit": "day",      "count": workout_days,
+         "points": workout_days * PTS_WORKOUT},
+        {"key": "meal",    "label": "Log a meal",       "icon": "🍳",
+         "per": PTS_MEAL,    "per_unit": "day",      "count": meal_days,
+         "points": meal_days * PTS_MEAL},
+        {"key": "weighin", "label": "Log a weigh-in",   "icon": "⚖️",
+         "per": PTS_WEIGHIN, "per_unit": "day",      "count": weighin_days,
+         "points": weighin_days * PTS_WEIGHIN},
+        {"key": "steps",   "label": "Steps (Oura)",     "icon": "👟",
+         "per": PTS_PER_KSTEP, "per_unit": "1k steps", "count": ksteps,
+         "points": ksteps * PTS_PER_KSTEP},
+    ]
+    return {"items": items, "total": sum(i["points"] for i in items)}
+
+
 def _weekly_scores(sb, ids: list[str], start: str, end: str) -> dict[str, int]:
     """Engagement points per user from `start`..`end` (inclusive). Works for
     everyone regardless of wearable; five batched queries total."""
     if not ids:
         return {}
-
-    checkins = _distinct_dates_by_user(sb, "daily_checkins",    ids, start, end)
-    workouts = _distinct_dates_by_user(sb, "training_workouts", ids, start, end)
-    meals    = _distinct_dates_by_user(sb, "nutrition_meals",   ids, start, end)
-    weighins = _distinct_dates_by_user(sb, "nutrition_weight",  ids, start, end)
-    steps    = _weekly_steps_total(sb, ids, start, end)
-
-    out: dict[str, int] = {}
-    for uid in ids:
-        pts = (
-            len(checkins.get(uid, set())) * PTS_CHECKIN
-            + len(workouts.get(uid, set())) * PTS_WORKOUT
-            + len(meals.get(uid, set()))    * PTS_MEAL
-            + len(weighins.get(uid, set())) * PTS_WEIGHIN
-            + (steps.get(uid, 0) // 1000)   * PTS_PER_KSTEP
-        )
-        out[uid] = int(pts)
-    return out
+    maps = _weekly_maps(sb, ids, start, end)
+    return {uid: _score_from_maps(maps, uid) for uid in ids}
 
 
 # ── Main entry point ──────────────────────────────────────────────────────────
@@ -182,7 +216,7 @@ def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
     league = _get_or_create_league(sb, tier, week_start, week_end)
     league_id = league.get("id")
     if not league_id:
-        return {"league": None, "standings": [], "me_rank": None, "days_left": None, "member_count": 0}
+        return {"league": None, "standings": [], "me_rank": None, "days_left": None, "member_count": 0, "my_breakdown": None}
 
     _ensure_member(sb, league_id, user_id)
 
@@ -191,7 +225,9 @@ def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
     if user_id not in ids:
         ids.append(user_id)
 
-    scores = _weekly_scores(sb, ids, week_start, today_str)
+    maps = _weekly_maps(sb, ids, week_start, today_str)
+    scores = {uid: _score_from_maps(maps, uid) for uid in ids}
+    my_breakdown = _breakdown_from_maps(maps, user_id)
     names = _names_for(sb, ids)
 
     # Refresh cached scores (best-effort) so other surfaces can read them cheaply.
@@ -229,4 +265,5 @@ def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
         "me_rank":      me_rank,
         "days_left":    days_left,
         "member_count": len(standings),
+        "my_breakdown": my_breakdown,
     }

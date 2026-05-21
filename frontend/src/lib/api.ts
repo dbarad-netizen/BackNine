@@ -1220,6 +1220,21 @@ export interface LeagueStanding {
   is_me:   boolean;
 }
 
+export interface LeagueBreakdownItem {
+  key:      string;   // checkin | workout | meal | weighin | steps
+  label:    string;   // "Daily check-in"
+  icon:     string;   // emoji
+  per:      number;   // points earned per unit
+  per_unit: string;   // "day" | "1k steps"
+  count:    number;   // how many units you've done this week
+  points:   number;   // count * per
+}
+
+export interface LeagueBreakdown {
+  items: LeagueBreakdownItem[];
+  total: number;       // sums to your league score
+}
+
 export interface LeagueResponse {
   league: {
     tier:       number;
@@ -1231,6 +1246,7 @@ export interface LeagueResponse {
   me_rank:      number | null;
   days_left:    number | null;
   member_count: number;
+  my_breakdown?: LeagueBreakdown | null;   // current user's per-category points
 }
 
 export interface LeaderboardResponse {
