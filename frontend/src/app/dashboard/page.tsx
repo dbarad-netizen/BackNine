@@ -49,6 +49,23 @@ import {
 type Tab     = "scores" | "hrv" | "sleep_detail";
 type Section = "coaching" | "nutrition" | "training" | "labs" | "challenges" | "apple-health" | "gear";
 
+// Standalone PWAs have no browser refresh, so give people an explicit one.
+// A full reload re-fetches all data (the API is never cached) and picks up new
+// app versions (page loads are network-first in the service worker).
+function RefreshButton() {
+  const [spinning, setSpinning] = useState(false);
+  return (
+    <button
+      onClick={() => { setSpinning(true); window.location.reload(); }}
+      title="Refresh"
+      aria-label="Refresh"
+      className="text-gray-400 hover:text-[#1B3829] transition-colors text-base leading-none"
+    >
+      <span className={`inline-block ${spinning ? "animate-spin" : ""}`}>↻</span>
+    </button>
+  );
+}
+
 // ── Calorie ring ──────────────────────────────────────────────────────────────
 function CalorieRing({
   consumed, budget, color = "#22c55e",
@@ -1138,6 +1155,7 @@ export default function DashboardPage() {
             <span className="hidden sm:block text-xs text-gray-400">
               {new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
             </span>
+            <RefreshButton />
             <NotificationBell />
             <button
               onClick={() => setShowShare(true)}
