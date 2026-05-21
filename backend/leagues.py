@@ -86,6 +86,20 @@ PTS_MEAL      = 5    # per day with ≥1 meal logged
 PTS_WEIGHIN   = 10   # per day with a weigh-in
 PTS_PER_KSTEP = 1    # per 1,000 steps that week (Oura tracker bonus)
 
+# Single source of truth for scoring categories. `map_key` is the key in the
+# `_weekly_maps` dict; `key` is the public id used by the frontend grid. Order
+# here is the column order shown in the "How scoring works" panel.
+CATEGORIES = [
+    {"key": "checkin", "map_key": "checkins", "label": "Daily check-in", "icon": "✅", "per": PTS_CHECKIN,   "per_unit": "day"},
+    {"key": "workout", "map_key": "workouts", "label": "Log a workout",  "icon": "💪", "per": PTS_WORKOUT,   "per_unit": "day"},
+    {"key": "meal",    "map_key": "meals",    "label": "Log a meal",     "icon": "🍳", "per": PTS_MEAL,      "per_unit": "day"},
+    {"key": "weighin", "map_key": "weighins", "label": "Log a weigh-in", "icon": "⚖️", "per": PTS_WEIGHIN,   "per_unit": "day"},
+    {"key": "steps",   "map_key": "steps",    "label": "Steps (Oura)",   "icon": "👟", "per": PTS_PER_KSTEP, "per_unit": "1k steps"},
+]
+
+# Column metadata for the frontend (no internal map_key).
+CATEGORY_META = [{k: c[k] for k in ("key", "label", "icon", "per", "per_unit")} for c in CATEGORIES]
+
 
 def _distinct_dates_by_user(sb, table: str, ids: list[str], start: str, end: str) -> dict[str, set]:
     """Map user_id -> set of distinct dates with ≥1 row in `table` over the week."""
@@ -139,41 +153,34 @@ def _weekly_maps(sb, ids: list[str], start: str, end: str) -> dict[str, dict]:
     }
 
 
+def _counts_by_cat(maps: dict, uid: str) -> dict[str, int]:
+    """How many scoring units the user earned in each category this week
+    (distinct days for habits; whole-thousands of steps for the Oura bonus)."""
+    out: dict[str, int] = {}
+    for c in CATEGORIES:
+        val = maps.get(c["map_key"], {}).get(uid, 0 if c["key"] == "steps" else set())
+        out[c["key"]] = (val // 1000) if c["key"] == "steps" else len(val)
+    return out
+
+
+def _points_by_cat(maps: dict, uid: str) -> dict[str, int]:
+    """Points earned in each category — used for the per-member comparison grid."""
+    counts = _counts_by_cat(maps, uid)
+    return {c["key"]: counts[c["key"]] * c["per"] for c in CATEGORIES}
+
+
 def _score_from_maps(maps: dict, uid: str) -> int:
-    return int(
-        len(maps["checkins"].get(uid, set())) * PTS_CHECKIN
-        + len(maps["workouts"].get(uid, set())) * PTS_WORKOUT
-        + len(maps["meals"].get(uid, set()))    * PTS_MEAL
-        + len(maps["weighins"].get(uid, set())) * PTS_WEIGHIN
-        + (maps["steps"].get(uid, 0) // 1000)   * PTS_PER_KSTEP
-    )
+    return int(sum(_points_by_cat(maps, uid).values()))
 
 
 def _breakdown_from_maps(maps: dict, uid: str) -> dict:
     """Per-category point breakdown for one user — same numbers that sum to the
     user's league score, so the 'How scoring works' panel always reconciles."""
-    checkin_days = len(maps["checkins"].get(uid, set()))
-    workout_days = len(maps["workouts"].get(uid, set()))
-    meal_days    = len(maps["meals"].get(uid, set()))
-    weighin_days = len(maps["weighins"].get(uid, set()))
-    ksteps       = maps["steps"].get(uid, 0) // 1000
-
+    counts = _counts_by_cat(maps, uid)
     items = [
-        {"key": "checkin", "label": "Daily check-in",   "icon": "✅",
-         "per": PTS_CHECKIN, "per_unit": "day",      "count": checkin_days,
-         "points": checkin_days * PTS_CHECKIN},
-        {"key": "workout", "label": "Log a workout",    "icon": "💪",
-         "per": PTS_WORKOUT, "per_unit": "day",      "count": workout_days,
-         "points": workout_days * PTS_WORKOUT},
-        {"key": "meal",    "label": "Log a meal",       "icon": "🍳",
-         "per": PTS_MEAL,    "per_unit": "day",      "count": meal_days,
-         "points": meal_days * PTS_MEAL},
-        {"key": "weighin", "label": "Log a weigh-in",   "icon": "⚖️",
-         "per": PTS_WEIGHIN, "per_unit": "day",      "count": weighin_days,
-         "points": weighin_days * PTS_WEIGHIN},
-        {"key": "steps",   "label": "Steps (Oura)",     "icon": "👟",
-         "per": PTS_PER_KSTEP, "per_unit": "1k steps", "count": ksteps,
-         "points": ksteps * PTS_PER_KSTEP},
+        {**{k: c[k] for k in ("key", "label", "icon", "per", "per_unit")},
+         "count": counts[c["key"]], "points": counts[c["key"]] * c["per"]}
+        for c in CATEGORIES
     ]
     return {"items": items, "total": sum(i["points"] for i in items)}
 
@@ -216,7 +223,7 @@ def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
     league = _get_or_create_league(sb, tier, week_start, week_end)
     league_id = league.get("id")
     if not league_id:
-        return {"league": None, "standings": [], "me_rank": None, "days_left": None, "member_count": 0, "my_breakdown": None}
+        return {"league": None, "standings": [], "me_rank": None, "days_left": None, "member_count": 0, "my_breakdown": None, "categories": CATEGORY_META}
 
     _ensure_member(sb, league_id, user_id)
 
@@ -244,6 +251,7 @@ def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
             "name":    names.get(uid, "Friend"),
             "score":   scores.get(uid, 0),
             "is_me":   uid == user_id,
+            "points_by_cat": _points_by_cat(maps, uid),
         }
         for uid in ids
     ]
@@ -266,4 +274,5 @@ def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
         "days_left":    days_left,
         "member_count": len(standings),
         "my_breakdown": my_breakdown,
+        "categories":   CATEGORY_META,
     }

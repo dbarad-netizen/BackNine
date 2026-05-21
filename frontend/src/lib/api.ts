@@ -1218,6 +1218,15 @@ export interface LeagueStanding {
   score:   number;   // weekly engagement points
   rank:    number;
   is_me:   boolean;
+  points_by_cat?: Record<string, number>;   // points per category key (grid)
+}
+
+export interface LeagueCategory {
+  key:      string;   // checkin | workout | meal | weighin | steps
+  label:    string;   // "Daily check-in"
+  icon:     string;   // emoji (used as the grid column header)
+  per:      number;   // points earned per unit
+  per_unit: string;   // "day" | "1k steps"
 }
 
 export interface LeagueBreakdownItem {
@@ -1247,6 +1256,7 @@ export interface LeagueResponse {
   days_left:    number | null;
   member_count: number;
   my_breakdown?: LeagueBreakdown | null;   // current user's per-category points
+  categories?:   LeagueCategory[];         // column defs for the per-task grid
 }
 
 export interface LeaderboardResponse {
