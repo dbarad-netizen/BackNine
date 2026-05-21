@@ -1100,7 +1100,10 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-[#F4F1EA] text-gray-900">
       {/* ── Top nav ── */}
-      <header className="sticky top-0 z-20 bg-white border-b border-gray-200 shadow-sm">
+      <header
+        className="sticky top-0 z-20 bg-white border-b border-gray-200 shadow-sm"
+        style={{ paddingTop: "env(safe-area-inset-top)" }}
+      >
         <div className="max-w-5xl mx-auto px-4 sm:px-6 flex items-center h-12">
           {/* Logo */}
           <span className="font-bold text-sm tracking-tight shrink-0 mr-3">
