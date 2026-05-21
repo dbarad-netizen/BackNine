@@ -833,18 +833,29 @@ async def get_dashboard(request: Request, days: int = 120):
     if refreshed_session:
         session = refreshed_session
 
-    # ── Try cache first ───────────────────────────────────────────────────────
-    # Webhooks keep the cache warm; only call Oura live when the cache is stale.
+    # ── Load cache as a baseline, then refresh live if stale ──────────────────
+    # We ALWAYS read the cache first so it can serve as a fallback. A live fetch
+    # only *replaces* the cache when it returns real data — a transient empty or
+    # sparse Oura response must never blank the dashboard or overwrite good
+    # cached data. (That was the cause of "my Oura data vanished mid-day": a
+    # stale cache + an empty live fetch wiped the rings and corrupted the cache,
+    # while the morning's cached briefing kept showing the real numbers.)
     rm, slm, am, smm = {}, {}, {}, {}
     oura_vo2_max: float | None = None
-    cache_hit = False
     try:
-        if oc.is_fresh(user_id, max_age_hours=0.5):
-            rm, slm, am, smm = oc.get_days(user_id, days=days)
-            if rm or slm or am or smm:
-                cache_hit = True
+        rm, slm, am, smm = oc.get_days(user_id, days=days)
     except Exception:
-        pass  # fall through to live fetch
+        pass
+    have_cache = bool(rm or slm or am or smm)
+
+    fresh = False
+    try:
+        fresh = oc.is_fresh(user_id, max_age_hours=0.5)
+    except Exception:
+        pass
+    # Only trust the cache if it's both fresh AND actually has data — a fresh but
+    # empty cache row should still trigger a live fetch.
+    cache_hit = fresh and have_cache
 
     # Even when the cache is fresh, bypass it if today's session detail is
     # missing — Oura processes scores quickly but session detail takes longer.
@@ -857,21 +868,29 @@ async def get_dashboard(request: Request, days: int = 120):
     if not cache_hit:
         try:
             raw = await fetch_all(access_token, days=days)
-            rm, slm, am, smm = parse_oura_data(raw)
-            oura_vo2_max = parse_oura_vo2_max(raw)
-            # Populate the cache so the next load is instant
-            try:
-                oc.store_days(user_id, rm, slm, am, smm)
-            except Exception:
-                pass
+            live_rm, live_slm, live_am, live_smm = parse_oura_data(raw)
+            # Only adopt live data when it actually came back with something;
+            # otherwise keep whatever the cache gave us above.
+            if live_rm or live_slm or live_am or live_smm:
+                rm, slm, am, smm = live_rm, live_slm, live_am, live_smm
+                oura_vo2_max = parse_oura_vo2_max(raw)
+                # Only overwrite the cache with non-empty live data.
+                try:
+                    oc.store_days(user_id, rm, slm, am, smm)
+                except Exception:
+                    pass
         except Exception as exc:
             exc_str = str(exc).lower()
             if "401" in exc_str or "403" in exc_str or "token" in exc_str or "expired" in exc_str:
-                raise HTTPException(
-                    status_code=401,
-                    detail="Oura token expired — please reconnect your Oura Ring.",
-                )
-            if not (rm or slm or am or smm):
+                # Genuine auth failure with no cached data → prompt reconnect.
+                # If we DO have cache, fall through and serve it rather than
+                # blocking the whole dashboard on a transient auth blip.
+                if not have_cache:
+                    raise HTTPException(
+                        status_code=401,
+                        detail="Oura token expired — please reconnect your Oura Ring.",
+                    )
+            elif not (rm or slm or am or smm):
                 raise HTTPException(status_code=502, detail=f"Oura API error: {exc}")
 
     # ── "Today" — anchor to the most recent available data ───────────────────
