@@ -36,6 +36,8 @@ export default function MorningBriefing({ onOpenChat }: Props) {
   const [savingMood, setSavingMood] = useState(false);
   // 'saved' shows ✓ briefly; 'error' shows a retry hint. Cleared after ~2s.
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle");
+  // Re-checking / overriding the "waiting for last night's sleep" state.
+  const [checking, setChecking] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,6 +75,34 @@ export default function MorningBriefing({ onOpenChat }: Props) {
       setSaveStatus("error");
     } finally {
       setSavingMood(false);
+    }
+  };
+
+  // "Waiting for last night's sleep" actions. Check again re-pulls (Oura may have
+  // synced since); brief-without-sleep is the escape hatch for a no-ring night.
+  const handleCheckAgain = async () => {
+    if (checking) return;
+    setChecking(true);
+    try {
+      const fresh = await api.briefing();
+      setData(fresh);
+    } catch {
+      /* keep showing the syncing state */
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const handleBriefNoSleep = async () => {
+    if (checking) return;
+    setChecking(true);
+    try {
+      const fresh = await api.briefing(false, undefined, true);
+      setData(fresh);
+    } catch {
+      /* keep showing the syncing state */
+    } finally {
+      setChecking(false);
     }
   };
 
@@ -128,6 +158,9 @@ export default function MorningBriefing({ onOpenChat }: Props) {
   const appStreak = data.app_streak ?? 0;
   const showAppStreak = appStreak >= 2;
   const moodLogged = todayMood !== undefined && todayMood !== null;
+  // Last night's Oura sleep hasn't synced yet — show a "syncing" state instead
+  // of building the briefing on an older night's data.
+  const pending = data.sleep_status === "pending";
 
   return (
     <section
@@ -211,14 +244,42 @@ export default function MorningBriefing({ onOpenChat }: Props) {
             </p>
           </div>
 
-          {paragraphs.map((p, i) => (
-            <p
-              key={i}
-              className={`text-white text-[13.5px] leading-relaxed ${i > 0 ? "mt-2" : ""}`}
-            >
-              {p}
-            </p>
-          ))}
+          {pending ? (
+            <div className="rounded-xl bg-white/10 border border-white/15 px-3 py-3">
+              <p className="text-white text-[13.5px] leading-relaxed font-semibold mb-1">
+                🌙 Syncing last night&apos;s sleep…
+              </p>
+              <p className="text-white/80 text-[12.5px] leading-relaxed">
+                Last night&apos;s Oura data hasn&apos;t reached us yet. I&apos;ll have your full briefing the
+                moment it lands — usually a few minutes after you wake. Opening the Oura app can nudge the sync along.
+              </p>
+              <div className="flex items-center gap-3 mt-3">
+                <button
+                  onClick={handleCheckAgain}
+                  disabled={checking}
+                  className="text-[12px] font-semibold bg-white text-[#1B3829] rounded-lg px-3 py-1.5 disabled:opacity-60"
+                >
+                  {checking ? "Checking…" : "Check again"}
+                </button>
+                <button
+                  onClick={handleBriefNoSleep}
+                  disabled={checking}
+                  className="text-[12px] text-white/80 hover:text-white underline-offset-2 hover:underline disabled:opacity-60"
+                >
+                  Brief me without sleep
+                </button>
+              </div>
+            </div>
+          ) : (
+            paragraphs.map((p, i) => (
+              <p
+                key={i}
+                className={`text-white text-[13.5px] leading-relaxed ${i > 0 ? "mt-2" : ""}`}
+              >
+                {p}
+              </p>
+            ))
+          )}
         </div>
       </div>
 
@@ -227,7 +288,7 @@ export default function MorningBriefing({ onOpenChat }: Props) {
         <div className="flex items-center gap-3 min-w-0">
           {/* In the no-data welcome state there's nothing to regenerate, so
               hide the timestamp + Regenerate link and just keep the chat CTA. */}
-          {data.has_data !== false && (
+          {data.has_data !== false && !pending && (
             <>
               <p className="text-[11px] text-white/50 truncate">
                 {data.cached ? "Generated earlier today" : "Just generated"}

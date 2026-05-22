@@ -2619,7 +2619,7 @@ async def health_chat(request: Request):
 # ── Morning Briefing ──────────────────────────────────────────────────────────
 
 @app.get("/api/briefing/today")
-async def get_morning_briefing(request: Request, refresh: bool = False, date: Optional[str] = None):
+async def get_morning_briefing(request: Request, refresh: bool = False, date: Optional[str] = None, allow_no_sleep: bool = False):
     """Return today's Coach Al morning briefing for the current user.
 
     Cache strategy: one row per (user_id, date) in public.daily_briefings.
@@ -2665,6 +2665,7 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
                     "cached":              True,
                     "app_streak":          _compute_app_streak(user_id, today_str),
                     "has_data":            True,
+                    "sleep_status":        "ok",
                 }
         except Exception:
             pass  # fall through to regenerate
@@ -2675,11 +2676,69 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
     except Exception:
         rm, slm, am, smm = {}, {}, {}, {}
 
-    # Timezone-safe anchor + smm with bedtime/AH fallbacks (see helper docstring).
-    # The naive `datetime.now()` approach was reading server UTC and missing the
-    # bedtime-keyed sleep row — that was the source of the 5.8h-when-Oura-says-8h
-    # bug in the briefing.
-    _anchor, t_rdy, t_sl, t_act, t_sm = _resolve_oura_anchor(user_id, rm, slm, am, smm)
+    # Last night's sleep is keyed to the wake date = the user's LOCAL today. If
+    # it's not in our cache yet, try a live pull — Oura may have just finished
+    # processing — so we don't fall back to an older night.
+    if not (smm.get(today_str, {}) or {}).get("total"):
+        try:
+            access_token, _ = await _ensure_valid_token(session)
+            raw = await fetch_all(access_token, days=14)
+            l_rm, l_slm, l_am, l_smm = parse_oura_data(raw)
+            if l_rm or l_slm or l_am or l_smm:
+                rm, slm, am, smm = l_rm, l_slm, l_am, l_smm
+                try:
+                    oc.store_days(user_id, rm, slm, am, smm)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    # Anchor STRICTLY to last night (wake date = local today). We never substitute
+    # an older night as "today" — that mislabels stale data and is exactly what
+    # made the briefing quote 5.3h when last night was 6h44m. Apple Health fills
+    # in the sleep model when Oura hasn't synced but AH has.
+    t_rdy = rm.get(today_str, {}) or {}
+    t_sl  = slm.get(today_str, {}) or {}
+    t_act = am.get(today_str, {}) or {}
+    t_sm  = smm.get(today_str, {}) or {}
+    if not t_sm.get("total"):
+        try:
+            ah_day = ah.get_day(user_id, today_str)
+            if ah_day and (ah_day.get("sleep_hours") or ah_day.get("hrv")):
+                sh  = ah_day.get("sleep_hours") or 0
+                sdh = ah_day.get("sleep_deep_hours") or 0
+                srh = ah_day.get("sleep_rem_hours") or 0
+                t_sm = {
+                    "total":   int(sh  * 3600) if sh  else None,
+                    "deep":    int(sdh * 3600) if sdh else None,
+                    "rem":     int(srh * 3600) if srh else None,
+                    "hrv":     ah_day.get("hrv"),
+                    "rhr":     ah_day.get("resting_hr"),
+                    "_source": "apple_health",
+                }
+        except Exception:
+            pass
+
+    # Wait for real sleep: if the user normally has sleep data but last night
+    # hasn't synced yet, hold the briefing (show "syncing" client-side) rather
+    # than build it on an older night. Manual / no-wearable users (no recent
+    # sleep history) are never blocked. `allow_no_sleep` is the escape hatch for
+    # a genuine no-ring night.
+    sleep_ready   = bool(t_sm.get("total"))
+    recent_sleep  = [d for d in sorted(smm.keys(), reverse=True)[:4] if smm[d].get("total")]
+    expects_sleep = len(recent_sleep) > 0
+    if expects_sleep and not sleep_ready and not allow_no_sleep:
+        return {
+            "date":                today_str,
+            "narrative":           "",
+            "sleep_status":        "pending",
+            "prediction_streak":   None,
+            "prediction_accuracy": None,
+            "generated_at":        None,
+            "cached":              False,
+            "app_streak":          _compute_app_streak(user_id, today_str),
+            "has_data":            True,
+        }
 
     recent_days = sorted(smm.keys(), reverse=True)[:7]
     hrv_vals   = [smm[d]["hrv"]   for d in recent_days if smm[d].get("hrv")]
@@ -2756,6 +2815,7 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
             "cached":              False,
             "app_streak":          _compute_app_streak(user_id, today_str),
             "has_data":            False,
+            "sleep_status":        "ok",
         }
 
     # Prediction status — used both for the prompt AND returned to the client
@@ -2867,8 +2927,12 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"briefing generation failed: {e}")
 
-    # Save to cache (best-effort — never crash the dashboard over a write)
-    if db:
+    # Save to cache (best-effort — never crash the dashboard over a write).
+    # Only cache a sleep-ready briefing (or a genuine no-wearable user's). A
+    # briefing generated WITHOUT last night's sleep (allow_no_sleep escape hatch)
+    # is intentionally NOT cached, so the moment last night syncs the next open
+    # regenerates the real one instead of locking in a sleepless note for the day.
+    if db and (sleep_ready or not expects_sleep):
         try:
             db.table("daily_briefings").upsert(
                 {
@@ -2892,6 +2956,7 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
         "cached":              False,
         "app_streak":          _compute_app_streak(user_id, today_str),
         "has_data":            True,
+        "sleep_status":        "ok",
     }
 
 

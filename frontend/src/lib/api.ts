@@ -815,9 +815,10 @@ export const api = {
   },
 
   // ── Morning Briefing ──────────────────────────────────────────────────────
-  briefing(refresh = false, date?: string): Promise<BriefingResponse> {
+  briefing(refresh = false, date?: string, allowNoSleep = false): Promise<BriefingResponse> {
     const params = new URLSearchParams({ date: date || localToday() });
     if (refresh) params.set("refresh", "1");
+    if (allowNoSleep) params.set("allow_no_sleep", "1");
     return request(`/api/briefing/today?${params.toString()}`);
   },
 
@@ -985,6 +986,7 @@ export interface BriefingResponse {
   cached:              boolean;
   app_streak:          number;     // consecutive days the user has opened BackNine
   has_data?:           boolean;    // false = welcome state for users with no metrics yet
+  sleep_status?:       "ok" | "pending";  // "pending" = last night's sleep hasn't synced yet
 }
 
 export interface WeeklyInsightStat {

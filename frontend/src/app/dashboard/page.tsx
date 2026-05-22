@@ -1282,6 +1282,11 @@ export default function DashboardPage() {
             {(() => {
               const hour = new Date().getHours();
               const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+              // Morning gap: today's Oura data hasn't synced yet (anchor is an
+              // older day). Show "Syncing…" rather than presenting yesterday's
+              // scores as today's. After ~2pm we stop waiting and fall back to
+              // showing the last-known values (current behavior).
+              const syncingToday = !anchorIsToday && hour < 14;
               const dayFull  = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
               const scoreColor = (s: number | undefined) =>
                 !s ? "#9ca3af" : s >= 85 ? "#22c55e" : s >= 70 ? "#f59e0b" : "#ef4444";
@@ -1329,15 +1334,17 @@ export default function DashboardPage() {
                           <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
                             <circle cx="50" cy="50" r="40" fill="none" stroke="#E5E7EB" strokeWidth="11"/>
                             <circle cx="50" cy="50" r="40" fill="none"
-                              stroke={stale ? color + "88" : color}
+                              stroke={syncingToday ? "#D1D5DB" : stale ? color + "88" : color}
                               strokeWidth="11" strokeLinecap="round"
                               strokeDasharray={circ}
-                              strokeDashoffset={circ * (1 - (score ?? 0) / 100)}
+                              strokeDashoffset={syncingToday ? circ : circ * (1 - (score ?? 0) / 100)}
                               className="transition-all duration-700"
                             />
                           </svg>
                           <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            {score != null && score > 0 ? (
+                            {syncingToday ? (
+                              <span className="text-[10px] text-gray-400 text-center leading-tight px-1 animate-pulse">Syncing…</span>
+                            ) : score != null && score > 0 ? (
                               <>
                                 <span className={`text-xl font-bold leading-none ${stale ? "text-gray-400" : "text-gray-900"}`}>{score}</span>
                                 <span className="text-[9px] text-gray-400 mt-0.5">{stale ? "last" : "/100"}</span>
@@ -1348,7 +1355,7 @@ export default function DashboardPage() {
                           </div>
                         </div>
                         <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest">{label}</p>
-                        <p className="text-[11px] font-medium" style={{ color: stale ? "#9ca3af" : color }}>{stale ? "Last known" : scoreLabel(score)}</p>
+                        <p className="text-[11px] font-medium" style={{ color: syncingToday ? "#9ca3af" : stale ? "#9ca3af" : color }}>{syncingToday ? "Updating…" : stale ? "Last known" : scoreLabel(score)}</p>
                       </div>
                     ))}
                   </div>
