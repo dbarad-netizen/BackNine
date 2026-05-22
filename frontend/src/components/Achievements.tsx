@@ -27,37 +27,34 @@ export default function Achievements() {
   const newlyXp = data.newly_xp ?? 0;
 
   return (
-    <section className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+    <>
       {/* Just-unlocked celebration stays — the moment matters. */}
       {justUnlocked.length > 0 && (
-        <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-100">
-          <p className="text-[12px] text-amber-800 font-semibold">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 shadow-sm">
+          <p className="text-[12px] text-amber-800 font-semibold text-center">
             🎉 Just unlocked: {justUnlocked.map(b => `${b.emoji} ${b.name}`).join(", ")}
             {newlyXp > 0 && <span className="text-amber-700"> &nbsp;+{newlyXp} XP</span>}
           </p>
         </div>
       )}
 
-      {/* Slim, demoted entry — level lives in the league/leaderboard now; this is
-          just the doorway to the full badge grid. */}
+      {/* Pill — matches the meal / workout / body & weight quick actions. */}
       <button
         onClick={() => setOpen(true)}
-        className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50 transition-colors"
+        className="w-full py-3 rounded-2xl border border-[#1B3829]/25 bg-white text-sm font-semibold text-[#1B3829] hover:bg-[#1B3829]/5 transition-colors flex items-center justify-center gap-2 shadow-sm"
       >
-        <span className="flex items-center gap-2 min-w-0">
-          <span className="text-base leading-none">🏅</span>
-          <span className="text-sm font-semibold text-gray-800">Achievements</span>
-          {level && (
-            <span className="text-[10px] font-bold text-[#1B3829] bg-[#1B3829]/10 rounded px-1.5 py-0.5 whitespace-nowrap">
-              Lv {level.level} · {level.title}
-            </span>
-          )}
-        </span>
-        <span className="text-[11px] text-gray-400 shrink-0">{data.earned_count}/{data.total} · View all →</span>
+        <span className="text-base leading-none">🏅</span>
+        Achievements
+        {level && (
+          <span className="text-[10px] font-bold text-[#1B3829] bg-[#1B3829]/10 rounded px-1.5 py-0.5 whitespace-nowrap">
+            Lv {level.level}
+          </span>
+        )}
+        <span className="text-xs font-normal text-[#1B3829]/50">· {data.earned_count}/{data.total}</span>
       </button>
 
       {open && <AchievementsModal data={data} onClose={() => setOpen(false)} />}
-    </section>
+    </>
   );
 }
 
