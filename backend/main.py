@@ -468,16 +468,21 @@ async def _refresh_oura_cache_for_user(oura_user_id: str) -> None:
     Looks up the user's stored tokens, refreshes them if expired,
     fetches the last 3 days of data, and writes to oura_daily_cache.
     """
-    backnine_uid = f"oura_{oura_user_id}"
     db = get_supabase()
     if not db:
         return
 
     try:
+        # Oura's webhook sends ITS OWN user id. We store that in the
+        # `oura_user_id` COLUMN; the row's `user_id` is the canonical id we key
+        # the cache on (a Supabase UUID, or oura_<hash> for direct sign-ins).
+        # Matching on oura_user_id is what makes webhooks actually land — the old
+        # lookup keyed off f"oura_{oura_user_id}" and never matched, so every
+        # push silently no-op'd and data only arrived via the slow lazy poll.
         res = (
             db.table("wearable_connections")
-            .select("access_token, refresh_token, expires_at")
-            .eq("user_id", backnine_uid)
+            .select("user_id, access_token, refresh_token, expires_at")
+            .eq("oura_user_id", str(oura_user_id))
             .eq("provider", "oura")
             .execute()
         )
@@ -485,6 +490,7 @@ async def _refresh_oura_cache_for_user(oura_user_id: str) -> None:
         if not rows:
             return
         conn = rows[0]
+        backnine_uid = conn["user_id"]
         access_token = conn["access_token"]
         refresh_tok  = conn.get("refresh_token")
         expires_at   = conn.get("expires_at", 0)
