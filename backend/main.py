@@ -1234,14 +1234,13 @@ async def get_dashboard(request: Request, days: int = 120):
             "rhr":                 t_sm.get("rhr"),
             "vo2_max":             _vo2,
             "body_fat_percentage": _ah_body_fat,
-            # 7-day averages for sleep and steps
-            "sleep_hours": (lambda v: v if v else None)(
-                next((d.get("total_hrs") for d in sorted(
-                    [{"d": d, "total_hrs": (
-                        sum(t_sm2.get("total", 0) or 0 for t_sm2 in [smm.get(d2, {}) for d2 in [d]])
-                        / 3600
-                    )} for d in sorted(smm, reverse=True)[:7]], key=lambda x: x["d"]
-                ) if d.get("total_hrs", 0) > 0), None)
+            # True 7-day average of the most recent nights that have sleep data.
+            # (The previous expression accidentally returned a single night — the
+            # earliest in the window — which is why the Longevity sleep average
+            # read ~8.3h instead of the real ~6.8h.)
+            "sleep_hours": (lambda vals: round(sum(vals) / len(vals), 1) if vals else None)(
+                [smm[d]["total"] / 3600 for d in sorted(smm, reverse=True)[:7]
+                 if smm.get(d, {}).get("total")]
             ),
             "steps": (lambda vals: round(sum(vals) / len(vals)) if vals else None)(
                 [am[d]["steps"] for d in sorted(am, reverse=True)[:7] if am[d].get("steps")]
