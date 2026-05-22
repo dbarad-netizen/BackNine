@@ -1146,6 +1146,8 @@ export interface LeaderboardEntry {
   activity:      MetricValue;
   /** Weekly engagement points — the inclusive ranking metric (works without a wearable). */
   points:        number;
+  /** Achievement level — shown as a small status chip next to the name. */
+  level?:        number | null;
   /** Which taunt (if any) the current user has sent to this friend today. */
   taunt_sent:    TauntKind | null;
   /** Weekly head-to-head tally vs the current user. Null for self. */
@@ -1237,6 +1239,7 @@ export interface LeagueStanding {
   score:   number;   // weekly engagement points
   rank:    number;
   is_me:   boolean;
+  level?:  number | null;                    // achievement level (status chip)
   points_by_cat?: Record<string, number>;   // points per category key (grid)
 }
 

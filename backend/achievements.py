@@ -157,6 +157,32 @@ def _level_info(xp: int) -> dict:
     }
 
 
+_XP_BY_ID = {b["id"]: b.get("xp", 0) for b in BADGES}
+
+
+def levels_for(user_ids) -> dict:
+    """Map user_id -> {level, title, xp} from earned badges (one batched query).
+
+    Powers the level chip shown next to names in the Weekly League and friend
+    leaderboard — turning achievements into visible social status."""
+    out: dict = {}
+    ids = [u for u in (user_ids or []) if u]
+    if not ids:
+        return out
+    xp_by_user: dict = {}
+    try:
+        sb = _sb()
+        res = sb.table("user_badges").select("user_id, badge_id").in_("user_id", ids).execute()
+        for r in (res.data or []):
+            xp_by_user[r["user_id"]] = xp_by_user.get(r["user_id"], 0) + _XP_BY_ID.get(r["badge_id"], 0)
+    except Exception:
+        pass
+    for uid in ids:
+        info = _level_info(xp_by_user.get(uid, 0))
+        out[uid] = {"level": info["level"], "title": info["title"], "xp": info["xp"]}
+    return out
+
+
 # ── Stats gathering ───────────────────────────────────────────────────────────
 
 def _streak(sb, user_id: str, today: str) -> int:
@@ -250,9 +276,10 @@ def _gather_stats(user_id: str) -> dict:
 
 # ── Evaluate ──────────────────────────────────────────────────────────────────
 
-def evaluate(user_id: str) -> dict:
+def evaluate(user_id: str, user_name: str = "") -> dict:
     """Evaluate all badges, persist newly-earned ones, return the full catalog
-    with earned status + which were just unlocked."""
+    with earned status + which were just unlocked. Newly-earned badges are also
+    broadcast to the friend feed (Pulse) so unlocks become shareable moments."""
     sb = _sb()
     stats = _gather_stats(user_id)
 
@@ -297,6 +324,23 @@ def evaluate(user_id: str) -> dict:
             sb.table("user_badges").upsert(to_insert, on_conflict="user_id,badge_id").execute()
         except Exception:
             pass
+
+    # Broadcast each newly-earned badge to the Pulse feed (best-effort) so friends
+    # see and can react — the "shareable win" half of social achievements. Fires
+    # once per badge since `newly` only contains first-time unlocks.
+    if newly:
+        _by_id = {b["id"]: b for b in BADGES}
+        for _bid in newly:
+            _b = _by_id.get(_bid) or {}
+            try:
+                frd.record_event(
+                    user_id,
+                    "achievement",
+                    {"badge_id": _bid, "name": _b.get("name"), "emoji": _b.get("emoji"), "xp": _b.get("xp", 0)},
+                    user_name=user_name or None,
+                )
+            except Exception:
+                pass
 
     earned_xp = sum(x["xp"] for x in out if x["earned"])
     newly_xp  = sum(x["xp"] for x in out if x["id"] in newly)

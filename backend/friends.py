@@ -1125,4 +1125,9 @@ def _summarize_event(row: dict) -> str:
             return f"{name} called {target} out for being slow 🐌"
         return f"{name} cheered {target} 👏"
 
+    if et == "achievement":
+        emoji = p.get("emoji") or "🏅"
+        badge = p.get("name") or "an achievement"
+        return f"{name} unlocked {emoji} {badge}"
+
     return f"{name} did something"

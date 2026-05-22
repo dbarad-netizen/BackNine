@@ -119,8 +119,11 @@ export default function WeeklyLeague({ onInvite }: Props) {
               <span className={`w-7 text-center text-sm font-bold shrink-0 ${top3 ? "" : "text-gray-400"}`}>
                 {top3 ? MEDAL[s.rank - 1] : s.rank}
               </span>
-              <span className={`flex-1 text-sm truncate ${s.is_me ? "font-bold text-[#1B3829]" : "text-gray-700"}`}>
-                {s.is_me ? "You" : s.name}
+              <span className={`flex-1 text-sm truncate flex items-center gap-1.5 ${s.is_me ? "font-bold text-[#1B3829]" : "text-gray-700"}`}>
+                <span className="truncate">{s.is_me ? "You" : s.name}</span>
+                {s.level != null && (
+                  <span className="shrink-0 text-[9px] font-bold text-[#1B3829] bg-[#1B3829]/10 rounded px-1 py-0.5 leading-none">Lv{s.level}</span>
+                )}
               </span>
               <span className="text-sm font-semibold text-gray-900 shrink-0">
                 {s.score.toLocaleString()}

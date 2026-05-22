@@ -3256,7 +3256,7 @@ def abandon_goal(goal_id: str, request: Request):
 def get_achievements(request: Request):
     session = _require_session(request)
     try:
-        return ach.evaluate(session["user_id"])
+        return ach.evaluate(session["user_id"], _display_name_for(session["user_id"]))
     except Exception:
         return {"badges": [], "earned_count": 0, "total": 0, "newly_unlocked": []}
 
@@ -3531,6 +3531,8 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None):
             # (check-in, workouts, meals, weigh-ins + step bonus). Non-wearable
             # users still rank here instead of showing all-zero.
             "points":   int(points_map.get(uid, 0)),
+            # Achievement level for the status chip (None until they've earned XP).
+            "level":    (levels_map.get(uid) or {}).get("level"),
             # If you've taunted this friend today, surface which kind (else None).
             "taunt_sent":   None if is_me else taunts_today.get(uid),
             # 7-day head-to-head tally vs the current user (null for self).
@@ -3549,6 +3551,11 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None):
         points_map = lg.weekly_points(all_uids, today_str)
     except Exception:
         points_map = {}
+    # Achievement level per member — shown as a status chip on each row.
+    try:
+        levels_map = ach.levels_for(all_uids)
+    except Exception:
+        levels_map = {}
 
     entries: list[dict] = [_entry_for(user_id, _display_name_for(user_id), True)]
     for f in friends:
