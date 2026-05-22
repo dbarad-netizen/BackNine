@@ -473,17 +473,15 @@ async def _refresh_oura_cache_for_user(oura_user_id: str) -> None:
         return
 
     try:
-        # Oura's webhook sends ITS OWN user id. We store that in the
-        # `oura_user_id` COLUMN; the row's `user_id` is the canonical id we key
-        # the cache on (a Supabase UUID, or oura_<hash> for direct sign-ins).
-        # Matching on oura_user_id is what makes webhooks actually land — the old
-        # lookup keyed off f"oura_{oura_user_id}" and never matched, so every
-        # push silently no-op'd and data only arrived via the slow lazy poll.
+        # Oura's webhook sends ITS OWN user id (the personal id). We persist a
+        # mapping + tokens in `oura_connections` (oura_user_id PK → BackNine
+        # user_id + tokens). Reading it here is what makes webhooks actually land
+        # — the old code read the empty, UUID-typed `wearable_connections` table
+        # and silently no-op'd, so the cache only ever updated via the slow poll.
         res = (
-            db.table("wearable_connections")
+            db.table("oura_connections")
             .select("user_id, access_token, refresh_token, expires_at")
             .eq("oura_user_id", str(oura_user_id))
-            .eq("provider", "oura")
             .execute()
         )
         rows = res.data or []
@@ -494,6 +492,8 @@ async def _refresh_oura_cache_for_user(oura_user_id: str) -> None:
         access_token = conn["access_token"]
         refresh_tok  = conn.get("refresh_token")
         expires_at   = conn.get("expires_at", 0)
+        if not access_token:
+            return  # mapping seeded but no tokens yet — fills on the user's next sign-in
 
         # Refresh token if expired
         if expires_at and datetime.now(timezone.utc).timestamp() > expires_at - 60:
@@ -503,11 +503,11 @@ async def _refresh_oura_cache_for_user(oura_user_id: str) -> None:
             access_token = tokens["access_token"]
             new_refresh  = tokens.get("refresh_token", refresh_tok)
             new_expires  = int(datetime.now(timezone.utc).timestamp()) + tokens.get("expires_in", 86400)
-            db.table("wearable_connections").update({
+            db.table("oura_connections").update({
                 "access_token":  access_token,
                 "refresh_token": new_refresh,
                 "expires_at":    new_expires,
-            }).eq("user_id", backnine_uid).eq("provider", "oura").execute()
+            }).eq("oura_user_id", str(oura_user_id)).execute()
 
         # Fetch the last 3 days (catches any delayed processing on Oura's end)
         raw = await fetch_all(access_token, days=3)
@@ -543,6 +543,29 @@ def oura_auth_start(response: Response, link_user_id: str = None):
     }
     url = build_auth_url(OURA_CLIENT_ID, OURA_REDIRECT_URI, state)
     return RedirectResponse(url)
+
+
+def _resolve_oura_user(oura_pid: str) -> Optional[str]:
+    """Return the BackNine user_id already mapped to this Oura personal id, if any.
+
+    Lets a returning user (especially one who later linked a Supabase account)
+    resolve to their existing identity instead of a fresh oura_<pid>. Returns
+    None for a brand-new Oura account."""
+    db = get_supabase()
+    if not db:
+        return None
+    try:
+        res = (
+            db.table("oura_connections")
+            .select("user_id")
+            .eq("oura_user_id", str(oura_pid))
+            .limit(1)
+            .execute()
+        )
+        rows = res.data or []
+        return rows[0]["user_id"] if rows else None
+    except Exception:
+        return None
 
 
 @app.get("/auth/oura/callback")
@@ -584,40 +607,26 @@ async def oura_auth_callback(
         # • Otherwise fall back to oura_<oura_user_id> (legacy).
         try:
             personal = await fetch_personal_info(access_token)
-            oura_pid = personal["id"]          # Oura's own numeric user ID
-            oura_native_id = f"oura_{oura_pid}"
+            oura_pid = str(personal["id"])     # Oura's stable personal user ID
         except Exception:
-            import hashlib
             oura_pid = None
-            oura_native_id = f"oura_{hashlib.sha256(access_token.encode()).hexdigest()[:16]}"
 
         if link_user_id:
             # User is connecting Oura from a Supabase account — use the Supabase UUID
             user_id = link_user_id
         elif oura_pid:
-            # Direct Oura sign-in — check if this Oura account is already linked
-            # to a Supabase UUID via the oura_user_id column in wearable_connections
-            db = get_supabase()
-            canonical_id = None
-            if db:
-                try:
-                    res = (
-                        db.table("wearable_connections")
-                        .select("user_id")
-                        .eq("oura_user_id", oura_pid)
-                        .eq("provider", "oura")
-                        .execute()
-                    )
-                    for row in (res.data or []):
-                        uid = row["user_id"]
-                        if not uid.startswith("oura_"):
-                            canonical_id = uid  # Found the Supabase UUID
-                            break
-                except Exception:
-                    pass
-            user_id = canonical_id or oura_native_id
+            # Direct Oura sign-in. Identity is deterministic — oura_<pid> — and
+            # stable across devices because oura_pid is constant per Oura account.
+            # If this account is already mapped to a canonical id (e.g. a later
+            # Supabase link) in oura_connections, reuse it so all data stays under
+            # one identity.
+            user_id = _resolve_oura_user(oura_pid) or f"oura_{oura_pid}"
         else:
-            user_id = oura_native_id
+            # personal_info failed (after retries) and this isn't a Supabase link.
+            # Do NOT mint a random hash-of-token fallback id — that gave the user a
+            # brand-new account on every new browser and forced re-onboarding.
+            # Bounce them back to retry instead of silently fragmenting their data.
+            return RedirectResponse(f"{FRONTEND_URL}/?error=oura_verify_failed")
 
         session_data = {
             "user_id":       user_id,
@@ -645,6 +654,25 @@ async def oura_auth_callback(
                 db.table("wearable_connections").upsert(row).execute()
         except Exception:
             pass
+
+        # Persist the canonical Oura connection (oura_user_id → user_id + tokens).
+        # This is the table the webhook handler reads to refresh the cache on push,
+        # AND the stable mapping that lets a returning user resolve to the same
+        # BackNine id on any device. Keyed on oura_user_id (the Oura personal id).
+        if oura_pid:
+            try:
+                db = get_supabase()
+                if db:
+                    db.table("oura_connections").upsert({
+                        "oura_user_id":  oura_pid,
+                        "user_id":       user_id,
+                        "access_token":  access_token,
+                        "refresh_token": refresh_tok,
+                        "expires_at":    expires_at,
+                        "updated_at":    datetime.now(timezone.utc).isoformat(),
+                    }).execute()
+            except Exception:
+                pass
 
         # Pass token in URL for cross-origin compatibility (Vercel + Render)
         jwt_token = _encode_session(session_data)

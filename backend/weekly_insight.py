@@ -71,7 +71,11 @@ def _build_system_prompt(insight: dict, profile: dict) -> str:
         f"({insight.get('group_a_label')} avg {insight.get('group_a_avg')} vs "
         f"{insight.get('group_b_label')} avg {insight.get('group_b_avg')})"
     )
-    parts.append(f"Based on {insight.get('n')} days of data (correlation r={insight.get('r')}).")
+    _r = insight.get("r")
+    if _r:
+        parts.append(f"Based on {insight.get('n')} days of data (correlation r={_r}).")
+    else:
+        parts.append(f"Based on {insight.get('n')} days of data.")
 
     return "\n".join(parts)
 

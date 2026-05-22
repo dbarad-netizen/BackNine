@@ -447,6 +447,67 @@ def _insight_hrv_trend(oura: dict) -> Optional[dict]:
     }
 
 
+def _insight_baseline(oura: dict) -> Optional[dict]:
+    """Always-available fallback so a data-rich user never sees 'needs more data'
+    just because their numbers are too stable to throw a strong correlation.
+
+    Summarizes their baseline (avg readiness / sleep / HRV) and frames the
+    week-over-week movement — for very consistent people that consistency IS the
+    story. Only fires with a real history behind it (>=14 days of readiness)."""
+    dates = sorted(oura)
+    rdy = [(oura[d].get("readiness", {}) or {}).get("score") for d in dates]
+    rdy = [v for v in rdy if v]
+    if len(rdy) < 14:
+        return None
+
+    sleep = [(oura[d].get("sleep_model", {}) or {}).get("total") for d in dates]
+    sleep = [v / 3600 for v in sleep if v]
+    hrv = [(oura[d].get("sleep_model", {}) or {}).get("hrv") for d in dates]
+    hrv = [v for v in hrv if v]
+
+    avg_rdy   = round(sum(rdy) / len(rdy))
+    avg_sleep = round(sum(sleep) / len(sleep), 1) if sleep else None
+    avg_hrv   = round(sum(hrv) / len(hrv)) if hrv else None
+
+    recent = rdy[-7:]
+    prior  = rdy[-14:-7]
+    r_recent = round(sum(recent) / len(recent)) if recent else avg_rdy
+    r_prior  = round(sum(prior)  / len(prior))  if prior  else avg_rdy
+    delta = r_recent - r_prior
+
+    bits = [f"readiness {avg_rdy}"]
+    if avg_sleep:
+        bits.append(f"sleep {avg_sleep}h")
+    if avg_hrv:
+        bits.append(f"HRV {avg_hrv}ms")
+    finding = f"Over the last {len(rdy)} days your averages held at {', '.join(bits)}."
+    if abs(delta) < 3:
+        detail = "Your numbers are remarkably steady — that consistency is the foundation everything else builds on."
+        direction = "neutral"
+    else:
+        detail = (
+            f"Your readiness has {'climbed' if delta > 0 else 'dipped'} about "
+            f"{abs(delta)} points versus the week before."
+        )
+        direction = "positive" if delta > 0 else "negative"
+
+    return {
+        "id": "baseline",
+        "title": "Your Baseline",
+        "finding": finding,
+        "detail": detail,
+        "direction": direction,
+        "magnitude": abs(delta),
+        "unit": "points",
+        "n": len(rdy),
+        "r": 0.0,
+        "group_a_label": "prior week",
+        "group_b_label": "last week",
+        "group_a_avg": r_prior,
+        "group_b_avg": r_recent,
+    }
+
+
 # ── main entry point ──────────────────────────────────────────────────────────
 
 def get_insights(user_id: str, days: int = 60) -> list[dict]:
@@ -490,4 +551,16 @@ def get_insights(user_id: str, days: int = 60) -> list[dict]:
 
     # Sort by magnitude of effect (largest first) then by n (most data first)
     candidates.sort(key=lambda x: (x["magnitude"], x["n"]), reverse=True)
+
+    # Last resort: if no correlation cleared its threshold but the user has real
+    # history, fall back to a baseline summary so we never tell a data-rich user
+    # they "need more data" (their numbers are just consistent).
+    if not candidates:
+        try:
+            base = _insight_baseline(oura)
+            if base:
+                candidates.append(base)
+        except Exception:
+            pass
+
     return candidates

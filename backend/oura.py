@@ -47,14 +47,29 @@ async def refresh_token(refresh_tok: str, client_id: str,
         return r.json()
 
 async def fetch_personal_info(access_token: str) -> dict:
-    """Fetch the authenticated user's stable Oura user ID and basic info."""
-    async with httpx.AsyncClient(timeout=10) as client:
-        r = await client.get(
-            "https://api.ouraring.com/v2/usercollection/personal_info",
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
-        r.raise_for_status()
-        return r.json()  # contains: id, age, weight, height, biological_sex, email
+    """Fetch the authenticated user's stable Oura user ID and basic info.
+
+    Retries a few times on transient failures: this call decides the user's
+    identity at sign-in, so a flaky response must NOT be allowed to fall through
+    to a random fallback id (that created phantom accounts / re-onboarding on new
+    devices). Better to retry, and let the caller error out than mint a new id.
+    """
+    import asyncio
+    last_exc: Exception | None = None
+    for attempt in range(3):
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                r = await client.get(
+                    "https://api.ouraring.com/v2/usercollection/personal_info",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+                r.raise_for_status()
+                return r.json()  # contains: id, age, weight, height, biological_sex, email
+        except Exception as e:  # noqa: BLE001 — retry any transient error
+            last_exc = e
+            if attempt < 2:
+                await asyncio.sleep(0.6 * (attempt + 1))
+    raise last_exc if last_exc else RuntimeError("personal_info failed")
 
 async def fetch_all(access_token: str, days: int = 120) -> dict:
     """
