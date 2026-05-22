@@ -21,7 +21,7 @@ create index if not exists idx_nutrition_meals_user_date
 create table if not exists public.nutrition_weight (
   id                        text        primary key,
   user_id                   text        not null,
-  date                      date        not null unique,
+  date                      date        not null,
   weight_lbs                numeric(6,1) not null,
   body_fat_pct              numeric(5,2),
   fat_mass_lbs              numeric(6,1),
@@ -45,7 +45,11 @@ create table if not exists public.nutrition_weight (
   bone_mineral_content_lbs  numeric(5,2),
   bmr_kcal                  integer,
   inbody_score              integer,
-  logged_at                 timestamptz default now()
+  logged_at                 timestamptz default now(),
+  -- One weigh-in per USER per day. (Was a global UNIQUE(date), which let only
+  -- one person in the whole app log a weigh-in on any given day — fixed live and
+  -- here so a re-provision keeps the per-user constraint.)
+  constraint nutrition_weight_user_date_key unique (user_id, date)
 );
 
 create index if not exists idx_nutrition_weight_user_date
