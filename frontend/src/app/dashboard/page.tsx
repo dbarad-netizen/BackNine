@@ -823,6 +823,7 @@ export default function DashboardPage() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [autoLogWorkout, setAutoLogWorkout] = useState(false);
+  const [showMealAdd, setShowMealAdd] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const openChatRef = useRef<((seed?: string) => void) | null>(null);
 
@@ -1635,6 +1636,21 @@ export default function DashboardPage() {
             {/* ── Friend Pulse feed ── */}
             <PulseFeed onInviteFriend={() => { setProfileInitialTab("friends"); setShowProfile(true); }} />
 
+            {/* ── Quick action: enter a meal (logs inline — no tab switch) ── */}
+            <button
+              onClick={() => setShowMealAdd(v => !v)}
+              className="w-full py-3 rounded-2xl border border-[#1B3829]/25 bg-white text-sm font-semibold text-[#1B3829] hover:bg-[#1B3829]/5 transition-colors flex items-center justify-center gap-2 shadow-sm"
+            >
+              <span className="text-base leading-none">🍳</span>
+              {showMealAdd ? "Hide meal entry" : "Enter a meal"}
+            </button>
+            {showMealAdd && (
+              <MealQuickAdd
+                date={nutToday?.date}
+                onLogged={() => api.nutritionToday().then(setNutToday).catch(() => {})}
+              />
+            )}
+
             {/* ── Quick action: log a workout (jumps to Training with logger open) ── */}
             <button
               onClick={() => { setAutoLogWorkout(true); setSection("training"); }}
@@ -1644,19 +1660,7 @@ export default function DashboardPage() {
               Log a workout
             </button>
 
-            {/* ── Active Competitions strip ── */}
-            <ActiveCompetitions onJump={() => setSection("challenges")} />
-
-            {/* ── Achievements / badges ── */}
-            <Achievements />
-
-            {/* ── Coach Al's Weekly Insight ── */}
-            <WeeklyInsight onOpenChat={(seed) => openChatRef.current?.(seed)} />
-
-            {/* ── Coach Al Goal / Program ── */}
-            <GoalCard onOpenChat={(seed) => openChatRef.current?.(seed)} />
-
-            {/* ── Body & Weight (collapsible) ── */}
+            {/* ── Body & Weight (collapsible) — kept with the quick actions above ── */}
             <CollapsibleSection
               title="Body & Weight"
               icon="⚖️"
@@ -1708,6 +1712,18 @@ export default function DashboardPage() {
             {/* ── Log Weigh-In ── */}
             <WeightForm onSave={handleLogWeight} />
             </CollapsibleSection>
+
+            {/* ── Active Competitions strip ── */}
+            <ActiveCompetitions onJump={() => setSection("challenges")} />
+
+            {/* ── Achievements / badges ── */}
+            <Achievements />
+
+            {/* ── Coach Al's Weekly Insight ── */}
+            <WeeklyInsight onOpenChat={(seed) => openChatRef.current?.(seed)} />
+
+            {/* ── Coach Al Goal / Program ── */}
+            <GoalCard onOpenChat={(seed) => openChatRef.current?.(seed)} />
 
             {/* ── Picked For You (smart gear recommendations) — bottom of Scorecard ── */}
             <GearPicks
