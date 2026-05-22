@@ -2747,15 +2747,20 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
         except Exception:
             pass
 
-    # Wait for real sleep: if the user normally has sleep data but last night
-    # hasn't synced yet, hold the briefing (show "syncing" client-side) rather
-    # than build it on an older night. Manual / no-wearable users (no recent
-    # sleep history) are never blocked. `allow_no_sleep` is the escape hatch for
-    # a genuine no-ring night.
-    sleep_ready   = bool(t_sm.get("total"))
-    recent_sleep  = [d for d in sorted(smm.keys(), reverse=True)[:4] if smm[d].get("total")]
-    expects_sleep = len(recent_sleep) > 0
-    if expects_sleep and not sleep_ready and not allow_no_sleep:
+    # Only hold for "syncing" when TODAY has essentially no signal yet. Readiness
+    # and the sleep SCORE usually land before the detailed sleep session (duration
+    # /HRV), so if we have any of today's numbers we write a real briefing now and
+    # simply omit whatever hasn't synced — far better than a barren "syncing" wall.
+    # We still never quote an OLDER night, because everything here is anchored to
+    # today_str. "Syncing" is reserved for the genuine "nothing for today" case
+    # (e.g. opened minutes after waking before Oura processed anything) for a user
+    # who normally syncs. `allow_no_sleep` is the manual override.
+    today_has_signal = bool(
+        t_rdy.get("score") or t_sl.get("score") or t_act.get("score") or t_sm.get("total")
+    )
+    _recent_keys = sorted(set(list(rm.keys()) + list(smm.keys())), reverse=True)[:4]
+    recent_signal = any((rm.get(d, {}).get("score") or smm.get(d, {}).get("total")) for d in _recent_keys)
+    if recent_signal and not today_has_signal and not allow_no_sleep:
         return {
             "date":                today_str,
             "narrative":           "",
@@ -2956,11 +2961,11 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
         raise HTTPException(status_code=500, detail=f"briefing generation failed: {e}")
 
     # Save to cache (best-effort — never crash the dashboard over a write).
-    # Only cache a sleep-ready briefing (or a genuine no-wearable user's). A
-    # briefing generated WITHOUT last night's sleep (allow_no_sleep escape hatch)
-    # is intentionally NOT cached, so the moment last night syncs the next open
-    # regenerates the real one instead of locking in a sleepless note for the day.
-    if db and (sleep_ready or not expects_sleep):
+    # Cache once today has real signal (or for no-wearable users). A briefing
+    # forced out with allow_no_sleep while today is still empty is NOT cached, so
+    # the next open regenerates the real one once data lands. (Coach Al can be
+    # re-run any time via Regenerate to fold in sleep detail that synced later.)
+    if db and (today_has_signal or not recent_signal):
         try:
             db.table("daily_briefings").upsert(
                 {
