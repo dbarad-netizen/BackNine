@@ -551,7 +551,7 @@ export const api = {
   nutritionToday(date?: string): Promise<NutritionToday> {
     return request(`/api/nutrition/today?date=${date || localToday()}`);
   },
-  nutritionSummary():   Promise<NutritionSummary>  { return request("/api/nutrition/summary"); },
+  nutritionSummary(date?: string): Promise<NutritionSummary> { return request(`/api/nutrition/summary?date=${date || localToday()}`); },
   searchFoods(q: string): Promise<{ results: FoodItem[] }> { return request(`/api/nutrition/foods/search?q=${encodeURIComponent(q)}`); },
   logMeal(meal: Omit<Meal, "id" | "logged_at"> & { date?: string }): Promise<Meal> {
     return request("/api/nutrition/meals", {
@@ -815,8 +815,10 @@ export const api = {
   },
 
   // ── Morning Briefing ──────────────────────────────────────────────────────
-  briefing(refresh = false): Promise<BriefingResponse> {
-    return request(`/api/briefing/today${refresh ? "?refresh=1" : ""}`);
+  briefing(refresh = false, date?: string): Promise<BriefingResponse> {
+    const params = new URLSearchParams({ date: date || localToday() });
+    if (refresh) params.set("refresh", "1");
+    return request(`/api/briefing/today?${params.toString()}`);
   },
 
   // ── Coach Al Weekly Insight ───────────────────────────────────────────────
@@ -886,13 +888,13 @@ export const api = {
   },
 
   // ── Daily check-in ────────────────────────────────────────────────────────
-  getCheckinToday(): Promise<CheckinSnapshot> {
-    return request("/api/checkin/today");
+  getCheckinToday(date?: string): Promise<CheckinSnapshot> {
+    return request(`/api/checkin/today?date=${date || localToday()}`);
   },
-  postCheckin(mood: Mood): Promise<{ ok: boolean; mood: Mood; date: string }> {
+  postCheckin(mood: Mood, date?: string): Promise<{ ok: boolean; mood: Mood; date: string }> {
     return request("/api/checkin", {
       method: "POST",
-      body: JSON.stringify({ mood }),
+      body: JSON.stringify({ mood, date: date || localToday() }),
     });
   },
 
@@ -1016,9 +1018,21 @@ export interface Badge {
   emoji:       string;
   category:    string;
   description: string;
+  xp?:         number;
   earned:      boolean;
   earned_at:   string | null;
   progress:    { current: number; target: number } | null;
+}
+
+export interface LevelInfo {
+  level:         number;
+  title:         string;       // e.g. "Committed"
+  xp:            number;       // total earned XP
+  xp_into_level: number;       // XP earned past the current level threshold
+  xp_for_next:   number;       // XP remaining to reach the next level
+  next_title:    string | null;
+  pct:           number;       // 0-100 progress to next level
+  is_max:        boolean;      // true at the top level (Legend)
 }
 
 export interface AchievementsResponse {
@@ -1026,6 +1040,9 @@ export interface AchievementsResponse {
   earned_count:   number;
   total:          number;
   newly_unlocked: string[];
+  xp?:            number;
+  newly_xp?:      number;
+  level?:         LevelInfo;
 }
 
 export interface GearReview {

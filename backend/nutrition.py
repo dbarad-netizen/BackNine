@@ -323,8 +323,15 @@ def save_settings(settings: dict, user_id: str = "default") -> dict:
 
 # ── Weekly summary ────────────────────────────────────────────────────────────
 
-def weekly_summary(active_calories_by_date: Optional[dict] = None, user_id: str = "default") -> dict:
-    today      = date.today()
+def weekly_summary(active_calories_by_date: Optional[dict] = None, user_id: str = "default",
+                   today_str: Optional[str] = None) -> dict:
+    # Anchor the 7-day window on the user's LOCAL date (passed from the client),
+    # not the server's date.today() (UTC on Render) — otherwise the graph can run
+    # a day ahead and show "tomorrow" for users west of the server.
+    try:
+        today = date.fromisoformat(today_str) if today_str else date.today()
+    except ValueError:
+        today = date.today()
     week_start = today - timedelta(days=6)
 
     daily = []

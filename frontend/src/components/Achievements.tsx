@@ -10,7 +10,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { api, type AchievementsResponse, type Badge } from "@/lib/api";
+import { api, type AchievementsResponse, type Badge, type LevelInfo } from "@/lib/api";
 
 /** Friendly "when earned" label from an ISO timestamp. */
 function whenLabel(iso: string | null): string {
@@ -55,52 +55,71 @@ export default function Achievements() {
     ? locked.reduce((best, b) => (ratio(b) > ratio(best) ? b : best))
     : null;
   const remaining = data.total - data.earned_count;
+  const level = data.level ?? null;
+  const newlyXp = data.newly_xp ?? 0;
 
   return (
     <section className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
-      <div className="px-4 py-3 flex items-center justify-between border-b border-gray-50">
-        <div className="flex items-center gap-2">
-          <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400">Achievements</h3>
-          <span className="text-[11px] font-bold text-[#1B3829]">{data.earned_count}/{data.total}</span>
+      {/* Level hero — the gamification centerpiece */}
+      <div className="px-4 py-4" style={{ background: "linear-gradient(135deg, #1B3829 0%, #2D6A4F 100%)" }}>
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-12 h-12 rounded-full bg-white/15 border border-white/30 flex flex-col items-center justify-center shrink-0 leading-none">
+              <span className="text-[8px] text-white/70 font-semibold tracking-wider">LVL</span>
+              <span className="text-white font-bold text-base">{level?.level ?? 1}</span>
+            </div>
+            <div className="min-w-0">
+              <p className="text-white font-bold text-sm leading-tight truncate">{level?.title ?? "Rookie"}</p>
+              <p className="text-white/60 text-[10px] uppercase tracking-widest">
+                {data.earned_count}/{data.total} badges earned
+              </p>
+            </div>
+          </div>
+          <button onClick={() => setOpen(true)} className="text-[11px] text-white/80 font-semibold hover:text-white shrink-0">
+            All →
+          </button>
         </div>
-        <button onClick={() => setOpen(true)} className="text-[11px] text-[#1B3829] font-semibold hover:underline">
-          View all →
-        </button>
+
+        {/* XP progress to next level */}
+        <div className="mt-3">
+          <div className="flex items-center justify-between text-[10px] text-white/70 mb-1">
+            <span className="font-semibold">{(level?.xp ?? 0).toLocaleString()} XP</span>
+            <span>
+              {level?.is_max
+                ? "Max level reached 🏅"
+                : `${(level?.xp_for_next ?? 0).toLocaleString()} XP to ${level?.next_title ?? "next level"}`}
+            </span>
+          </div>
+          <div className="h-2 rounded-full bg-white/20 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-white transition-all"
+              style={{ width: `${level?.pct ?? 0}%` }}
+            />
+          </div>
+        </div>
       </div>
 
       {justUnlocked.length > 0 && (
         <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-100">
           <p className="text-[12px] text-amber-800 font-semibold">
             🎉 Just unlocked: {justUnlocked.map(b => `${b.emoji} ${b.name}`).join(", ")}
+            {newlyXp > 0 && <span className="text-amber-700"> &nbsp;+{newlyXp} XP</span>}
           </p>
         </div>
       )}
 
       <div className="px-4 py-3 space-y-3">
-        <p className="text-[11px] text-gray-400 leading-snug">
-          Milestones you unlock as you build healthy habits — each one marks real progress.
-        </p>
-
-        {/* Latest unlock — with what it is, not just a name */}
-        {latest && (
-          <div className="flex items-start gap-3 rounded-xl bg-[#1B3829]/5 border border-[#1B3829]/10 px-3 py-2.5">
-            <span className="text-2xl leading-none shrink-0">{latest.emoji}</span>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <p className="text-[13px] font-semibold text-gray-900 truncate">{latest.name}</p>
-                <span className="text-[10px] text-[#2D6A4F] font-semibold shrink-0">
-                  ✓ {whenLabel(latest.earned_at) || "unlocked"}
-                </span>
-              </div>
-              <p className="text-[11px] text-gray-500 leading-snug">{latest.description}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Next up — the closest badge, with progress so it feels reachable */}
+        {/* Next up — the closest badge, with its XP reward + progress */}
         {nextUp ? (
           <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/60 px-3 py-2.5">
-            <p className="text-[10px] uppercase tracking-widest font-semibold text-gray-400 mb-1.5">Next up</p>
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-[10px] uppercase tracking-widest font-semibold text-gray-400">Next up</p>
+              {!!nextUp.xp && (
+                <span className="text-[10px] font-bold text-[#2D6A4F] bg-[#2D6A4F]/10 rounded-full px-2 py-0.5">
+                  +{nextUp.xp} XP
+                </span>
+              )}
+            </div>
             <div className="flex items-start gap-3">
               <span className="text-2xl leading-none shrink-0 grayscale opacity-50">{nextUp.emoji}</span>
               <div className="min-w-0 flex-1">
@@ -124,6 +143,20 @@ export default function Achievements() {
           earned.length > 0 && (
             <p className="text-[12px] text-[#2D6A4F] font-semibold">🎉 Every badge unlocked — you&apos;ve done it all.</p>
           )
+        )}
+
+        {/* Latest unlock */}
+        {latest && (
+          <div className="flex items-center gap-3 rounded-xl bg-[#1B3829]/5 border border-[#1B3829]/10 px-3 py-2">
+            <span className="text-xl leading-none shrink-0">{latest.emoji}</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[12px] font-semibold text-gray-900 truncate">Latest: {latest.name}</p>
+              <p className="text-[10px] text-gray-400 truncate">{latest.description}</p>
+            </div>
+            <span className="text-[10px] text-[#2D6A4F] font-semibold shrink-0">
+              ✓ {whenLabel(latest.earned_at) || "done"}
+            </span>
+          </div>
         )}
 
         {remaining > 0 && (
@@ -150,8 +183,13 @@ function AchievementsModal({ data, onClose }: { data: AchievementsResponse; onCl
       <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-gray-100 px-5 py-3 flex items-center justify-between">
           <div>
-            <h2 className="text-sm font-bold text-gray-900">Achievements</h2>
-            <p className="text-[11px] text-gray-400">{data.earned_count} of {data.total} unlocked</p>
+            <h2 className="text-sm font-bold text-gray-900">
+              {data.level ? `Level ${data.level.level} · ${data.level.title}` : "Achievements"}
+            </h2>
+            <p className="text-[11px] text-gray-400">
+              {data.earned_count} of {data.total} unlocked
+              {data.level ? ` · ${data.level.xp.toLocaleString()} XP` : ""}
+            </p>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700 flex items-center justify-center text-lg leading-none">✕</button>
         </div>
@@ -166,8 +204,15 @@ function AchievementsModal({ data, onClose }: { data: AchievementsResponse; onCl
                     className={`rounded-xl border p-3 ${b.earned ? "border-[#1B3829]/20 bg-[#1B3829]/5" : "border-gray-100 bg-gray-50"}`}>
                     <div className="flex items-start gap-2">
                       <span className={`text-2xl leading-none ${b.earned ? "" : "grayscale opacity-40"}`}>{b.emoji}</span>
-                      <div className="min-w-0">
-                        <p className={`text-[13px] font-semibold leading-tight ${b.earned ? "text-gray-900" : "text-gray-500"}`}>{b.name}</p>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-1">
+                          <p className={`text-[13px] font-semibold leading-tight ${b.earned ? "text-gray-900" : "text-gray-500"}`}>{b.name}</p>
+                          {!!b.xp && (
+                            <span className={`text-[9px] font-bold shrink-0 rounded-full px-1.5 py-0.5 ${b.earned ? "text-[#2D6A4F] bg-[#2D6A4F]/10" : "text-gray-400 bg-gray-200"}`}>
+                              {b.xp} XP
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[11px] text-gray-400 leading-snug mt-0.5">{b.description}</p>
                       </div>
                     </div>

@@ -1571,7 +1571,7 @@ async def update_nutrition_settings(request: Request):
 
 
 @app.get("/api/nutrition/summary")
-async def get_nutrition_summary(request: Request):
+async def get_nutrition_summary(request: Request, date: Optional[str] = None):
     session = _require_session(request)
     uid     = session["user_id"]
     access_token, _ = await _ensure_valid_token(session)
@@ -1582,7 +1582,8 @@ async def get_nutrition_summary(request: Request):
         active_cals = {d: am[d].get("active_cal", 0) for d in am if am[d].get("active_cal")}
     except Exception:
         active_cals = {}
-    return nutr.weekly_summary(active_cals, uid)
+    today_str = date if (date and _valid_ymd(date)) else None
+    return nutr.weekly_summary(active_cals, uid, today_str=today_str)
 
 
 # ── Training ──────────────────────────────────────────────────────────────────
@@ -2391,15 +2392,22 @@ async def save_profile(request: Request):
 # `app` instance is in scope by the time the decorators execute.
 
 @app.get("/api/checkin/today")
-def get_checkin_today(request: Request):
-    """Return today's mood if logged, plus yesterday's for context display."""
+def get_checkin_today(request: Request, date: Optional[str] = None):
+    """Return today's mood if logged, plus yesterday's for context display.
+
+    `date` is the client's LOCAL date (YYYY-MM-DD); we honor it so the mood
+    persists for the user's whole day instead of rolling at server-ET midnight.
+    """
     session = _require_session(request)
     user_id = session["user_id"]
-    try:
-        from zoneinfo import ZoneInfo
-    except ImportError:
-        from backports.zoneinfo import ZoneInfo  # type: ignore
-    today = datetime.now(tz=ZoneInfo("America/New_York")).date()
+    if date and _valid_ymd(date):
+        today = datetime.strptime(date, "%Y-%m-%d").date()
+    else:
+        try:
+            from zoneinfo import ZoneInfo
+        except ImportError:
+            from backports.zoneinfo import ZoneInfo  # type: ignore
+        today = datetime.now(tz=ZoneInfo("America/New_York")).date()
     yesterday = today - timedelta(days=1)
     return {
         "today":     _get_checkin(user_id, today.isoformat()),
@@ -2419,11 +2427,15 @@ async def save_checkin(request: Request):
             status_code=400,
             detail=f"mood must be one of {sorted(ALLOWED_MOODS)}",
         )
-    try:
-        from zoneinfo import ZoneInfo
-    except ImportError:
-        from backports.zoneinfo import ZoneInfo  # type: ignore
-    today_str = datetime.now(tz=ZoneInfo("America/New_York")).date().isoformat()
+    date_in = (body.get("date") or "").strip()
+    if date_in and _valid_ymd(date_in):
+        today_str = date_in
+    else:
+        try:
+            from zoneinfo import ZoneInfo
+        except ImportError:
+            from backports.zoneinfo import ZoneInfo  # type: ignore
+        today_str = datetime.now(tz=ZoneInfo("America/New_York")).date().isoformat()
     db = get_supabase()
     if not db:
         raise HTTPException(status_code=503, detail="storage unavailable")
@@ -2601,7 +2613,7 @@ async def health_chat(request: Request):
 # ── Morning Briefing ──────────────────────────────────────────────────────────
 
 @app.get("/api/briefing/today")
-async def get_morning_briefing(request: Request, refresh: bool = False):
+async def get_morning_briefing(request: Request, refresh: bool = False, date: Optional[str] = None):
     """Return today's Coach Al morning briefing for the current user.
 
     Cache strategy: one row per (user_id, date) in public.daily_briefings.
@@ -2612,13 +2624,17 @@ async def get_morning_briefing(request: Request, refresh: bool = False):
     session = _require_session(request)
     user_id = session["user_id"]
 
-    # Timezone-safe "today" — same convention as challenges.py so cache keys
-    # don't roll over at midnight UTC for ET-based users.
-    try:
-        from zoneinfo import ZoneInfo
-    except ImportError:
-        from backports.zoneinfo import ZoneInfo  # type: ignore
-    today_str = datetime.now(tz=ZoneInfo("America/New_York")).date().isoformat()
+    # "Today" follows the user's device (the client passes its LOCAL date), so the
+    # cache key and the app-streak count match the day the user is actually living
+    # — not the server's ET/UTC clock. Falls back to ET when no date is supplied.
+    if date and _valid_ymd(date):
+        today_str = date
+    else:
+        try:
+            from zoneinfo import ZoneInfo
+        except ImportError:
+            from backports.zoneinfo import ZoneInfo  # type: ignore
+        today_str = datetime.now(tz=ZoneInfo("America/New_York")).date().isoformat()
 
     db = get_supabase()
 
