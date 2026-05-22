@@ -36,8 +36,9 @@ def compute(metrics: dict, profile: dict) -> dict:
         hrv = metrics["hrv"]
         hrv_value = hrv
         hrv_norm = max(25, 75 - (age - 20) * 0.65)
-        hrv_points = min(1.5, hrv / hrv_norm) * 25
-        hrv_points = round(hrv_points)
+        # Score linearly up to the age norm = full marks. Cap the ratio at 1.0 so
+        # an above-norm HRV earns the component max (25) and never overflows it.
+        hrv_points = round(min(1.0, hrv / hrv_norm) * 25)
         has_hrv = True
         components["hrv"] = {
             "label": "Heart Rate Variability",

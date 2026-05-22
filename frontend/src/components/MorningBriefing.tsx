@@ -137,31 +137,35 @@ export default function MorningBriefing({ onOpenChat }: Props) {
       <div className="px-5 pt-5 pb-4 flex items-start gap-4">
         <CoachAlAvatar size={52} className="rounded-full ring-2 ring-white/30 shrink-0" />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <p className="text-[10px] text-white/60 uppercase tracking-widest font-semibold">
+          <div className="flex items-center gap-2 mb-2">
+            <p className="text-[10px] text-white/60 uppercase tracking-widest font-semibold truncate min-w-0">
               Coach Al · Today&apos;s Briefing
             </p>
-            {showAppStreak && (
-              <span
-                className="text-[10px] text-white bg-orange-500/40 backdrop-blur-sm rounded-full px-2 py-0.5 font-semibold flex items-center gap-1 border border-orange-300/30"
-                title={`You've opened BackNine ${appStreak} days in a row`}
-              >
-                <span>🔥</span>
-                <span>{appStreak}-day streak</span>
-              </span>
-            )}
-            {showPredictionStreak && (
-              <span
-                className="text-[10px] text-white bg-white/15 backdrop-blur-sm rounded-full px-2 py-0.5 font-semibold flex items-center gap-1"
-                title={
-                  data.prediction_accuracy != null
-                    ? `${data.prediction_accuracy}% prediction accuracy`
-                    : "Daily prediction streak"
-                }
-              >
-                <span>🎯</span>
-                <span>{predictionStreak}d predicting</span>
-              </span>
+            {(showAppStreak || showPredictionStreak) && (
+              <div className="flex items-center gap-1.5 shrink-0">
+                {showAppStreak && (
+                  <span
+                    className="text-[10px] text-white bg-orange-500/40 backdrop-blur-sm rounded-full px-2 py-0.5 font-semibold flex items-center gap-1 border border-orange-300/30 whitespace-nowrap"
+                    title={`You've opened BackNine ${appStreak} days in a row`}
+                  >
+                    <span>🔥</span>
+                    <span>{appStreak}-day streak</span>
+                  </span>
+                )}
+                {showPredictionStreak && (
+                  <span
+                    className="text-[10px] text-white bg-white/15 backdrop-blur-sm rounded-full px-2 py-0.5 font-semibold flex items-center gap-1 whitespace-nowrap"
+                    title={
+                      data.prediction_accuracy != null
+                        ? `${data.prediction_accuracy}% prediction accuracy`
+                        : "Daily prediction streak"
+                    }
+                  >
+                    <span>🎯</span>
+                    <span>{predictionStreak}d predicting</span>
+                  </span>
+                )}
+              </div>
             )}
           </div>
 

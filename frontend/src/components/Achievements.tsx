@@ -12,6 +12,26 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type AchievementsResponse, type Badge } from "@/lib/api";
 
+/** Friendly "when earned" label from an ISO timestamp. */
+function whenLabel(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const days = Math.floor(
+    (new Date().setHours(0, 0, 0, 0) - new Date(d).setHours(0, 0, 0, 0)) / 86_400_000,
+  );
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 7) return `${days} days ago`;
+  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+/** Progress ratio for a locked badge (0 when it has no progress meter). */
+function ratio(b: Badge): number {
+  return b.progress && b.progress.target > 0 ? b.progress.current / b.progress.target : 0;
+}
+
 export default function Achievements() {
   const [data, setData]   = useState<AchievementsResponse | null>(null);
   const [open, setOpen]   = useState(false);
@@ -27,6 +47,14 @@ export default function Achievements() {
   // Most-recent earned first (earned_at desc; nulls last).
   const recent = [...earned].sort((a, b) =>
     (b.earned_at || "").localeCompare(a.earned_at || "")).slice(0, 6);
+  const latest = recent[0] ?? null;
+  // The locked badge you're closest to unlocking — makes "what's next" feel
+  // intentional and shows it's within reach, instead of a wall of mystery badges.
+  const locked = data.badges.filter(b => !b.earned);
+  const nextUp = locked.length
+    ? locked.reduce((best, b) => (ratio(b) > ratio(best) ? b : best))
+    : null;
+  const remaining = data.total - data.earned_count;
 
   return (
     <section className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
@@ -48,21 +76,60 @@ export default function Achievements() {
         </div>
       )}
 
-      <div className="px-4 py-3">
-        {earned.length === 0 ? (
-          <p className="text-[13px] text-gray-500">
-            No badges yet — check in, log a workout, or connect a friend to start unlocking them.
-          </p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {recent.map(b => (
-              <span key={b.id} title={`${b.name} — ${b.description}`}
-                className="inline-flex items-center gap-1.5 rounded-full bg-[#1B3829]/5 border border-[#1B3829]/10 px-2.5 py-1">
-                <span className="text-base leading-none">{b.emoji}</span>
-                <span className="text-[12px] font-medium text-gray-700">{b.name}</span>
-              </span>
-            ))}
+      <div className="px-4 py-3 space-y-3">
+        <p className="text-[11px] text-gray-400 leading-snug">
+          Milestones you unlock as you build healthy habits — each one marks real progress.
+        </p>
+
+        {/* Latest unlock — with what it is, not just a name */}
+        {latest && (
+          <div className="flex items-start gap-3 rounded-xl bg-[#1B3829]/5 border border-[#1B3829]/10 px-3 py-2.5">
+            <span className="text-2xl leading-none shrink-0">{latest.emoji}</span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <p className="text-[13px] font-semibold text-gray-900 truncate">{latest.name}</p>
+                <span className="text-[10px] text-[#2D6A4F] font-semibold shrink-0">
+                  ✓ {whenLabel(latest.earned_at) || "unlocked"}
+                </span>
+              </div>
+              <p className="text-[11px] text-gray-500 leading-snug">{latest.description}</p>
+            </div>
           </div>
+        )}
+
+        {/* Next up — the closest badge, with progress so it feels reachable */}
+        {nextUp ? (
+          <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/60 px-3 py-2.5">
+            <p className="text-[10px] uppercase tracking-widest font-semibold text-gray-400 mb-1.5">Next up</p>
+            <div className="flex items-start gap-3">
+              <span className="text-2xl leading-none shrink-0 grayscale opacity-50">{nextUp.emoji}</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-semibold text-gray-700 truncate">{nextUp.name}</p>
+                <p className="text-[11px] text-gray-500 leading-snug">{nextUp.description}</p>
+                {nextUp.progress && nextUp.progress.target > 0 && (
+                  <div className="mt-1.5">
+                    <div className="h-1.5 rounded-full bg-gray-200 overflow-hidden">
+                      <div className="h-full rounded-full bg-[#2D6A4F]"
+                        style={{ width: `${Math.min(100, Math.round(ratio(nextUp) * 100))}%` }} />
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-0.5">
+                      {nextUp.progress.current} / {nextUp.progress.target}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          earned.length > 0 && (
+            <p className="text-[12px] text-[#2D6A4F] font-semibold">🎉 Every badge unlocked — you&apos;ve done it all.</p>
+          )
+        )}
+
+        {remaining > 0 && (
+          <p className="text-[11px] text-gray-400">
+            {remaining} more to unlock · <button onClick={() => setOpen(true)} className="text-[#1B3829] font-semibold hover:underline">see them all</button>
+          </p>
         )}
       </div>
 
