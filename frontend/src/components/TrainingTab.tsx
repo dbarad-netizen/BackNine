@@ -147,7 +147,7 @@ function SetStepper({
 }
 
 // ── Workout logger ────────────────────────────────────────────────────────────
-function WorkoutLogger({
+export function WorkoutLogger({
   onSaved, recentWorkouts,
 }: {
   onSaved: (w: Workout) => void;

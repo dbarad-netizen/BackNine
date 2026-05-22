@@ -85,6 +85,16 @@ def _build_system_prompt(
                     parts.append(f"  • {label}: {v:.1f}{unit}")
                 else:
                     parts.append(f"  • {label}: {v}{unit}")
+        # Guard against hallucinated sleep figures: if last night's detailed sleep
+        # (duration/HRV) hasn't synced but we have the score, tell Coach Al not to
+        # quote a duration/HRV or borrow the 7-day average as if it were last night.
+        if today.get("sleep_hours") is None:
+            parts.append(
+                "  • NOTE: last night's sleep DURATION and HRV have not synced yet. "
+                "Do NOT state any sleep duration or HRV number for last night, and do "
+                "NOT present the 7-day average as last night's figure. You may still "
+                "reference the readiness and sleep SCORE above."
+            )
 
     seven = health_context.get("seven_day") or {}
     if seven:

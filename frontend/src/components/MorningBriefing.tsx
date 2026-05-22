@@ -153,8 +153,6 @@ export default function MorningBriefing({ onOpenChat }: Props) {
     .map(p => p.trim())
     .filter(Boolean);
 
-  const predictionStreak = data.prediction_streak ?? 0;
-  const showPredictionStreak = predictionStreak >= 3;
   const appStreak = data.app_streak ?? 0;
   const showAppStreak = appStreak >= 2;
   const moodLogged = todayMood !== undefined && todayMood !== null;
@@ -174,30 +172,15 @@ export default function MorningBriefing({ onOpenChat }: Props) {
             <p className="text-[10px] text-white/60 uppercase tracking-widest font-semibold truncate min-w-0">
               Coach Al · Today&apos;s Briefing
             </p>
-            {(showAppStreak || showPredictionStreak) && (
+            {showAppStreak && (
               <div className="flex items-center gap-1.5 shrink-0">
-                {showAppStreak && (
-                  <span
-                    className="text-[10px] text-white bg-orange-500/40 backdrop-blur-sm rounded-full px-2 py-0.5 font-semibold flex items-center gap-1 border border-orange-300/30 whitespace-nowrap"
-                    title={`You've opened BackNine ${appStreak} days in a row`}
-                  >
-                    <span>🔥</span>
-                    <span>{appStreak}-day streak</span>
-                  </span>
-                )}
-                {showPredictionStreak && (
-                  <span
-                    className="text-[10px] text-white bg-white/15 backdrop-blur-sm rounded-full px-2 py-0.5 font-semibold flex items-center gap-1 whitespace-nowrap"
-                    title={
-                      data.prediction_accuracy != null
-                        ? `${data.prediction_accuracy}% prediction accuracy`
-                        : "Daily prediction streak"
-                    }
-                  >
-                    <span>🎯</span>
-                    <span>{predictionStreak}d predicting</span>
-                  </span>
-                )}
+                <span
+                  className="text-[10px] text-white bg-orange-500/40 backdrop-blur-sm rounded-full px-2 py-0.5 font-semibold flex items-center gap-1 border border-orange-300/30 whitespace-nowrap"
+                  title={`You've opened BackNine ${appStreak} days in a row`}
+                >
+                  <span>🔥</span>
+                  <span>{appStreak}-day streak</span>
+                </span>
               </div>
             )}
           </div>

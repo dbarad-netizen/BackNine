@@ -19,7 +19,7 @@ import { scoreColor, fmtDate } from "@/lib/utils";
 import ScoreRing from "@/components/ScoreRing";
 import CoachCard from "@/components/CoachCard";
 import TrendChart from "@/components/TrendChart";
-import TrainingTab from "@/components/TrainingTab";
+import TrainingTab, { WorkoutLogger } from "@/components/TrainingTab";
 import LabsTab from "@/components/LabsTab";
 import ChallengeTab from "@/components/ChallengeTab";
 import AppleHealthTab from "@/components/AppleHealthTab";
@@ -824,6 +824,8 @@ export default function DashboardPage() {
   const [showShare, setShowShare] = useState(false);
   const [autoLogWorkout, setAutoLogWorkout] = useState(false);
   const [showMealAdd, setShowMealAdd] = useState(false);
+  const [showWorkoutAdd, setShowWorkoutAdd] = useState(false);
+  const [showBodyWeight, setShowBodyWeight] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const openChatRef = useRef<((seed?: string) => void) | null>(null);
 
@@ -1645,27 +1647,47 @@ export default function DashboardPage() {
               {showMealAdd ? "Hide meal entry" : "Enter a meal"}
             </button>
             {showMealAdd && (
-              <MealQuickAdd
-                date={nutToday?.date}
-                onLogged={() => api.nutritionToday().then(setNutToday).catch(() => {})}
-              />
+              <div className="space-y-2">
+                <div className="flex justify-end">
+                  <button onClick={() => setShowMealAdd(false)} className="text-xs font-medium text-gray-400 hover:text-gray-700">Close ✕</button>
+                </div>
+                <MealQuickAdd
+                  date={nutToday?.date}
+                  onLogged={() => api.nutritionToday().then(setNutToday).catch(() => {})}
+                />
+              </div>
             )}
 
-            {/* ── Quick action: log a workout (jumps to Training with logger open) ── */}
+            {/* ── Quick action: log a workout (inline — no tab switch) ── */}
             <button
-              onClick={() => { setAutoLogWorkout(true); setSection("training"); }}
+              onClick={() => setShowWorkoutAdd(v => !v)}
               className="w-full py-3 rounded-2xl border border-[#1B3829]/25 bg-white text-sm font-semibold text-[#1B3829] hover:bg-[#1B3829]/5 transition-colors flex items-center justify-center gap-2 shadow-sm"
             >
               <span className="text-base leading-none">🏋️</span>
-              Log a workout
+              {showWorkoutAdd ? "Hide workout" : "Log a workout"}
             </button>
+            {showWorkoutAdd && (
+              <div className="space-y-2">
+                <div className="flex justify-end">
+                  <button onClick={() => setShowWorkoutAdd(false)} className="text-xs font-medium text-gray-400 hover:text-gray-700">Close ✕</button>
+                </div>
+                <WorkoutLogger recentWorkouts={[]} onSaved={() => setShowWorkoutAdd(false)} />
+              </div>
+            )}
 
-            {/* ── Body & Weight (collapsible) — kept with the quick actions above ── */}
-            <CollapsibleSection
-              title="Body & Weight"
-              icon="⚖️"
-              badge={weightLog.length > 0 ? `${weightLog[weightLog.length-1].weight_lbs} lbs` : undefined}
+            {/* ── Quick action: body & weight (pill — matches the two above) ── */}
+            <button
+              onClick={() => setShowBodyWeight(v => !v)}
+              className="w-full py-3 rounded-2xl border border-[#1B3829]/25 bg-white text-sm font-semibold text-[#1B3829] hover:bg-[#1B3829]/5 transition-colors flex items-center justify-center gap-2 shadow-sm"
             >
+              <span className="text-base leading-none">⚖️</span>
+              {showBodyWeight ? "Hide body & weight" : "Body & Weight"}
+              {!showBodyWeight && weightLog.length > 0 && (
+                <span className="text-xs font-normal text-[#1B3829]/60">· {weightLog[weightLog.length - 1].weight_lbs} lbs</span>
+              )}
+            </button>
+            {showBodyWeight && (
+            <div className="space-y-4">
             <section className="rounded-xl border border-gray-100 bg-gray-50 p-4">
               <div className="flex items-center justify-between mb-4">
                 <p className="text-sm font-semibold text-gray-900">Body Composition</p>
@@ -1711,7 +1733,8 @@ export default function DashboardPage() {
 
             {/* ── Log Weigh-In ── */}
             <WeightForm onSave={handleLogWeight} />
-            </CollapsibleSection>
+            </div>
+            )}
 
             {/* ── Active Competitions strip ── */}
             <ActiveCompetitions onJump={() => setSection("challenges")} />
