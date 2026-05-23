@@ -364,3 +364,65 @@ def weekly_summary(active_calories_by_date: Optional[dict] = None, user_id: str 
         "avg_carbs":    round(sum(d["carbs"]    for d in logged_days) / n, 1),
         "avg_fat":      round(sum(d["fat"]      for d in logged_days) / n, 1),
     }
+
+
+# ── Coach Al context snapshot ──────────────────────────────────────────────────
+
+def coach_snapshot(user_id: str, today_str: Optional[str] = None) -> dict:
+    """Compact nutrition + body-composition snapshot for Coach Al's chat context.
+
+    Returns {"nutrition": {...}|None, "body": {...}|None}. Best-effort: any read
+    failure degrades to None so a chat reply never breaks over it.
+      nutrition: today's consumed macros vs the user's targets + meals logged.
+      body:      latest logged weigh-in (weight, body fat, muscle, lean) plus the
+                 change since the previous weigh-in.
+    """
+    out: dict = {"nutrition": None, "body": None}
+
+    # Today's macros vs targets
+    try:
+        day = today_str or date.today().isoformat()
+        meals = get_meals(day, user_id)
+        settings = get_settings(user_id)
+        out["nutrition"] = {
+            "date":         day,
+            "meals_logged": len(meals),
+            "consumed": {
+                "calories": int(sum(m.get("calories") or 0 for m in meals)),
+                "protein":  round(sum(m.get("protein") or 0 for m in meals), 1),
+                "carbs":    round(sum(m.get("carbs")   or 0 for m in meals), 1),
+                "fat":      round(sum(m.get("fat")     or 0 for m in meals), 1),
+            },
+            "targets": {
+                "calories": settings.get("calorie_target"),
+                "protein":  settings.get("protein_g"),
+                "carbs":    settings.get("carbs_g"),
+                "fat":      settings.get("fat_g"),
+            },
+        }
+    except Exception:
+        out["nutrition"] = None
+
+    # Latest logged body composition + change vs previous weigh-in
+    try:
+        entries = get_weight_entries(user_id)  # ascending by date
+        if entries:
+            latest = entries[-1]
+            prev = entries[-2] if len(entries) >= 2 else None
+            change = None
+            if prev and latest.get("weight_lbs") is not None and prev.get("weight_lbs") is not None:
+                change = round(float(latest["weight_lbs"]) - float(prev["weight_lbs"]), 1)
+            out["body"] = {
+                "date":                 latest.get("date"),
+                "weight_lbs":           latest.get("weight_lbs"),
+                "body_fat_pct":         latest.get("body_fat_pct"),
+                "muscle_mass_lbs":      latest.get("muscle_mass_lbs"),
+                "lean_mass_lbs":        latest.get("lean_mass_lbs"),
+                "change_since_prev_lbs": change,
+                "prev_date":            (prev or {}).get("date"),
+                "entries_logged":       len(entries),
+            }
+    except Exception:
+        out["body"] = None
+
+    return out

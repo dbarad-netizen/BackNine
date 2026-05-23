@@ -2620,12 +2620,31 @@ async def health_chat(request: Request):
         },
     }
 
+    # Device-local "today" (sent by the client) so today's macros anchor to the
+    # user's date, not the server's UTC date. Falls back to ET if absent.
+    today_local = body.get("date") or _et_today()
+
     # Make chat aware of the user's active goal so "how am I doing?" lands in
     # context. Best-effort — never block a chat reply on it.
     try:
-        health_context["active_goal"] = gl.get_active_goal(user_id, _et_today())
+        health_context["active_goal"] = gl.get_active_goal(user_id, today_local)
     except Exception:
         health_context["active_goal"] = None
+
+    # Nutrition (today's macros vs targets) + body composition (logged weigh-ins)
+    # so Coach Al can answer "how are my macros?" / "how's my weight trending?".
+    # Best-effort. We also prefer the user's LOGGED body-fat over Apple Health's,
+    # since the manual InBody reading is what they entered and trust.
+    try:
+        _snap = nutr.coach_snapshot(user_id, today_local)
+        health_context["nutrition"] = _snap.get("nutrition")
+        health_context["body"] = _snap.get("body")
+        _bf = (_snap.get("body") or {}).get("body_fat_pct")
+        if _bf is not None:
+            health_context["today"]["body_fat_percentage"] = _bf
+    except Exception:
+        health_context["nutrition"] = None
+        health_context["body"] = None
 
     profile = _get_profile(user_id)
 

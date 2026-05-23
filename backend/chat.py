@@ -24,6 +24,8 @@ def _build_system_prompt(health_context: dict, profile: dict) -> str:
         health_context: Dict with optional keys:
             - today (dict): today's readiness_score, sleep_score, hrv, rhr, activity_score, steps, sleep_hours
             - seven_day (dict): hrv_direction (str), hrv_avg, sleep_avg, readiness_avg
+            - nutrition (dict): consumed {calories,protein,carbs,fat}, targets {...}, meals_logged
+            - body (dict): logged weigh-in — weight_lbs, muscle_mass_lbs, lean_mass_lbs, change_since_prev_lbs
             - longevity_score (dict): score, grade, components, biological_age_delta
             - coaching (dict): short_term, mid_term, long_term (each a string)
         profile: Dict with keys:
@@ -122,6 +124,64 @@ def _build_system_prompt(health_context: dict, profile: dict) -> str:
         readiness_avg = seven_day.get("readiness_avg")
         if readiness_avg is not None:
             prompt_parts.append(f"  • Readiness Avg: {readiness_avg}/100")
+
+    # TODAY'S NUTRITION (macros the user logged vs. their targets)
+    nutrition = health_context.get("nutrition")
+    if nutrition and nutrition.get("meals_logged"):
+        c = nutrition.get("consumed", {})
+        t = nutrition.get("targets", {})
+        prompt_parts.append("\n=== TODAY'S NUTRITION (logged so far) ===")
+
+        cal, cal_t = c.get("calories"), t.get("calories")
+        if cal is not None:
+            if cal_t:
+                rem = round(cal_t - cal)
+                prompt_parts.append(f"  • Calories: {cal} / {cal_t} target ({abs(rem)} {'remaining' if rem >= 0 else 'over'})")
+            else:
+                prompt_parts.append(f"  • Calories: {cal}")
+
+        for label, key in (("Protein", "protein"), ("Carbs", "carbs"), ("Fat", "fat")):
+            v, v_t = c.get(key), t.get(key)
+            if v is None:
+                continue
+            if v_t:
+                rem = round(v_t - v)
+                prompt_parts.append(f"  • {label}: {v}g / {v_t}g target ({abs(rem)}g {'left' if rem >= 0 else 'over'})")
+            else:
+                prompt_parts.append(f"  • {label}: {v}g")
+
+        prompt_parts.append(f"  • Meals logged today: {nutrition.get('meals_logged')}")
+    elif nutrition:
+        t = nutrition.get("targets", {})
+        if any(t.get(k) for k in ("calories", "protein", "carbs", "fat")):
+            prompt_parts.append("\n=== TODAY'S NUTRITION ===")
+            prompt_parts.append("  • No meals logged yet today.")
+            prompt_parts.append(
+                f"  • Daily targets: {t.get('calories')} cal, {t.get('protein')}g protein, "
+                f"{t.get('carbs')}g carbs, {t.get('fat')}g fat."
+            )
+
+    # BODY COMPOSITION (the user's own logged weigh-ins — weight, muscle, lean)
+    body = health_context.get("body")
+    if body and (body.get("weight_lbs") is not None or body.get("muscle_mass_lbs") is not None):
+        prompt_parts.append("\n=== BODY COMPOSITION (from the user's logged weigh-ins) ===")
+        w = body.get("weight_lbs")
+        if w is not None:
+            line = f"  • Weight: {w} lbs"
+            if body.get("date"):
+                line += f" (as of {body['date']})"
+            prompt_parts.append(line)
+        if body.get("muscle_mass_lbs") is not None:
+            prompt_parts.append(f"  • Muscle Mass: {body['muscle_mass_lbs']} lbs")
+        if body.get("lean_mass_lbs") is not None:
+            prompt_parts.append(f"  • Lean Mass: {body['lean_mass_lbs']} lbs")
+        chg = body.get("change_since_prev_lbs")
+        if chg is not None:
+            direction = "down" if chg < 0 else "up" if chg > 0 else "unchanged"
+            prompt_parts.append(
+                f"  • Change since previous weigh-in: {direction} {abs(chg)} lbs"
+                + (f" (vs {body['prev_date']})" if body.get("prev_date") else "")
+            )
 
     # LONGEVITY SCORE
     longevity = health_context.get("longevity_score", {})

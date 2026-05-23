@@ -779,9 +779,10 @@ export const api = {
 
   // ── AI Chat ───────────────────────────────────────────────────────────────
   chat(message: string, history: ChatMessage[]): Promise<{ reply: string }> {
+    // Send the device-local date so today's macros anchor to the user's day.
     return request("/api/chat", {
       method: "POST",
-      body: JSON.stringify({ message, history }),
+      body: JSON.stringify({ message, history, date: localToday() }),
     });
   },
   chatHistory(limit = 50): Promise<{ messages: ChatMessage[] }> {
