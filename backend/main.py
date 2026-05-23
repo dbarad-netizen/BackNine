@@ -2881,6 +2881,15 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
 
     profile = _get_profile(user_id)
 
+    # Active goal pace — lets Coach Al nudge toward the user's committed goal
+    # ("ahead of pace", "a little behind") right in the morning note. Best-effort;
+    # uses the device-local date so week/days-left line up with the goal card.
+    try:
+        _ag = gl.get_active_goal(user_id, today_str)
+        health_context["active_goal"] = _ag if (_ag and _ag.get("pace")) else None
+    except Exception:
+        health_context["active_goal"] = None
+
     # Daily milestone events for the Pulse feed — only positive wins broadcast
     # to friends. Dedup'd by (user_id, kind, anchor_date) via payload.date so
     # each milestone fires at most once per day. Bad news (HRV drops, poor

@@ -1212,6 +1212,19 @@ export interface GoalMetricOption {
   current:       number | null;
 }
 
+export type GoalPaceStatus =
+  | "no_data" | "starting" | "reached"
+  | "well_ahead" | "ahead" | "on_track" | "slightly_behind" | "behind";
+
+export interface GoalPace {
+  status:       GoalPaceStatus;
+  label:        string;                 // short chip text, e.g. "Ahead of pace"
+  message:      string;                 // one-line Coach Al nudge
+  tone:         "win" | "good" | "warn" | "neutral";
+  expected_pct: number | null;          // % of timeline elapsed
+  delta_pct:    number | null;          // progress_pct - expected_pct
+}
+
 export interface Goal {
   id:           string;
   metric:       string;
@@ -1231,6 +1244,7 @@ export interface Goal {
   overview:     string | null;
   weeks:        GoalPlanWeek[];
   this_week:    GoalPlanWeek | null;
+  pace?:        GoalPace | null;
 }
 
 export interface LeagueStanding {

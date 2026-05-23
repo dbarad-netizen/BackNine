@@ -157,6 +157,70 @@ def _progress_pct(baseline, current, target) -> Optional[int]:
         return None
 
 
+def _pace(
+    metric_label: str,
+    baseline: Optional[float],
+    current: Optional[float],
+    progress_pct: Optional[int],
+    start: date,
+    end: date,
+    today: date,
+    this_week: Optional[dict],
+) -> dict:
+    """Deterministic pace read: how far the metric has moved vs. how much of the
+    timeline has elapsed.
+
+    expected_pct is the share of the window that's gone by (a linear pace
+    assumption). delta_pct = progress_pct - expected_pct: positive means ahead
+    of schedule, negative means behind. Returns a small dict the UI and Coach Al
+    can both render. `tone` is one of win | good | warn | neutral.
+    """
+    label = (metric_label or "this metric").strip()
+    if baseline is None or current is None or progress_pct is None:
+        return {
+            "status": "no_data", "label": "Tracking",
+            "message": f"Log your {label.lower()} so I can track your pace toward the target.",
+            "tone": "neutral", "expected_pct": None, "delta_pct": None,
+        }
+
+    total_days = max(1, (end - start).days)
+    elapsed = max(0, (today - start).days)
+    expected = max(0, min(100, round(elapsed / total_days * 100)))
+    delta = int(progress_pct) - expected  # > 0 ahead of schedule
+
+    focus = ""
+    if isinstance(this_week, dict) and this_week.get("focus"):
+        focus = f" This week, lean into {str(this_week['focus']).rstrip('.').lower()}."
+
+    if progress_pct >= 100:
+        return {"status": "reached", "label": "Target reached", "tone": "win",
+                "expected_pct": expected, "delta_pct": delta,
+                "message": "You've reached your target — mark it complete or set a tougher one. 🎉"}
+    if expected < 8:
+        return {"status": "starting", "label": "Just getting started", "tone": "neutral",
+                "expected_pct": expected, "delta_pct": delta,
+                "message": "Early days — stay consistent and the numbers will follow." + focus}
+    if delta >= 25:
+        return {"status": "well_ahead", "label": "Well ahead of pace", "tone": "win",
+                "expected_pct": expected, "delta_pct": delta,
+                "message": "You're well ahead of schedule — whatever you're doing, keep it up."}
+    if delta >= 10:
+        return {"status": "ahead", "label": "Ahead of pace", "tone": "win",
+                "expected_pct": expected, "delta_pct": delta,
+                "message": "You're ahead of pace. Hold this rhythm and you'll beat the deadline."}
+    if delta > -10:
+        return {"status": "on_track", "label": "On track", "tone": "good",
+                "expected_pct": expected, "delta_pct": delta,
+                "message": "Right on pace for your target — steady as you go." + focus}
+    if delta > -25:
+        return {"status": "slightly_behind", "label": "A little behind pace", "tone": "warn",
+                "expected_pct": expected, "delta_pct": delta,
+                "message": "A touch behind, but very catchable." + focus}
+    return {"status": "behind", "label": "Behind pace", "tone": "warn",
+            "expected_pct": expected, "delta_pct": delta,
+            "message": "Behind schedule — let's tighten things up." + focus}
+
+
 def _enrich(goal_row: dict, today_str: str, current: Optional[float]) -> dict:
     meta = METRICS.get(goal_row["metric"], {"label": goal_row["metric"], "unit": ""})
     start = date.fromisoformat(str(goal_row["start_date"]))
@@ -168,6 +232,7 @@ def _enrich(goal_row: dict, today_str: str, current: Optional[float]) -> dict:
     plan = goal_row.get("plan") or {}
     weeks = plan.get("weeks") or []
     this_week = next((w for w in weeks if w.get("week") == week_num), (weeks[week_num - 1] if 0 < week_num <= len(weeks) else None))
+    progress_pct = _progress_pct(goal_row.get("baseline"), current, goal_row["target"])
 
     return {
         "id":            goal_row["id"],
@@ -177,7 +242,7 @@ def _enrich(goal_row: dict, today_str: str, current: Optional[float]) -> dict:
         "baseline":      goal_row.get("baseline"),
         "current":       current,
         "target":        goal_row["target"],
-        "progress_pct":  _progress_pct(goal_row.get("baseline"), current, goal_row["target"]),
+        "progress_pct":  progress_pct,
         "week":          week_num,
         "total_weeks":   total_weeks,
         "days_left":     days_left,
@@ -188,6 +253,7 @@ def _enrich(goal_row: dict, today_str: str, current: Optional[float]) -> dict:
         "overview":      plan.get("overview"),
         "weeks":         weeks,
         "this_week":     this_week,
+        "pace":          _pace(meta["label"], goal_row.get("baseline"), current, progress_pct, start, end, today, this_week),
     }
 
 

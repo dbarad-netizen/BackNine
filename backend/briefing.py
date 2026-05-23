@@ -141,6 +141,32 @@ def _build_system_prompt(
             "confirm or contrast with how they felt. Only mention if it adds insight.)"
         )
 
+    goal = health_context.get("active_goal") or {}
+    pace = (goal or {}).get("pace") or {}
+    if goal and pace and pace.get("status") not in (None, "no_data"):
+        unit = goal.get("unit") or ""
+        parts.append("\n=== ACTIVE GOAL ===")
+        parts.append(
+            f"  • Goal: {goal.get('label')} — now {goal.get('current')}{unit}, "
+            f"target {goal.get('target')}{unit}"
+        )
+        wk, tw, dl = goal.get("week"), goal.get("total_weeks"), goal.get("days_left")
+        if wk and tw:
+            parts.append(f"  • Timeline: week {wk} of {tw}, {dl} days left")
+        delta = pace.get("delta_pct")
+        if delta is not None and pace.get("status") not in ("reached", "starting"):
+            parts.append(f"  • Pace: {pace.get('label')} ({delta:+d}% vs expected)")
+        else:
+            parts.append(f"  • Pace: {pace.get('label')}")
+        tw_focus = (goal.get("this_week") or {}).get("focus")
+        if tw_focus:
+            parts.append(f"  • This week's focus: {tw_focus}")
+        parts.append(
+            "  (You MAY add ONE short clause about this goal in paragraph 2 — celebrate if "
+            "ahead, gently rally if behind — and tie today's action to it. Keep it natural "
+            "and skip it if today's data already fills the briefing. Never invent goal numbers.)"
+        )
+
     if prediction_status:
         streak = prediction_status.get("streak")
         last_pred = prediction_status.get("last_predicted")

@@ -19,6 +19,14 @@ interface Props {
 
 const DURATIONS = [4, 6, 8, 12];
 
+// Pace banner colors keyed by Coach Al's tone.
+const PACE_TONE: Record<string, { bg: string; border: string; text: string; dot: string }> = {
+  win:     { bg: "bg-green-50",     border: "border-green-200",     text: "text-green-800",  dot: "bg-green-500" },
+  good:    { bg: "bg-[#1B3829]/5",  border: "border-[#1B3829]/15",  text: "text-[#1B3829]",  dot: "bg-[#2D6A4F]" },
+  warn:    { bg: "bg-amber-50",     border: "border-amber-200",     text: "text-amber-800",  dot: "bg-amber-500" },
+  neutral: { bg: "bg-gray-50",      border: "border-gray-200",      text: "text-gray-600",   dot: "bg-gray-400" },
+};
+
 function fmt(v: number | null, unit: string): string {
   if (v == null) return "—";
   const n = Number.isInteger(v) ? v : Math.round(v * 10) / 10;
@@ -140,6 +148,27 @@ export default function GoalCard({ onOpenChat }: Props) {
               </span>
             </div>
           </div>
+
+          {/* Pace — are you tracking to target? Coach Al's at-a-glance read. */}
+          {goal.pace && goal.pace.status !== "no_data" && (() => {
+            const t = PACE_TONE[goal.pace.tone] || PACE_TONE.neutral;
+            const d = goal.pace.delta_pct;
+            const showDelta = d != null && goal.pace.status !== "reached" && goal.pace.status !== "starting";
+            return (
+              <div className={`mt-3 rounded-xl border ${t.bg} ${t.border} px-3.5 py-2.5`}>
+                <div className="flex items-center gap-2">
+                  <span className={`h-2 w-2 rounded-full ${t.dot} shrink-0`} />
+                  <p className={`text-[12px] font-bold ${t.text}`}>{goal.pace.label}</p>
+                  {showDelta && (
+                    <span className={`text-[10px] font-semibold ${t.text} opacity-70`}>
+                      {d! > 0 ? `+${d}` : d}% vs pace
+                    </span>
+                  )}
+                </div>
+                <p className="text-[12px] text-gray-600 leading-snug mt-1">{goal.pace.message}</p>
+              </div>
+            );
+          })()}
 
           {/* This week's focus */}
           {goal.this_week && (
