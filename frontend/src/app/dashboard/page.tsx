@@ -44,7 +44,7 @@ import ShareCardModal from "@/components/ShareCardModal";
 import OnboardingModal from "@/components/OnboardingModal";
 import Footer from "@/components/Footer";
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Legend,
 } from "recharts";
 
 type Tab     = "scores" | "hrv" | "sleep_detail";
@@ -559,20 +559,33 @@ function WeightTrendChart({ entries, goalLbs }: { entries: WeightEntry[]; goalLb
     muscle:  e.muscle_mass_lbs,
   }));
 
+  const hasMuscle = data.some(d => d.muscle != null);
+  const hasFat    = data.some(d => d.fat_pct != null);
+
   return (
-    <ResponsiveContainer width="100%" height={160}>
+    // Weight & muscle share the left axis (lbs); body fat rides its own right
+    // axis (%) so its smaller numbers don't flatten against the pounds scale.
+    <ResponsiveContainer width="100%" height={hasFat ? 188 : 170}>
       <LineChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
         <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#52525b" }} tickLine={false} axisLine={false} />
-        <YAxis tick={{ fontSize: 10, fill: "#52525b" }} tickLine={false} axisLine={false} domain={["auto", "auto"]} />
+        <YAxis yAxisId="lbs" tick={{ fontSize: 10, fill: "#52525b" }} tickLine={false} axisLine={false} domain={["auto", "auto"]} />
+        {hasFat && (
+          <YAxis yAxisId="pct" orientation="right" width={34} tick={{ fontSize: 10, fill: "#f59e0b" }}
+            tickLine={false} axisLine={false} domain={["auto", "auto"]} tickFormatter={(v) => `${v}%`} />
+        )}
         <Tooltip
           contentStyle={{ background: "#FFFFFF", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }}
           labelStyle={{ color: "#6B7280" }}
           itemStyle={{ color: "#111827" }}
         />
-        {goalLbs && <ReferenceLine y={goalLbs} stroke="#6366f1" strokeDasharray="3 3" label={{ value: "Goal", fill: "#6366f1", fontSize: 10 }} />}
-        <Line type="monotone" dataKey="weight" stroke="#22c55e" strokeWidth={2} dot={false} name="Weight (lbs)" />
-        {data.some(d => d.muscle) && (
-          <Line type="monotone" dataKey="muscle" stroke="#6366f1" strokeWidth={2} dot={false} name="Muscle (lbs)" />
+        <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} iconType="plainline" />
+        {goalLbs && <ReferenceLine yAxisId="lbs" y={goalLbs} stroke="#6366f1" strokeDasharray="3 3" label={{ value: "Goal", fill: "#6366f1", fontSize: 10 }} />}
+        <Line yAxisId="lbs" type="monotone" dataKey="weight" stroke="#22c55e" strokeWidth={2} dot={false} name="Weight (lbs)" connectNulls />
+        {hasMuscle && (
+          <Line yAxisId="lbs" type="monotone" dataKey="muscle" stroke="#6366f1" strokeWidth={2} dot={false} name="Muscle (lbs)" connectNulls />
+        )}
+        {hasFat && (
+          <Line yAxisId="pct" type="monotone" dataKey="fat_pct" stroke="#f59e0b" strokeWidth={2} dot={false} name="Body Fat (%)" connectNulls />
         )}
       </LineChart>
     </ResponsiveContainer>
