@@ -826,6 +826,7 @@ export default function DashboardPage() {
   const [showMealAdd, setShowMealAdd] = useState(false);
   const [showWorkoutAdd, setShowWorkoutAdd] = useState(false);
   const [showBodyWeight, setShowBodyWeight] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const openChatRef = useRef<((seed?: string) => void) | null>(null);
 
@@ -1135,10 +1136,12 @@ export default function DashboardPage() {
           >
             <span className="text-[#1B3829]">Back</span><span className="text-[#2D6A4F]">Nine</span>
           </button>
-          {/* Divider */}
-          <div className="w-px h-5 bg-gray-200 shrink-0 mr-1" />
-          {/* Tabs */}
-          <div className="flex overflow-x-auto scrollbar-none flex-1">
+          {/* Divider (desktop only) */}
+          <div className="hidden sm:block w-px h-5 bg-gray-200 shrink-0 mr-1" />
+          {/* Mobile spacer — pushes the right cluster over since tabs are hidden */}
+          <div className="flex-1 sm:hidden" />
+          {/* Tabs (desktop only — mobile uses the ☰ menu) */}
+          <div className="hidden sm:flex overflow-x-auto scrollbar-none flex-1">
             {NAV_ITEMS.map(({ id, label, icon }) => (
               <button
                 key={id}
@@ -1161,29 +1164,110 @@ export default function DashboardPage() {
             </span>
             <RefreshButton />
             <NotificationBell />
+            {/* Desktop-only utility icons — mobile uses the ☰ menu */}
             <button
               onClick={() => setShowShare(true)}
               title="Invite friends"
-              className="text-gray-400 hover:text-[#1B3829] transition-colors text-base leading-none"
+              className="hidden sm:block text-gray-400 hover:text-[#1B3829] transition-colors text-base leading-none"
             >
               📣
             </button>
             <button
               onClick={() => setShowProfile(true)}
               title="Edit health profile"
-              className="text-gray-400 hover:text-gray-700 transition-colors text-base leading-none"
+              className="hidden sm:block text-gray-400 hover:text-gray-700 transition-colors text-base leading-none"
             >
               👤
             </button>
             <button
               onClick={() => api.logout().then(() => (window.location.href = "/"))}
-              className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
+              className="hidden sm:block text-xs text-gray-400 hover:text-gray-700 transition-colors"
             >
               Disconnect
+            </button>
+            {/* Mobile menu button */}
+            <button
+              onClick={() => setNavOpen(true)}
+              aria-label="Open menu"
+              className="sm:hidden text-gray-600 hover:text-[#1B3829] transition-colors text-xl leading-none"
+            >
+              ☰
             </button>
           </div>
         </div>
       </header>
+
+      {/* ── Mobile nav drawer (☰) ── */}
+      {navOpen && (
+        <div className="sm:hidden fixed inset-0 z-40">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setNavOpen(false)} />
+          <div
+            className="absolute right-0 top-0 h-full w-72 max-w-[82%] bg-white shadow-2xl flex flex-col"
+            style={{ paddingTop: "env(safe-area-inset-top)" }}
+          >
+            <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100">
+              <span className="font-bold text-sm tracking-tight">
+                <span className="text-[#1B3829]">Back</span><span className="text-[#2D6A4F]">Nine</span>
+              </span>
+              <button
+                onClick={() => setNavOpen(false)}
+                aria-label="Close menu"
+                className="w-8 h-8 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700 flex items-center justify-center text-lg leading-none"
+              >
+                ✕
+              </button>
+            </div>
+            <nav className="flex-1 overflow-y-auto py-2">
+              {NAV_ITEMS.slice(0, 5).map(({ id, label, icon }) => (
+                <button
+                  key={id}
+                  onClick={() => { setSection(id); setNavOpen(false); window.scrollTo({ top: 0 }); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-left transition-colors ${
+                    section === id ? "bg-[#1B3829]/5 text-[#1B3829]" : "text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  <span className="text-lg leading-none">{icon}</span>{label}
+                </button>
+              ))}
+              {NAV_ITEMS.length > 5 && (
+                <>
+                  <p className="px-4 pt-3 pb-1 text-[10px] uppercase tracking-widest text-gray-400 font-semibold">More</p>
+                  {NAV_ITEMS.slice(5).map(({ id, label, icon }) => (
+                    <button
+                      key={id}
+                      onClick={() => { setSection(id); setNavOpen(false); window.scrollTo({ top: 0 }); }}
+                      className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-left transition-colors ${
+                        section === id ? "bg-[#1B3829]/5 text-[#1B3829]" : "text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      <span className="text-lg leading-none">{icon}</span>{label}
+                    </button>
+                  ))}
+                </>
+              )}
+              <div className="my-2 border-t border-gray-100" />
+              <button
+                onClick={() => { setShowShare(true); setNavOpen(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 text-left"
+              >
+                <span className="text-lg leading-none">📣</span>Invite friends
+              </button>
+              <button
+                onClick={() => { setShowProfile(true); setNavOpen(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 text-left"
+              >
+                <span className="text-lg leading-none">👤</span>Profile
+              </button>
+              <button
+                onClick={() => api.logout().then(() => (window.location.href = "/"))}
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 text-left"
+              >
+                <span className="text-lg leading-none">🚪</span>Log out
+              </button>
+            </nav>
+          </div>
+        </div>
+      )}
 
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
 
