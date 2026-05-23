@@ -15,6 +15,9 @@ import CoachAlAvatar from "@/components/CoachAlAvatar";
 
 interface Props {
   onOpenChat?: (seed?: string) => void;
+  /** Fires whenever we learn whether the user has an active goal, so the
+   *  dashboard can hoist this card above the Weekly Insight when one exists. */
+  onActiveChange?: (active: boolean) => void;
 }
 
 const DURATIONS = [4, 6, 8, 12];
@@ -33,7 +36,7 @@ function fmt(v: number | null, unit: string): string {
   return `${n}${unit}`;
 }
 
-export default function GoalCard({ onOpenChat }: Props) {
+export default function GoalCard({ onOpenChat, onActiveChange }: Props) {
   const [goal, setGoal]       = useState<Goal | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -48,9 +51,11 @@ export default function GoalCard({ onOpenChat }: Props) {
 
   useEffect(() => {
     api.goal.active()
-      .then(r => setGoal(r.goal))
+      .then(r => { setGoal(r.goal); onActiveChange?.(!!r.goal); })
       .catch(() => {})
       .finally(() => setLoading(false));
+    // onActiveChange is a stable setter from the parent; run once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const startCreate = () => {
@@ -66,6 +71,7 @@ export default function GoalCard({ onOpenChat }: Props) {
     try {
       const g = await api.goal.create(selMetric, parseFloat(target), duration);
       setGoal(g);
+      onActiveChange?.(true);
       setCreating(false);
       setSelMetric(null); setTarget("");
     } catch (e) {
@@ -79,6 +85,7 @@ export default function GoalCard({ onOpenChat }: Props) {
     if (!goal) return;
     try { await api.goal.complete(goal.id); } catch { /* ignore */ }
     setGoal(null);
+    onActiveChange?.(false);
   };
 
   const handleAbandon = async () => {
@@ -90,6 +97,7 @@ export default function GoalCard({ onOpenChat }: Props) {
     }
     try { await api.goal.remove(goal.id); } catch { /* ignore */ }
     setGoal(null);
+    onActiveChange?.(false);
     setAbandonConfirm(false);
   };
 

@@ -827,6 +827,17 @@ export default function DashboardPage() {
   const [showWorkoutAdd, setShowWorkoutAdd] = useState(false);
   const [showBodyWeight, setShowBodyWeight] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  // When the user has an active goal, hoist the Goal card above Weekly Insight.
+  // Seed from localStorage so returning users get the right order on first paint
+  // (no reorder flash); GoalCard confirms/updates it once it fetches.
+  const [goalActive, setGoalActive] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("bn_goal_active") === "1";
+  });
+  const handleGoalActive = (active: boolean) => {
+    setGoalActive(active);
+    try { window.localStorage.setItem("bn_goal_active", active ? "1" : "0"); } catch { /* ignore */ }
+  };
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const openChatRef = useRef<((seed?: string) => void) | null>(null);
 
@@ -1826,11 +1837,21 @@ export default function DashboardPage() {
             {/* ── Achievements / badges ── */}
             <Achievements />
 
-            {/* ── Coach Al's Weekly Insight ── */}
-            <WeeklyInsight onOpenChat={(seed) => openChatRef.current?.(seed)} />
-
-            {/* ── Coach Al Goal / Program ── */}
-            <GoalCard onOpenChat={(seed) => openChatRef.current?.(seed)} />
+            {/* ── Coach Al Goal & Weekly Insight ──
+                When the user has an active goal, the Goal card rises above the
+                Weekly Insight so their committed target leads. No active goal →
+                Insight leads and the Goal card (its "set a goal" prompt) sits below. */}
+            {goalActive ? (
+              <>
+                <GoalCard onOpenChat={(seed) => openChatRef.current?.(seed)} onActiveChange={handleGoalActive} />
+                <WeeklyInsight onOpenChat={(seed) => openChatRef.current?.(seed)} />
+              </>
+            ) : (
+              <>
+                <WeeklyInsight onOpenChat={(seed) => openChatRef.current?.(seed)} />
+                <GoalCard onOpenChat={(seed) => openChatRef.current?.(seed)} onActiveChange={handleGoalActive} />
+              </>
+            )}
 
             {/* ── Picked For You (smart gear recommendations) — bottom of Scorecard ── */}
             <GearPicks
