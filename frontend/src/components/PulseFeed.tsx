@@ -454,6 +454,10 @@ function CommentThread({
   const [sending, setSending]   = useState(false);
   const [error, setError]       = useState<string | null>(null);
   const bottomRef               = useRef<HTMLDivElement>(null);
+  // Only follow the thread once the user has posted in it. Without this, the
+  // initial fetch populating the list fires scrollIntoView and yanks the whole
+  // page down to this thread on first load.
+  const followThread            = useRef(false);
 
   // Load on mount
   useEffect(() => {
@@ -469,9 +473,12 @@ function CommentThread({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
-  // Auto-scroll to newest comment when the list grows
+  // Auto-scroll to the newest comment ONLY after the user posts — never on the
+  // initial load (that would scroll the page down to this thread). block:"nearest"
+  // keeps the movement to the minimum needed.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (!followThread.current) return;
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [comments?.length]);
 
   const send = async () => {
@@ -481,6 +488,7 @@ function CommentThread({
     setError(null);
     try {
       const created = await api.friends.postComment(eventId, t);
+      followThread.current = true;  // now it's OK to scroll to the newest comment
       setComments(prev => {
         const next = [...(prev || []), { ...created, is_me: true }];
         onCountChange(next.length);
