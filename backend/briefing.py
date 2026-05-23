@@ -167,6 +167,40 @@ def _build_system_prompt(
             "and skip it if today's data already fills the briefing. Never invent goal numbers.)"
         )
 
+    nutrition = health_context.get("nutrition") or {}
+    body = health_context.get("body") or {}
+    if (nutrition and nutrition.get("meals_logged")) or body.get("weight_lbs") is not None:
+        parts.append("\n=== NUTRITION & BODY ===")
+        if nutrition and nutrition.get("meals_logged"):
+            c = nutrition.get("consumed", {})
+            t = nutrition.get("targets", {})
+            day = nutrition.get("date")
+            bits: list[str] = []
+            if c.get("calories") is not None:
+                bits.append(f"{c['calories']}{('/' + str(t['calories'])) if t.get('calories') else ''} cal")
+            if c.get("protein") is not None:
+                bits.append(f"{c['protein']}{('/' + str(t['protein'])) if t.get('protein') else ''}g protein")
+            if c.get("carbs") is not None:
+                bits.append(f"{c['carbs']}g carbs")
+            if c.get("fat") is not None:
+                bits.append(f"{c['fat']}g fat")
+            if bits:
+                parts.append(f"  • Last logged day ({day}): " + ", ".join(bits))
+        if body.get("weight_lbs") is not None:
+            line = f"  • Weight: {body['weight_lbs']} lbs"
+            chg = body.get("change_since_prev_lbs")
+            if chg is not None:
+                direction = "down" if chg < 0 else "up" if chg > 0 else "flat"
+                line += f" ({direction} {abs(chg)} lbs since last weigh-in)"
+            parts.append(line)
+            if body.get("muscle_mass_lbs") is not None:
+                parts.append(f"  • Muscle mass: {body['muscle_mass_lbs']} lbs")
+        parts.append(
+            "  (You MAY reference nutrition or weight if it's notable or ties to today's "
+            "recommendation — e.g., protein ran low yesterday, or weight is trending toward "
+            "their goal. Only mention if it adds value. Never invent numbers.)"
+        )
+
     if prediction_status:
         streak = prediction_status.get("streak")
         last_pred = prediction_status.get("last_predicted")

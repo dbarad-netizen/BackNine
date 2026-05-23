@@ -2909,6 +2909,22 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
     except Exception:
         health_context["active_goal"] = None
 
+    # Nutrition recap + body composition for the briefing, mirroring chat. We pull
+    # YESTERDAY's macros (the just-completed day — today's log is empty in the
+    # morning) plus the latest logged weigh-in/trend. Best-effort; also prefer the
+    # user's logged body-fat over Apple Health for consistency.
+    try:
+        _yest = (datetime.strptime(today_str, "%Y-%m-%d").date() - timedelta(days=1)).isoformat()
+        _nsnap = nutr.coach_snapshot(user_id, _yest)
+        health_context["nutrition"] = _nsnap.get("nutrition")
+        health_context["body"] = _nsnap.get("body")
+        _bf = (_nsnap.get("body") or {}).get("body_fat_pct")
+        if _bf is not None and health_context.get("today"):
+            health_context["today"]["body_fat_percentage"] = _bf
+    except Exception:
+        health_context["nutrition"] = None
+        health_context["body"] = None
+
     # Daily milestone events for the Pulse feed — only positive wins broadcast
     # to friends. Dedup'd by (user_id, kind, anchor_date) via payload.date so
     # each milestone fires at most once per day. Bad news (HRV drops, poor
