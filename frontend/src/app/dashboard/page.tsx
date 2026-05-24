@@ -1746,19 +1746,38 @@ export default function DashboardPage() {
             {/* ── Friend Pulse feed ── */}
             <PulseFeed onInviteFriend={() => { setProfileInitialTab("friends"); setShowProfile(true); }} />
 
-            {/* ── Quick action: enter a meal (logs inline — no tab switch) ── */}
+            {/* ── Quick action: enter a meal / macros (logs inline — no tab switch) ── */}
             <button
               onClick={() => setShowMealAdd(v => !v)}
               className="w-full py-3 rounded-2xl border border-[#1B3829]/25 bg-white text-sm font-semibold text-[#1B3829] hover:bg-[#1B3829]/5 transition-colors flex items-center justify-center gap-2 shadow-sm"
             >
               <span className="text-base leading-none">🍳</span>
-              {showMealAdd ? "Hide meal entry" : "Enter a meal"}
+              {showMealAdd ? "Hide meal/macros" : "Enter a meal/macros"}
             </button>
             {showMealAdd && (
               <div className="space-y-2">
                 <div className="flex justify-end">
                   <button onClick={() => setShowMealAdd(false)} className="text-xs font-medium text-gray-400 hover:text-gray-700">Close ✕</button>
                 </div>
+
+                {/* Abbreviated macros snapshot — today's totals vs targets.
+                    Updates live as meals are logged (onLogged refreshes nutToday). */}
+                {nutToday && (
+                  <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-gray-400 uppercase tracking-widest">Today's macros</p>
+                      <span className="text-[11px] font-medium text-gray-700">
+                        {nutToday.totals.calories}
+                        <span className="text-gray-400"> / {nutToday.settings.calorie_target} kcal</span>
+                      </span>
+                    </div>
+                    <MacroBar label="Calories" value={nutToday.totals.calories} target={nutToday.settings.calorie_target} unit=" kcal" color="#1B3829" />
+                    <MacroBar label="Protein"  value={nutToday.totals.protein}  target={nutToday.settings.protein_g}      color="#6366f1" />
+                    <MacroBar label="Carbs"    value={nutToday.totals.carbs}    target={nutToday.settings.carbs_g}        color="#f59e0b" />
+                    <MacroBar label="Fat"      value={nutToday.totals.fat}      target={nutToday.settings.fat_g}          color="#ef4444" />
+                  </div>
+                )}
+
                 <MealQuickAdd
                   date={nutToday?.date}
                   onLogged={() => api.nutritionToday().then(setNutToday).catch(() => {})}
