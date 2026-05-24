@@ -904,10 +904,12 @@ export default function DashboardPage() {
       .catch(() => {});
   }, []);
 
-  // Reload nutrition data every time the tab is opened so meals logged
-  // in an earlier session / on another device always show up.
+  // Reload nutrition data when the Nutrition tab OR the Scorecard is opened.
+  // The Scorecard's inline quick-actions (Enter a meal/macros panel, Body &
+  // Weight pill) read nutToday/weightLog too, so without fetching here they'd be
+  // empty on a fresh load that lands straight on the Scorecard.
   useEffect(() => {
-    if (section !== "nutrition") return;
+    if (section !== "nutrition" && section !== "coaching") return;
     setNutLoading(true);
     Promise.all([
       api.nutritionToday(),
