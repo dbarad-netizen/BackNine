@@ -20,7 +20,9 @@ from typing import Any, Optional
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-INVITE_TTL_HOURS = 72   # invites are short-lived; resend if stale
+INVITE_TTL_HOURS = 24 * 365   # ~1 year. Codes are single-use, so there's no need
+                              # to expire them quickly — a 72h window was easy to
+                              # miss (a friend who joined days later couldn't redeem).
 INVITE_CODE_LEN  = 6
 
 
@@ -250,6 +252,36 @@ def accept_referral(code: str, accepter_id: str, accepter_name: str) -> dict:
         return {"self": True}
 
     return _create_friendship(sb, inviter_id, inviter_name, accepter_id, accepter_name)
+
+
+def accept_any_code(code: str, accepter_id: str, accepter_name: str) -> dict:
+    """Accept EITHER a one-time invite code OR a reusable referral code.
+
+    The single 'Got a friend code?' box calls this, so any code we ever hand out
+    connects the two users when pasted — redeemable any time after signup,
+    regardless of which kind it is. Tries the one-time invite table first; if the
+    code isn't there, falls back to the reusable referral table.
+    """
+    if not code:
+        raise ValueError("Missing code")
+    code = code.strip().upper()
+
+    sb = _sb()
+    try:
+        inv = sb.table("friend_invites").select("code").eq("code", code).execute()
+    except Exception:
+        inv = None
+    if inv and inv.data:
+        return accept_invite(code, accepter_id, accepter_name)
+
+    try:
+        ref = sb.table("referral_codes").select("code").eq("code", code).execute()
+    except Exception:
+        ref = None
+    if ref and ref.data:
+        return accept_referral(code, accepter_id, accepter_name)
+
+    raise ValueError("Code not found")
 
 
 # ── Friends list ──────────────────────────────────────────────────────────────

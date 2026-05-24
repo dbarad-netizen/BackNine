@@ -3066,7 +3066,10 @@ async def create_friend_invite(request: Request):
 
 @app.post("/api/friends/accept")
 async def accept_friend_invite(request: Request):
-    """Accept an invite by code. Body: { code }."""
+    """Accept a friend code by pasting it. Body: { code }.
+
+    Handles BOTH code types — a one-time invite code or a reusable referral
+    (share-card) code — so any code we hand out works here, any time."""
     session = _require_session(request)
     user_id = session["user_id"]
     body = await request.json()
@@ -3074,11 +3077,11 @@ async def accept_friend_invite(request: Request):
     if not code:
         raise HTTPException(status_code=400, detail="code is required")
     try:
-        return frd.accept_invite(code, user_id, _display_name_for(user_id))
+        return frd.accept_any_code(code, user_id, _display_name_for(user_id))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"could not accept invite: {e}")
+        raise HTTPException(status_code=500, detail=f"could not accept code: {e}")
 
 
 @app.get("/api/friends/referral")

@@ -442,10 +442,10 @@ function FriendsPanel() {
         )}
       </div>
 
-      {/* Accept an invite */}
+      {/* Accept a friend code — works for either a one-time invite or a share-link code */}
       <div>
         <label className="block text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">
-          Got an Invite Code?
+          Got a friend code?
         </label>
         <div className="flex gap-2">
           <input
