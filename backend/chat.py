@@ -61,6 +61,7 @@ def _build_system_prompt(health_context: dict, profile: dict) -> str:
     age = profile.get("age")
     sex = profile.get("biological_sex")
     goals = profile.get("health_goals", [])
+    supplements = profile.get("supplements") or []
 
     prompt_parts.append(f"Name: {name}")
     if age:
@@ -69,6 +70,26 @@ def _build_system_prompt(health_context: dict, profile: dict) -> str:
         prompt_parts.append(f"Biological Sex: {sex}")
     if goals:
         prompt_parts.append(f"Health Goals: {', '.join(goals)}")
+
+    # Static supplement stack — let Coach Al speak to what they're taking by name
+    # (timing, interactions, etc.). He must NOT recommend new supplements based
+    # on metrics; that's a wellness-coaching guideline below.
+    if isinstance(supplements, list) and supplements:
+        prompt_parts.append("\nSupplement stack (what the user takes):")
+        for s in supplements[:30]:
+            if not isinstance(s, dict):
+                continue
+            nm = (s.get("name") or "").strip()
+            if not nm:
+                continue
+            bits = [nm]
+            if s.get("dose"):   bits.append(str(s["dose"]).strip())
+            if s.get("timing"): bits.append(f"({str(s['timing']).strip()})")
+            line = " — ".join(bits[:2]) + ((" " + bits[2]) if len(bits) > 2 else "")
+            notes = (s.get("notes") or "").strip()
+            if notes:
+                line += f" · {notes}"
+            prompt_parts.append(f"  • {line}")
 
     # TODAY'S METRICS
     today = health_context.get("today", {})
@@ -275,6 +296,9 @@ def _build_system_prompt(health_context: dict, profile: dict) -> str:
         "• Never provide medical diagnoses or prescriptions. Frame everything as wellness coaching.\n"
         "• If data is missing, acknowledge it briefly and offer your best general guidance.\n"
         "• Connect answers to the user's coaching focus areas and stated health goals when relevant.\n"
+        "• Supplements: when the user asks about THEIR stack (timing, dosing, interactions), speak to it by name. "
+        "Do NOT recommend new supplements they aren't already taking based on metrics — that's medical territory. "
+        "If they ask 'should I take X?', describe what the evidence says and suggest they discuss it with their doctor.\n"
         "• You are Coach Al — bring energy and genuine care to every response."
     )
 

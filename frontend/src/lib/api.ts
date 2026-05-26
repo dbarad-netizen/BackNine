@@ -208,6 +208,13 @@ export interface LongevityHistory {
   };
 }
 
+export interface Supplement {
+  name:    string;
+  dose?:   string;     // e.g. "400mg", "2 caps"
+  timing?: string;     // e.g. "morning", "with dinner"
+  notes?:  string;
+}
+
 export interface UserProfile {
   name?:           string | null;
   age?:            number | null;     // derived from birthdate when set
@@ -215,6 +222,7 @@ export interface UserProfile {
   biological_sex?: "male" | "female" | null;
   health_goals?:   string[];
   vo2_max?:        number | null;
+  supplements?:    Supplement[];
 }
 
 export interface ChatMessage {

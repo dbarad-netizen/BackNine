@@ -2379,16 +2379,43 @@ def get_profile(request: Request):
     return _get_profile(session["user_id"])
 
 
+def _sanitize_supplements(raw) -> list[dict]:
+    """Normalize the supplements payload into a clean list of {name,dose,timing,notes}.
+
+    Drops entries without a name, trims fields, caps the list at 30 items so a
+    bad client can't dump a megabyte of JSON into a profile row.
+    """
+    if not isinstance(raw, list):
+        return []
+    out: list[dict] = []
+    for item in raw[:30]:
+        if not isinstance(item, dict):
+            continue
+        name = (str(item.get("name") or "")).strip()[:80]
+        if not name:
+            continue
+        out.append({
+            "name":   name,
+            "dose":   (str(item.get("dose")   or "")).strip()[:40],
+            "timing": (str(item.get("timing") or "")).strip()[:40],
+            "notes":  (str(item.get("notes")  or "")).strip()[:200],
+        })
+    return out
+
+
 @app.post("/api/profile")
 async def save_profile(request: Request):
     session = _require_session(request)
     user_id = session["user_id"]
     body = await request.json()
-    allowed = {"name", "age", "biological_sex", "height_cm", "health_goals", "vo2_max", "birthdate"}
+    allowed = {"name", "age", "biological_sex", "height_cm", "health_goals", "vo2_max", "birthdate", "supplements"}
     data = {k: v for k, v in body.items() if k in allowed}
     # Empty birthdate string clears it (Postgres date column rejects "").
     if "birthdate" in data and not data["birthdate"]:
         data["birthdate"] = None
+    # Sanitize supplements server-side so the DB only ever holds clean shapes.
+    if "supplements" in data:
+        data["supplements"] = _sanitize_supplements(data["supplements"])
     data["user_id"] = user_id
     try:
         db = get_supabase()

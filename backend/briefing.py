@@ -64,6 +64,28 @@ def _build_system_prompt(
     if goals:
         parts.append(f"Goals: {', '.join(goals)}")
 
+    # Static supplement stack — so Coach Al can reference what the user is on
+    # when timing/dosing ties to today's recommendation. He must NOT recommend
+    # new supplements; the prompt below permits reference only.
+    supplements = profile.get("supplements") or []
+    if isinstance(supplements, list) and supplements:
+        names: list[str] = []
+        for s in supplements[:30]:
+            if not isinstance(s, dict):
+                continue
+            nm = (s.get("name") or "").strip()
+            if nm:
+                bits = [nm]
+                if s.get("dose"):   bits.append(str(s["dose"]).strip())
+                if s.get("timing"): bits.append(f"({str(s['timing']).strip()})")
+                names.append(" ".join(bits))
+        if names:
+            parts.append("Supplement stack: " + ", ".join(names))
+            parts.append(
+                "  (You MAY reference these by name if timing/dosing ties to today's plan. "
+                "Do NOT recommend NEW supplements. Always use the metric's stated unit.)"
+            )
+
     today = health_context.get("today") or {}
     if today:
         parts.append("\n=== TODAY ===")

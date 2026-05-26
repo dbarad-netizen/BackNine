@@ -17,6 +17,7 @@ import {
 } from "@/lib/api";
 import { scoreColor, fmtDate } from "@/lib/utils";
 import ScoreRing from "@/components/ScoreRing";
+import SupplementsCard from "@/components/SupplementsCard";
 import CoachCard from "@/components/CoachCard";
 import TrendChart from "@/components/TrendChart";
 import TrainingTab, { WorkoutLogger } from "@/components/TrainingTab";
@@ -2051,6 +2052,15 @@ export default function DashboardPage() {
                   </section>
                 )}
 
+
+                {/* ─ Supplements (static stack — flows into Coach Al's chat + briefing context) ─ */}
+                <SupplementsCard
+                  supplements={profile?.supplements ?? []}
+                  onSave={async (next) => {
+                    const updated = await api.saveProfile({ ...(profile ?? {}), supplements: next });
+                    setProfile(prev => ({ ...(prev ?? {}), ...updated, supplements: next }));
+                  }}
+                />
 
                 {/* ─ Settings ─ */}
                 <div>
