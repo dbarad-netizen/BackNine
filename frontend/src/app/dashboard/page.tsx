@@ -2273,17 +2273,22 @@ function LoadingState() {
 
 function ErrorState({ error }: { error: string }) {
   const e = error.toLowerCase();
-  const isAuth    = e.includes("not authenticated") || e.includes("session expired") || e === "401";
-  const isOuraApi = e.includes("oura") || e.includes("502") || e.includes("token");
-  const isOffline = e.includes("fetch") || e.includes("network") || e.includes("failed to fetch");
+  // Auth errors are a SEPARATE bucket from Oura errors — a Supabase email user
+  // getting a 401 should be sent to sign in, not pushed to "Reconnect Oura"
+  // (which is what was happening to non-Oura users). Only explicit Oura mentions
+  // route to the Oura reconnect path now.
+  const isAuth    = e.includes("not authenticated") || e.includes("session expired") || e === "401" || e.includes("401");
+  const isOuraApi = e.includes("oura") || e.includes("reconnect");
+  const isOffline = e.includes("fetch") || e.includes("network") || e.includes("failed to fetch") || e.includes("502");
 
-  let emoji = "⚠️";
-  let title = "Something went wrong";
-  let message = error;
+  let emoji    = "⚠️";
+  let title    = "Something went wrong";
+  let message  = error;
   let btnLabel = "Retry";
   let btnHref  = "/dashboard";
+  let secondary: { label: string; href: string } | null = null;
 
-  if (isAuth || isOuraApi) {
+  if (isOuraApi) {
     emoji   = "🔗";
     title   = "Oura connection issue";
     message = e.includes("expired") || e.includes("reconnect")
@@ -2291,6 +2296,13 @@ function ErrorState({ error }: { error: string }) {
       : "There was a problem reaching your Oura Ring data. Try reconnecting — it usually fixes it.";
     btnLabel = "Reconnect Oura →";
     btnHref  = "https://backnine-hu60.onrender.com/auth/oura";
+    secondary = { label: "Retry without reconnecting", href: "/dashboard" };
+  } else if (isAuth) {
+    emoji   = "🔒";
+    title   = "Please sign in again";
+    message = "Your session expired. Sign in to pick back up where you left off.";
+    btnLabel = "Sign in →";
+    btnHref  = "/";
   } else if (isOffline) {
     emoji   = "📡";
     title   = "Can't reach the server";
@@ -2311,9 +2323,9 @@ function ErrorState({ error }: { error: string }) {
           >
             {btnLabel}
           </a>
-          {(isAuth || isOuraApi) && (
-            <a href="/dashboard" className="text-xs text-gray-400 hover:text-gray-600">
-              Retry without reconnecting
+          {secondary && (
+            <a href={secondary.href} className="text-xs text-gray-400 hover:text-gray-600">
+              {secondary.label}
             </a>
           )}
         </div>
