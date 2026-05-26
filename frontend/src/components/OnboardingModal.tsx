@@ -193,14 +193,18 @@ export default function OnboardingModal({ onDone }: Props) {
             </div>
           )}
 
-          {/* ── Step 2: Data sources ── */}
+          {/* ── Step 2: Data sources ──
+              All three options are equal-weight clickable buttons so a user
+              without an Oura ring has an obvious path. Oura still redirects to
+              its OAuth flow; Apple Health and Manual just advance the modal —
+              Apple Health setup happens in the Metrics tab after this. */}
           {step === 2 && (
             <div className="flex-1 flex flex-col">
               <div className="flex-1 space-y-3">
                 <div>
                   <h2 className="text-lg font-bold text-gray-900">How do you track?</h2>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    Connect a source for richer insights — or start with manual tracking and add one later.
+                    Pick one — you can change or add others later.
                   </p>
                 </div>
 
@@ -219,31 +223,39 @@ export default function OnboardingModal({ onDone }: Props) {
                   </div>
                 </button>
 
-                {/* Apple Health */}
-                <div className="rounded-xl border border-gray-200 p-3">
+                {/* Apple Health — advances onboarding; actual setup lives in Metrics tab */}
+                <button
+                  onClick={() => setStep(3)}
+                  className="w-full text-left block rounded-xl border border-gray-200 hover:border-[#1B3829]/40 p-3 transition-colors"
+                >
                   <div className="flex items-center gap-3">
                     <span className="text-2xl">🍎</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-gray-900">Use Apple Health</p>
-                      <p className="text-[11px] text-gray-500">Steps, sleep, HRV from your iPhone / Apple Watch — set up in the Metrics tab after this.</p>
+                      <p className="text-[11px] text-gray-500">Steps, sleep, HRV from your iPhone / Apple Watch — we&apos;ll finish setup in the Metrics tab.</p>
                     </div>
+                    <span className="text-gray-400 text-sm">→</span>
                   </div>
-                </div>
+                </button>
 
-                {/* Manual */}
-                <div className="rounded-xl border border-gray-200 p-3 bg-gray-50/60">
+                {/* Manual — advances onboarding, no wearable required */}
+                <button
+                  onClick={() => setStep(3)}
+                  className="w-full text-left block rounded-xl border border-gray-200 hover:border-[#1B3829]/40 p-3 transition-colors"
+                >
                   <div className="flex items-center gap-3">
                     <span className="text-2xl">✏️</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-gray-900">Just manual for now</p>
-                      <p className="text-[11px] text-gray-500">Log workouts, weight, and mood by hand. Add a tracker anytime.</p>
+                      <p className="text-[11px] text-gray-500">Log workouts, meals, weight & mood by hand. Add a tracker anytime.</p>
                     </div>
+                    <span className="text-gray-400 text-sm">→</span>
                   </div>
-                </div>
+                </button>
               </div>
               <div className="flex gap-2 mt-6">
                 <button onClick={() => setStep(1)} className="px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-600 hover:border-gray-400 transition-colors">Back</button>
-                <button onClick={() => setStep(3)} className="flex-1 py-3 rounded-xl bg-[#1B3829] hover:bg-[#2D6A4F] text-white text-sm font-semibold transition-colors">Continue</button>
+                <button onClick={() => setStep(3)} className="flex-1 py-3 rounded-xl bg-[#1B3829] hover:bg-[#2D6A4F] text-white text-sm font-semibold transition-colors">Skip — decide later</button>
               </div>
             </div>
           )}
