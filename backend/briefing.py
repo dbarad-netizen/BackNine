@@ -147,12 +147,24 @@ def _build_system_prompt(
     goal = health_context.get("active_goal") or {}
     pace = (goal or {}).get("pace") or {}
     if goal and pace and pace.get("status") not in (None, "no_data"):
-        unit = goal.get("unit") or ""
+        unit = (goal.get("unit") or "").strip()
+        unit_label = unit if unit else "units"
+        unit_fmt   = f" {unit}" if unit and not unit.startswith("%") else (unit or "")
         parts.append("\n=== ACTIVE GOAL ===")
+        parts.append(f"  • Metric: {goal.get('label')} (measured in {unit_label})")
         parts.append(
-            f"  • Goal: {goal.get('label')} — now {goal.get('current')}{unit}, "
-            f"target {goal.get('target')}{unit}"
+            f"  • Now {goal.get('current')}{unit_fmt} → target {goal.get('target')}{unit_fmt}"
         )
+        # Pre-compute the gap with the correct unit so Coach Al just reads it
+        # (no risk of "0.6 pounds" when the goal is in %).
+        try:
+            cur = goal.get("current"); tgt = goal.get("target")
+            if cur is not None and tgt is not None:
+                gap = round(abs(float(tgt) - float(cur)), 1)
+                direction = "above" if float(cur) > float(tgt) else "below" if float(cur) < float(tgt) else "at"
+                parts.append(f"  • Distance to target: {gap}{unit_fmt} ({direction} target)")
+        except Exception:
+            pass
         wk, tw, dl = goal.get("week"), goal.get("total_weeks"), goal.get("days_left")
         if wk and tw:
             parts.append(f"  • Timeline: week {wk} of {tw}, {dl} days left")
@@ -167,7 +179,9 @@ def _build_system_prompt(
         parts.append(
             "  (You MAY add ONE short clause about this goal in paragraph 2 — celebrate if "
             "ahead, gently rally if behind — and tie today's action to it. Keep it natural "
-            "and skip it if today's data already fills the briefing. Never invent goal numbers.)"
+            "and skip it if today's data already fills the briefing. Never invent goal numbers. "
+            "ALWAYS use the metric's stated unit — body fat is %, weight is pounds, VO2 max "
+            "is ml/kg/min. Do NOT substitute pounds for percent or vice versa.)"
         )
 
     nutrition = health_context.get("nutrition") or {}

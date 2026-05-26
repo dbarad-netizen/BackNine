@@ -224,26 +224,47 @@ def _build_system_prompt(health_context: dict, profile: dict) -> str:
         if long_term:
             prompt_parts.append(f"Long-term Focus:\n  {long_term}")
 
-    # ACTIVE GOAL (the program Coach Al is guiding them through)
+    # ACTIVE GOAL (the program Coach Al is guiding them through).
+    # Unit handling is deliberately verbose: we pre-compute "distance to target"
+    # using the metric's OWN unit so Coach Al can't accidentally say "0.6 pounds"
+    # when the goal is body fat in %. The explicit unit chip + the rule below
+    # close that drift.
     goal = health_context.get("active_goal")
     if goal:
-        unit = goal.get("unit") or ""
+        unit = (goal.get("unit") or "").strip()
+        unit_label = unit if unit else "units"
+        unit_fmt   = f" {unit}" if unit and not unit.startswith("%") else (unit or "")
         prompt_parts.append("\n=== ACTIVE GOAL (the program you're coaching them through) ===")
-        prompt_parts.append(f"  • Goal: {goal.get('label')} → target {goal.get('target')}{unit}")
+        prompt_parts.append(f"  • Metric: {goal.get('label')} (measured in {unit_label})")
         if goal.get("baseline") is not None:
-            prompt_parts.append(f"  • Started at: {goal.get('baseline')}{unit}")
+            prompt_parts.append(f"  • Started at: {goal.get('baseline')}{unit_fmt}")
         if goal.get("current") is not None:
-            prompt_parts.append(f"  • Currently: {goal.get('current')}{unit}")
+            prompt_parts.append(f"  • Currently:  {goal.get('current')}{unit_fmt}")
+        if goal.get("target") is not None:
+            prompt_parts.append(f"  • Target:     {goal.get('target')}{unit_fmt}")
+        # Pre-compute the gap so Coach Al just reads it (in the metric's unit).
+        try:
+            cur = goal.get("current"); tgt = goal.get("target")
+            if cur is not None and tgt is not None:
+                gap = round(abs(float(tgt) - float(cur)), 1)
+                direction = "above target" if float(cur) > float(tgt) else "below target" if float(cur) < float(tgt) else "at target"
+                prompt_parts.append(f"  • Distance to target: {gap}{unit_fmt} ({direction})")
+        except Exception:
+            pass
         if goal.get("progress_pct") is not None:
             prompt_parts.append(
-                f"  • Progress: {goal.get('progress_pct')}% "
+                f"  • Progress to goal: {goal.get('progress_pct')}% of the way there "
                 f"(week {goal.get('week')} of {goal.get('total_weeks')}, {goal.get('days_left')} days left)"
             )
         tw = goal.get("this_week")
         if tw:
             acts = "; ".join(tw.get("actions", []))
             prompt_parts.append(f"  • This week's focus: {tw.get('focus')} — {acts}")
-        prompt_parts.append("  When relevant, connect your advice to this goal and how they're tracking toward it.")
+        prompt_parts.append(
+            "  When referring to this goal, ALWAYS use the metric's stated unit above. "
+            "Do NOT substitute pounds for percent or vice versa — body fat is a %, "
+            "weight is in pounds, VO2 max in ml/kg/min, etc."
+        )
 
     # Guidelines
     prompt_parts.append(
