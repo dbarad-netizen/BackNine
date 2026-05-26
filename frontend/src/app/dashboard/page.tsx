@@ -2319,6 +2319,19 @@ function ErrorState({ error }: { error: string }) {
         <div className="flex flex-col gap-2 items-center">
           <a
             href={btnHref}
+            onClick={() => {
+              // On the auth path, clear the stale token BEFORE letting the browser
+              // navigate. Otherwise the homepage sees bn_token still in localStorage,
+              // auto-redirects to /dashboard, which 401s again — infinite loop.
+              if (isAuth && typeof window !== "undefined") {
+                try {
+                  localStorage.removeItem("bn_token");
+                  Object.keys(localStorage)
+                    .filter(k => k.startsWith("sb-"))
+                    .forEach(k => localStorage.removeItem(k));
+                } catch { /* ignore */ }
+              }
+            }}
             className="inline-block rounded-xl bg-[#1B3829] hover:bg-[#2D6A4F] text-white font-semibold px-6 py-3 text-sm transition-colors"
           >
             {btnLabel}
