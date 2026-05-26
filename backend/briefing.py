@@ -72,8 +72,11 @@ def _build_system_prompt(
             ("Sleep score", "sleep_score", "/100"),
             ("HRV", "hrv", " ms"),
             ("Resting HR", "rhr", " bpm"),
-            ("Activity score", "activity_score", "/100"),
-            ("Steps", "steps", ""),
+            # Activity reflects the just-completed day, not today in progress — at
+            # morning briefing time today's activity is near-zero. Coach Al should
+            # frame these as yesterday's totals, not today's.
+            ("Activity score (yesterday)", "activity_score", "/100"),
+            ("Steps (yesterday)", "steps", ""),
             ("Sleep duration", "sleep_hours", " h"),
             ("Body fat", "body_fat_percentage", "%"),
         ]:

@@ -2765,6 +2765,18 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
         except Exception:
             pass
 
+    # Activity for the BRIEFING narrative is YESTERDAY's completed day, not
+    # today's intra-day total. Oura's sleep score and readiness are last-night
+    # keyed (complete by morning), but activity is calendar-day keyed and just
+    # starts accumulating — first thing in the morning today's activity_score
+    # is near-zero, which felt 'off' next to the synced sleep/readiness numbers.
+    # Yesterday is the right "what your body did" frame for a morning recap.
+    try:
+        _yest = (datetime.strptime(today_str, "%Y-%m-%d").date() - timedelta(days=1)).isoformat()
+    except Exception:
+        _yest = today_str
+    y_act = am.get(_yest, {}) or {}
+
     # Only hold for "syncing" when TODAY has essentially no signal yet. Readiness
     # and the sleep SCORE usually land before the detailed sleep session (duration
     # /HRV), so if we have any of today's numbers we write a real briefing now and
@@ -2826,8 +2838,9 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
             "sleep_score":         t_sl.get("score"),
             "hrv":                 t_sm.get("hrv"),
             "rhr":                 t_sm.get("rhr"),
-            "activity_score":      t_act.get("score"),
-            "steps":               t_act.get("steps"),
+            # Activity = YESTERDAY's complete day (see note above where y_act is set).
+            "activity_score":      y_act.get("score"),
+            "steps":               y_act.get("steps"),
             "sleep_hours":         round(t_sm["total"] / 3600, 1) if t_sm.get("total") else None,
             "body_fat_percentage": ah_today.get("body_fat_percentage"),
             "vo2_max":             ah_today.get("vo2_max"),
