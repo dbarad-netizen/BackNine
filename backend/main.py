@@ -852,13 +852,20 @@ def _empty_dashboard_payload(session: dict) -> dict:
     who haven't connected Oura. Every key the frontend destructures is present
     so the dashboard renders its empty states rather than throwing on a missing
     `today` / `coaches` / `trend`.
+
+    Includes `has_apple_health` + `apple_health` keys so the frontend can render
+    Apple Health metrics for non-Oura users when they're syncing via the iOS
+    Shortcut. The dashboard endpoint overlays real AH data into these keys when
+    present; defaults here keep them safely null.
     """
     _empty_coach = {"color": "#111827", "border": "#d1d5db", "icon": "", "title": "", "msg": ""}
     return {
-        "generated":    datetime.now(timezone.utc).isoformat(),
-        "data_through": None,
-        "provider":     session.get("provider", "supabase"),
-        "has_oura":     False,
+        "generated":         datetime.now(timezone.utc).isoformat(),
+        "data_through":      None,
+        "provider":          session.get("provider", "supabase"),
+        "has_oura":          False,
+        "has_apple_health":  False,
+        "apple_health":      None,
         "today": {
             "date":               None,
             "calendar_today":     None,
@@ -913,10 +920,42 @@ async def get_dashboard(request: Request, days: int = 120):
                 pass
 
     if not session.get("access_token"):
-        # User is authenticated but hasn't connected Oura yet. Return a COMPLETE
-        # empty payload (every key the frontend destructures) so the dashboard
-        # renders its empty states instead of crashing on `today.sleep_model`.
-        return _empty_dashboard_payload(session)
+        # User is authenticated but hasn't connected Oura yet. Build the empty
+        # payload baseline, then overlay Apple Health data if they're syncing it.
+        # Without this, non-Oura users (e.g. email signups using Health Auto
+        # Export) saw a totally blank dashboard even though their HealthKit
+        # numbers were landing in the DB.
+        payload = _empty_dashboard_payload(session)
+        try:
+            ah_sum = ah.get_summary(user_id, days=30)
+        except Exception:
+            ah_sum = {"has_data": False}
+        if ah_sum.get("has_data"):
+            payload["has_apple_health"] = True
+            payload["data_through"]     = ah_sum.get("as_of")
+            payload["apple_health"]     = {
+                "as_of":   ah_sum.get("as_of"),
+                "today":   ah_sum.get("today") or {},
+                "averages": ah_sum.get("averages") or {},
+                "days_synced": ah_sum.get("days_synced"),
+            }
+            # Last-sync time helps users trust the freshness of these numbers.
+            try:
+                db_sb = get_supabase()
+                if db_sb:
+                    last_res = (
+                        db_sb.table("apple_health_daily")
+                        .select("updated_at")
+                        .eq("user_id", user_id)
+                        .order("updated_at", desc=True)
+                        .limit(1)
+                        .execute()
+                    )
+                    if last_res.data:
+                        payload["apple_health"]["last_sync_at"] = last_res.data[0].get("updated_at")
+            except Exception:
+                pass
+        return payload
 
     access_token, refreshed_session = await _ensure_valid_token(session)
     if refreshed_session:
@@ -2816,6 +2855,21 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
     except Exception:
         _yest = today_str
     y_act = am.get(_yest, {}) or {}
+    # Apple Health fallback for yesterday's activity — so AH-only users (no Oura)
+    # still get their step count in the morning briefing instead of a silent
+    # blank. Oura provides an activity score; AH provides only raw quantities,
+    # so activity_score stays None and the prompt naturally omits it.
+    if not y_act.get("steps"):
+        try:
+            ah_y = ah.get_day(user_id, _yest)
+            if ah_y and ah_y.get("steps"):
+                y_act = {
+                    **y_act,
+                    "steps": ah_y.get("steps"),
+                    "active_cal": ah_y.get("active_calories"),
+                }
+        except Exception:
+            pass
 
     # Only hold for "syncing" when TODAY has essentially no signal yet. Readiness
     # and the sleep SCORE usually land before the detailed sleep session (duration

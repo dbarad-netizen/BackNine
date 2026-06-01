@@ -238,11 +238,40 @@ export interface MeResponse {
   needs_onboarding: boolean;
 }
 
+export interface AppleHealthToday {
+  steps?:                    number | null;
+  sleep_hours?:              number | null;
+  active_calories?:          number | null;
+  resting_hr?:               number | null;
+  hrv?:                      number | null;
+  respiratory_rate?:         number | null;
+  weight_kg?:                number | null;
+  vo2_max?:                  number | null;
+  body_fat_percentage?:      number | null;
+  lean_body_mass_kg?:        number | null;
+  skeletal_muscle_mass_kg?:  number | null;
+  bmi?:                      number | null;
+  blood_pressure_systolic?:  number | null;
+  blood_pressure_diastolic?: number | null;
+  spo2?:                     number | null;
+  visceral_fat_rating?:      number | null;
+}
+
+export interface AppleHealthBlock {
+  as_of:        string | null;
+  today:        AppleHealthToday;
+  averages?:    Partial<AppleHealthToday>;
+  days_synced?: number;
+  last_sync_at?: string;
+}
+
 export interface DashboardData {
   generated:            string;
   data_through:         string;
   provider:             string;
   has_oura?:            boolean;
+  has_apple_health?:    boolean;
+  apple_health?:        AppleHealthBlock | null;
   today:                TodayData;
   trend:                TrendDay[];
   coaches:              { overall: CoachCard; sleep: CoachCard; activity: CoachCard };

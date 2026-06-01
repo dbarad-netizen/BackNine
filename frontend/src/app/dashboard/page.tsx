@@ -18,6 +18,7 @@ import {
 import { scoreColor, fmtDate } from "@/lib/utils";
 import ScoreRing from "@/components/ScoreRing";
 import SupplementsCard from "@/components/SupplementsCard";
+import AppleHealthCard from "@/components/AppleHealthCard";
 import CoachCard from "@/components/CoachCard";
 import TrendChart from "@/components/TrendChart";
 import TrainingTab, { WorkoutLogger } from "@/components/TrainingTab";
@@ -1348,10 +1349,19 @@ export default function DashboardPage() {
 
           return (
           <div className="space-y-6">
+            {/* Apple Health card — for users without Oura who are syncing AH.
+                Surfaces the metrics AH actually provides (steps, sleep duration,
+                HRV, RHR, weight, body fat, VO2 max) instead of leaving the
+                dashboard empty. Sits above the Getting Started card so the
+                user sees their numbers first. */}
+            {data.has_apple_health && data.apple_health && (
+              <AppleHealthCard data={data.apple_health} />
+            )}
+
             {/* Getting Started card — shown until a data source is connected.
                 Frames all three paths (Oura / Apple Health / manual) so a
                 no-wearable user feels guided rather than blocked. */}
-            {data.has_oura === false && (
+            {data.has_oura === false && !data.has_apple_health && (
               <div className="rounded-2xl border border-[#1B3829]/15 bg-white p-5 shadow-sm">
                 <p className="font-bold text-gray-900 text-sm mb-1">👋 Let&apos;s get your data flowing</p>
                 <p className="text-xs text-gray-600 mb-4 leading-relaxed">
