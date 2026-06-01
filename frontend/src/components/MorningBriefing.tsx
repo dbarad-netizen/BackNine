@@ -273,8 +273,10 @@ export default function MorningBriefing({ onOpenChat }: Props) {
               hide the timestamp + Regenerate link and just keep the chat CTA. */}
           {data.has_data !== false && !pending && (
             <>
-              <p className="text-[11px] text-white/50 truncate">
-                {data.cached ? "Generated earlier today" : "Just generated"}
+              <p className="text-[11px] text-white/60 truncate">
+                {data.generated_at
+                  ? `From ${new Date(data.generated_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
+                  : data.cached ? "Generated earlier today" : "Just generated"}
               </p>
               <button
                 onClick={handleRegenerate}

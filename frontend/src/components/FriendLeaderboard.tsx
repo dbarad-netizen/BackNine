@@ -47,11 +47,11 @@ function fmtMetric(value: number | null, metric: MetricKey): string {
 function freshnessLabel(anchor: string, todayStr: string): string | null {
   if (!anchor || anchor === todayStr) return null;
   try {
-    const a = new Date(anchor + "T12:00:00Z").getTime();
-    const t = new Date(todayStr + "T12:00:00Z").getTime();
-    const diffDays = Math.round((t - a) / (1000 * 60 * 60 * 24));
-    if (diffDays === 1) return "y";
-    if (diffDays > 1)   return `${diffDays}d`;
+    const a = new Date(anchor + "T12:00:00");
+    const t = new Date(todayStr + "T12:00:00");
+    const diffDays = Math.round((t.getTime() - a.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays === 1) return "yesterday";
+    if (diffDays > 1)   return `${a.getMonth() + 1}/${a.getDate()}`;
     return null;
   } catch {
     return null;
@@ -277,13 +277,20 @@ export default function FriendLeaderboard() {
                         }`}>
                           {METRIC_LABELS[m]}
                           {isLeader && " 🏅"}
-                          {fresh && <span className="ml-1 text-gray-500 italic">·{fresh}</span>}
                         </p>
                         <p className={`text-[13px] font-bold leading-tight tabular-nums ${
                           isLeader ? "text-amber-900" : has ? "text-gray-800" : "text-gray-500"
                         }`}>
                           {fmtMetric(mv.value, m)}
                         </p>
+                        {fresh && (
+                          <p
+                            className="text-[10px] font-semibold text-amber-700 mt-0.5 leading-none"
+                            title={`This number is from ${mv.anchor}, not today — most recent available.`}
+                          >
+                            from {fresh}
+                          </p>
+                        )}
                       </div>
                     );
                   })}

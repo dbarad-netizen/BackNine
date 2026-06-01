@@ -3081,7 +3081,9 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
         "narrative":           narrative,
         "prediction_streak":   prediction_status.get("streak"),
         "prediction_accuracy": prediction_status.get("accuracy_pct"),
-        "generated_at":        None,
+        # Stamp the live-generated briefing so the UI can show "from 7:14am" —
+        # was None before, which left the user guessing how stale the numbers were.
+        "generated_at":        datetime.now(timezone.utc).isoformat(),
         "cached":              False,
         "app_streak":          _compute_app_streak(user_id, today_str),
         "has_data":            True,
@@ -3504,18 +3506,34 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None):
                 yield (cursor - timedelta(days=i)).isoformat()
 
         if metric == "steps":
-            for d in _walk_back():
-                # AH first for each day in the walk (live data wins)
+            # Walk-back logic: for TODAY (idx 0), trust what the sources have
+            # even if it's 0 — otherwise mid-day, when today is still partial,
+            # we silently fell through to yesterday's bigger number and the user
+            # was looking at yesterday without knowing it. For PRIOR days, keep
+            # the original "only non-zero" rule so we don't surface a stale 0.
+            days = list(_walk_back())
+            for idx, d in enumerate(days):
+                ah_steps = None
                 try:
                     ah_day = ah.get_day(uid, d)
-                    if ah_day and ah_day.get("steps"):
-                        return float(ah_day["steps"]), d
+                    if ah_day is not None and "steps" in ah_day:
+                        ah_steps = ah_day.get("steps")
                 except Exception:
                     pass
-                # Oura fallback for this day
                 am_day = am.get(d) or {}
-                if am_day.get("steps"):
-                    return float(am_day["steps"]), d
+                oura_steps = am_day.get("steps")
+                if idx == 0:
+                    # Today: take whatever is recorded, even 0.
+                    if ah_steps is not None:
+                        return float(ah_steps), d
+                    if oura_steps is not None:
+                        return float(oura_steps), d
+                    continue  # genuinely no record for today → fall back to walking
+                # Prior days: only count if non-zero (existing behavior).
+                if ah_steps:
+                    return float(ah_steps), d
+                if oura_steps:
+                    return float(oura_steps), d
             return None, anchor
 
         if metric == "sleep":
