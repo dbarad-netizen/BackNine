@@ -1698,6 +1698,11 @@ async def log_workout(request: Request):
         exercises    = body.get("exercises", []),
         duration_min = body.get("duration_min"),
         notes        = body.get("notes", ""),
+        # Cardio fields — silently passed through; ignored for non-cardio rows.
+        activity        = body.get("activity"),
+        distance_meters = body.get("distance_meters"),
+        avg_hr          = body.get("avg_hr"),
+        calories_kcal   = body.get("calories_kcal"),
     )
     # Activity feed event — best-effort, never blocks the response
     try:

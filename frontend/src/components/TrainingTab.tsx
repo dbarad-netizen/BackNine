@@ -15,8 +15,19 @@ import {
   type TrainingSettings,
 } from "@/lib/api";
 
-const TYPE_ICON: Record<string, string>  = { lifting: "🏋️", stretching: "🧘", mobility: "🔄" };
-const TYPE_LABEL: Record<string, string> = { lifting: "Lifting", stretching: "Stretch", mobility: "Mobility" };
+const TYPE_ICON: Record<string, string>  = { lifting: "🏋️", stretching: "🧘", mobility: "🔄", cardio: "🏃" };
+const TYPE_LABEL: Record<string, string> = { lifting: "Lifting", stretching: "Stretch", mobility: "Mobility", cardio: "Cardio" };
+
+// Cardio activity options shown in the logger — slug = stored, label = displayed.
+const CARDIO_ACTIVITIES: Array<{ slug: string; label: string; icon: string }> = [
+  { slug: "running",  label: "Run",   icon: "🏃" },
+  { slug: "walking",  label: "Walk",  icon: "🚶" },
+  { slug: "hiking",   label: "Hike",  icon: "🥾" },
+  { slug: "cycling",  label: "Bike",  icon: "🚴" },
+  { slug: "swimming", label: "Swim",  icon: "🏊" },
+  { slug: "rowing",   label: "Row",   icon: "🚣" },
+  { slug: "other",    label: "Other", icon: "💪" },
+];
 
 // Activity-level icons for Oura-imported workouts/sessions — picked over the
 // type icon when present so a "Running" row shows 🏃 instead of the generic 💪.
@@ -40,6 +51,7 @@ const TYPE_BADGE: Record<string, string> = {
   lifting:    "bg-[#1B3829]/10 text-[#1B3829]",
   stretching: "bg-indigo-50 text-indigo-600",
   mobility:   "bg-amber-50 text-amber-700",
+  cardio:     "bg-rose-50 text-rose-700",
 };
 
 // ── Daily recommendation card ─────────────────────────────────────────────────
@@ -172,11 +184,18 @@ export function WorkoutLogger({
   onSaved: (w: Workout) => void;
   recentWorkouts: Workout[];
 }) {
-  const [workoutType, setWorkoutType] = useState<"lifting" | "stretching" | "mobility">("lifting");
+  const [workoutType, setWorkoutType] = useState<"lifting" | "stretching" | "mobility" | "cardio">("lifting");
   const [exercises, setExercises]     = useState<WorkoutExercise[]>([]);
   const [duration, setDuration]       = useState("");
   const [notes, setNotes]             = useState("");
   const [query, setQuery]             = useState("");
+  // Cardio-only inputs. Kept in their own state so switching modes doesn't
+  // clobber the user's strength session in progress (or vice versa).
+  const [cardioActivity, setCardioActivity]   = useState<string>("running");
+  const [cardioDistance, setCardioDistance]   = useState<string>("");
+  const [cardioUnit, setCardioUnit]           = useState<"mi" | "km">("mi");
+  const [cardioAvgHr, setCardioAvgHr]         = useState<string>("");
+  const [cardioCalories, setCardioCalories]   = useState<string>("");
   const [results, setResults]         = useState<ExerciseInfo[]>([]);
   const [saving, setSaving]           = useState(false);
   const [templates, setTemplates]     = useState<WorkoutTemplate[]>([]);
@@ -341,15 +360,19 @@ export function WorkoutLogger({
   };
 
   // A workout is saveable if it has itemized exercises OR enough to stand on its
-  // own as a quick log: a description, a note, or a duration.
+  // own as a quick log: a description, a note, or a duration. For cardio,
+  // duration alone is enough (e.g. "ran for 30 min" — no other fields required).
   const describeTrimmed = describe.trim();
-  const canSave = exercises.length > 0 || !!notes.trim() || !!duration || !!describeTrimmed;
+  const canSave = workoutType === "cardio"
+    ? !!duration || !!cardioDistance || !!notes.trim()
+    : (exercises.length > 0 || !!notes.trim() || !!duration || !!describeTrimmed);
 
   const save = async () => {
     // Fall back to whatever the user typed in the "describe" box if they hit
     // Save before pressing Add — log it as a freeform session.
     const effectiveNotes = notes.trim() || (exercises.length === 0 ? describeTrimmed : "");
-    if (exercises.length === 0 && !effectiveNotes && !duration) return;
+    if (workoutType !== "cardio" && exercises.length === 0 && !effectiveNotes && !duration) return;
+    if (workoutType === "cardio" && !duration && !cardioDistance && !effectiveNotes) return;
     setSaving(true);
     try {
       // Don't persist UI-only "done" flags on the workout record.
@@ -358,15 +381,30 @@ export function WorkoutLogger({
         ...(ex.sets ? { sets: ex.sets.map(s => ({ weight_lbs: s.weight_lbs, reps: s.reps })) } : {}),
         ...(ex.duration_sec ? { duration_sec: ex.duration_sec } : {}),
       }));
+
+      // Cardio: convert distance to meters and pull HR / calories into the payload.
+      const isCardio = workoutType === "cardio";
+      const distNum  = isCardio && cardioDistance ? parseFloat(cardioDistance) : NaN;
+      const distMeters = isCardio && !isNaN(distNum)
+        ? Math.round(distNum * (cardioUnit === "mi" ? 1609.34 : 1000))
+        : undefined;
+
       const w = await api.logWorkout({
         date:         new Date().toISOString().slice(0, 10),
         type:         workoutType,
         exercises:    clean,
         duration_min: duration ? parseInt(duration) : undefined,
         notes:        effectiveNotes,
+        ...(isCardio ? {
+          activity:        cardioActivity,
+          distance_meters: distMeters,
+          avg_hr:          cardioAvgHr   ? parseInt(cardioAvgHr)   : undefined,
+          calories_kcal:   cardioCalories ? parseInt(cardioCalories) : undefined,
+        } : {}),
       });
       onSaved(w);
       setExercises([]); setDuration(""); setNotes(""); setDescribe("");
+      setCardioDistance(""); setCardioAvgHr(""); setCardioCalories("");
     } catch (e) { console.error(e); }
     finally { setSaving(false); }
   };
@@ -413,7 +451,7 @@ export function WorkoutLogger({
 
       {/* Type selector */}
       <div className="flex gap-1">
-        {(["lifting", "stretching", "mobility"] as const).map(t => (
+        {(["lifting", "cardio", "stretching", "mobility"] as const).map(t => (
           <button key={t} onClick={() => setWorkoutType(t)}
             className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${
               workoutType === t ? "bg-[#1B3829] text-white" : "bg-gray-100 text-gray-600 hover:text-gray-800"
@@ -423,8 +461,55 @@ export function WorkoutLogger({
         ))}
       </div>
 
+      {/* Cardio inputs — activity / distance / avg HR / calories. Duration
+          uses the shared Meta input below so the layout stays familiar. */}
+      {workoutType === "cardio" && (
+        <div className="space-y-3">
+          <div>
+            <p className="text-[10px] text-gray-600 uppercase tracking-widest mb-1.5">Activity</p>
+            <div className="flex flex-wrap gap-1.5">
+              {CARDIO_ACTIVITIES.map(a => (
+                <button key={a.slug} onClick={() => setCardioActivity(a.slug)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    cardioActivity === a.slug ? "bg-[#1B3829] text-white" : "bg-gray-100 text-gray-600 hover:text-gray-800"
+                  }`}>
+                  {a.icon} {a.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <p className="text-xs text-gray-600 mb-1">Distance</p>
+              <div className="flex items-center gap-1">
+                <input className={inp} type="number" step="0.01" placeholder="3.1"
+                  value={cardioDistance} onChange={e => setCardioDistance(e.target.value)} />
+                <div className="flex shrink-0 rounded-lg overflow-hidden border border-gray-200">
+                  {(["mi", "km"] as const).map(u => (
+                    <button key={u} onClick={() => setCardioUnit(u)}
+                      className={`px-2 py-2 text-xs font-medium ${cardioUnit === u ? "bg-[#1B3829] text-white" : "bg-gray-50 text-gray-600"}`}>
+                      {u}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs text-gray-600 mb-1">Avg HR (bpm)</p>
+              <input className={inp} type="number" placeholder="148"
+                value={cardioAvgHr} onChange={e => setCardioAvgHr(e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <p className="text-xs text-gray-600 mb-1">Calories (optional)</p>
+            <input className={inp} type="number" placeholder="385"
+              value={cardioCalories} onChange={e => setCardioCalories(e.target.value)} />
+          </div>
+        </div>
+      )}
+
       {/* Repeat last — one tap to start from your previous session of this type */}
-      {lastWorkoutOfType && (
+      {workoutType !== "cardio" && lastWorkoutOfType && (
         <button onClick={() => loadExercises(lastWorkoutOfType.exercises)}
           className="w-full py-2 rounded-lg border border-[#1B3829]/30 bg-[#1B3829]/5 text-xs font-semibold text-[#1B3829] hover:bg-[#1B3829]/10 transition-colors">
           ↻ Repeat last {TYPE_LABEL[workoutType]} workout · {lastWorkoutOfType.date}
@@ -432,7 +517,7 @@ export function WorkoutLogger({
       )}
 
       {/* Saved routines — one tap to start from a template */}
-      {typeTemplates.length > 0 && (
+      {workoutType !== "cardio" && typeTemplates.length > 0 && (
         <div>
           <p className="text-[10px] text-gray-600 uppercase tracking-widest mb-1.5">Start from a routine</p>
           <div className="flex flex-wrap gap-1.5">
@@ -450,7 +535,8 @@ export function WorkoutLogger({
         </div>
       )}
 
-      {/* Exercise search */}
+      {/* Exercise search (lifting/stretching/mobility) */}
+      {workoutType !== "cardio" && (
       <div className="relative">
         <input className={inp} placeholder={workoutType === "lifting" ? "Add exercise: squat, bench, row…" : "Add stretch: pigeon, quad, lat…"}
           value={query} onChange={e => { setQuery(e.target.value); doSearch(e.target.value); }} />
@@ -469,9 +555,10 @@ export function WorkoutLogger({
           </div>
         )}
       </div>
+      )}
 
       {/* Exercise list */}
-      {exercises.length > 0 && (
+      {workoutType !== "cardio" && exercises.length > 0 && (
         <div className="space-y-3">
           {exercises.map((ex, exIdx) => (
             <div key={exIdx} className="rounded-xl bg-gray-50 border border-gray-100 p-3">
@@ -519,7 +606,7 @@ export function WorkoutLogger({
       )}
 
       {/* Save as routine */}
-      {exercises.length > 0 && (
+      {workoutType !== "cardio" && exercises.length > 0 && (
         showSaveTpl ? (
           <div className="flex items-center gap-2">
             <input className={inp} placeholder="Routine name (e.g. Push Day)" value={tplName}

@@ -390,10 +390,15 @@ def get_workouts(user_id: str, days: int = 30) -> List[dict]:
 def add_workout(
     user_id: str,
     date_str: str,
-    workout_type: str,          # "lifting" | "stretching" | "mobility"
+    workout_type: str,          # "lifting" | "stretching" | "mobility" | "cardio"
     exercises: List[dict],      # see schema below
     duration_min: Optional[int] = None,
     notes: str = "",
+    # Cardio extras — used when workout_type == "cardio". All optional.
+    activity: Optional[str]      = None,   # running, walking, cycling, swimming, rowing, hiking, other
+    distance_meters: Optional[float] = None,
+    avg_hr: Optional[int]        = None,
+    calories_kcal: Optional[int] = None,
 ) -> dict:
     """
     Persist a workout for the user. Returns the inserted row.
@@ -402,6 +407,8 @@ def add_workout(
       { name, sets: [{weight_lbs, reps, rpe?}] }
     Exercise schema (stretching):
       { name, duration_sec }
+    Cardio rows have no exercise list — duration/distance/HR live as top-level
+    columns and the activity field stores what kind ("running", "cycling", …).
     """
     # Compute totals for lifting sessions
     total_volume = 0
@@ -417,11 +424,15 @@ def add_workout(
                 r = s.get("reps", 0) or 0
                 total_volume += w * r
 
+    is_cardio = workout_type == "cardio"
     entry: dict = {
         "id":            str(uuid.uuid4())[:8],
         "user_id":       user_id,
         "date":          date_str,
-        "type":          workout_type,
+        # Keep `type` as the user-facing label ("Running" reads better than
+        # "Cardio") when a cardio activity is supplied.
+        "type":          (activity.title() if (is_cardio and activity) else workout_type),
+        "kind":          "cardio" if is_cardio else "strength",
         "exercises":     exercises,
         "muscle_groups": muscle_groups,
         "duration_min":  duration_min,
@@ -429,6 +440,11 @@ def add_workout(
         "total_volume_lbs": round(total_volume) if workout_type == "lifting" else None,
         "logged_at":     datetime.now().isoformat(),
     }
+    if is_cardio:
+        if activity:        entry["activity"]        = activity
+        if distance_meters is not None: entry["distance_meters"] = distance_meters
+        if avg_hr is not None:          entry["avg_hr"]          = int(avg_hr)
+        if calories_kcal is not None:   entry["calories_kcal"]   = int(calories_kcal)
 
     sb = _sb()
     res = sb.table("training_workouts").insert(entry).execute()
