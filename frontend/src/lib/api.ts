@@ -414,13 +414,21 @@ export interface WorkoutExercise {
 export interface Workout {
   id:                string;
   date:              string;
-  type:              "lifting" | "stretching" | "mobility";
+  type:              string;            // free-text label (e.g. "Lifting", "Running", "Sauna")
   exercises:         WorkoutExercise[];
   muscle_groups:     string[];
   duration_min?:     number;
   notes?:            string;
   logged_at:         string;
   total_volume_lbs?: number;
+  // Extended attributes (Oura imports + future cardio entries)
+  kind?:             "strength" | "cardio" | "session";
+  source?:           "oura" | null;     // null = manually logged
+  external_id?:      string;            // Oura workout/session id
+  activity?:         string;            // running, walking, sauna, meditation, etc.
+  distance_meters?:  number;
+  avg_hr?:           number;
+  calories_kcal?:    number;
 }
 
 export interface TrainingRecommendation {

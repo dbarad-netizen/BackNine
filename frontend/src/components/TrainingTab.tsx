@@ -17,6 +17,25 @@ import {
 
 const TYPE_ICON: Record<string, string>  = { lifting: "🏋️", stretching: "🧘", mobility: "🔄" };
 const TYPE_LABEL: Record<string, string> = { lifting: "Lifting", stretching: "Stretch", mobility: "Mobility" };
+
+// Activity-level icons for Oura-imported workouts/sessions — picked over the
+// type icon when present so a "Running" row shows 🏃 instead of the generic 💪.
+const ACTIVITY_ICON: Record<string, string> = {
+  running: "🏃", walking: "🚶", hiking: "🥾", cycling: "🚴", swimming: "🏊",
+  rowing: "🚣", yoga: "🧘", pilates: "🤸", weights: "🏋️", strength: "🏋️",
+  dance: "💃", tennis: "🎾", basketball: "🏀", soccer: "⚽", golf: "⛳",
+  skiing: "🎿", snowboarding: "🏂", climbing: "🧗", boxing: "🥊",
+  sauna: "🧖", meditation: "🧘", breathing: "🌬️", rest: "😌", ice_bath: "🧊",
+};
+
+function workoutGlyph(w: { activity?: string; type: string; kind?: string }): string {
+  const a = (w.activity || "").toLowerCase();
+  if (a && ACTIVITY_ICON[a]) return ACTIVITY_ICON[a];
+  if (TYPE_ICON[w.type]) return TYPE_ICON[w.type];
+  if (w.kind === "cardio")  return "🏃";
+  if (w.kind === "session") return "🧘";
+  return "💪";
+}
 const TYPE_BADGE: Record<string, string> = {
   lifting:    "bg-[#1B3829]/10 text-[#1B3829]",
   stretching: "bg-indigo-50 text-indigo-600",
@@ -612,8 +631,16 @@ function RecentWorkouts({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${TYPE_BADGE[w.type] ?? "bg-gray-100 text-gray-600"}`}>
-                      {TYPE_ICON[w.type] ?? "💪"} {TYPE_LABEL[w.type] ?? w.type}
+                      {workoutGlyph(w)} {TYPE_LABEL[w.type] ?? w.type}
                     </span>
+                    {w.source === "oura" && (
+                      <span
+                        className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700"
+                        title="Imported from your Oura Ring"
+                      >
+                        💍 Oura
+                      </span>
+                    )}
                     <span className="text-xs text-gray-400">{w.date}</span>
                   </div>
                   {w.exercises.length > 0 ? (
@@ -627,6 +654,12 @@ function RecentWorkouts({
                   )}
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-xs text-gray-400">
                     {w.duration_min ? <span>⏱ {w.duration_min} min</span> : null}
+                    {/* Cardio / Oura-import meta */}
+                    {w.distance_meters != null && w.distance_meters > 0 && (
+                      <span>📏 {(w.distance_meters / 1609.34).toFixed(2)} mi</span>
+                    )}
+                    {w.avg_hr ? <span>❤️ {w.avg_hr} bpm avg</span> : null}
+                    {w.calories_kcal ? <span>🔥 {w.calories_kcal} kcal</span> : null}
                     {vol && vol > 0 ? <span>📦 {vol.toLocaleString()} lbs vol</span> : null}
                     {w.muscle_groups.length > 0 && (
                       <span>{w.muscle_groups.slice(0, 3).map(m => m.replace("_", " ")).join(", ")}</span>

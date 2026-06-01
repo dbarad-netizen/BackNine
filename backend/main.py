@@ -19,7 +19,7 @@ from fastapi.responses import RedirectResponse, JSONResponse, PlainTextResponse
 from dotenv import load_dotenv
 from jose import jwt, JWTError
 
-from oura import build_auth_url, exchange_code, refresh_token as oura_refresh, fetch_all, parse_oura_data, parse_oura_vo2_max, fetch_personal_info
+from oura import build_auth_url, exchange_code, refresh_token as oura_refresh, fetch_all, fetch_workouts as oura_fetch_workouts, fetch_sessions as oura_fetch_sessions, parse_oura_data, parse_oura_vo2_max, fetch_personal_info
 from coaching import generate_coaching, coach_overall, coach_sleep, coach_activity
 from models import DashboardResponse, DailyMetrics, WearableConnection
 import nutrition as nutr
@@ -968,6 +968,19 @@ async def get_dashboard(request: Request, days: int = 120):
                     oc.store_days(user_id, rm, slm, am, smm)
                 except Exception:
                     pass
+
+            # Import Oura-logged workouts (runs, walks, cycling, etc.) and
+            # sessions (sauna, meditation, breathing) as training_workouts rows.
+            # Idempotent via the (user_id, source, external_id) unique index, so
+            # re-running on every cache miss is harmless. Best-effort: a flaky
+            # call here must never block the dashboard.
+            try:
+                _ow = await oura_fetch_workouts(access_token, days=30)
+                _os = await oura_fetch_sessions(access_token, days=30)
+                if _ow or _os:
+                    trn.import_oura_events(user_id, _ow, _os)
+            except Exception:
+                pass
         except Exception as exc:
             exc_str = str(exc).lower()
             if "401" in exc_str or "403" in exc_str or "token" in exc_str or "expired" in exc_str:

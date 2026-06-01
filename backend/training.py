@@ -453,6 +453,105 @@ def delete_workout(user_id: str, workout_id: str) -> bool:
         return False
 
 
+# ── Oura imports (workouts + sessions) ─────────────────────────────────────────
+
+def _duration_min_between(start_iso: Optional[str], end_iso: Optional[str]) -> Optional[int]:
+    """Minutes between two ISO timestamps, rounded down. None if either is bad."""
+    if not start_iso or not end_iso:
+        return None
+    try:
+        s = datetime.fromisoformat(start_iso.replace("Z", "+00:00"))
+        e = datetime.fromisoformat(end_iso.replace("Z", "+00:00"))
+        return max(0, int((e - s).total_seconds() / 60))
+    except Exception:
+        return None
+
+
+def import_oura_events(user_id: str, workouts: list[dict], sessions: list[dict]) -> int:
+    """Import Oura-logged workouts and sessions as training_workouts rows.
+
+    Idempotent: fetches the user's existing Oura external_ids once and skips
+    anything already imported. New rows go in via a single batch insert so a
+    re-import of a 30-day window is two queries total, not 60.
+
+    Returns the number of new rows actually inserted (zero on already-current).
+    """
+    if not user_id or (not workouts and not sessions):
+        return 0
+    try:
+        sb = _sb()
+        seen_res = (
+            sb.table("training_workouts")
+            .select("external_id")
+            .eq("user_id", user_id)
+            .eq("source", "oura")
+            .execute()
+        )
+        seen: set[str] = {
+            str(r["external_id"]) for r in (seen_res.data or []) if r.get("external_id")
+        }
+    except Exception:
+        return 0
+
+    new_rows: list[dict] = []
+
+    for w in (workouts or []):
+        wid = str(w.get("id") or "").strip()
+        day = w.get("day")
+        if not wid or not day or wid in seen:
+            continue
+        activity = (str(w.get("activity") or "workout")).strip().lower()
+        new_rows.append({
+            "id":              f"oura_w_{wid}"[:64],
+            "user_id":         user_id,
+            "date":            day,
+            "type":            activity.replace("_", " ").title() or "Workout",
+            "kind":            "cardio",
+            "source":          "oura",
+            "external_id":     wid,
+            "activity":        activity,
+            "duration_min":    _duration_min_between(w.get("start_datetime"), w.get("end_datetime")),
+            "distance_meters": w.get("distance"),
+            "avg_hr":          w.get("average_heart_rate"),
+            "calories_kcal":   w.get("calories"),
+            "exercises":       [],
+            "muscle_groups":   [],
+            "logged_at":       w.get("start_datetime") or None,
+        })
+
+    for s in (sessions or []):
+        sid = str(s.get("id") or "").strip()
+        day = s.get("day")
+        if not sid or not day or sid in seen:
+            continue
+        stype = (str(s.get("type") or "session")).strip().lower()
+        hr = s.get("heart_rate")
+        avg_hr = hr.get("average") if isinstance(hr, dict) else None
+        new_rows.append({
+            "id":            f"oura_s_{sid}"[:64],
+            "user_id":       user_id,
+            "date":          day,
+            "type":          stype.replace("_", " ").title() or "Session",
+            "kind":          "session",
+            "source":        "oura",
+            "external_id":   sid,
+            "activity":      stype,
+            "duration_min":  _duration_min_between(s.get("start_datetime"), s.get("end_datetime")),
+            "avg_hr":        avg_hr,
+            "exercises":     [],
+            "muscle_groups": [],
+            "logged_at":     s.get("start_datetime") or None,
+        })
+
+    if not new_rows:
+        return 0
+    try:
+        sb.table("training_workouts").insert(new_rows).execute()
+        return len(new_rows)
+    except Exception:
+        return 0
+
+
 # ── Reusable routines / templates ─────────────────────────────────────────────
 
 def get_templates(user_id: str) -> List[dict]:

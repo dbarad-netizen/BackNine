@@ -71,6 +71,45 @@ async def fetch_personal_info(access_token: str) -> dict:
                 await asyncio.sleep(0.6 * (attempt + 1))
     raise last_exc if last_exc else RuntimeError("personal_info failed")
 
+async def fetch_workouts(access_token: str, days: int = 30) -> list[dict]:
+    """Fetch the user's Oura-logged workouts for the past N days.
+
+    Each entry: {id, activity, start_datetime, end_datetime, day, intensity,
+    calories, distance, average_heart_rate}. Best-effort: returns [] on any
+    failure so a flaky endpoint never blocks the dashboard.
+    """
+    end   = datetime.now().strftime("%Y-%m-%d")
+    start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    headers = {"Authorization": f"Bearer {access_token}"}
+    url = f"{OURA_API_BASE}/workout?start_date={start}&end_date={end}"
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.get(url, headers=headers)
+            r.raise_for_status()
+            return (r.json() or {}).get("data", []) or []
+    except Exception:
+        return []
+
+
+async def fetch_sessions(access_token: str, days: int = 30) -> list[dict]:
+    """Fetch the user's Oura-logged sessions for the past N days.
+
+    Each entry: {id, type (meditation/breathing/rest/etc.), start_datetime,
+    end_datetime, day, heart_rate}. Best-effort: returns [] on failure.
+    """
+    end   = datetime.now().strftime("%Y-%m-%d")
+    start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    headers = {"Authorization": f"Bearer {access_token}"}
+    url = f"{OURA_API_BASE}/session?start_date={start}&end_date={end}"
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.get(url, headers=headers)
+            r.raise_for_status()
+            return (r.json() or {}).get("data", []) or []
+    except Exception:
+        return []
+
+
 async def fetch_all(access_token: str, days: int = 120) -> dict:
     """
     Fetch all Oura data endpoints for the past N days.
