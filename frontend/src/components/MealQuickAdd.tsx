@@ -182,7 +182,7 @@ export default function MealQuickAdd({ date, onLogged }: Props) {
           {parsing === "photo" ? "Reading…" : "Take a photo of your meal"}
         </button>
         <button onClick={() => uploadRef.current?.click()} disabled={parsing !== null}
-          className="shrink-0 rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-500 hover:bg-gray-50 transition-colors disabled:opacity-40">
+          className="shrink-0 rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-40">
           Upload
         </button>
         {/* Mobile: capture opens the rear camera directly. Desktop ignores it. */}
@@ -191,12 +191,12 @@ export default function MealQuickAdd({ date, onLogged }: Props) {
         <input ref={uploadRef} type="file" accept="image/*" className="hidden"
           onChange={e => { const f = e.target.files?.[0]; if (f) onPhoto(f); }} />
       </div>
-      <p className="text-[10px] text-gray-400 -mt-1">
+      <p className="text-[10px] text-gray-600 -mt-1">
         Describe it or snap a photo — Coach Al estimates the calories &amp; macros for you to confirm.
       </p>
 
       {parsing && (
-        <div className="flex items-center gap-2 text-xs text-gray-500">
+        <div className="flex items-center gap-2 text-xs text-gray-600">
           <div className="h-4 w-4 rounded-full border-2 border-[#1B3829] border-t-transparent animate-spin" />
           {parsing === "photo" ? "Reading your photo…" : "Working out the macros…"}
         </div>
@@ -215,11 +215,11 @@ export default function MealQuickAdd({ date, onLogged }: Props) {
               <div className="flex items-center gap-2">
                 <input value={it.name} onChange={e => updateDraft(i, "name", e.target.value)}
                   className="flex-1 min-w-0 text-sm text-gray-900 bg-transparent focus:outline-none" />
-                <button onClick={() => removeDraft(i)} className="text-gray-300 hover:text-red-400 text-base leading-none shrink-0">×</button>
+                <button onClick={() => removeDraft(i)} className="text-gray-500 hover:text-red-400 text-base leading-none shrink-0">×</button>
               </div>
               <div className="flex items-center gap-2 mt-1">
                 {([["calories", "kcal"], ["protein", "P"], ["carbs", "C"], ["fat", "F"]] as const).map(([f, lbl]) => (
-                  <label key={f} className="flex items-center gap-1 text-[10px] text-gray-400">
+                  <label key={f} className="flex items-center gap-1 text-[10px] text-gray-600">
                     <input type="number" min="0" value={it[f] || ""} onChange={e => updateDraft(i, f, e.target.value)}
                       className="w-14 rounded border border-gray-200 bg-gray-50 px-1.5 py-1 text-xs text-gray-900 text-center focus:outline-none focus:border-[#2D6A4F]" />
                     {lbl}
@@ -233,7 +233,7 @@ export default function MealQuickAdd({ date, onLogged }: Props) {
               className="flex-1 rounded-lg bg-[#1B3829] hover:bg-[#2D6A4F] py-2 text-xs font-semibold text-white transition-colors disabled:opacity-40">
               {logging ? "Logging…" : `Log ${draft.length} item${draft.length !== 1 ? "s" : ""}`}
             </button>
-            <button onClick={() => setDraft(null)} className="px-3 py-2 text-xs text-gray-500 hover:text-gray-800">Cancel</button>
+            <button onClick={() => setDraft(null)} className="px-3 py-2 text-xs text-gray-600 hover:text-gray-800">Cancel</button>
           </div>
         </div>
       )}
@@ -241,14 +241,14 @@ export default function MealQuickAdd({ date, onLogged }: Props) {
       {/* Recents */}
       {recents.length > 0 && !draft && (
         <div>
-          <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-1.5">Tap to re-log</p>
+          <p className="text-[10px] text-gray-600 uppercase tracking-widest mb-1.5">Tap to re-log</p>
           <div className="flex flex-wrap gap-1.5">
             {recents.map((f, i) => (
               <button key={`${f.name}-${i}`} onClick={() => logItems([f], `Logged ${f.name}`)} disabled={logging}
                 className="inline-flex items-center gap-1 rounded-full bg-gray-100 hover:bg-gray-200 px-2.5 py-1 text-xs text-gray-700 transition-colors disabled:opacity-40"
                 title={`${f.calories} kcal`}>
                 <span className="capitalize">{f.name}</span>
-                <span className="text-gray-400">+{f.calories}</span>
+                <span className="text-gray-600">+{f.calories}</span>
               </button>
             ))}
           </div>
@@ -257,7 +257,7 @@ export default function MealQuickAdd({ date, onLogged }: Props) {
 
       {/* Manual: search / custom (tucked away) */}
       <div className="border-t border-gray-50 pt-2">
-        <button onClick={() => setManualOpen(o => !o)} className="text-[11px] font-medium text-gray-500 hover:text-gray-800">
+        <button onClick={() => setManualOpen(o => !o)} className="text-[11px] font-medium text-gray-600 hover:text-gray-800">
           {manualOpen ? "▲ Hide" : "▼ Search the food database or enter it manually"}
         </button>
         {manualOpen && (
@@ -265,7 +265,7 @@ export default function MealQuickAdd({ date, onLogged }: Props) {
             <div className="flex gap-2">
               {(["search", "custom"] as const).map(m => (
                 <button key={m} onClick={() => setManualMode(m)}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${manualMode === m ? "bg-[#1B3829] text-white" : "bg-gray-100 text-gray-500 hover:text-gray-800"}`}>
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${manualMode === m ? "bg-[#1B3829] text-white" : "bg-gray-100 text-gray-600 hover:text-gray-800"}`}>
                   {m === "search" ? "Search food" : "Custom"}
                 </button>
               ))}
@@ -282,7 +282,7 @@ export default function MealQuickAdd({ date, onLogged }: Props) {
                         <button key={f.name} onClick={() => { setSelected(f); setQuery(f.name); setResults([]); setQty("1"); }}
                           className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 text-left transition-colors">
                           <span className="text-sm text-gray-900 capitalize">{f.name}</span>
-                          <span className="text-xs text-gray-400">{f.calories} kcal · {f.unit}</span>
+                          <span className="text-xs text-gray-600">{f.calories} kcal · {f.unit}</span>
                         </button>
                       ))}
                     </div>
@@ -291,10 +291,10 @@ export default function MealQuickAdd({ date, onLogged }: Props) {
                 {selected && (
                   <div className="flex gap-2 items-end">
                     <div className="flex-1">
-                      <p className="text-xs text-gray-400 mb-1">Servings ({selected.unit})</p>
+                      <p className="text-xs text-gray-600 mb-1">Servings ({selected.unit})</p>
                       <input className={inp} type="number" min="0.25" step="0.25" value={qty} onChange={e => setQty(e.target.value)} />
                     </div>
-                    <div className="flex-1 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
+                    <div className="flex-1 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
                       <p className="text-gray-900 font-medium capitalize">{selected.name}</p>
                       <p>{Math.round(selected.calories * (parseFloat(qty) || 1))} kcal</p>
                     </div>
@@ -312,7 +312,7 @@ export default function MealQuickAdd({ date, onLogged }: Props) {
                 <div className="grid grid-cols-4 gap-2">
                   {([["calories", "kcal"], ["protein", "P (g)"], ["carbs", "C (g)"], ["fat", "F (g)"]] as const).map(([f, lbl]) => (
                     <div key={f}>
-                      <p className="text-[10px] text-gray-400 mb-1">{lbl}</p>
+                      <p className="text-[10px] text-gray-600 mb-1">{lbl}</p>
                       <input className={inp} type="number" value={custom[f]}
                         onChange={e => setCustom({ ...custom, [f]: e.target.value })} />
                     </div>

@@ -73,18 +73,18 @@ function AchievementsModal({ data, onClose }: { data: AchievementsResponse; onCl
             <h2 className="text-sm font-bold text-gray-900">
               {data.level ? `Level ${data.level.level} · ${data.level.title}` : "Achievements"}
             </h2>
-            <p className="text-[11px] text-gray-400">
+            <p className="text-[11px] text-gray-600">
               {data.earned_count} of {data.total} unlocked
               {data.level ? ` · ${data.level.xp.toLocaleString()} XP` : ""}
             </p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700 flex items-center justify-center text-lg leading-none">✕</button>
+          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-gray-100 text-gray-600 hover:text-gray-700 flex items-center justify-center text-lg leading-none">✕</button>
         </div>
 
         <div className="p-5 space-y-5">
           {Object.entries(grouped).map(([cat, badges]) => (
             <div key={cat}>
-              <p className="text-[10px] text-gray-400 uppercase tracking-widest font-semibold mb-2">{cat}</p>
+              <p className="text-[10px] text-gray-600 uppercase tracking-widest font-semibold mb-2">{cat}</p>
               <div className="grid grid-cols-2 gap-2">
                 {badges.map(b => (
                   <div key={b.id}
@@ -93,14 +93,14 @@ function AchievementsModal({ data, onClose }: { data: AchievementsResponse; onCl
                       <span className={`text-2xl leading-none ${b.earned ? "" : "grayscale opacity-40"}`}>{b.emoji}</span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-1">
-                          <p className={`text-[13px] font-semibold leading-tight ${b.earned ? "text-gray-900" : "text-gray-500"}`}>{b.name}</p>
+                          <p className={`text-[13px] font-semibold leading-tight ${b.earned ? "text-gray-900" : "text-gray-600"}`}>{b.name}</p>
                           {!!b.xp && (
-                            <span className={`text-[9px] font-bold shrink-0 rounded-full px-1.5 py-0.5 ${b.earned ? "text-[#2D6A4F] bg-[#2D6A4F]/10" : "text-gray-400 bg-gray-200"}`}>
+                            <span className={`text-[9px] font-bold shrink-0 rounded-full px-1.5 py-0.5 ${b.earned ? "text-[#2D6A4F] bg-[#2D6A4F]/10" : "text-gray-600 bg-gray-200"}`}>
                               {b.xp} XP
                             </span>
                           )}
                         </div>
-                        <p className="text-[11px] text-gray-400 leading-snug mt-0.5">{b.description}</p>
+                        <p className="text-[11px] text-gray-600 leading-snug mt-0.5">{b.description}</p>
                       </div>
                     </div>
                     {!b.earned && b.progress && b.progress.target > 0 && (
@@ -109,7 +109,7 @@ function AchievementsModal({ data, onClose }: { data: AchievementsResponse; onCl
                           <div className="h-full rounded-full bg-[#2D6A4F]"
                             style={{ width: `${Math.min(100, Math.round((b.progress.current / b.progress.target) * 100))}%` }} />
                         </div>
-                        <p className="text-[10px] text-gray-400 mt-0.5">{b.progress.current} / {b.progress.target}</p>
+                        <p className="text-[10px] text-gray-600 mt-0.5">{b.progress.current} / {b.progress.target}</p>
                       </div>
                     )}
                     {b.earned && (

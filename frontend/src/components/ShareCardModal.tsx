@@ -361,9 +361,9 @@ export default function ShareCardModal({ onClose, longevity }: Props) {
         <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-gray-100 px-5 py-3 flex items-center justify-between">
           <div>
             <h2 className="text-sm font-bold text-gray-900">Invite friends</h2>
-            <p className="text-[11px] text-gray-400">Share a card — they join you instantly</p>
+            <p className="text-[11px] text-gray-600">Share a card — they join you instantly</p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700 flex items-center justify-center text-lg leading-none">✕</button>
+          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-gray-100 text-gray-600 hover:text-gray-700 flex items-center justify-center text-lg leading-none">✕</button>
         </div>
 
         <div className="p-5 space-y-4">
@@ -374,7 +374,7 @@ export default function ShareCardModal({ onClose, longevity }: Props) {
                 key={k}
                 onClick={() => setTab(k)}
                 className={`text-[12px] font-semibold px-3 py-1.5 rounded-full transition-colors ${
-                  tab === k ? "bg-[#1B3829] text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                  tab === k ? "bg-[#1B3829] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                 }`}
               >
                 {TAB_LABEL[k]}
@@ -394,7 +394,7 @@ export default function ShareCardModal({ onClose, longevity }: Props) {
 
           {/* Invite link row */}
           <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
-            <span className="text-[11px] text-gray-500 truncate flex-1">{inviteLink || "Preparing your link…"}</span>
+            <span className="text-[11px] text-gray-600 truncate flex-1">{inviteLink || "Preparing your link…"}</span>
             <button
               onClick={handleCopy}
               className="text-[11px] font-semibold text-[#1B3829] hover:underline shrink-0"
@@ -423,7 +423,7 @@ export default function ShareCardModal({ onClose, longevity }: Props) {
           </div>
 
           {/* Status */}
-          <p className="text-[11px] text-center min-h-[1em] text-gray-400">
+          <p className="text-[11px] text-center min-h-[1em] text-gray-600">
             {status === "shared" && "✓ Shared"}
             {status === "copied" && "✓ Link copied to clipboard"}
             {status === "downloaded" && "✓ Image saved — link copied too"}

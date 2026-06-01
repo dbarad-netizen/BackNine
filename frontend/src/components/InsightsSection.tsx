@@ -51,13 +51,13 @@ function InsightCard({ insight }: { insight: Insight }) {
 
       {/* Detail */}
       {insight.detail && (
-        <p className="text-xs text-gray-400 leading-snug">{insight.detail}</p>
+        <p className="text-xs text-gray-600 leading-snug">{insight.detail}</p>
       )}
 
       {/* Group comparison bar */}
       <div className="flex gap-3 mt-1">
         <div className="flex-1">
-          <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">{insight.group_a_label}</p>
+          <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1">{insight.group_a_label}</p>
           <div className="flex items-center gap-2">
             <div className="h-1.5 rounded-full bg-gray-200 flex-1">
               <div
@@ -71,7 +71,7 @@ function InsightCard({ insight }: { insight: Insight }) {
           </div>
         </div>
         <div className="flex-1">
-          <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">{insight.group_b_label}</p>
+          <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1">{insight.group_b_label}</p>
           <div className="flex items-center gap-2">
             <div className="h-1.5 rounded-full bg-gray-200 flex-1">
               <div
@@ -90,7 +90,7 @@ function InsightCard({ insight }: { insight: Insight }) {
       </div>
 
       {/* Footer */}
-      <p className="text-[10px] text-gray-300">
+      <p className="text-[10px] text-gray-500">
         Based on {insight.n} days · correlation r={insight.r}
       </p>
     </div>
@@ -144,8 +144,8 @@ export default function InsightsSection() {
   if (insights.length === 0) {
     return (
       <div className="rounded-2xl bg-white border border-gray-100 p-5 text-center">
-        <p className="text-sm font-medium text-gray-500 mb-1">Not enough data yet</p>
-        <p className="text-xs text-gray-400">
+        <p className="text-sm font-medium text-gray-600 mb-1">Not enough data yet</p>
+        <p className="text-xs text-gray-600">
           Insights appear after a few weeks of combined Oura, nutrition, and Apple Health data.
           Keep logging and check back soon.
         </p>
@@ -156,10 +156,10 @@ export default function InsightsSection() {
   return (
     <section className="space-y-3">
       <div className="flex items-baseline justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-600">
           Your Patterns
         </h3>
-        <span className="text-[10px] text-gray-300">Last 60 days</span>
+        <span className="text-[10px] text-gray-500">Last 60 days</span>
       </div>
       <div className="grid gap-3">
         {insights.map(insight => (

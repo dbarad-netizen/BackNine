@@ -251,7 +251,7 @@ export default function ChatWidget({ onRegisterOpen }: Props) {
                 </div>
                 <button
                   onClick={handleDismissObservation}
-                  className="text-[10px] text-gray-400 hover:text-gray-600 mt-1 pl-1"
+                  className="text-[10px] text-gray-600 hover:text-gray-600 mt-1 pl-1"
                 >
                   Dismiss
                 </button>

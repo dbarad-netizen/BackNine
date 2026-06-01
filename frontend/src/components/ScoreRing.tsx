@@ -19,7 +19,7 @@ export default function ScoreRing({ score, label, size = 96, stroke = 8 }: Score
     "text-green-400":  "#4ade80",
     "text-yellow-400": "#facc15",
     "text-red-400":    "#f87171",
-    "text-gray-400":   "#9CA3AF",
+    "text-gray-600":   "#9CA3AF",
   };
   const cls   = scoreColor(score);
   const color = colorMap[cls] ?? "#9CA3AF";
@@ -45,7 +45,7 @@ export default function ScoreRing({ score, label, size = 96, stroke = 8 }: Score
           </span>
         </div>
       </div>
-      <span className="text-xs text-gray-500 uppercase tracking-widest">{label}</span>
+      <span className="text-xs text-gray-600 uppercase tracking-widest">{label}</span>
     </div>
   );
 }

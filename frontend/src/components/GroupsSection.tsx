@@ -71,11 +71,11 @@ export default function GroupsSection() {
   return (
     <section className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
       <div className="px-4 py-3 flex items-center justify-between border-b border-gray-50">
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400">Groups</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-600">Groups</h3>
         <div className="flex items-center gap-2">
           <button
             onClick={() => { setMode(m => m === "join" ? "none" : "join"); setError(null); }}
-            className="text-[11px] text-gray-400 hover:text-[#1B3829] font-medium transition-colors"
+            className="text-[11px] text-gray-600 hover:text-[#1B3829] font-medium transition-colors"
           >
             Join
           </button>
@@ -119,8 +119,8 @@ export default function GroupsSection() {
       {/* Group list */}
       {groups.length === 0 ? (
         <div className="px-4 py-5 text-center">
-          <p className="text-sm text-gray-500">No groups yet</p>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <p className="text-sm text-gray-600">No groups yet</p>
+          <p className="text-xs text-gray-600 mt-0.5">
             Create one and share the code, or join with a friend&apos;s code — then chat together.
           </p>
         </div>
@@ -135,7 +135,7 @@ export default function GroupsSection() {
               <span className="w-8 h-8 rounded-full bg-[#1B3829]/10 text-base flex items-center justify-center shrink-0">👥</span>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-gray-900 truncate">{g.name}</p>
-                <p className="text-[11px] text-gray-400 truncate">
+                <p className="text-[11px] text-gray-600 truncate">
                   {g.member_count} member{g.member_count !== 1 ? "s" : ""} · {g.members.map(m => m.name).join(", ")}
                 </p>
               </div>

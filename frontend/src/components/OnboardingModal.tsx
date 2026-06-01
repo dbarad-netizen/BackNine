@@ -141,12 +141,12 @@ export default function OnboardingModal({ onDone }: Props) {
               <div className="flex-1 space-y-4">
                 <div>
                   <h2 className="text-lg font-bold text-gray-900">A little about you</h2>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <p className="text-xs text-gray-600 mt-0.5">
                     Your name is what friends see. Age &amp; sex make your longevity score accurate.
                   </p>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1.5">Display Name</label>
+                  <label className="block text-xs font-semibold text-gray-600 uppercase tracking-widest mb-1.5">Display Name</label>
                   <input
                     className={inp}
                     placeholder="e.g. David B."
@@ -157,7 +157,7 @@ export default function OnboardingModal({ onDone }: Props) {
                 </div>
                 <div className="flex gap-2">
                   <div className="flex-1">
-                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1.5">Date of Birth</label>
+                    <label className="block text-xs font-semibold text-gray-600 uppercase tracking-widest mb-1.5">Date of Birth</label>
                     <input
                       className={inp}
                       type="date"
@@ -167,7 +167,7 @@ export default function OnboardingModal({ onDone }: Props) {
                     />
                   </div>
                   <div className="flex-[1.5]">
-                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1.5">Biological Sex</label>
+                    <label className="block text-xs font-semibold text-gray-600 uppercase tracking-widest mb-1.5">Biological Sex</label>
                     <div className="flex gap-2">
                       {(["male", "female"] as const).map(s => (
                         <button
@@ -203,7 +203,7 @@ export default function OnboardingModal({ onDone }: Props) {
               <div className="flex-1 space-y-3">
                 <div>
                   <h2 className="text-lg font-bold text-gray-900">How do you track?</h2>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <p className="text-xs text-gray-600 mt-0.5">
                     Pick one — you can change or add others later.
                   </p>
                 </div>
@@ -217,9 +217,9 @@ export default function OnboardingModal({ onDone }: Props) {
                     <span className="text-2xl">💍</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-gray-900">Connect Oura Ring</p>
-                      <p className="text-[11px] text-gray-500">Unlocks readiness, sleep, HRV, recovery</p>
+                      <p className="text-[11px] text-gray-600">Unlocks readiness, sleep, HRV, recovery</p>
                     </div>
-                    <span className="text-gray-400 text-sm">→</span>
+                    <span className="text-gray-600 text-sm">→</span>
                   </div>
                 </button>
 
@@ -232,9 +232,9 @@ export default function OnboardingModal({ onDone }: Props) {
                     <span className="text-2xl">🍎</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-gray-900">Use Apple Health</p>
-                      <p className="text-[11px] text-gray-500">Steps, sleep, HRV from your iPhone / Apple Watch — we&apos;ll finish setup in the Metrics tab.</p>
+                      <p className="text-[11px] text-gray-600">Steps, sleep, HRV from your iPhone / Apple Watch — we&apos;ll finish setup in the Metrics tab.</p>
                     </div>
-                    <span className="text-gray-400 text-sm">→</span>
+                    <span className="text-gray-600 text-sm">→</span>
                   </div>
                 </button>
 
@@ -247,9 +247,9 @@ export default function OnboardingModal({ onDone }: Props) {
                     <span className="text-2xl">✏️</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-gray-900">Just manual for now</p>
-                      <p className="text-[11px] text-gray-500">Log workouts, meals, weight & mood by hand. Add a tracker anytime.</p>
+                      <p className="text-[11px] text-gray-600">Log workouts, meals, weight & mood by hand. Add a tracker anytime.</p>
                     </div>
-                    <span className="text-gray-400 text-sm">→</span>
+                    <span className="text-gray-600 text-sm">→</span>
                   </div>
                 </button>
               </div>
@@ -266,7 +266,7 @@ export default function OnboardingModal({ onDone }: Props) {
               <div className="flex-1 space-y-4">
                 <div>
                   <h2 className="text-lg font-bold text-gray-900">Better with friends 🤝</h2>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <p className="text-xs text-gray-600 mt-0.5">
                     BackNine is most fun when you compete with friends. Invite one now, or skip and do it later.
                   </p>
                 </div>

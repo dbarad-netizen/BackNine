@@ -88,7 +88,7 @@ export default function NotificationBell() {
       <button
         onClick={() => setOpen(v => !v)}
         aria-label="Notifications"
-        className="relative text-gray-400 hover:text-gray-700 transition-colors text-base leading-none"
+        className="relative text-gray-600 hover:text-gray-700 transition-colors text-base leading-none"
         title="Notifications"
       >
         🔔
@@ -120,7 +120,7 @@ export default function NotificationBell() {
           <p className="text-sm font-bold text-gray-900">Notifications</p>
           <button
             onClick={() => setOpen(false)}
-            className="text-gray-400 hover:text-gray-700 text-lg leading-none"
+            className="text-gray-600 hover:text-gray-700 text-lg leading-none"
           >
             ✕
           </button>
@@ -133,7 +133,7 @@ export default function NotificationBell() {
             </div>
           )}
           {!loading && items.length === 0 && (
-            <p className="text-xs text-gray-400 italic text-center py-8 px-4">
+            <p className="text-xs text-gray-600 italic text-center py-8 px-4">
               No activity yet. Friend messages, comments, taunts, and reactions show up here.
             </p>
           )}
@@ -147,16 +147,16 @@ export default function NotificationBell() {
                   <div className="flex-1 min-w-0">
                     <p className="text-[12px] text-gray-800 leading-snug">{summarize(n)}</p>
                     {n.preview && n.kind === "dm" && (
-                      <p className="text-[11px] text-gray-500 italic truncate mt-0.5">
+                      <p className="text-[11px] text-gray-600 italic truncate mt-0.5">
                         &ldquo;{n.preview}&rdquo;
                       </p>
                     )}
                     {n.preview && n.kind === "comment" && (
-                      <p className="text-[11px] text-gray-500 italic truncate mt-0.5">
+                      <p className="text-[11px] text-gray-600 italic truncate mt-0.5">
                         &ldquo;{n.preview}&rdquo;
                       </p>
                     )}
-                    <p className="text-[10px] text-gray-400 mt-0.5">{timeAgo(n.created_at)}</p>
+                    <p className="text-[10px] text-gray-600 mt-0.5">{timeAgo(n.created_at)}</p>
                   </div>
                   {n.unread && (
                     <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0 mt-2.5" />

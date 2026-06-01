@@ -185,13 +185,13 @@ export default function GearPicks({ signals, onJump }: Props) {
   return (
     <section>
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-600">
           Picked For You
         </h3>
         {onJump && (
           <button
             onClick={onJump}
-            className="text-[11px] text-gray-400 hover:text-[#1B3829] transition-colors font-medium"
+            className="text-[11px] text-gray-600 hover:text-[#1B3829] transition-colors font-medium"
           >
             Browse all →
           </button>
@@ -215,7 +215,7 @@ export default function GearPicks({ signals, onJump }: Props) {
                   </span>
                 )}
               </div>
-              <p className="text-[10px] text-gray-400 uppercase tracking-wide">{item.brand}</p>
+              <p className="text-[10px] text-gray-600 uppercase tracking-wide">{item.brand}</p>
 
               <div className="rounded-lg bg-amber-50/60 border border-amber-100 px-2 py-1.5 my-0.5">
                 <p className="text-[9px] text-amber-700 font-semibold uppercase tracking-wide mb-0.5">
@@ -224,17 +224,17 @@ export default function GearPicks({ signals, onJump }: Props) {
                 <p className="text-[11px] text-amber-900 leading-snug">{reason}</p>
               </div>
 
-              <p className="text-[11px] text-gray-500 leading-snug flex-1">{item.description}</p>
+              <p className="text-[11px] text-gray-600 leading-snug flex-1">{item.description}</p>
 
               <div className="flex items-center justify-between mt-0.5">
                 <p className="text-[11px] font-semibold text-[#1B3829]">{item.price}</p>
-                <span className="text-[10px] text-gray-400" title="Opens in a new tab">↗</span>
+                <span className="text-[10px] text-gray-600" title="Opens in a new tab">↗</span>
               </div>
             </a>
 
             <button
               onClick={() => handleDismiss(item.id)}
-              className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-white/90 border border-gray-200 text-gray-400 hover:text-red-500 hover:border-red-200 text-[11px] leading-none flex items-center justify-center transition-colors shadow-sm"
+              className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-white/90 border border-gray-200 text-gray-600 hover:text-red-500 hover:border-red-200 text-[11px] leading-none flex items-center justify-center transition-colors shadow-sm"
               title="Not for me — hide from my picks (stays in the Gear shop)"
             >
               ✕

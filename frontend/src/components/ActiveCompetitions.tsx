@@ -53,13 +53,13 @@ export default function ActiveCompetitions({ onJump }: Props) {
   return (
     <section>
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-600">
           Active Competitions
         </h3>
         {onJump && (
           <button
             onClick={onJump}
-            className="text-[11px] text-gray-400 hover:text-[#1B3829] transition-colors font-medium"
+            className="text-[11px] text-gray-600 hover:text-[#1B3829] transition-colors font-medium"
           >
             View all →
           </button>
@@ -97,7 +97,7 @@ export default function ActiveCompetitions({ onJump }: Props) {
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 mt-0.5 text-[11px] text-gray-400">
+                  <div className="flex items-center gap-3 mt-0.5 text-[11px] text-gray-600">
                     <span>
                       <span className="font-semibold text-gray-700">{me?.days_hit ?? 0}</span>
                       /{c.elapsed_days} days hit
@@ -117,12 +117,12 @@ export default function ActiveCompetitions({ onJump }: Props) {
                     {myRank > 0 ? rankBadge(myRank) : "—"}
                   </p>
                   {top && !me?.is_me && myRank > 1 && (
-                    <p className="text-[10px] text-gray-400 mt-1">
+                    <p className="text-[10px] text-gray-600 mt-1">
                       {fmt(top.total_value - (me?.total_value ?? 0), c.metric)} behind
                     </p>
                   )}
                   {myRank === 1 && top && sorted[1] && (
-                    <p className="text-[10px] text-gray-400 mt-1">
+                    <p className="text-[10px] text-gray-600 mt-1">
                       +{fmt((me?.total_value ?? 0) - sorted[1].total_value, c.metric)}
                     </p>
                   )}

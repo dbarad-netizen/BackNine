@@ -48,7 +48,7 @@ function RecCard({ rec }: { rec: TrainingRecommendation }) {
     <div className="rounded-2xl border bg-white p-5" style={{ borderColor: rec.color + "66" }}>
       <div className="flex items-start justify-between mb-3">
         <div>
-          <p className="text-xs text-gray-400 uppercase tracking-widest mb-1">Today&apos;s Training</p>
+          <p className="text-xs text-gray-600 uppercase tracking-widest mb-1">Today&apos;s Training</p>
           <p className="text-gray-900 font-semibold text-lg">{rec.title}</p>
         </div>
         <span className="text-xs font-semibold px-2.5 py-1 rounded-full shrink-0 ml-2"
@@ -56,7 +56,7 @@ function RecCard({ rec }: { rec: TrainingRecommendation }) {
           {rec.label}
         </span>
       </div>
-      <p className="text-sm text-gray-500 leading-relaxed mb-3">{rec.detail}</p>
+      <p className="text-sm text-gray-600 leading-relaxed mb-3">{rec.detail}</p>
       {rec.modifiers.length > 0 && (
         <div className="space-y-1 mb-3">
           {rec.modifiers.map((m, i) => (
@@ -67,11 +67,11 @@ function RecCard({ rec }: { rec: TrainingRecommendation }) {
         </div>
       )}
       <div className="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2">
-        <p className="text-xs text-gray-400 mb-0.5">Suggestion</p>
+        <p className="text-xs text-gray-600 mb-0.5">Suggestion</p>
         <p className="text-sm text-gray-800">{rec.suggestion}</p>
       </div>
       {rec.consecutive_days > 0 && (
-        <p className="text-xs text-gray-400 mt-2">{rec.consecutive_days} consecutive training day{rec.consecutive_days > 1 ? "s" : ""}</p>
+        <p className="text-xs text-gray-600 mt-2">{rec.consecutive_days} consecutive training day{rec.consecutive_days > 1 ? "s" : ""}</p>
       )}
     </div>
   );
@@ -83,7 +83,7 @@ function WeeklyPlanView({ plan }: { plan: WeeklyPlan }) {
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5">
-      <p className="text-xs text-gray-400 uppercase tracking-widest mb-4">This Week&apos;s Plan</p>
+      <p className="text-xs text-gray-600 uppercase tracking-widest mb-4">This Week&apos;s Plan</p>
       <div className="grid grid-cols-7 gap-1">
         {plan.plan.map((session, i) => (
           <div key={session.date}
@@ -94,11 +94,11 @@ function WeeklyPlanView({ plan }: { plan: WeeklyPlan }) {
                 ? "bg-gray-50"
                 : "bg-gray-100"
             }`}>
-            <p className={`text-[10px] font-medium mb-1 ${session.is_today ? "text-green-600" : "text-gray-400"}`}>
+            <p className={`text-[10px] font-medium mb-1 ${session.is_today ? "text-green-600" : "text-gray-600"}`}>
               {DAY_LABELS[i]}
             </p>
             {session.rest ? (
-              <p className="text-[10px] text-gray-400">Rest</p>
+              <p className="text-[10px] text-gray-600">Rest</p>
             ) : (
               <>
                 <p className="text-[9px] text-gray-700 leading-tight line-clamp-2">
@@ -106,7 +106,7 @@ function WeeklyPlanView({ plan }: { plan: WeeklyPlan }) {
                   {session.name.split("—")[0].trim()}
                 </p>
                 {session.focus && session.focus.length > 0 && (
-                  <p className="text-[8px] text-gray-400 mt-0.5 leading-tight">
+                  <p className="text-[8px] text-gray-600 mt-0.5 leading-tight">
                     {session.focus.slice(0, 2).map(f => f.replace("_", " ")).join(", ")}
                   </p>
                 )}
@@ -128,9 +128,9 @@ function WeeklyPlanView({ plan }: { plan: WeeklyPlan }) {
                 <div key={i} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
                   <div>
                     <p className="text-sm text-gray-900 capitalize">{ex.name}</p>
-                    {ex.note && <p className="text-xs text-gray-400 mt-0.5">{ex.note}</p>}
+                    {ex.note && <p className="text-xs text-gray-600 mt-0.5">{ex.note}</p>}
                   </div>
-                  <span className="text-xs text-gray-500 font-mono shrink-0 ml-2">
+                  <span className="text-xs text-gray-600 font-mono shrink-0 ml-2">
                     {ex.sets}×{ex.reps}
                   </span>
                 </div>
@@ -150,7 +150,7 @@ function SetStepper({
   value: number; step: number; placeholder: string; width: string;
   onChange: (v: number) => void;
 }) {
-  const btn = "w-6 h-7 rounded-md bg-gray-100 text-gray-500 hover:bg-gray-200 text-sm leading-none flex items-center justify-center transition-colors";
+  const btn = "w-6 h-7 rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200 text-sm leading-none flex items-center justify-center transition-colors";
   return (
     <div className="flex items-center gap-0.5">
       <button type="button" className={btn} onClick={() => onChange(Math.max(0, (value || 0) - step))}>−</button>
@@ -393,11 +393,11 @@ export function WorkoutLogger({
             {parsing ? "…" : "Add"}
           </button>
         </div>
-        <p className="text-[10px] text-gray-400 mt-1">
+        <p className="text-[10px] text-gray-600 mt-1">
           Type your whole workout and Coach Al fills in the exercises &amp; sets below to review.
         </p>
         {parsing && (
-          <div className="flex items-center gap-2 text-xs text-gray-500 mt-1.5">
+          <div className="flex items-center gap-2 text-xs text-gray-600 mt-1.5">
             <div className="h-4 w-4 rounded-full border-2 border-[#1B3829] border-t-transparent animate-spin" />
             Reading your workout…
           </div>
@@ -407,7 +407,7 @@ export function WorkoutLogger({
 
       <div className="flex items-center gap-2">
         <div className="flex-1 h-px bg-gray-100" />
-        <span className="text-[10px] text-gray-400 uppercase tracking-widest">or build it manually</span>
+        <span className="text-[10px] text-gray-600 uppercase tracking-widest">or build it manually</span>
         <div className="flex-1 h-px bg-gray-100" />
       </div>
 
@@ -416,7 +416,7 @@ export function WorkoutLogger({
         {(["lifting", "stretching", "mobility"] as const).map(t => (
           <button key={t} onClick={() => setWorkoutType(t)}
             className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              workoutType === t ? "bg-[#1B3829] text-white" : "bg-gray-100 text-gray-500 hover:text-gray-800"
+              workoutType === t ? "bg-[#1B3829] text-white" : "bg-gray-100 text-gray-600 hover:text-gray-800"
             }`}>
             {TYPE_ICON[t]} {TYPE_LABEL[t]}
           </button>
@@ -434,7 +434,7 @@ export function WorkoutLogger({
       {/* Saved routines — one tap to start from a template */}
       {typeTemplates.length > 0 && (
         <div>
-          <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-1.5">Start from a routine</p>
+          <p className="text-[10px] text-gray-600 uppercase tracking-widest mb-1.5">Start from a routine</p>
           <div className="flex flex-wrap gap-1.5">
             {typeTemplates.map(t => (
               <span key={t.id} className="inline-flex items-center rounded-full bg-[#1B3829]/8 border border-[#1B3829]/15 pl-2.5 pr-1 py-0.5">
@@ -443,7 +443,7 @@ export function WorkoutLogger({
                   {t.name}
                 </button>
                 <button onClick={() => deleteTemplate(t.id)} title="Delete routine"
-                  className="ml-1 w-4 h-4 text-gray-300 hover:text-red-400 text-sm leading-none">×</button>
+                  className="ml-1 w-4 h-4 text-gray-500 hover:text-red-400 text-sm leading-none">×</button>
               </span>
             ))}
           </div>
@@ -461,9 +461,9 @@ export function WorkoutLogger({
                 className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 text-left transition-colors">
                 <div>
                   <p className="text-sm text-gray-900 capitalize">{r.name}</p>
-                  <p className="text-xs text-gray-400">{r.primary.join(", ")} · {r.equipment}</p>
+                  <p className="text-xs text-gray-600">{r.primary.join(", ")} · {r.equipment}</p>
                 </div>
-                <span className="text-xs text-gray-400 shrink-0 ml-2 capitalize">{r.category}</span>
+                <span className="text-xs text-gray-600 shrink-0 ml-2 capitalize">{r.category}</span>
               </button>
             ))}
           </div>
@@ -477,40 +477,40 @@ export function WorkoutLogger({
             <div key={exIdx} className="rounded-xl bg-gray-50 border border-gray-100 p-3">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-sm font-medium text-gray-900 capitalize">{ex.name}</p>
-                <button onClick={() => removeExercise(exIdx)} className="text-gray-400 hover:text-red-400 text-lg leading-none transition-colors">×</button>
+                <button onClick={() => removeExercise(exIdx)} className="text-gray-600 hover:text-red-400 text-lg leading-none transition-colors">×</button>
               </div>
 
               {workoutType === "lifting" && ex.sets ? (
                 <>
                   {ex.sets.map((s, setIdx) => (
                     <div key={setIdx} className="flex items-center gap-1.5 mb-1.5">
-                      <span className="w-4 shrink-0 text-center text-[11px] text-gray-400">{setIdx + 1}</span>
+                      <span className="w-4 shrink-0 text-center text-[11px] text-gray-600">{setIdx + 1}</span>
                       <SetStepper value={s.weight_lbs} step={5} placeholder="lbs" width="w-12"
                         onChange={v => updateSet(exIdx, setIdx, "weight_lbs", v)} />
-                      <span className="text-[11px] text-gray-300">×</span>
+                      <span className="text-[11px] text-gray-500">×</span>
                       <SetStepper value={s.reps} step={1} placeholder="reps" width="w-11"
                         onChange={v => updateSet(exIdx, setIdx, "reps", v)} />
                       <button onClick={() => toggleDone(exIdx, setIdx)} title="Mark set done"
                         className={`ml-auto w-7 h-7 rounded-md text-sm leading-none transition-colors flex items-center justify-center ${
-                          s.done ? "bg-green-600 text-white" : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+                          s.done ? "bg-green-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                         }`}>✓</button>
                       <button onClick={() => removeSet(exIdx, setIdx)} title="Remove set"
-                        className="w-4 text-gray-300 hover:text-red-400 text-sm leading-none">×</button>
+                        className="w-4 text-gray-500 hover:text-red-400 text-sm leading-none">×</button>
                     </div>
                   ))}
                   <button onClick={() => addSet(exIdx)}
-                    className="mt-1 w-full py-1 rounded-lg border border-dashed border-gray-300 text-xs text-gray-400 hover:text-gray-700 hover:border-gray-400 transition-colors">
+                    className="mt-1 w-full py-1 rounded-lg border border-dashed border-gray-300 text-xs text-gray-600 hover:text-gray-700 hover:border-gray-400 transition-colors">
                     + Add set
                   </button>
                 </>
               ) : (
                 <div className="flex items-center gap-2">
-                  <p className="text-xs text-gray-400">Duration (sec)</p>
+                  <p className="text-xs text-gray-600">Duration (sec)</p>
                   <input type="number" min="10" step="5" placeholder="30"
                     value={ex.duration_sec || ""}
                     onChange={e => setExercises(prev => prev.map((x, i) => i === exIdx ? { ...x, duration_sec: parseInt(e.target.value) || 30 } : x))}
                     className="w-20 rounded-lg bg-white border border-gray-200 px-2 py-1.5 text-sm text-gray-900 text-center focus:outline-none focus:border-green-500" />
-                  <span className="text-xs text-gray-400">each side</span>
+                  <span className="text-xs text-gray-600">each side</span>
                 </div>
               )}
             </div>
@@ -529,7 +529,7 @@ export function WorkoutLogger({
               {savingTpl ? "…" : "Save"}
             </button>
             <button onClick={() => { setShowSaveTpl(false); setTplName(""); }}
-              className="shrink-0 text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+              className="shrink-0 text-gray-600 hover:text-gray-600 text-lg leading-none">×</button>
           </div>
         ) : (
           <button onClick={() => setShowSaveTpl(true)}
@@ -542,12 +542,12 @@ export function WorkoutLogger({
       {/* Meta */}
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <p className="text-xs text-gray-400 mb-1">Duration (min)</p>
+          <p className="text-xs text-gray-600 mb-1">Duration (min)</p>
           <input className={inp} type="number" placeholder="45" value={duration}
             onChange={e => setDuration(e.target.value)} />
         </div>
         <div>
-          <p className="text-xs text-gray-400 mb-1">Notes</p>
+          <p className="text-xs text-gray-600 mb-1">Notes</p>
           <input className={inp} placeholder="Optional" value={notes}
             onChange={e => setNotes(e.target.value)} />
         </div>
@@ -558,7 +558,7 @@ export function WorkoutLogger({
         {saving ? "Saving…" : "Save workout"}
       </button>
       {exercises.length === 0 && (notes.trim() || duration || describeTrimmed) && (
-        <p className="text-[11px] text-gray-400 -mt-2 text-center">
+        <p className="text-[11px] text-gray-600 -mt-2 text-center">
           No exercises added — this will be logged as a quick session.
         </p>
       )}
@@ -572,10 +572,10 @@ function StretchRoutineView({ routine, onClose }: { routine: StretchRoutine; onC
     <div className="rounded-2xl border border-indigo-200 bg-white p-5">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <p className="text-xs text-gray-400 uppercase tracking-widest">Post-Workout Stretch</p>
+          <p className="text-xs text-gray-600 uppercase tracking-widest">Post-Workout Stretch</p>
           <p className="text-sm font-semibold text-gray-900 mt-0.5">{routine.total_min} min · {routine.exercises.length} exercises</p>
         </div>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+        <button onClick={onClose} className="text-gray-600 hover:text-gray-600 text-xl leading-none">×</button>
       </div>
       <div className="space-y-2">
         {routine.exercises.map((ex, i) => (
@@ -586,11 +586,11 @@ function StretchRoutineView({ routine, onClose }: { routine: StretchRoutine; onC
                 {ex.sides === 2 ? `${ex.duration_sec}s × 2` : `${ex.duration_sec}s`}
               </span>
             </div>
-            <p className="text-xs text-gray-400">{ex.muscle_group} · {ex.cue}</p>
+            <p className="text-xs text-gray-600">{ex.muscle_group} · {ex.cue}</p>
           </div>
         ))}
       </div>
-      <p className="text-xs text-gray-400 mt-3">
+      <p className="text-xs text-gray-600 mt-3">
         Targets: {routine.muscle_groups.join(", ")}
       </p>
     </div>
@@ -610,8 +610,8 @@ function RecentWorkouts({
   if (workouts.length === 0) {
     return (
       <div className="rounded-2xl border border-gray-200 bg-white p-5 text-center">
-        <p className="text-gray-400 text-sm">No workouts logged yet</p>
-        <p className="text-gray-300 text-xs mt-1">Log your first session above</p>
+        <p className="text-gray-600 text-sm">No workouts logged yet</p>
+        <p className="text-gray-500 text-xs mt-1">Log your first session above</p>
       </div>
     );
   }
@@ -621,7 +621,7 @@ function RecentWorkouts({
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5">
-      <p className="text-xs text-gray-400 uppercase tracking-widest mb-4">Recent Workouts</p>
+      <p className="text-xs text-gray-600 uppercase tracking-widest mb-4">Recent Workouts</p>
       <div className="space-y-2.5">
         {sorted.slice(0, 5).map(w => {
           const vol = w.total_volume_lbs;
@@ -641,7 +641,7 @@ function RecentWorkouts({
                         💍 Oura
                       </span>
                     )}
-                    <span className="text-xs text-gray-400">{w.date}</span>
+                    <span className="text-xs text-gray-600">{w.date}</span>
                   </div>
                   {w.exercises.length > 0 ? (
                     <p className="text-sm text-gray-700 capitalize">
@@ -652,7 +652,7 @@ function RecentWorkouts({
                       {w.notes?.trim() || "Quick session"}
                     </p>
                   )}
-                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-xs text-gray-400">
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-xs text-gray-600">
                     {w.duration_min ? <span>⏱ {w.duration_min} min</span> : null}
                     {/* Cardio / Oura-import meta */}
                     {w.distance_meters != null && w.distance_meters > 0 && (
@@ -667,7 +667,7 @@ function RecentWorkouts({
                   </div>
                 </div>
                 <button onClick={() => onDelete(w.id)} title="Delete workout"
-                  className="text-gray-300 hover:text-red-400 text-lg leading-none transition-colors shrink-0">×</button>
+                  className="text-gray-500 hover:text-red-400 text-lg leading-none transition-colors shrink-0">×</button>
               </div>
 
               {/* Clear action — not a category tag */}
@@ -701,14 +701,14 @@ function TrainingSettingsPanel({ settings, onSave }: { settings: TrainingSetting
       <p className="text-sm font-semibold text-gray-900">Training Settings</p>
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <p className="text-xs text-gray-400 mb-1">Days / week</p>
+          <p className="text-xs text-gray-600 mb-1">Days / week</p>
           <select className={inp} value={s.days_per_week}
             onChange={e => setS({ ...s, days_per_week: parseInt(e.target.value) })}>
             {[3, 4, 5].map(n => <option key={n} value={n}>{n} days</option>)}
           </select>
         </div>
         <div>
-          <p className="text-xs text-gray-400 mb-1">Goal</p>
+          <p className="text-xs text-gray-600 mb-1">Goal</p>
           <select className={inp} value={s.goal}
             onChange={e => setS({ ...s, goal: e.target.value })}>
             <option value="general_fitness">General Fitness</option>
@@ -718,14 +718,14 @@ function TrainingSettingsPanel({ settings, onSave }: { settings: TrainingSetting
         </div>
       </div>
       <div>
-        <p className="text-xs text-gray-400 mb-2">Available equipment</p>
+        <p className="text-xs text-gray-600 mb-2">Available equipment</p>
         <div className="flex flex-wrap gap-1.5">
           {EQUIPMENT.map(e => (
             <button key={e} onClick={() => toggleEquip(e)}
               className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize transition-colors ${
                 s.equipment.includes(e)
                   ? "bg-green-100 text-green-700 border border-green-300"
-                  : "bg-gray-100 text-gray-400 border border-gray-200"
+                  : "bg-gray-100 text-gray-600 border border-gray-200"
               }`}>{e}</button>
           ))}
         </div>
@@ -829,7 +829,7 @@ export default function TrainingTab({
       <button onClick={() => setShowLogger(!showLogger)}
         className={`w-full py-2.5 rounded-xl border text-sm font-semibold transition-colors ${
           showLogger
-            ? "border-gray-300 text-gray-500 hover:text-gray-800"
+            ? "border-gray-300 text-gray-600 hover:text-gray-800"
             : "border-green-600/50 bg-green-600/10 text-green-700 hover:bg-green-600/20"
         }`}>
         {showLogger ? "▲ Cancel" : "＋ Log a workout"}
@@ -847,7 +847,7 @@ export default function TrainingTab({
       {/* Settings */}
       <div>
         <button onClick={() => setShowSettings(!showSettings)}
-          className="w-full py-2.5 rounded-xl border border-gray-200 text-gray-500 hover:text-gray-800 hover:border-gray-400 text-sm font-medium transition-colors">
+          className="w-full py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:text-gray-800 hover:border-gray-400 text-sm font-medium transition-colors">
           {showSettings ? "▲ Hide" : "⚙ Training settings"}
         </button>
         {showSettings && (

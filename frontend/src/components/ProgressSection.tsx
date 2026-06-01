@@ -11,11 +11,11 @@ function DeltaBadge({ value, unit, direction }: {
 }) {
   if (value === null || value === undefined) return null;
   const abs = Math.abs(value);
-  if (abs < 0.5) return <span className="text-[10px] text-gray-300">no change</span>;
+  if (abs < 0.5) return <span className="text-[10px] text-gray-500">no change</span>;
 
   const color =
     direction === "positive" ? "text-green-600" :
-    direction === "negative" ? "text-red-500"   : "text-gray-400";
+    direction === "negative" ? "text-red-500"   : "text-gray-600";
   const arrow = value > 0 ? "↑" : "↓";
 
   return (
@@ -41,7 +41,7 @@ function OnTargetBar({ current, previous, total, prevTotal, windowDays }: {
 
   return (
     <div className="space-y-1">
-      <div className="flex items-center justify-between text-[10px] text-gray-400">
+      <div className="flex items-center justify-between text-[10px] text-gray-600">
         <span>Last 30 days: <span className="font-semibold text-gray-700">{current}/{denom} days</span></span>
         {prevPct !== null && (
           <span>Prior 30 days: {previous}/{prevDenom}</span>
@@ -82,7 +82,7 @@ function ProgressCard({ item }: { item: ProgressItem }) {
           <span className="text-lg">{item.icon}</span>
           <span className="text-sm font-semibold text-gray-900">{item.title}</span>
           {item.target_label && (
-            <span className="text-[10px] text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded-full">
+            <span className="text-[10px] text-gray-600 bg-gray-50 px-1.5 py-0.5 rounded-full">
               {item.target_label}
             </span>
           )}
@@ -94,18 +94,18 @@ function ProgressCard({ item }: { item: ProgressItem }) {
       {item.current_avg !== null && (
         <div className="flex gap-4">
           <div>
-            <p className="text-[10px] text-gray-400 uppercase tracking-wider">Last 30 Days</p>
+            <p className="text-[10px] text-gray-600 uppercase tracking-wider">Last 30 Days</p>
             <p className="text-xl font-bold text-gray-900">
               {typeof item.current_avg === "number" && item.unit === "steps"
                 ? item.current_avg.toLocaleString()
                 : item.current_avg}
-              <span className="text-xs text-gray-400 font-normal ml-1">{item.unit}</span>
+              <span className="text-xs text-gray-600 font-normal ml-1">{item.unit}</span>
             </p>
           </div>
           {item.previous_avg !== null && (
             <div>
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider">Prior 30 Days</p>
-              <p className="text-xl font-semibold text-gray-300">
+              <p className="text-[10px] text-gray-600 uppercase tracking-wider">Prior 30 Days</p>
+              <p className="text-xl font-semibold text-gray-500">
                 {typeof item.previous_avg === "number" && item.unit === "steps"
                   ? item.previous_avg.toLocaleString()
                   : item.previous_avg}
@@ -115,7 +115,7 @@ function ProgressCard({ item }: { item: ProgressItem }) {
           )}
           {item.personal_best !== null && (
             <div className="ml-auto text-right">
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider">Best</p>
+              <p className="text-[10px] text-gray-600 uppercase tracking-wider">Best</p>
               <p className="text-sm font-semibold text-amber-500">
                 {typeof item.personal_best === "number" && item.unit === "steps"
                   ? item.personal_best.toLocaleString()
@@ -138,7 +138,7 @@ function ProgressCard({ item }: { item: ProgressItem }) {
       )}
 
       {/* Summary sentence */}
-      <p className="text-xs text-gray-500 leading-snug">{item.summary}</p>
+      <p className="text-xs text-gray-600 leading-snug">{item.summary}</p>
     </div>
   );
 }
@@ -167,10 +167,10 @@ export default function ProgressSection() {
   return (
     <section className="space-y-3">
       <div className="flex items-baseline justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-600">
           Progress
         </h3>
-        <span className="text-[10px] text-gray-300">{report.period_label}</span>
+        <span className="text-[10px] text-gray-500">{report.period_label}</span>
       </div>
       <div className="grid gap-3">
         {report.items.map(item => (

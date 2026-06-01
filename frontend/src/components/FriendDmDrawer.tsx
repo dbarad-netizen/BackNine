@@ -169,7 +169,7 @@ export default function FriendDmDrawer({ friend, onClose }: Props) {
                 </div>
               )}
               {messages?.length === 0 && (
-                <p className="text-xs text-gray-400 italic text-center py-6">
+                <p className="text-xs text-gray-600 italic text-center py-6">
                   No messages yet. Say something to start the chat.
                 </p>
               )}
@@ -185,7 +185,7 @@ export default function FriendDmDrawer({ friend, onClose }: Props) {
                   }`}>
                     {m.text}
                   </div>
-                  <p className="text-[9px] text-gray-400 mt-0.5 px-1">
+                  <p className="text-[9px] text-gray-600 mt-0.5 px-1">
                     {m.is_me ? "You" : (m.user_name || friend.name)} · {fmtTime(m.created_at)}
                   </p>
                 </div>

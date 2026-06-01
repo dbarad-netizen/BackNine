@@ -96,7 +96,7 @@ export default function SupplementsCard({ supplements, onSave }: Props) {
       <div className="flex items-center justify-between mb-3">
         <div>
           <p className="text-sm font-semibold text-gray-900">Supplements</p>
-          <p className="text-[11px] text-gray-400 mt-0.5">
+          <p className="text-[11px] text-gray-600 mt-0.5">
             Coach Al will know what you take when you ask about timing or interactions.
           </p>
         </div>
@@ -111,7 +111,7 @@ export default function SupplementsCard({ supplements, onSave }: Props) {
       </div>
 
       {supplements.length === 0 && editing === null && (
-        <p className="text-xs text-gray-400 italic">
+        <p className="text-xs text-gray-600 italic">
           No supplements added yet. Tap Add to capture what you take so Coach Al can speak to it.
         </p>
       )}
@@ -139,24 +139,24 @@ export default function SupplementsCard({ supplements, onSave }: Props) {
                 <div className="flex items-start gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-900 truncate">{s.name}</p>
-                    <p className="text-[11px] text-gray-500 truncate">
+                    <p className="text-[11px] text-gray-600 truncate">
                       {[s.dose, s.timing].filter(Boolean).join(" · ") || "—"}
                     </p>
                     {s.notes && (
-                      <p className="text-[11px] text-gray-400 mt-0.5 leading-snug">{s.notes}</p>
+                      <p className="text-[11px] text-gray-600 mt-0.5 leading-snug">{s.notes}</p>
                     )}
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
                       onClick={() => openEdit(i)}
-                      className="text-[11px] text-gray-500 hover:text-[#1B3829] transition-colors"
+                      className="text-[11px] text-gray-600 hover:text-[#1B3829] transition-colors"
                       title="Edit"
                     >
                       Edit
                     </button>
                     <button
                       onClick={() => handleDelete(i)}
-                      className="text-gray-400 hover:text-red-400 transition-colors text-base leading-none"
+                      className="text-gray-600 hover:text-red-400 transition-colors text-base leading-none"
                       title="Remove"
                       aria-label={`Remove ${s.name}`}
                     >
@@ -242,7 +242,7 @@ function SupplementForm({
         <button
           onClick={onCancel}
           disabled={saving}
-          className="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 text-xs hover:bg-gray-50 transition-colors disabled:opacity-40"
+          className="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-xs hover:bg-gray-50 transition-colors disabled:opacity-40"
         >
           Cancel
         </button>

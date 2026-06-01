@@ -132,7 +132,7 @@ export default function FriendLeaderboard() {
   if (loading || !data) {
     return (
       <section>
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-600 mb-2">
           Today&apos;s Matchup
         </h3>
         <div className="rounded-2xl border border-gray-200 bg-white p-3 space-y-3">
@@ -162,12 +162,12 @@ export default function FriendLeaderboard() {
   return (
     <section>
       <div className="flex items-center justify-between mb-2 gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-600">
           Today&apos;s Matchup
         </h3>
         <button
           onClick={() => load()}
-          className="text-[11px] text-gray-400 hover:text-[#1B3829] font-medium transition-colors"
+          className="text-[11px] text-gray-600 hover:text-[#1B3829] font-medium transition-colors"
         >
           Refresh
         </button>
@@ -232,11 +232,11 @@ export default function FriendLeaderboard() {
                     const total = tally.w + tally.l + tally.t;
                     if (total === 0) return null;
                     const outcome = tally.w > tally.l ? "w" : tally.l > tally.w ? "l" : "t";
-                    const color = outcome === "w" ? "text-green-700" : outcome === "l" ? "text-red-600" : "text-gray-400";
+                    const color = outcome === "w" ? "text-green-700" : outcome === "l" ? "text-red-600" : "text-gray-600";
                     const tag   = outcome === "w" ? "W" : outcome === "l" ? "L" : "T";
                     return (
                       <span key={label} className="inline-flex items-center gap-1">
-                        <span className="text-gray-400">{label}</span>
+                        <span className="text-gray-600">{label}</span>
                         <span className={`font-semibold ${color}`}>{tally.w}–{tally.l}</span>
                         <span className={`text-[9px] font-bold ${color}`}>{tag}</span>
                       </span>
@@ -249,8 +249,8 @@ export default function FriendLeaderboard() {
                   ].filter(Boolean);
                   if (cells.length === 0) return null;
                   return (
-                    <p className="text-[10px] text-gray-500 mb-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
-                      <span className="text-gray-400 italic">This week:</span>
+                    <p className="text-[10px] text-gray-600 mb-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
+                      <span className="text-gray-600 italic">This week:</span>
                       {cells}
                     </p>
                   );
@@ -273,14 +273,14 @@ export default function FriendLeaderboard() {
                         }`}
                       >
                         <p className={`text-[9px] uppercase tracking-wide font-semibold ${
-                          isLeader ? "text-amber-700" : "text-gray-400"
+                          isLeader ? "text-amber-700" : "text-gray-600"
                         }`}>
                           {METRIC_LABELS[m]}
                           {isLeader && " 🏅"}
-                          {fresh && <span className="ml-1 text-gray-300 italic">·{fresh}</span>}
+                          {fresh && <span className="ml-1 text-gray-500 italic">·{fresh}</span>}
                         </p>
                         <p className={`text-[13px] font-bold leading-tight tabular-nums ${
-                          isLeader ? "text-amber-900" : has ? "text-gray-800" : "text-gray-300"
+                          isLeader ? "text-amber-900" : has ? "text-gray-800" : "text-gray-500"
                         }`}>
                           {fmtMetric(mv.value, m)}
                         </p>

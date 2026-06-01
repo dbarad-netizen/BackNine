@@ -80,7 +80,7 @@ export default function LegalDoc({ title, body }: { title: string; body: string 
           <span className="sr-only">{title}</span>
           <div dangerouslySetInnerHTML={{ __html: mdToHtml(body) }} />
           <hr className="my-6 border-gray-200" />
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-gray-600">
             BackNine is for informational and entertainment purposes only and is not medical advice.
             See our{" "}
             <Link href="/terms" className="text-[#2D6A4F] underline">Terms</Link>,{" "}

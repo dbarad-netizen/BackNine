@@ -81,11 +81,11 @@ export default function WeeklyInsight({ onOpenChat }: Props) {
         <div className="flex items-start gap-3">
           <CoachAlAvatar size={40} className="rounded-full ring-2 ring-gray-100 shrink-0" />
           <div className="flex-1 min-w-0">
-            <p className="text-[10px] text-gray-400 uppercase tracking-widest font-semibold mb-1">
+            <p className="text-[10px] text-gray-600 uppercase tracking-widest font-semibold mb-1">
               Coach Al · Weekly Insight
             </p>
             <p className="font-bold text-gray-900 text-[15px] leading-snug mb-1">{data.headline}</p>
-            <p className="text-[13px] text-gray-500 leading-relaxed">{data.narrative}</p>
+            <p className="text-[13px] text-gray-600 leading-relaxed">{data.narrative}</p>
           </div>
         </div>
       </section>
@@ -105,7 +105,7 @@ export default function WeeklyInsight({ onOpenChat }: Props) {
           <CoachAlAvatar size={44} className="rounded-full ring-2 ring-gray-100 shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1.5">
-              <p className="text-[10px] text-gray-400 uppercase tracking-widest font-semibold">
+              <p className="text-[10px] text-gray-600 uppercase tracking-widest font-semibold">
                 Coach Al · Weekly Insight
               </p>
               <span
@@ -140,11 +140,11 @@ export default function WeeklyInsight({ onOpenChat }: Props) {
 
         {/* Evidence chip — the data behind the story, for credibility */}
         {data.stat && data.stat.n != null && (
-          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-gray-400">
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-gray-600">
             <span>Based on {data.stat.n} days</span>
             {data.stat.r != null && <span>· correlation r={data.stat.r}</span>}
             {data.stat.group_a_label && data.stat.group_b_label && (
-              <span className="text-gray-500">
+              <span className="text-gray-600">
                 · {data.stat.group_a_label} {data.stat.group_a_avg} vs {data.stat.group_b_label} {data.stat.group_b_avg}
               </span>
             )}
@@ -157,7 +157,7 @@ export default function WeeklyInsight({ onOpenChat }: Props) {
         <button
           onClick={handleRegenerate}
           disabled={regenerating}
-          className={`text-[11px] text-gray-400 hover:text-gray-600 transition-colors underline-offset-2 hover:underline disabled:opacity-40 ${
+          className={`text-[11px] text-gray-600 hover:text-gray-600 transition-colors underline-offset-2 hover:underline disabled:opacity-40 ${
             regenerating ? "animate-pulse" : ""
           }`}
           title="Generate a fresh take on this week's pattern"

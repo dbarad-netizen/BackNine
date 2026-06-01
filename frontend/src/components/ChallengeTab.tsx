@@ -87,7 +87,7 @@ function ChallengeCalendar({
               <div
                 key={d}
                 style={{ width: cellSize, flexShrink: 0, textAlign: "center" }}
-                className={`text-[9px] font-semibold ${isT ? "text-[#1B3829]" : "text-gray-300"}`}
+                className={`text-[9px] font-semibold ${isT ? "text-[#1B3829]" : "text-gray-500"}`}
               >
                 {dayNum}
               </div>
@@ -104,7 +104,7 @@ function ChallengeCalendar({
               className="text-[11px] text-gray-600 truncate pr-1 text-right font-medium"
             >
               {p.display_name.split(" ")[0]}
-              {p.is_me && <span className="text-gray-300 ml-0.5">•</span>}
+              {p.is_me && <span className="text-gray-500 ml-0.5">•</span>}
             </div>
 
             {/* Day cells */}
@@ -170,7 +170,7 @@ function ChallengeCalendar({
           ].map(l => (
             <div key={l.label} className="flex items-center gap-1">
               <div style={{ width: 10, height: 10, backgroundColor: l.bg, border: `1px solid ${l.border}`, borderRadius: 2 }} />
-              <span className="text-[9px] text-gray-400">{l.label}</span>
+              <span className="text-[9px] text-gray-600">{l.label}</span>
             </div>
           ))}
         </div>
@@ -197,7 +197,7 @@ function LeaderboardRow({
           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
             <p className="text-sm font-semibold text-gray-900 truncate">
               {p.display_name}
-              {p.is_me && <span className="ml-1 text-xs text-gray-400 font-normal">(you)</span>}
+              {p.is_me && <span className="ml-1 text-xs text-gray-600 font-normal">(you)</span>}
             </p>
             {p.streak > 1 && (
               <span className="text-xs text-orange-500 font-medium">{p.streak}🔥</span>
@@ -226,7 +226,7 @@ function LeaderboardRow({
           </div>
 
           {/* Total value */}
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="text-xs text-gray-600 mt-1">
             {fmt(p.total_value, metric)} {metric} total
           </p>
         </div>
@@ -298,7 +298,7 @@ function ChallengeChat({ challengeId, myDisplayName }: { challengeId: string; my
       {/* Toggle button */}
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-gray-500 hover:text-gray-800 hover:bg-gray-50 transition-colors"
+        className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-gray-600 hover:text-gray-800 hover:bg-gray-50 transition-colors"
       >
         <span className="flex items-center gap-1.5 font-semibold">
           💬 Chat
@@ -306,7 +306,7 @@ function ChallengeChat({ challengeId, myDisplayName }: { challengeId: string; my
             <span className="bg-[#1B3829] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">{unread}</span>
           )}
         </span>
-        <span className="text-gray-400">{open ? "▲" : "▼"}</span>
+        <span className="text-gray-600">{open ? "▲" : "▼"}</span>
       </button>
 
       {open && (
@@ -314,7 +314,7 @@ function ChallengeChat({ challengeId, myDisplayName }: { challengeId: string; my
           {/* Message list */}
           <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
             {messages.length === 0 && (
-              <p className="text-center text-xs text-gray-400 py-4">No messages yet — be the first to talk trash 😤</p>
+              <p className="text-center text-xs text-gray-600 py-4">No messages yet — be the first to talk trash 😤</p>
             )}
             {messages.map(m => (
               <div key={m.id} className={`flex flex-col ${m.display_name === myDisplayName ? "items-end" : "items-start"}`}>
@@ -325,7 +325,7 @@ function ChallengeChat({ challengeId, myDisplayName }: { challengeId: string; my
                 }`}>
                   {m.text}
                 </div>
-                <p className="text-[9px] text-gray-400 mt-0.5 px-1">
+                <p className="text-[9px] text-gray-600 mt-0.5 px-1">
                   {m.display_name === myDisplayName ? "You" : m.display_name} · {fmtTime(m.created_at)}
                 </p>
               </div>
@@ -420,10 +420,10 @@ function ChallengeCard({
               <span className="text-xl">{challenge.type_info.icon}</span>
               <p className="text-base font-bold text-gray-900 truncate">{challenge.name}</p>
               {!challenge.is_active && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 flex-shrink-0">Ended</span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 flex-shrink-0">Ended</span>
               )}
             </div>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-gray-600">
               {challenge.target.toLocaleString()} {challenge.metric}/day · {challenge.start_date} → {challenge.end_date}
             </p>
           </div>
@@ -437,7 +437,7 @@ function ChallengeCard({
             </button>
             <button
               onClick={handleRefresh}
-              className={`text-gray-400 hover:text-gray-700 px-1 transition-all ${refreshing ? "animate-spin" : ""}`}
+              className={`text-gray-600 hover:text-gray-700 px-1 transition-all ${refreshing ? "animate-spin" : ""}`}
               title="Refresh"
             >
               ↻
@@ -446,7 +446,7 @@ function ChallengeCard({
             {onArchive && (challenge.archived || !challenge.is_active) && (
               <button
                 onClick={() => onArchive(challenge.id, !challenge.archived)}
-                className="text-[11px] text-gray-400 hover:text-gray-700 px-1.5 py-1 rounded-lg hover:bg-gray-100 transition-colors"
+                className="text-[11px] text-gray-600 hover:text-gray-700 px-1.5 py-1 rounded-lg hover:bg-gray-100 transition-colors"
                 title={challenge.archived ? "Restore to your active list" : "Archive this ended competition"}
               >
                 {challenge.archived ? "Restore" : "Archive"}
@@ -457,7 +457,7 @@ function ChallengeCard({
 
         {/* Time progress */}
         <div className="mt-3">
-          <div className="flex justify-between text-xs text-gray-400 mb-1">
+          <div className="flex justify-between text-xs text-gray-600 mb-1">
             <span className="font-medium text-gray-600">Day {challenge.elapsed_days} of {challenge.total_days}</span>
             <span>{challenge.is_active ? `${daysLabel(challenge.days_left)} left` : "Complete"}</span>
           </div>
@@ -472,7 +472,7 @@ function ChallengeCard({
 
       {/* ── Leaderboard ── */}
       <div className="px-4 pb-3 space-y-2">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-1">Leaderboard</p>
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-600 mb-1">Leaderboard</p>
         {sorted.map((p, i) => (
           <LeaderboardRow
             key={p.user_id}
@@ -490,7 +490,7 @@ function ChallengeCard({
       <div className="px-4 pb-2">
         <button
           onClick={() => setExpanded(v => !v)}
-          className="w-full flex items-center justify-between py-2 text-xs text-gray-400 hover:text-gray-700 transition-colors"
+          className="w-full flex items-center justify-between py-2 text-xs text-gray-600 hover:text-gray-700 transition-colors"
         >
           <span className="font-semibold uppercase tracking-widest">Full Calendar</span>
           <span className="text-base leading-none">{expanded ? "▲" : "▼"}</span>
@@ -508,7 +508,7 @@ function ChallengeCard({
             + Log today's {challenge.type_info.label.toLowerCase()}
           </button>
           {me && me.today_value > 0 && (
-            <p className="text-xs text-center text-gray-400 mt-1.5">
+            <p className="text-xs text-center text-gray-600 mt-1.5">
               Today: {fmt(me.today_value, challenge.metric)} {challenge.metric}
               {pct(me.today_value, challenge.target) >= 100 ? " ✓" : ` · ${pct(me.today_value, challenge.target)}% of target`}
             </p>
@@ -557,15 +557,15 @@ function CreateChallengeForm({ onCreated, onCancel }: { onCreated: (c: Challenge
     <div className="rounded-2xl border border-gray-200 bg-white p-5 space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm font-bold text-gray-900">New Challenge</p>
-        <button onClick={onCancel} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+        <button onClick={onCancel} className="text-gray-600 hover:text-gray-700 text-xl leading-none">×</button>
       </div>
       <div>
-        <label className="block text-xs text-gray-500 mb-2">Challenge type</label>
+        <label className="block text-xs text-gray-600 mb-2">Challenge type</label>
         <div className="grid grid-cols-2 gap-2">
           {TYPE_OPTIONS.map(t => (
             <button key={t.value} onClick={() => setType(t.value)}
               className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium transition-all ${
-                type === t.value ? "border-[#1B3829]/40 bg-[#1B3829]/10 text-[#1B3829]" : "border-gray-200 text-gray-500 hover:text-gray-800"
+                type === t.value ? "border-[#1B3829]/40 bg-[#1B3829]/10 text-[#1B3829]" : "border-gray-200 text-gray-600 hover:text-gray-800"
               }`}>
               <span>{t.icon}</span><span>{t.label}</span>
             </button>
@@ -573,32 +573,32 @@ function CreateChallengeForm({ onCreated, onCancel }: { onCreated: (c: Challenge
         </div>
       </div>
       <div>
-        <label className="block text-xs text-gray-500 mb-1">Challenge name</label>
+        <label className="block text-xs text-gray-600 mb-1">Challenge name</label>
         <input type="text" value={name} onChange={e => setName(e.target.value)}
           placeholder={`e.g. May ${typeOpt.label} Battle`}
           className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#1B3829]" />
       </div>
       <div>
-        <label className="block text-xs text-gray-500 mb-1">Daily target ({type === "custom" ? (customUnit || "pts") : typeOpt.unit})</label>
+        <label className="block text-xs text-gray-600 mb-1">Daily target ({type === "custom" ? (customUnit || "pts") : typeOpt.unit})</label>
         <input type="number" value={target} onChange={e => setTarget(e.target.value)}
           placeholder={typeOpt.placeholder}
           className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#1B3829]" />
       </div>
       {type === "custom" && (
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Unit label</label>
+          <label className="block text-xs text-gray-600 mb-1">Unit label</label>
           <input type="text" value={customUnit} onChange={e => setCustomUnit(e.target.value)}
             placeholder="e.g. miles, sessions"
             className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#1B3829]" />
         </div>
       )}
       <div>
-        <label className="block text-xs text-gray-500 mb-2">Duration</label>
+        <label className="block text-xs text-gray-600 mb-2">Duration</label>
         <div className="flex gap-2">
           {DURATION_OPTIONS.map(d => (
             <button key={d} onClick={() => setDuration(d)}
               className={`flex-1 py-2 rounded-lg text-xs font-medium border transition-all ${
-                duration === d ? "border-[#1B3829]/40 bg-[#1B3829]/10 text-[#1B3829]" : "border-gray-200 text-gray-500 hover:text-gray-800"
+                duration === d ? "border-[#1B3829]/40 bg-[#1B3829]/10 text-[#1B3829]" : "border-gray-200 text-gray-600 hover:text-gray-800"
               }`}>
               {d}d
             </button>
@@ -606,7 +606,7 @@ function CreateChallengeForm({ onCreated, onCancel }: { onCreated: (c: Challenge
         </div>
       </div>
       <div>
-        <label className="block text-xs text-gray-500 mb-1">Your display name</label>
+        <label className="block text-xs text-gray-600 mb-1">Your display name</label>
         <input type="text" value={myName} onChange={e => setMyName(e.target.value)}
           placeholder="e.g. David"
           className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#1B3829]" />
@@ -642,17 +642,17 @@ function JoinChallengeForm({ onJoined, onCancel }: { onJoined: (c: Challenge) =>
     <div className="rounded-2xl border border-gray-200 bg-white p-5 space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm font-bold text-gray-900">Join a Challenge</p>
-        <button onClick={onCancel} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+        <button onClick={onCancel} className="text-gray-600 hover:text-gray-700 text-xl leading-none">×</button>
       </div>
       <div>
-        <label className="block text-xs text-gray-500 mb-1">Invite code</label>
+        <label className="block text-xs text-gray-600 mb-1">Invite code</label>
         <input type="text" value={code} onChange={e => setCode(e.target.value.toUpperCase())}
           placeholder="e.g. K7XRMB"
           className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 font-mono tracking-widest placeholder-gray-400 focus:outline-none focus:border-[#1B3829]"
           maxLength={8} />
       </div>
       <div>
-        <label className="block text-xs text-gray-500 mb-1">Your display name</label>
+        <label className="block text-xs text-gray-600 mb-1">Your display name</label>
         <input type="text" value={myName} onChange={e => setMyName(e.target.value)}
           placeholder="e.g. Mike"
           className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#1B3829]" />
@@ -690,25 +690,25 @@ function LogProgressModal({ challenge, onSaved, onCancel }: {
           <p className="text-sm font-bold text-gray-900">
             {challenge.type_info.icon} Log {challenge.type_info.label}
           </p>
-          <button onClick={onCancel} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+          <button onClick={onCancel} className="text-gray-600 hover:text-gray-700 text-xl leading-none">×</button>
         </div>
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-gray-600">
           {todayStr} · target: {challenge.target.toLocaleString()} {challenge.metric}
         </p>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Your {challenge.metric} today</label>
+          <label className="block text-xs text-gray-600 mb-1">Your {challenge.metric} today</label>
           <input type="number" step="any" value={value} onChange={e => setValue(e.target.value)}
             autoFocus
             className="w-full bg-white border border-gray-200 rounded-lg px-3 py-3 text-2xl font-bold text-gray-900 text-center focus:outline-none focus:border-[#1B3829]" />
           {value && !isNaN(parseFloat(value)) && (
-            <p className="text-xs text-center text-gray-400 mt-1">
+            <p className="text-xs text-center text-gray-600 mt-1">
               {pct(parseFloat(value), challenge.target)}% of daily target
             </p>
           )}
         </div>
         <div className="flex gap-2">
           <button onClick={onCancel}
-            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-500 text-sm font-medium hover:text-gray-900 hover:border-gray-400 transition-colors">
+            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium hover:text-gray-900 hover:border-gray-400 transition-colors">
             Cancel
           </button>
           <button onClick={handleSave} disabled={saving || !value}
@@ -803,8 +803,8 @@ export default function ChallengeTab() {
         challenges.length === 0 ? (
           <div className="text-center py-14 space-y-2">
             <p className="text-4xl">🏆</p>
-            <p className="text-gray-500 text-sm font-medium">No challenges yet</p>
-            <p className="text-gray-400 text-xs">Create one and share the code with a friend</p>
+            <p className="text-gray-600 text-sm font-medium">No challenges yet</p>
+            <p className="text-gray-600 text-xs">Create one and share the code with a friend</p>
           </div>
         ) : (() => {
           const visible  = challenges.filter(c => !c.archived);
@@ -815,14 +815,14 @@ export default function ChallengeTab() {
                 <ChallengeCard key={c.id} challenge={c} onRefresh={handleRefresh} onLog={setLogTarget} onArchive={handleArchive} />
               ))}
               {visible.length === 0 && (
-                <p className="text-center text-xs text-gray-400 py-4">All competitions archived.</p>
+                <p className="text-center text-xs text-gray-600 py-4">All competitions archived.</p>
               )}
 
               {archived.length > 0 && (
                 <div className="pt-1">
                   <button
                     onClick={() => setShowArchived(s => !s)}
-                    className="w-full py-2 text-[11px] font-semibold uppercase tracking-widest text-gray-400 hover:text-gray-700 transition-colors"
+                    className="w-full py-2 text-[11px] font-semibold uppercase tracking-widest text-gray-600 hover:text-gray-700 transition-colors"
                   >
                     {showArchived ? "▲ Hide archived" : `▼ Archived (${archived.length})`}
                   </button>

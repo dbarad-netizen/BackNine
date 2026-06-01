@@ -14,7 +14,7 @@ export default function CoachingItem({ item }: { item: CoachItem }) {
           <span className="text-lg leading-none">{item.icon}</span>
           <span className="font-semibold text-gray-900 text-sm">{item.label}</span>
         </div>
-        <p className="text-gray-500 text-sm leading-relaxed">{item.text}</p>
+        <p className="text-gray-600 text-sm leading-relaxed">{item.text}</p>
       </div>
     </div>
   );

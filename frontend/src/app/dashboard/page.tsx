@@ -61,7 +61,7 @@ function RefreshButton() {
       onClick={() => { setSpinning(true); window.location.reload(); }}
       title="Refresh"
       aria-label="Refresh"
-      className="text-gray-400 hover:text-[#1B3829] transition-colors text-base leading-none"
+      className="text-gray-600 hover:text-[#1B3829] transition-colors text-base leading-none"
     >
       <span className={`inline-block ${spinning ? "animate-spin" : ""}`}>↻</span>
     </button>
@@ -90,7 +90,7 @@ function CalorieRing({
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-xl font-bold text-gray-900 leading-none">{consumed}</span>
-        <span className="text-[10px] text-gray-400 mt-0.5">/ {budget}</span>
+        <span className="text-[10px] text-gray-600 mt-0.5">/ {budget}</span>
       </div>
     </div>
   );
@@ -141,8 +141,8 @@ function MacroBar({
   return (
     <div>
       <div className="flex justify-between text-xs mb-1">
-        <span className="text-gray-500">{label}</span>
-        <span className="text-gray-700 font-medium">{value}{unit} <span className="text-gray-400">/ {target}{unit}</span></span>
+        <span className="text-gray-600">{label}</span>
+        <span className="text-gray-700 font-medium">{value}{unit} <span className="text-gray-600">/ {target}{unit}</span></span>
       </div>
       <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
         <div
@@ -204,7 +204,7 @@ function FastingClock({ start, end }: { start: string; end: string }) {
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5">
-      <p className="text-xs text-gray-400 uppercase tracking-widest mb-4">
+      <p className="text-xs text-gray-600 uppercase tracking-widest mb-4">
         {parseInt(fastHours)}:{(60 - windowLen % 60).toString().padStart(2, "0")} Intermittent Fasting
       </p>
       <div className="flex items-center gap-5">
@@ -231,8 +231,8 @@ function FastingClock({ start, end }: { start: string; end: string }) {
           <p className={`text-base font-semibold mb-1 ${inWindow ? "text-amber-400" : "text-indigo-400"}`}>
             {inWindow ? "🍽️ Eating Window" : "⏳ Fasting"}
           </p>
-          <p className="text-xs text-gray-500">{nextEvent}</p>
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="text-xs text-gray-600">{nextEvent}</p>
+          <p className="text-xs text-gray-600 mt-1">
             Window: {start} – {end}
           </p>
         </div>
@@ -302,11 +302,11 @@ function AddMealForm({ onAdd }: { onAdd: (meal: Omit<Meal, "id" | "logged_at">) 
     <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-3">
       <div className="flex gap-2">
         <button onClick={() => setMode("search")}
-          className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${mode === "search" ? "bg-[#1B3829] text-white" : "text-gray-500 hover:text-gray-800"}`}>
+          className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${mode === "search" ? "bg-[#1B3829] text-white" : "text-gray-600 hover:text-gray-800"}`}>
           Search food
         </button>
         <button onClick={() => setMode("custom")}
-          className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${mode === "custom" ? "bg-[#1B3829] text-white" : "text-gray-500 hover:text-gray-800"}`}>
+          className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${mode === "custom" ? "bg-[#1B3829] text-white" : "text-gray-600 hover:text-gray-800"}`}>
           Enter custom
         </button>
       </div>
@@ -326,7 +326,7 @@ function AddMealForm({ onAdd }: { onAdd: (meal: Omit<Meal, "id" | "logged_at">) 
                   <button key={f.name} onClick={() => pickFood(f)}
                     className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-200 text-left transition-colors">
                     <span className="text-sm text-gray-900 capitalize">{f.name}</span>
-                    <span className="text-xs text-gray-400">{f.calories} kcal · {f.unit}</span>
+                    <span className="text-xs text-gray-600">{f.calories} kcal · {f.unit}</span>
                   </button>
                 ))}
               </div>
@@ -335,11 +335,11 @@ function AddMealForm({ onAdd }: { onAdd: (meal: Omit<Meal, "id" | "logged_at">) 
           {selected && (
             <div className="flex gap-2 items-end">
               <div className="flex-1">
-                <p className="text-xs text-gray-400 mb-1">Servings ({selected.unit})</p>
+                <p className="text-xs text-gray-600 mb-1">Servings ({selected.unit})</p>
                 <input className={inp} type="number" min="0.25" step="0.25" value={qty}
                   onChange={(e) => setQty(e.target.value)} />
               </div>
-              <div className="flex-1 rounded-lg bg-gray-100/50 px-3 py-2 text-xs text-gray-500 space-y-0.5">
+              <div className="flex-1 rounded-lg bg-gray-100/50 px-3 py-2 text-xs text-gray-600 space-y-0.5">
                 <p className="text-gray-900 font-medium capitalize">{selected.name}</p>
                 <p>{Math.round(selected.calories * (parseFloat(qty) || 1))} kcal · P {Math.round(selected.protein * (parseFloat(qty) || 1))}g · C {Math.round(selected.carbs * (parseFloat(qty) || 1))}g · F {Math.round(selected.fat * (parseFloat(qty) || 1))}g</p>
               </div>
@@ -359,22 +359,22 @@ function AddMealForm({ onAdd }: { onAdd: (meal: Omit<Meal, "id" | "logged_at">) 
             onChange={(e) => setCustom({ ...custom, name: e.target.value })} />
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <p className="text-xs text-gray-400 mb-1">Calories</p>
+              <p className="text-xs text-gray-600 mb-1">Calories</p>
               <input className={inp} type="number" placeholder="kcal" value={custom.calories}
                 onChange={(e) => setCustom({ ...custom, calories: e.target.value })} />
             </div>
             <div>
-              <p className="text-xs text-gray-400 mb-1">Protein (g)</p>
+              <p className="text-xs text-gray-600 mb-1">Protein (g)</p>
               <input className={inp} type="number" placeholder="g" value={custom.protein}
                 onChange={(e) => setCustom({ ...custom, protein: e.target.value })} />
             </div>
             <div>
-              <p className="text-xs text-gray-400 mb-1">Carbs (g)</p>
+              <p className="text-xs text-gray-600 mb-1">Carbs (g)</p>
               <input className={inp} type="number" placeholder="g" value={custom.carbs}
                 onChange={(e) => setCustom({ ...custom, carbs: e.target.value })} />
             </div>
             <div>
-              <p className="text-xs text-gray-400 mb-1">Fat (g)</p>
+              <p className="text-xs text-gray-600 mb-1">Fat (g)</p>
               <input className={inp} type="number" placeholder="g" value={custom.fat}
                 onChange={(e) => setCustom({ ...custom, fat: e.target.value })} />
             </div>
@@ -435,7 +435,7 @@ function WeightForm({ onSave }: { onSave: (e: Partial<WeightEntry> & { weight_lb
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold text-gray-900">Log Weigh-In</p>
         <button onClick={() => setExpanded(!expanded)}
-          className="text-xs text-gray-400 hover:text-green-400 transition-colors">
+          className="text-xs text-gray-600 hover:text-green-400 transition-colors">
           {expanded ? "Hide InBody fields ▲" : "InBody fields ▼"}
         </button>
       </div>
@@ -443,22 +443,22 @@ function WeightForm({ onSave }: { onSave: (e: Partial<WeightEntry> & { weight_lb
       {/* Always-visible: weight + body fat */}
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <p className="text-xs text-gray-400 mb-1">Weight (lbs) *</p>
+          <p className="text-xs text-gray-600 mb-1">Weight (lbs) *</p>
           <input className={inp} type="number" step="0.1" placeholder="185.0" value={f("weight_lbs")}
             onChange={e => set("weight_lbs", e.target.value)} />
         </div>
         <div>
-          <p className="text-xs text-gray-400 mb-1">Body Fat %</p>
+          <p className="text-xs text-gray-600 mb-1">Body Fat %</p>
           <input className={inp} type="number" step="0.1" placeholder="18.5" value={f("body_fat_pct")}
             onChange={e => set("body_fat_pct", e.target.value)} />
         </div>
         <div>
-          <p className="text-xs text-gray-400 mb-1">Muscle Mass (lbs)</p>
+          <p className="text-xs text-gray-600 mb-1">Muscle Mass (lbs)</p>
           <input className={inp} type="number" step="0.1" placeholder="152.0" value={f("muscle_mass_lbs")}
             onChange={e => set("muscle_mass_lbs", e.target.value)} />
         </div>
         <div>
-          <p className="text-xs text-gray-400 mb-1">InBody Score</p>
+          <p className="text-xs text-gray-600 mb-1">InBody Score</p>
           <input className={inp} type="number" placeholder="78" value={f("inbody_score")}
             onChange={e => set("inbody_score", e.target.value)} />
         </div>
@@ -467,7 +467,7 @@ function WeightForm({ onSave }: { onSave: (e: Partial<WeightEntry> & { weight_lb
       {/* InBody expanded */}
       {expanded && (
         <div className="space-y-3 pt-1 border-t border-gray-200">
-          <p className="text-xs text-gray-400 uppercase tracking-widest pt-1">Segmental Muscle (lbs)</p>
+          <p className="text-xs text-gray-600 uppercase tracking-widest pt-1">Segmental Muscle (lbs)</p>
           <div className="grid grid-cols-2 gap-2">
             {[
               ["Trunk", "trunk_muscle_lbs"],
@@ -478,14 +478,14 @@ function WeightForm({ onSave }: { onSave: (e: Partial<WeightEntry> & { weight_lb
               ["Lean Mass", "lean_mass_lbs"],
             ].map(([label, key]) => (
               <div key={key}>
-                <p className="text-xs text-gray-400 mb-1">{label}</p>
+                <p className="text-xs text-gray-600 mb-1">{label}</p>
                 <input className={inp} type="number" step="0.1" value={f(key)}
                   onChange={e => set(key, e.target.value)} />
               </div>
             ))}
           </div>
 
-          <p className="text-xs text-gray-400 uppercase tracking-widest">Segmental Fat (lbs)</p>
+          <p className="text-xs text-gray-600 uppercase tracking-widest">Segmental Fat (lbs)</p>
           <div className="grid grid-cols-2 gap-2">
             {[
               ["Trunk", "trunk_fat_lbs"],
@@ -495,14 +495,14 @@ function WeightForm({ onSave }: { onSave: (e: Partial<WeightEntry> & { weight_lb
               ["Left Leg", "left_leg_fat_lbs"],
             ].map(([label, key]) => (
               <div key={key}>
-                <p className="text-xs text-gray-400 mb-1">{label}</p>
+                <p className="text-xs text-gray-600 mb-1">{label}</p>
                 <input className={inp} type="number" step="0.1" value={f(key)}
                   onChange={e => set(key, e.target.value)} />
               </div>
             ))}
           </div>
 
-          <p className="text-xs text-gray-400 uppercase tracking-widest">Body Water (lbs)</p>
+          <p className="text-xs text-gray-600 uppercase tracking-widest">Body Water (lbs)</p>
           <div className="grid grid-cols-2 gap-2">
             {[
               ["Total Water", "total_body_water_lbs"],
@@ -511,14 +511,14 @@ function WeightForm({ onSave }: { onSave: (e: Partial<WeightEntry> & { weight_lb
               ["ECW Ratio", "ecw_ratio"],
             ].map(([label, key]) => (
               <div key={key}>
-                <p className="text-xs text-gray-400 mb-1">{label}</p>
+                <p className="text-xs text-gray-600 mb-1">{label}</p>
                 <input className={inp} type="number" step="0.01" value={f(key)}
                   onChange={e => set(key, e.target.value)} />
               </div>
             ))}
           </div>
 
-          <p className="text-xs text-gray-400 uppercase tracking-widest">Other</p>
+          <p className="text-xs text-gray-600 uppercase tracking-widest">Other</p>
           <div className="grid grid-cols-2 gap-2">
             {[
               ["Visceral Fat Level", "visceral_fat_level"],
@@ -526,7 +526,7 @@ function WeightForm({ onSave }: { onSave: (e: Partial<WeightEntry> & { weight_lb
               ["BMR (kcal)", "bmr_kcal"],
             ].map(([label, key]) => (
               <div key={key}>
-                <p className="text-xs text-gray-400 mb-1">{label}</p>
+                <p className="text-xs text-gray-600 mb-1">{label}</p>
                 <input className={inp} type="number" step="0.1" value={f(key)}
                   onChange={e => set(key, e.target.value)} />
               </div>
@@ -547,7 +547,7 @@ function WeightForm({ onSave }: { onSave: (e: Partial<WeightEntry> & { weight_lb
 function WeightTrendChart({ entries, goalLbs }: { entries: WeightEntry[]; goalLbs: number | null }) {
   if (entries.length === 0) {
     return (
-      <div className="h-32 flex items-center justify-center text-gray-400 text-sm">
+      <div className="h-32 flex items-center justify-center text-gray-600 text-sm">
         No weigh-ins logged yet
       </div>
     );
@@ -611,7 +611,7 @@ function BodyCompBadge({ entry }: { entry: WeightEntry }) {
     <div className="grid grid-cols-4 gap-1.5 mt-2">
       {items.map(({ label, value }) => (
         <div key={label} className="rounded-lg bg-gray-100/80 px-2 py-1.5 text-center">
-          <p className="text-[9px] text-gray-400 uppercase tracking-wide">{label}</p>
+          <p className="text-[9px] text-gray-600 uppercase tracking-wide">{label}</p>
           <p className="text-xs font-semibold text-gray-900 mt-0.5">{value}</p>
         </div>
       ))}
@@ -644,7 +644,7 @@ function Stepper({
 }) {
   return (
     <div className="rounded-xl border border-gray-200 bg-gray-100/80 p-3">
-      <p className="text-xs text-gray-400 mb-2 flex items-center gap-1.5">
+      <p className="text-xs text-gray-600 mb-2 flex items-center gap-1.5">
         <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: color }} />
         {label}
       </p>
@@ -655,7 +655,7 @@ function Stepper({
         >−</button>
         <div className="flex-1 text-center">
           <span className="text-xl font-bold text-gray-900">{value}</span>
-          <span className="text-xs text-gray-400 ml-1">{unit}</span>
+          <span className="text-xs text-gray-600 ml-1">{unit}</span>
         </div>
         <button
           onClick={() => onChange(Math.min(max, value + step))}
@@ -689,7 +689,7 @@ function SettingsPanel({ settings, onSave }: { settings: NutritionSettings; onSa
         {(["macros", "other"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors capitalize ${
-              tab === t ? "bg-[#1B3829] text-white" : "text-gray-500 hover:text-gray-800"
+              tab === t ? "bg-[#1B3829] text-white" : "text-gray-600 hover:text-gray-800"
             }`}>
             {t === "macros" ? "🎯 Macro Targets" : "⚙ Other Settings"}
           </button>
@@ -700,19 +700,19 @@ function SettingsPanel({ settings, onSave }: { settings: NutritionSettings; onSa
         <>
           {/* Calorie target */}
           <div>
-            <p className="text-xs text-gray-400 mb-1.5">Daily Calorie Target</p>
+            <p className="text-xs text-gray-600 mb-1.5">Daily Calorie Target</p>
             <div className="flex items-center gap-2">
               <input className={`${inp} text-center text-lg font-bold`} type="number"
                 value={s.calorie_target}
                 onChange={e => setS({ ...s, calorie_target: parseFloat(e.target.value) || 0 })}
               />
-              <span className="text-xs text-gray-400 whitespace-nowrap">kcal / day</span>
+              <span className="text-xs text-gray-600 whitespace-nowrap">kcal / day</span>
             </div>
           </div>
 
           {/* Preset chips */}
           <div>
-            <p className="text-xs text-gray-400 mb-2">Quick presets</p>
+            <p className="text-xs text-gray-600 mb-2">Quick presets</p>
             <div className="grid grid-cols-2 gap-1.5">
               {MACRO_PRESETS.map(p => (
                 <button key={p.id}
@@ -721,7 +721,7 @@ function SettingsPanel({ settings, onSave }: { settings: NutritionSettings; onSa
                   <span className="text-base">{p.icon}</span>
                   <div>
                     <p className="text-xs font-semibold text-gray-800 leading-tight">{p.label}</p>
-                    <p className="text-[10px] text-gray-400">{p.desc}</p>
+                    <p className="text-[10px] text-gray-600">{p.desc}</p>
                   </div>
                 </button>
               ))}
@@ -740,19 +740,19 @@ function SettingsPanel({ settings, onSave }: { settings: NutritionSettings; onSa
 
           {/* Live calorie math */}
           <div className="rounded-xl bg-gray-100 border border-gray-300/50 px-3 py-2.5 flex items-center justify-between">
-            <div className="text-xs text-gray-400">
+            <div className="text-xs text-gray-600">
               <span style={{ color: "#6366f1" }}>{s.protein_g}g P</span>
-              <span className="mx-1 text-gray-300">×4</span>
-              <span className="text-gray-400 mr-2">+</span>
+              <span className="mx-1 text-gray-500">×4</span>
+              <span className="text-gray-600 mr-2">+</span>
               <span style={{ color: "#f59e0b" }}>{s.carbs_g}g C</span>
-              <span className="mx-1 text-gray-300">×4</span>
-              <span className="text-gray-400 mr-2">+</span>
+              <span className="mx-1 text-gray-500">×4</span>
+              <span className="text-gray-600 mr-2">+</span>
               <span style={{ color: "#ef4444" }}>{s.fat_g}g F</span>
-              <span className="mx-1 text-gray-300">×9</span>
+              <span className="mx-1 text-gray-500">×9</span>
             </div>
             <div className="text-right">
               <span className="text-sm font-bold text-gray-900">{macroCals}</span>
-              <span className="text-xs text-gray-400 ml-1">kcal</span>
+              <span className="text-xs text-gray-600 ml-1">kcal</span>
               {Math.abs(calDiff) > 5 && (
                 <p className="text-[10px] mt-0.5" style={{ color: diffColor }}>
                   {calDiff > 0 ? `+${calDiff}` : calDiff} vs target
@@ -768,7 +768,7 @@ function SettingsPanel({ settings, onSave }: { settings: NutritionSettings; onSa
           <p className="text-sm font-semibold text-gray-900">Weight Goal</p>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <p className="text-xs text-gray-400 mb-1">Goal Type</p>
+              <p className="text-xs text-gray-600 mb-1">Goal Type</p>
               <select className={inp} value={s.weight_goal_type}
                 onChange={e => setS({ ...s, weight_goal_type: e.target.value as NutritionSettings["weight_goal_type"] })}>
                 <option value="lose">Lose</option>
@@ -777,7 +777,7 @@ function SettingsPanel({ settings, onSave }: { settings: NutritionSettings; onSa
               </select>
             </div>
             <div>
-              <p className="text-xs text-gray-400 mb-1">Goal Weight (lbs)</p>
+              <p className="text-xs text-gray-600 mb-1">Goal Weight (lbs)</p>
               <input className={inp} type="number" step="0.5" placeholder="175"
                 value={s.weight_goal_lbs ?? ""}
                 onChange={e => setS({ ...s, weight_goal_lbs: parseFloat(e.target.value) || null })}
@@ -787,7 +787,7 @@ function SettingsPanel({ settings, onSave }: { settings: NutritionSettings; onSa
 
           <p className="text-sm font-semibold text-gray-900 pt-1">Fasting Window</p>
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-gray-500">Enable fasting tracker</span>
+            <span className="text-xs text-gray-600">Enable fasting tracker</span>
             <button onClick={() => setS({ ...s, fasting_enabled: !s.fasting_enabled })}
               className={`relative w-10 h-5 rounded-full transition-colors ${s.fasting_enabled ? "bg-[#1B3829]" : "bg-gray-200"}`}>
               <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${s.fasting_enabled ? "translate-x-5" : "translate-x-0.5"}`} />
@@ -795,19 +795,19 @@ function SettingsPanel({ settings, onSave }: { settings: NutritionSettings; onSa
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <p className="text-xs text-gray-400 mb-1">Eating starts</p>
+              <p className="text-xs text-gray-600 mb-1">Eating starts</p>
               <input className={inp} type="time" value={s.eating_start}
                 onChange={e => setS({ ...s, eating_start: e.target.value })} />
             </div>
             <div>
-              <p className="text-xs text-gray-400 mb-1">Eating ends</p>
+              <p className="text-xs text-gray-600 mb-1">Eating ends</p>
               <input className={inp} type="time" value={s.eating_end}
                 onChange={e => setS({ ...s, eating_end: e.target.value })} />
             </div>
           </div>
 
           <div className="flex items-center justify-between">
-            <span className="text-xs text-gray-500">Add active calories to budget</span>
+            <span className="text-xs text-gray-600">Add active calories to budget</span>
             <button onClick={() => setS({ ...s, include_active_cal_in_budget: !s.include_active_cal_in_budget })}
               className={`relative w-10 h-5 rounded-full transition-colors ${s.include_active_cal_in_budget ? "bg-[#2D6A4F]" : "bg-gray-200"}`}>
               <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${s.include_active_cal_in_budget ? "translate-x-5" : "translate-x-0.5"}`} />
@@ -1176,7 +1176,7 @@ export default function DashboardPage() {
                 className={`flex items-center gap-1.5 px-3 py-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${
                   section === id
                     ? "text-[#1B3829] border-[#1B3829]"
-                    : "text-gray-500 border-transparent hover:text-gray-900 hover:border-gray-300"
+                    : "text-gray-600 border-transparent hover:text-gray-900 hover:border-gray-300"
                 }`}
               >
                 <span className="text-base leading-none">{icon}</span>
@@ -1186,7 +1186,7 @@ export default function DashboardPage() {
           </div>
           {/* Right side */}
           <div className="flex items-center gap-3 ml-3 shrink-0">
-            <span className="hidden sm:block text-xs text-gray-400">
+            <span className="hidden sm:block text-xs text-gray-600">
               {new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
             </span>
             <RefreshButton />
@@ -1195,20 +1195,20 @@ export default function DashboardPage() {
             <button
               onClick={() => setShowShare(true)}
               title="Invite friends"
-              className="hidden sm:block text-gray-400 hover:text-[#1B3829] transition-colors text-base leading-none"
+              className="hidden sm:block text-gray-600 hover:text-[#1B3829] transition-colors text-base leading-none"
             >
               📣
             </button>
             <button
               onClick={() => setShowProfile(true)}
               title="Edit health profile"
-              className="hidden sm:block text-gray-400 hover:text-gray-700 transition-colors text-base leading-none"
+              className="hidden sm:block text-gray-600 hover:text-gray-700 transition-colors text-base leading-none"
             >
               👤
             </button>
             <button
               onClick={() => api.logout().then(() => (window.location.href = "/"))}
-              className="hidden sm:block text-xs text-gray-400 hover:text-gray-700 transition-colors"
+              className="hidden sm:block text-xs text-gray-600 hover:text-gray-700 transition-colors"
             >
               Disconnect
             </button>
@@ -1239,7 +1239,7 @@ export default function DashboardPage() {
               <button
                 onClick={() => setNavOpen(false)}
                 aria-label="Close menu"
-                className="w-8 h-8 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700 flex items-center justify-center text-lg leading-none"
+                className="w-8 h-8 rounded-full hover:bg-gray-100 text-gray-600 hover:text-gray-700 flex items-center justify-center text-lg leading-none"
               >
                 ✕
               </button>
@@ -1258,7 +1258,7 @@ export default function DashboardPage() {
               ))}
               {NAV_ITEMS.length > 5 && (
                 <>
-                  <p className="px-4 pt-3 pb-1 text-[10px] uppercase tracking-widest text-gray-400 font-semibold">More</p>
+                  <p className="px-4 pt-3 pb-1 text-[10px] uppercase tracking-widest text-gray-600 font-semibold">More</p>
                   {NAV_ITEMS.slice(5).map(({ id, label, icon }) => (
                     <button
                       key={id}
@@ -1354,7 +1354,7 @@ export default function DashboardPage() {
             {data.has_oura === false && (
               <div className="rounded-2xl border border-[#1B3829]/15 bg-white p-5 shadow-sm">
                 <p className="font-bold text-gray-900 text-sm mb-1">👋 Let&apos;s get your data flowing</p>
-                <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+                <p className="text-xs text-gray-600 mb-4 leading-relaxed">
                   BackNine gets more useful with every source you connect — but you can start with any of these:
                 </p>
                 <div className="space-y-2">
@@ -1363,27 +1363,27 @@ export default function DashboardPage() {
                     <span className="text-xl shrink-0">💍</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-gray-900">Connect Oura Ring</p>
-                      <p className="text-[11px] text-gray-500">Readiness, sleep, HRV, recovery</p>
+                      <p className="text-[11px] text-gray-600">Readiness, sleep, HRV, recovery</p>
                     </div>
-                    <span className="text-gray-400 text-sm shrink-0">→</span>
+                    <span className="text-gray-600 text-sm shrink-0">→</span>
                   </a>
                   <button onClick={() => setSection("apple-health")}
                     className="w-full flex items-center gap-3 rounded-xl border border-gray-200 hover:border-[#1B3829]/40 px-3 py-2.5 transition-colors text-left">
                     <span className="text-xl shrink-0">🍎</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-gray-900">Set up Apple Health</p>
-                      <p className="text-[11px] text-gray-500">Steps, sleep &amp; HRV from your iPhone / Watch</p>
+                      <p className="text-[11px] text-gray-600">Steps, sleep &amp; HRV from your iPhone / Watch</p>
                     </div>
-                    <span className="text-gray-400 text-sm shrink-0">→</span>
+                    <span className="text-gray-600 text-sm shrink-0">→</span>
                   </button>
                   <button onClick={() => openChatRef.current?.()}
                     className="w-full flex items-center gap-3 rounded-xl border border-gray-200 hover:border-[#1B3829]/40 px-3 py-2.5 transition-colors text-left">
                     <span className="text-xl shrink-0">✏️</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-gray-900">Start manually</p>
-                      <p className="text-[11px] text-gray-500">Log a workout or weigh-in, or ask Coach Al anything</p>
+                      <p className="text-[11px] text-gray-600">Log a workout or weigh-in, or ask Coach Al anything</p>
                     </div>
-                    <span className="text-gray-400 text-sm shrink-0">→</span>
+                    <span className="text-gray-600 text-sm shrink-0">→</span>
                   </button>
                 </div>
               </div>
@@ -1422,7 +1422,7 @@ export default function DashboardPage() {
                   {/* Greeting row */}
                   <div className="px-5 pt-4 pb-3 flex items-start justify-between">
                     <div>
-                      <p className="text-xs text-gray-400 uppercase tracking-widest mb-0.5">{greeting}</p>
+                      <p className="text-xs text-gray-600 uppercase tracking-widest mb-0.5">{greeting}</p>
                       <p className="font-bold text-gray-900 text-lg leading-tight">{dayFull}</p>
                     </div>
                     {coaches.overall?.title && (
@@ -1434,7 +1434,7 @@ export default function DashboardPage() {
                           {coaches.overall.title.replace(/[.!]$/, "")}
                         </span>
                         {isStale && (
-                          <p className="text-[10px] text-gray-400 mt-1">{fmtDate(data.today.date!)}</p>
+                          <p className="text-[10px] text-gray-600 mt-1">{fmtDate(data.today.date!)}</p>
                         )}
                       </div>
                     )}
@@ -1457,18 +1457,18 @@ export default function DashboardPage() {
                           </svg>
                           <div className="absolute inset-0 flex flex-col items-center justify-center">
                             {syncingToday ? (
-                              <span className="text-[10px] text-gray-400 text-center leading-tight px-1 animate-pulse">Syncing…</span>
+                              <span className="text-[10px] text-gray-600 text-center leading-tight px-1 animate-pulse">Syncing…</span>
                             ) : score != null && score > 0 ? (
                               <>
-                                <span className={`text-xl font-bold leading-none ${stale ? "text-gray-400" : "text-gray-900"}`}>{score}</span>
-                                <span className="text-[9px] text-gray-400 mt-0.5">{stale ? "last" : "/100"}</span>
+                                <span className={`text-xl font-bold leading-none ${stale ? "text-gray-600" : "text-gray-900"}`}>{score}</span>
+                                <span className="text-[9px] text-gray-600 mt-0.5">{stale ? "last" : "/100"}</span>
                               </>
                             ) : (
-                              <span className="text-[11px] text-gray-400 text-center leading-tight px-1">—</span>
+                              <span className="text-[11px] text-gray-600 text-center leading-tight px-1">—</span>
                             )}
                           </div>
                         </div>
-                        <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest">{label}</p>
+                        <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest">{label}</p>
                         <p className="text-[11px] font-medium" style={{ color: syncingToday ? "#9ca3af" : stale ? "#9ca3af" : color }}>{syncingToday ? "Updating…" : stale ? "Last known" : scoreLabel(score)}</p>
                       </div>
                     ))}
@@ -1478,7 +1478,7 @@ export default function DashboardPage() {
                   {coaches.overall?.msg && (
                     <div className="border-t border-gray-100 px-5 py-3 flex items-start gap-2.5">
                       <span className="text-base shrink-0 mt-0.5">💬</span>
-                      <p className="text-xs text-gray-500 leading-relaxed">{coaches.overall.msg}</p>
+                      <p className="text-xs text-gray-600 leading-relaxed">{coaches.overall.msg}</p>
                     </div>
                   )}
                 </section>
@@ -1492,10 +1492,10 @@ export default function DashboardPage() {
                   <span className="text-2xl">🧬</span>
                   <div>
                     <p className="text-sm font-bold text-gray-900">Longevity Score</p>
-                    <p className="text-[11px] text-gray-400">Your vitality, scored against age &amp; sex norms</p>
+                    <p className="text-[11px] text-gray-600">Your vitality, scored against age &amp; sex norms</p>
                   </div>
                 </div>
-                <p className="text-xs text-gray-500 leading-relaxed mb-3">
+                <p className="text-xs text-gray-600 leading-relaxed mb-3">
                   We compute this from six markers — HRV, resting heart rate, VO2 max, sleep,
                   body fat, and daily steps. Connect a tracker or add a couple of numbers manually to unlock it.
                 </p>
@@ -1534,14 +1534,14 @@ export default function DashboardPage() {
                       </svg>
                       <div className="absolute inset-0 flex flex-col items-center justify-center">
                         <span className="text-lg font-bold text-gray-900 leading-none">{lon.score}</span>
-                        <span className="text-[9px] text-gray-400 uppercase tracking-wide">Vitality</span>
+                        <span className="text-[9px] text-gray-600 uppercase tracking-wide">Vitality</span>
                       </div>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-0.5">Longevity Score</p>
+                      <p className="text-[10px] text-gray-600 uppercase tracking-widest mb-0.5">Longevity Score</p>
                       <p className="font-bold text-gray-900 text-base" style={{ color: gradeColor }}>{lon.grade}</p>
                       {lon.biological_age_delta != null && (
-                        <p className="text-xs text-gray-500 mt-0.5">
+                        <p className="text-xs text-gray-600 mt-0.5">
                           {lon.biological_age_delta === 0 ? (
                             <span className="font-semibold text-gray-600">On par with your chronological age</span>
                           ) : (
@@ -1555,7 +1555,7 @@ export default function DashboardPage() {
                           )}
                         </p>
                       )}
-                      <p className="text-[10px] text-gray-300 mt-1">{lon.data_coverage} available</p>
+                      <p className="text-[10px] text-gray-500 mt-1">{lon.data_coverage} available</p>
                     </div>
                   </div>
 
@@ -1563,15 +1563,15 @@ export default function DashboardPage() {
                   {lonHistory && lonHistory.history.length >= 2 ? (() => {
                     const delta = lonHistory.summary.delta_30d ?? lonHistory.summary.delta_7d;
                     const deltaWindow = lonHistory.summary.delta_30d != null ? 30 : 7;
-                    const deltaColor = delta == null ? "text-gray-400"
+                    const deltaColor = delta == null ? "text-gray-600"
                       : delta > 0 ? "text-green-600"
-                      : delta < 0 ? "text-red-500" : "text-gray-500";
+                      : delta < 0 ? "text-red-500" : "text-gray-600";
                     const firstDate = lonHistory.history[0].date;
                     const [, fm, fd] = firstDate.split("-");
                     return (
                       <div className="pt-3 border-t border-gray-100">
                         <div className="flex items-center justify-between mb-1">
-                          <p className="text-[10px] text-gray-400 uppercase tracking-widest">Score trend</p>
+                          <p className="text-[10px] text-gray-600 uppercase tracking-widest">Score trend</p>
                           {delta != null && (
                             <span className={`text-[11px] font-semibold ${deltaColor}`}>
                               {delta > 0 ? "▲" : delta < 0 ? "▼" : "—"} {Math.abs(delta)} pts vs {deltaWindow}d ago
@@ -1579,7 +1579,7 @@ export default function DashboardPage() {
                           )}
                         </div>
                         <LongevitySparkline points={lonHistory.history} color={gradeColor} />
-                        <div className="flex justify-between text-[9px] text-gray-300 mt-0.5">
+                        <div className="flex justify-between text-[9px] text-gray-500 mt-0.5">
                           <span>{parseInt(fm)}/{parseInt(fd)}</span>
                           <span>Today</span>
                         </div>
@@ -1587,7 +1587,7 @@ export default function DashboardPage() {
                     );
                   })() : lonHistory && lonHistory.history.length === 1 ? (
                     <div className="pt-3 border-t border-gray-100">
-                      <p className="text-[10px] text-gray-400 leading-snug">
+                      <p className="text-[10px] text-gray-600 leading-snug">
                         📈 Now tracking your Longevity Score — a trend line appears here as your history builds.
                       </p>
                     </div>
@@ -1603,7 +1603,7 @@ export default function DashboardPage() {
                         return (
                           <div key={comp.label} className="space-y-1">
                             <div className="flex justify-between text-[10px]">
-                              <span className="text-gray-500 truncate pr-1">{comp.label}</span>
+                              <span className="text-gray-600 truncate pr-1">{comp.label}</span>
                               <div className="flex items-center gap-1 shrink-0">
                                 <span className="text-gray-700 font-medium">{comp.points}/{comp.max}</span>
                                 {isVo2 && !vo2Editing && (
@@ -1619,7 +1619,7 @@ export default function DashboardPage() {
                               <div className="h-full rounded-full transition-all duration-500"
                                 style={{ width: `${pct}%`, backgroundColor: barColor }} />
                             </div>
-                            <p className="text-[9px] text-gray-400">{comp.value} · {comp.norm}</p>
+                            <p className="text-[9px] text-gray-600">{comp.value} · {comp.norm}</p>
                             {/* Inline edit form — shown when user clicks "edit" */}
                             {isVo2 && vo2Editing && (
                               <div className="flex items-center gap-1.5 pt-0.5">
@@ -1639,7 +1639,7 @@ export default function DashboardPage() {
                                 </button>
                                 <button
                                   onClick={() => { setVo2Editing(false); setVo2Input(""); }}
-                                  className="text-[10px] text-gray-400 hover:text-gray-600"
+                                  className="text-[10px] text-gray-600 hover:text-gray-600"
                                 >✕</button>
                               </div>
                             )}
@@ -1657,14 +1657,14 @@ export default function DashboardPage() {
                     if (!missingBodyFat && !missingVo2) return null;
                     return (
                       <div className="pt-2 border-t border-gray-100 space-y-2">
-                        <p className="text-[10px] text-gray-400 font-medium uppercase tracking-widest">Unlock more points</p>
+                        <p className="text-[10px] text-gray-600 font-medium uppercase tracking-widest">Unlock more points</p>
 
                         {/* VO2 Max — inline entry */}
                         {missingVo2 && (
                           <div className="space-y-1.5">
-                            <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                            <div className="flex items-center gap-2 text-[10px] text-gray-600">
                               <span className="w-1.5 h-1.5 rounded-full bg-gray-300 shrink-0" />
-                              <span><span className="font-medium text-gray-500">VO2 Max</span> (+20 pts max)</span>
+                              <span><span className="font-medium text-gray-600">VO2 Max</span> (+20 pts max)</span>
                             </div>
                             <div className="flex items-center gap-2 pl-3.5">
                               <input
@@ -1675,7 +1675,7 @@ export default function DashboardPage() {
                                 onChange={e => setVo2Input(e.target.value)}
                                 className="w-24 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs text-gray-900 focus:outline-none focus:border-green-400"
                               />
-                              <span className="text-[10px] text-gray-400">ml/kg/min</span>
+                              <span className="text-[10px] text-gray-600">ml/kg/min</span>
                               <button
                                 onClick={handleSaveVo2}
                                 disabled={vo2Saving || !vo2Input}
@@ -1684,7 +1684,7 @@ export default function DashboardPage() {
                                 {vo2Saved ? "✓ Saved" : vo2Saving ? "…" : "Save"}
                               </button>
                             </div>
-                            <p className="pl-3.5 text-[10px] text-gray-400">
+                            <p className="pl-3.5 text-[10px] text-gray-600">
                               From your Oura app or Apple Health → Cardio Fitness. Will auto-sync once connected.
                             </p>
                           </div>
@@ -1692,9 +1692,9 @@ export default function DashboardPage() {
 
                         {/* Body fat — redirect to weigh-in card */}
                         {missingBodyFat && (
-                          <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                          <div className="flex items-center gap-2 text-[10px] text-gray-600">
                             <span className="w-1.5 h-1.5 rounded-full bg-gray-300 shrink-0" />
-                            <span><span className="font-medium text-gray-500">Body Fat %</span> (+10 pts max) — enter via the Log Weigh-In card below</span>
+                            <span><span className="font-medium text-gray-600">Body Fat %</span> (+10 pts max) — enter via the Log Weigh-In card below</span>
                           </div>
                         )}
                       </div>
@@ -1729,7 +1729,7 @@ export default function DashboardPage() {
                   })()}
 
                   {profile != null && (profile.age == null || !profile.biological_sex) && (
-                    <p className="text-[10px] text-gray-400 border-t border-gray-50 pt-2">
+                    <p className="text-[10px] text-gray-600 border-t border-gray-50 pt-2">
                       💡 Add your age &amp; sex in <button onClick={() => setShowProfile(true)} className="underline hover:text-gray-600">Profile</button> for more accurate norms.
                     </p>
                   )}
@@ -1760,7 +1760,7 @@ export default function DashboardPage() {
             {showMealAdd && (
               <div className="space-y-2">
                 <div className="flex justify-end">
-                  <button onClick={() => setShowMealAdd(false)} className="text-xs font-medium text-gray-400 hover:text-gray-700">Close ✕</button>
+                  <button onClick={() => setShowMealAdd(false)} className="text-xs font-medium text-gray-600 hover:text-gray-700">Close ✕</button>
                 </div>
 
                 {/* Abbreviated macros snapshot — today's totals vs targets.
@@ -1768,10 +1768,10 @@ export default function DashboardPage() {
                 {nutToday && (
                   <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm space-y-2.5">
                     <div className="flex items-center justify-between">
-                      <p className="text-xs text-gray-400 uppercase tracking-widest">Today's macros</p>
+                      <p className="text-xs text-gray-600 uppercase tracking-widest">Today's macros</p>
                       <span className="text-[11px] font-medium text-gray-700">
                         {nutToday.totals.calories}
-                        <span className="text-gray-400"> / {nutToday.settings.calorie_target} kcal</span>
+                        <span className="text-gray-600"> / {nutToday.settings.calorie_target} kcal</span>
                       </span>
                     </div>
                     <MacroBar label="Calories" value={nutToday.totals.calories} target={nutToday.settings.calorie_target} unit=" kcal" color="#1B3829" />
@@ -1799,7 +1799,7 @@ export default function DashboardPage() {
             {showWorkoutAdd && (
               <div className="space-y-2">
                 <div className="flex justify-end">
-                  <button onClick={() => setShowWorkoutAdd(false)} className="text-xs font-medium text-gray-400 hover:text-gray-700">Close ✕</button>
+                  <button onClick={() => setShowWorkoutAdd(false)} className="text-xs font-medium text-gray-600 hover:text-gray-700">Close ✕</button>
                 </div>
                 <WorkoutLogger recentWorkouts={[]} onSaved={() => setShowWorkoutAdd(false)} />
               </div>
@@ -1823,9 +1823,9 @@ export default function DashboardPage() {
                 <p className="text-sm font-semibold text-gray-900">Body Composition</p>
                 {weightLog.length > 0 && (
                   <div className="text-right">
-                    <p className="text-lg font-bold text-gray-900">{weightLog[weightLog.length - 1].weight_lbs} <span className="text-xs text-gray-400 font-normal">lbs</span></p>
+                    <p className="text-lg font-bold text-gray-900">{weightLog[weightLog.length - 1].weight_lbs} <span className="text-xs text-gray-600 font-normal">lbs</span></p>
                     {settings?.weight_goal_lbs && (
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-gray-600">
                         Goal: {settings.weight_goal_lbs} lbs
                         ({((weightLog[weightLog.length - 1].weight_lbs - settings.weight_goal_lbs) > 0 ? "+" : "") +
                           (weightLog[weightLog.length - 1].weight_lbs - settings.weight_goal_lbs).toFixed(1)} lbs)
@@ -1847,13 +1847,13 @@ export default function DashboardPage() {
                     <div key={e.id} className="flex items-center justify-between rounded-lg bg-gray-100/80 px-3 py-2">
                       <div>
                         <span className="text-sm text-gray-900 font-medium">{e.weight_lbs} lbs</span>
-                        {e.body_fat_pct && <span className="text-xs text-gray-400 ml-2">{e.body_fat_pct}% fat</span>}
-                        {e.muscle_mass_lbs && <span className="text-xs text-gray-400 ml-2">{e.muscle_mass_lbs} lbs muscle</span>}
+                        {e.body_fat_pct && <span className="text-xs text-gray-600 ml-2">{e.body_fat_pct}% fat</span>}
+                        {e.muscle_mass_lbs && <span className="text-xs text-gray-600 ml-2">{e.muscle_mass_lbs} lbs muscle</span>}
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-400">{e.date}</span>
+                        <span className="text-xs text-gray-600">{e.date}</span>
                         <button onClick={() => handleDeleteWeight(e.id)}
-                          className="text-gray-400 hover:text-red-400 transition-colors text-lg leading-none">×</button>
+                          className="text-gray-600 hover:text-red-400 transition-colors text-lg leading-none">×</button>
                       </div>
                     </div>
                   ))}
@@ -1942,8 +1942,8 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-5 mb-5">
                     <CalorieRing consumed={consumed} budget={budget} />
                     <div className="flex-1">
-                      <p className="text-gray-900 font-semibold text-base">{consumed} <span className="text-gray-400 text-sm font-normal">kcal eaten</span></p>
-                      <p className="text-xs text-gray-400 mb-3">
+                      <p className="text-gray-900 font-semibold text-base">{consumed} <span className="text-gray-600 text-sm font-normal">kcal eaten</span></p>
+                      <p className="text-xs text-gray-600 mb-3">
                         Budget: {baseBudget}
                         {settings?.include_active_cal_in_budget && activeCal > 0 && ` + ${activeCal} active = ${budget}`} kcal
                       </p>
@@ -1955,7 +1955,7 @@ export default function DashboardPage() {
                           { label: "Fat",     val: nutToday.totals.fat,     unit: "g",    color: "#ef4444"  },
                         ].map(({ label, val, unit, color }) => (
                           <div key={label}>
-                            <p className="text-[10px] text-gray-400 uppercase tracking-wide">{label}</p>
+                            <p className="text-[10px] text-gray-600 uppercase tracking-wide">{label}</p>
                             <p className="text-sm font-bold" style={{ color }}>{val}{unit}</p>
                           </div>
                         ))}
@@ -1964,10 +1964,10 @@ export default function DashboardPage() {
                   </div>
                   <div className="space-y-2.5">
                     <div className="flex items-center justify-between mb-1">
-                      <p className="text-xs text-gray-400 uppercase tracking-widest">Macros</p>
+                      <p className="text-xs text-gray-600 uppercase tracking-widest">Macros</p>
                       <button
                         onClick={() => { setShowSettings(true); }}
-                        className="text-[10px] text-gray-400 hover:text-green-400 transition-colors flex items-center gap-1"
+                        className="text-[10px] text-gray-600 hover:text-green-400 transition-colors flex items-center gap-1"
                       >
                         ✏ Edit targets
                       </button>
@@ -1982,19 +1982,19 @@ export default function DashboardPage() {
                 <section className="rounded-2xl border border-gray-200 bg-white p-4">
                   <p className="text-sm font-semibold text-gray-900 mb-3">Today's Meals</p>
                   {nutToday.meals.length === 0 ? (
-                    <p className="text-gray-400 text-sm text-center py-4">No meals logged yet today</p>
+                    <p className="text-gray-600 text-sm text-center py-4">No meals logged yet today</p>
                   ) : (
                     <div className="space-y-2 mb-3">
                       {nutToday.meals.map((meal) => (
                         <div key={meal.id} className="flex items-center justify-between rounded-xl bg-gray-100/80 px-3 py-2.5">
                           <div>
                             <p className="text-sm text-gray-900 capitalize">{meal.name}</p>
-                            <p className="text-xs text-gray-400 mt-0.5">
+                            <p className="text-xs text-gray-600 mt-0.5">
                               {meal.calories} kcal · P {meal.protein}g · C {meal.carbs}g · F {meal.fat}g
                             </p>
                           </div>
                           <button onClick={() => handleDeleteMeal(meal.id)}
-                            className="text-gray-400 hover:text-red-400 transition-colors ml-2 text-lg leading-none">
+                            className="text-gray-600 hover:text-red-400 transition-colors ml-2 text-lg leading-none">
                             ×
                           </button>
                         </div>
@@ -2017,7 +2017,7 @@ export default function DashboardPage() {
                 {/* ─ Weekly summary ─ */}
                 {nutSummary && nutSummary.days_logged > 0 && (
                   <section className="rounded-2xl border border-gray-200 bg-white p-5">
-                    <p className="text-xs text-gray-400 uppercase tracking-widest mb-4">7-Day Average</p>
+                    <p className="text-xs text-gray-600 uppercase tracking-widest mb-4">7-Day Average</p>
                     <div className="grid grid-cols-4 gap-2 mb-4">
                       {[
                         { label: "Calories",     val: nutSummary.avg_calories, unit: "kcal" },
@@ -2026,8 +2026,8 @@ export default function DashboardPage() {
                         { label: "Fat",          val: nutSummary.avg_fat,      unit: "g" },
                       ].map(({ label, val, unit }) => (
                         <div key={label} className="rounded-xl bg-gray-100 px-2 py-3 text-center">
-                          <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">{label}</p>
-                          <p className="text-sm font-bold text-gray-900">{val}<span className="text-xs text-gray-400 font-normal">{unit}</span></p>
+                          <p className="text-[10px] text-gray-600 uppercase tracking-wide mb-1">{label}</p>
+                          <p className="text-sm font-bold text-gray-900">{val}<span className="text-xs text-gray-600 font-normal">{unit}</span></p>
                         </div>
                       ))}
                     </div>
@@ -2043,12 +2043,12 @@ export default function DashboardPage() {
                               style={{ height: h, backgroundColor: day.calories > 0 ? "#22c55e" : "#E5E7EB" }}
                               title={`${day.date}: ${day.calories} kcal`}
                             />
-                            <p className="text-[9px] text-gray-400">{day.date.slice(5)}</p>
+                            <p className="text-[9px] text-gray-600">{day.date.slice(5)}</p>
                           </div>
                         );
                       })}
                     </div>
-                    <p className="text-xs text-gray-400 mt-2">{nutSummary.days_logged} of 7 days logged</p>
+                    <p className="text-xs text-gray-600 mt-2">{nutSummary.days_logged} of 7 days logged</p>
                   </section>
                 )}
 
@@ -2065,7 +2065,7 @@ export default function DashboardPage() {
                 {/* ─ Settings ─ */}
                 <div>
                   <button onClick={() => setShowSettings(!showSettings)}
-                    className="w-full py-2.5 rounded-xl border border-gray-200 text-gray-500 hover:text-gray-900 hover:border-gray-400 text-sm font-medium transition-colors">
+                    className="w-full py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-400 text-sm font-medium transition-colors">
                     {showSettings ? "▲ Hide" : "⚙ Nutrition settings"}
                   </button>
                   {showSettings && nutToday.settings && (
@@ -2084,9 +2084,9 @@ export default function DashboardPage() {
           <div className="space-y-4">
             {/* Training Load (ACWR) */}
             <section className="rounded-2xl border bg-white p-6" style={{ borderColor: training_load.color + "66" }}>
-              <p className="text-xs text-gray-400 uppercase tracking-widest mb-3">Training Load (ACWR)</p>
+              <p className="text-xs text-gray-600 uppercase tracking-widest mb-3">Training Load (ACWR)</p>
               <div className="mb-5">
-                <div className="flex justify-between text-xs text-gray-400 mb-1.5">
+                <div className="flex justify-between text-xs text-gray-600 mb-1.5">
                   <span>Under-trained</span><span>Optimal</span><span>Overreaching</span>
                 </div>
                 <div className="relative h-3 rounded-full overflow-hidden bg-gray-100">
@@ -2101,7 +2101,7 @@ export default function DashboardPage() {
                       style={{ left: `${Math.min(98, Math.max(1, (training_load.acwr / 2) * 100))}%` }} />
                   )}
                 </div>
-                <div className="flex justify-between text-xs text-gray-400 mt-1">
+                <div className="flex justify-between text-xs text-gray-600 mt-1">
                   <span>0.0</span><span>0.8</span><span>1.3</span><span>1.5</span><span>2.0+</span>
                 </div>
               </div>
@@ -2114,24 +2114,24 @@ export default function DashboardPage() {
                       {training_load.label}
                     </span>
                   </div>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-gray-600">
                     Acute/Chronic Workload Ratio
-                    <span className="ml-2 text-gray-300">·</span>
+                    <span className="ml-2 text-gray-500">·</span>
                     <span className="ml-2 text-green-600 font-medium">Optimal: 0.8–1.3</span>
                   </p>
                 </div>
               </div>
               <div className="mt-4 grid grid-cols-3 gap-3">
                 <div className="rounded-xl bg-gray-100 px-4 py-3 text-center">
-                  <p className="text-xs text-gray-400 mb-1">7-Day Avg</p>
-                  <p className="text-lg font-bold text-gray-900">{training_load.acute_avg ?? "—"} <span className="text-xs text-gray-400 font-normal">cal</span></p>
+                  <p className="text-xs text-gray-600 mb-1">7-Day Avg</p>
+                  <p className="text-lg font-bold text-gray-900">{training_load.acute_avg ?? "—"} <span className="text-xs text-gray-600 font-normal">cal</span></p>
                 </div>
                 <div className="rounded-xl bg-gray-100 px-4 py-3 text-center">
-                  <p className="text-xs text-gray-400 mb-1">28-Day Avg</p>
-                  <p className="text-lg font-bold text-gray-900">{training_load.chronic_avg ?? "—"} <span className="text-xs text-gray-400 font-normal">cal</span></p>
+                  <p className="text-xs text-gray-600 mb-1">28-Day Avg</p>
+                  <p className="text-lg font-bold text-gray-900">{training_load.chronic_avg ?? "—"} <span className="text-xs text-gray-600 font-normal">cal</span></p>
                 </div>
                 <div className="rounded-xl px-4 py-3 text-center" style={{ backgroundColor: training_load.color + "18" }}>
-                  <p className="text-xs text-gray-400 mb-1">Status</p>
+                  <p className="text-xs text-gray-600 mb-1">Status</p>
                   <p className="text-sm font-bold" style={{ color: training_load.color }}>
                     {training_load.zone === "optimal" ? "✓ In zone" :
                      training_load.zone === "low"     ? "↑ Too low" :
@@ -2140,7 +2140,7 @@ export default function DashboardPage() {
                   </p>
                 </div>
               </div>
-              <p className="mt-4 text-xs text-gray-400 leading-relaxed">
+              <p className="mt-4 text-xs text-gray-600 leading-relaxed">
                 {training_load.zone === "optimal"  && "Your training load is balanced. Keep this up for sustained performance gains."}
                 {training_load.zone === "low"       && "You've been under-training recently. Gradually increase intensity over the next week."}
                 {training_load.zone === "caution"   && "Load is elevated. Prioritize sleep and recovery to avoid injury."}
@@ -2170,7 +2170,7 @@ export default function DashboardPage() {
                   {(["scores", "hrv", "sleep_detail"] as Tab[]).map((t) => (
                     <button key={t} onClick={() => setTab(t)}
                       className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                        tab === t ? "bg-gray-200 text-gray-900" : "text-gray-500 hover:text-gray-800"
+                        tab === t ? "bg-gray-200 text-gray-900" : "text-gray-600 hover:text-gray-800"
                       }`}>
                       {t === "scores" ? "Scores" : t === "hrv" ? "HRV/RHR" : "Sleep"}
                     </button>
@@ -2251,11 +2251,11 @@ function CollapsibleSection({
           {icon && <span className="text-base">{icon}</span>}
           <span className="text-sm font-semibold text-gray-800">{title}</span>
           {!open && badge && (
-            <span className="text-xs text-gray-400 font-normal">{badge}</span>
+            <span className="text-xs text-gray-600 font-normal">{badge}</span>
           )}
         </div>
         <svg
-          className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          className={`w-4 h-4 text-gray-600 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
           fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -2275,7 +2275,7 @@ function LoadingState() {
     <div className="flex min-h-screen items-center justify-center bg-[#F4F1EA]">
       <div className="text-center space-y-4">
         <div className="h-12 w-12 rounded-full border-4 border-[#1B3829] border-t-transparent animate-spin mx-auto" />
-        <p className="text-gray-500 text-sm">Loading your health data…</p>
+        <p className="text-gray-600 text-sm">Loading your health data…</p>
       </div>
     </div>
   );
@@ -2325,7 +2325,7 @@ function ErrorState({ error }: { error: string }) {
       <div className="text-center space-y-5 max-w-sm">
         <p className="text-5xl">{emoji}</p>
         <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
-        <p className="text-gray-500 text-sm leading-relaxed">{message}</p>
+        <p className="text-gray-600 text-sm leading-relaxed">{message}</p>
         <div className="flex flex-col gap-2 items-center">
           <a
             href={btnHref}
@@ -2347,7 +2347,7 @@ function ErrorState({ error }: { error: string }) {
             {btnLabel}
           </a>
           {secondary && (
-            <a href={secondary.href} className="text-xs text-gray-400 hover:text-gray-600">
+            <a href={secondary.href} className="text-xs text-gray-600 hover:text-gray-600">
               {secondary.label}
             </a>
           )}

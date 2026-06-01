@@ -116,7 +116,7 @@ export default function WeeklyLeague({ onInvite }: Props) {
               key={s.user_id}
               className={`flex items-center gap-3 px-4 py-2.5 ${s.is_me ? "bg-[#1B3829]/5" : ""}`}
             >
-              <span className={`w-7 text-center text-sm font-bold shrink-0 ${top3 ? "" : "text-gray-400"}`}>
+              <span className={`w-7 text-center text-sm font-bold shrink-0 ${top3 ? "" : "text-gray-600"}`}>
                 {top3 ? MEDAL[s.rank - 1] : s.rank}
               </span>
               <span className={`flex-1 text-sm truncate flex items-center gap-1.5 ${s.is_me ? "font-bold text-[#1B3829]" : "text-gray-700"}`}>
@@ -128,7 +128,7 @@ export default function WeeklyLeague({ onInvite }: Props) {
               <span className="text-sm font-semibold text-gray-900 shrink-0">
                 {s.score.toLocaleString()}
               </span>
-              <span className="text-[11px] text-gray-400 shrink-0">pts</span>
+              <span className="text-[11px] text-gray-600 shrink-0">pts</span>
             </div>
           );
         })}
@@ -136,7 +136,7 @@ export default function WeeklyLeague({ onInvite }: Props) {
 
       {/* Footer */}
       <div className="px-4 py-2.5 border-t border-gray-50 flex items-center justify-between gap-2">
-        <p className="text-[11px] text-gray-400">
+        <p className="text-[11px] text-gray-600">
           {me_rank != null
             ? soloOrTiny
               ? "You're first in — invite friends to make it a race"
@@ -162,13 +162,13 @@ export default function WeeklyLeague({ onInvite }: Props) {
         <span className="text-xs font-semibold text-[#1B3829] flex items-center gap-1.5">
           <span>📊</span> How scoring works
         </span>
-        <span className={`text-gray-400 text-xs transition-transform ${showScoring ? "rotate-180" : ""}`}>⌄</span>
+        <span className={`text-gray-600 text-xs transition-transform ${showScoring ? "rotate-180" : ""}`}>⌄</span>
       </button>
 
       {showScoring && (
         <div className="px-4 pb-4 pt-1 bg-gray-50/60 border-t border-gray-100">
           {/* Rules legend — decodes the grid's emoji columns */}
-          <p className="text-[11px] text-gray-500 mb-2 leading-relaxed">
+          <p className="text-[11px] text-gray-600 mb-2 leading-relaxed">
             Earn points every day this week for these habits:
           </p>
           <div className="flex flex-wrap gap-1.5 mb-3">
@@ -191,7 +191,7 @@ export default function WeeklyLeague({ onInvite }: Props) {
                 <table className="w-full border-collapse">
                   <thead>
                     <tr>
-                      <th className="text-left text-[10px] font-medium text-gray-400 pb-2 pl-1">Player</th>
+                      <th className="text-left text-[10px] font-medium text-gray-600 pb-2 pl-1">Player</th>
                       {cats.map(c => (
                         <th
                           key={c.key}
@@ -201,7 +201,7 @@ export default function WeeklyLeague({ onInvite }: Props) {
                           {c.icon}
                         </th>
                       ))}
-                      <th className="text-right text-[10px] font-semibold text-gray-500 pb-2 pr-1">Pts</th>
+                      <th className="text-right text-[10px] font-semibold text-gray-600 pb-2 pr-1">Pts</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -218,7 +218,7 @@ export default function WeeklyLeague({ onInvite }: Props) {
                             <td
                               key={c.key}
                               className={`text-center text-[11px] tabular-nums px-0.5 ${
-                                v > 0 ? (s.is_me ? "font-semibold text-[#1B3829]" : "text-gray-700") : "text-gray-300"
+                                v > 0 ? (s.is_me ? "font-semibold text-[#1B3829]" : "text-gray-700") : "text-gray-500"
                               }`}
                             >
                               {v > 0 ? v : "·"}
@@ -234,7 +234,7 @@ export default function WeeklyLeague({ onInvite }: Props) {
                 </table>
               </div>
               {standings.length > 12 && (
-                <p className="text-[10px] text-gray-400 mt-1.5">Showing top 12 of {member_count}.</p>
+                <p className="text-[10px] text-gray-600 mt-1.5">Showing top 12 of {member_count}.</p>
               )}
             </>
           ) : (
@@ -252,10 +252,10 @@ export default function WeeklyLeague({ onInvite }: Props) {
                     <span className="text-base leading-none shrink-0">{item.icon}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium text-gray-800 truncate">{item.label}</p>
-                      <p className="text-[10px] text-gray-400">+{item.per} per {item.per_unit}</p>
+                      <p className="text-[10px] text-gray-600">+{item.per} per {item.per_unit}</p>
                     </div>
                     {breakdown && (
-                      <span className={`text-sm font-bold shrink-0 ${earned ? "text-[#1B3829]" : "text-gray-300"}`}>
+                      <span className={`text-sm font-bold shrink-0 ${earned ? "text-[#1B3829]" : "text-gray-500"}`}>
                         {earned ? `+${item.points}` : "0"}
                       </span>
                     )}

@@ -193,7 +193,7 @@ export default function GroupChatDrawer({ group, onClose, onLeft }: Props) {
               {(["chat", "standings"] as const).map(t => (
                 <button key={t} onClick={() => setTab(t)}
                   className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                    tab === t ? "bg-[#1B3829] text-white" : "bg-gray-100 text-gray-500 hover:text-gray-800"
+                    tab === t ? "bg-[#1B3829] text-white" : "bg-gray-100 text-gray-600 hover:text-gray-800"
                   }`}>
                   {t === "chat" ? "💬 Chat" : "🏆 Standings"}
                 </button>
@@ -209,21 +209,21 @@ export default function GroupChatDrawer({ group, onClose, onLeft }: Props) {
                 </div>
               )}
               {messages?.length === 0 && (
-                <p className="text-xs text-gray-400 italic text-center py-6">
+                <p className="text-xs text-gray-600 italic text-center py-6">
                   No messages yet. Say hi to the group! Share the invite code above to add people.
                 </p>
               )}
               {messages?.map(m => (
                 <div key={m.id} className={`flex flex-col ${m.is_me ? "items-end" : "items-start"}`}>
                   {!m.is_me && (
-                    <p className="text-[10px] text-gray-400 mb-0.5 px-1 font-medium">{m.user_name}</p>
+                    <p className="text-[10px] text-gray-600 mb-0.5 px-1 font-medium">{m.user_name}</p>
                   )}
                   <div className={`max-w-[82%] rounded-2xl px-3.5 py-2 text-sm leading-snug whitespace-pre-wrap break-words ${
                     m.is_me ? "bg-[#1B3829] text-white rounded-br-sm" : "bg-gray-100 text-gray-800 rounded-bl-sm"
                   }`}>
                     {m.text}
                   </div>
-                  <p className="text-[9px] text-gray-400 mt-0.5 px-1">{fmtTime(m.created_at)}</p>
+                  <p className="text-[9px] text-gray-600 mt-0.5 px-1">{fmtTime(m.created_at)}</p>
                 </div>
               ))}
               <div ref={bottomRef} />
@@ -277,7 +277,7 @@ export default function GroupChatDrawer({ group, onClose, onLeft }: Props) {
                     {/* Shared weekly goal */}
                     {(standings.goal == null && !editingGoal) ? (
                       <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 mb-3">
-                        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Weekly group goal</p>
+                        <p className="text-[11px] font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Weekly group goal</p>
                         <button onClick={() => { setEditingGoal(true); setGoalInput(""); }}
                           className="text-xs font-semibold text-[#1B3829] hover:underline">
                           ＋ Set a shared points goal
@@ -285,18 +285,18 @@ export default function GroupChatDrawer({ group, onClose, onLeft }: Props) {
                       </div>
                     ) : editingGoal ? (
                       <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 mb-3">
-                        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Weekly group goal</p>
+                        <p className="text-[11px] font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Weekly group goal</p>
                         <div className="flex items-center gap-2">
                           <input type="number" min={0} placeholder="e.g. 500" value={goalInput}
                             onChange={e => setGoalInput(e.target.value)}
                             className="w-24 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:border-[#1B3829]" />
-                          <span className="text-xs text-gray-400">pts / week</span>
+                          <span className="text-xs text-gray-600">pts / week</span>
                           <button onClick={() => saveGoal(false)} disabled={savingGoal || !goalInput}
                             className="ml-auto rounded-lg bg-[#1B3829] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">
                             {savingGoal ? "…" : "Save"}
                           </button>
                           {standings.goal != null && (
-                            <button onClick={() => saveGoal(true)} className="text-[11px] text-gray-400 hover:text-red-500">Clear</button>
+                            <button onClick={() => saveGoal(true)} className="text-[11px] text-gray-600 hover:text-red-500">Clear</button>
                           )}
                         </div>
                       </div>
@@ -308,16 +308,16 @@ export default function GroupChatDrawer({ group, onClose, onLeft }: Props) {
                       return (
                         <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 mb-3">
                           <div className="flex items-center justify-between mb-1.5">
-                            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Weekly group goal</p>
+                            <p className="text-[11px] font-semibold text-gray-600 uppercase tracking-wide">Weekly group goal</p>
                             <button onClick={() => { setEditingGoal(true); setGoalInput(String(goal)); }}
-                              className="text-[10px] text-gray-400 hover:text-gray-700 underline">edit</button>
+                              className="text-[10px] text-gray-600 hover:text-gray-700 underline">edit</button>
                           </div>
                           <div className="flex items-baseline justify-between mb-1">
                             <span className="text-lg font-bold text-gray-900">
                               {total.toLocaleString()}
-                              <span className="text-xs text-gray-400 font-normal"> / {goal.toLocaleString()} pts</span>
+                              <span className="text-xs text-gray-600 font-normal"> / {goal.toLocaleString()} pts</span>
                             </span>
-                            <span className={`text-xs font-semibold ${done ? "text-green-600" : "text-gray-500"}`}>
+                            <span className={`text-xs font-semibold ${done ? "text-green-600" : "text-gray-600"}`}>
                               {done ? "🎉 Goal hit!" : `${pct}%`}
                             </span>
                           </div>
@@ -330,22 +330,22 @@ export default function GroupChatDrawer({ group, onClose, onLeft }: Props) {
                     })()}
 
                     {/* Member ranking */}
-                    <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-1.5">This week</p>
+                    <p className="text-[11px] font-semibold text-gray-600 uppercase tracking-widest mb-1.5">This week</p>
                     <div className="divide-y divide-gray-50">
                       {standings.members.map(m => (
                         <div key={m.user_id} className="flex items-center gap-3 py-2">
-                          <span className="w-6 text-center text-sm text-gray-400">
+                          <span className="w-6 text-center text-sm text-gray-600">
                             {m.rank <= 3 ? ["🥇", "🥈", "🥉"][m.rank - 1] : m.rank}
                           </span>
                           <span className={`flex-1 text-sm truncate ${m.is_me ? "font-bold text-[#1B3829]" : "text-gray-700"}`}>
                             {m.is_me ? "You" : m.name}
                           </span>
                           <span className="text-sm font-semibold text-gray-900">{m.points.toLocaleString()}</span>
-                          <span className="text-[11px] text-gray-400">pts</span>
+                          <span className="text-[11px] text-gray-600">pts</span>
                         </div>
                       ))}
                     </div>
-                    <p className="text-[10px] text-gray-400 mt-3">
+                    <p className="text-[10px] text-gray-600 mt-3">
                       Points: daily check-in, logged workouts/meals/weigh-ins + a step bonus.
                     </p>
                   </>

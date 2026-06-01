@@ -216,7 +216,7 @@ export default function PulseFeed({ onInviteFriend }: Props) {
   if (loading) {
     return (
       <section>
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-600 mb-2">
           Friend Pulse
         </h3>
         <div className="flex gap-2 overflow-hidden">
@@ -232,12 +232,12 @@ export default function PulseFeed({ onInviteFriend }: Props) {
   if (hasFriends === false) {
     return (
       <section>
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-600 mb-2">
           Friend Pulse
         </h3>
         <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/60 px-4 py-5 text-center">
           <p className="text-sm text-gray-600 font-medium mb-1">🤝 Better with friends</p>
-          <p className="text-[11px] text-gray-400 mb-3 leading-snug">
+          <p className="text-[11px] text-gray-600 mb-3 leading-snug">
             Invite a friend to see their workouts, weigh-ins, and challenge milestones here.
           </p>
           {onInviteFriend && (
@@ -258,18 +258,18 @@ export default function PulseFeed({ onInviteFriend }: Props) {
     return (
       <section>
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+          <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-600">
             Friend Pulse
           </h3>
           <button
             onClick={() => load(true)}
             disabled={refreshing}
-            className="text-[11px] text-gray-400 hover:text-[#1B3829] transition-colors font-medium"
+            className="text-[11px] text-gray-600 hover:text-[#1B3829] transition-colors font-medium"
           >
             {refreshing ? "…" : "Refresh"}
           </button>
         </div>
-        <p className="text-[11px] text-gray-400 italic px-1">
+        <p className="text-[11px] text-gray-600 italic px-1">
           No recent activity from your friends. Check back soon.
         </p>
       </section>
@@ -286,17 +286,17 @@ export default function PulseFeed({ onInviteFriend }: Props) {
   return (
     <section>
       <div className="flex items-center justify-between mb-2 gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400 truncate">
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-600 truncate">
           Friend Pulse
           {namedFriends.length > 0 && (
-            <span className="ml-1 normal-case font-normal text-gray-400">
+            <span className="ml-1 normal-case font-normal text-gray-600">
               · with <span className="text-[#1B3829] font-semibold">
                 {namedFriends.length === 1 ? namedFriends[0] : namedFriends.length <= 3 ? namedFriends.join(", ") : `${namedFriends[0]} +${namedFriends.length - 1}`}
               </span>
             </span>
           )}
           {namedFriends.length === 0 && friends.length > 0 && (
-            <span className="ml-1 normal-case font-normal text-gray-300">
+            <span className="ml-1 normal-case font-normal text-gray-500">
               · {friends.length} {friends.length === 1 ? "friend" : "friends"}
             </span>
           )}
@@ -304,7 +304,7 @@ export default function PulseFeed({ onInviteFriend }: Props) {
         <button
           onClick={() => load(true)}
           disabled={refreshing}
-          className={`shrink-0 text-[11px] text-gray-400 hover:text-[#1B3829] transition-colors font-medium ${refreshing ? "animate-pulse" : ""}`}
+          className={`shrink-0 text-[11px] text-gray-600 hover:text-[#1B3829] transition-colors font-medium ${refreshing ? "animate-pulse" : ""}`}
         >
           {refreshing ? "…" : "Refresh"}
         </button>
@@ -334,7 +334,7 @@ export default function PulseFeed({ onInviteFriend }: Props) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-[11px] font-semibold text-gray-900 truncate">{e.user_name || "Friend"}</p>
-                  <p className="text-[10px] text-gray-400">{timeAgo(e.created_at)}</p>
+                  <p className="text-[10px] text-gray-600">{timeAgo(e.created_at)}</p>
                 </div>
               </div>
 
@@ -356,7 +356,7 @@ export default function PulseFeed({ onInviteFriend }: Props) {
                       }`}
                     >
                       <p className={`text-[8px] uppercase tracking-wide font-semibold leading-none ${
-                        isMilestone ? "text-green-700" : "text-gray-400"
+                        isMilestone ? "text-green-700" : "text-gray-600"
                       }`}>
                         {p.label}
                       </p>
@@ -385,7 +385,7 @@ export default function PulseFeed({ onInviteFriend }: Props) {
                     className={`text-[11px] rounded-full px-2 py-0.5 transition-all border ${
                       mine
                         ? "bg-[#1B3829]/10 border-[#1B3829]/30 text-[#1B3829]"
-                        : "bg-gray-50 border-gray-200 text-gray-500 hover:border-gray-400"
+                        : "bg-gray-50 border-gray-200 text-gray-600 hover:border-gray-400"
                     }`}
                     style={mine ? { backgroundColor: "rgba(27,56,41,0.10)", borderColor: "rgba(27,56,41,0.3)" } : undefined}
                   >
@@ -398,7 +398,7 @@ export default function PulseFeed({ onInviteFriend }: Props) {
               {e.reactions
                 .filter(r => !REACTIONS.includes(r.emoji as typeof REACTIONS[number]))
                 .map(r => (
-                  <span key={r.emoji} className="text-[11px] rounded-full px-2 py-0.5 bg-gray-50 border border-gray-200 text-gray-500">
+                  <span key={r.emoji} className="text-[11px] rounded-full px-2 py-0.5 bg-gray-50 border border-gray-200 text-gray-600">
                     {r.emoji} <span className="text-[10px] font-semibold">{r.count}</span>
                   </span>
                 ))}
@@ -409,7 +409,7 @@ export default function PulseFeed({ onInviteFriend }: Props) {
                 className={`text-[11px] rounded-full px-2 py-0.5 transition-all border ml-auto ${
                   openComments.has(e.id)
                     ? "bg-[#1B3829]/10 border-[#1B3829]/30 text-[#1B3829]"
-                    : "bg-gray-50 border-gray-200 text-gray-500 hover:border-gray-400"
+                    : "bg-gray-50 border-gray-200 text-gray-600 hover:border-gray-400"
                 }`}
                 title={openComments.has(e.id) ? "Hide comments" : "Show comments"}
               >
@@ -512,10 +512,10 @@ function CommentThread({
       {/* Comment list */}
       <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
         {comments === null && (
-          <p className="text-[11px] text-gray-400 italic">Loading…</p>
+          <p className="text-[11px] text-gray-600 italic">Loading…</p>
         )}
         {comments !== null && comments.length === 0 && (
-          <p className="text-[11px] text-gray-400 italic">Be the first to say something.</p>
+          <p className="text-[11px] text-gray-600 italic">Be the first to say something.</p>
         )}
         {comments?.map(c => (
           <div key={c.id} className={`flex flex-col ${c.is_me ? "items-end" : "items-start"}`}>
@@ -526,7 +526,7 @@ function CommentThread({
             }`}>
               {c.text}
             </div>
-            <p className="text-[9px] text-gray-400 mt-0.5 px-0.5">
+            <p className="text-[9px] text-gray-600 mt-0.5 px-0.5">
               {c.is_me ? "You" : (c.user_name || "Friend")} · {fmt(c.created_at)}
             </p>
           </div>

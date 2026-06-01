@@ -194,7 +194,7 @@ function LabLogForm({ onSave }: LogFormProps) {
 
       {/* Date */}
       <div>
-        <label className="block text-xs text-gray-500 mb-1">Date</label>
+        <label className="block text-xs text-gray-600 mb-1">Date</label>
         <input type="date" value={date} onChange={e => setDate(e.target.value)}
           className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900" />
       </div>
@@ -204,7 +204,7 @@ function LabLogForm({ onSave }: LogFormProps) {
         {Object.keys(GROUPS).map(g => (
           <button key={g} onClick={() => setActiveGroup(g)}
             className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-              activeGroup === g ? "bg-gray-200 text-white" : "text-gray-400 hover:text-gray-700"
+              activeGroup === g ? "bg-gray-200 text-white" : "text-gray-600 hover:text-gray-700"
             }`}>
             {g}
           </button>
@@ -215,8 +215,8 @@ function LabLogForm({ onSave }: LogFormProps) {
       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
         {markers.map(m => (
           <div key={m.key}>
-            <label className="block text-xs text-gray-500 mb-1">
-              {m.label} <span className="text-gray-400">({m.unit})</span>
+            <label className="block text-xs text-gray-600 mb-1">
+              {m.label} <span className="text-gray-600">({m.unit})</span>
             </label>
             <input
               type="number" step="any"
@@ -231,7 +231,7 @@ function LabLogForm({ onSave }: LogFormProps) {
 
       {/* Notes */}
       <div>
-        <label className="block text-xs text-gray-500 mb-1">Notes (optional)</label>
+        <label className="block text-xs text-gray-600 mb-1">Notes (optional)</label>
         <input type="text" value={notes} onChange={e => setNotes(e.target.value)}
           placeholder="e.g. fasted 12 hrs"
           className="w-full bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500" />
@@ -306,12 +306,12 @@ function LabEntryCard({
               </span>
             ) : null)}
           </div>
-          {entry.notes && <p className="text-xs text-gray-400 mt-0.5">{entry.notes}</p>}
+          {entry.notes && <p className="text-xs text-gray-600 mt-0.5">{entry.notes}</p>}
         </div>
         <div className="flex items-center gap-2">
           <button onClick={e => { e.stopPropagation(); onDelete(entry.id); }}
-            className="text-gray-400 hover:text-red-400 transition-colors text-lg leading-none px-1">×</button>
-          <span className="text-gray-400 text-sm">{expanded ? "▲" : "▼"}</span>
+            className="text-gray-600 hover:text-red-400 transition-colors text-lg leading-none px-1">×</button>
+          <span className="text-gray-600 text-sm">{expanded ? "▲" : "▼"}</span>
         </div>
       </div>
 
@@ -323,7 +323,7 @@ function LabEntryCard({
             if (groupScored.length === 0) return null;
             return (
               <div key={groupName}>
-                <p className="text-xs text-gray-400 uppercase tracking-widest mb-2">{groupName}</p>
+                <p className="text-xs text-gray-600 uppercase tracking-widest mb-2">{groupName}</p>
                 <div className="space-y-1.5">
                   {groupScored.map(s => (
                     <MarkerRow key={s.key} {...s} />
@@ -362,16 +362,16 @@ function LabSummary({ entries }: { entries: LabEntry[] }) {
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-4">
-      <p className="text-xs text-gray-400 uppercase tracking-widest mb-3">Latest Panel Summary</p>
+      <p className="text-xs text-gray-600 uppercase tracking-widest mb-3">Latest Panel Summary</p>
       <div className="flex gap-3">
         {(["optimal", "normal", "low", "high"] as const).map(s => (
           <div key={s} className={`flex-1 text-center rounded-xl py-2.5 ${STATUS_STYLE[s].bg}`}>
             <p className={`text-2xl font-bold ${STATUS_STYLE[s].text}`}>{counts[s] ?? 0}</p>
-            <p className="text-xs text-gray-400 mt-0.5 capitalize">{s}</p>
+            <p className="text-xs text-gray-600 mt-0.5 capitalize">{s}</p>
           </div>
         ))}
       </div>
-      <p className="text-xs text-gray-400 mt-2 text-center">{total} markers tracked · {latest.date}</p>
+      <p className="text-xs text-gray-600 mt-2 text-center">{total} markers tracked · {latest.date}</p>
     </div>
   );
 }
@@ -449,7 +449,7 @@ function PdfImportPanel({ onConfirm, onCancel }: {
       <div className="rounded-2xl border border-gray-200 bg-white p-5 space-y-4">
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold text-gray-900">Import from PDF</p>
-          <button onClick={onCancel} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+          <button onClick={onCancel} className="text-gray-600 hover:text-gray-700 text-xl leading-none">×</button>
         </div>
 
         {/* Drop zone */}
@@ -464,19 +464,19 @@ function PdfImportPanel({ onConfirm, onCancel }: {
           <input type="file" accept=".pdf" onChange={handleFileInput}
             className="absolute inset-0 opacity-0 cursor-pointer" />
           {uploading ? (
-            <p className="text-sm text-gray-500">Parsing PDF…</p>
+            <p className="text-sm text-gray-600">Parsing PDF…</p>
           ) : (
             <>
               <span className="text-3xl">📄</span>
               <p className="text-sm text-gray-700 font-medium">Drop your lab PDF here</p>
-              <p className="text-xs text-gray-400">or click to browse · Quest, LabCorp, hospital portals</p>
+              <p className="text-xs text-gray-600">or click to browse · Quest, LabCorp, hospital portals</p>
             </>
           )}
         </div>
 
         {error && <p className="text-xs text-red-400 text-center">{error}</p>}
 
-        <p className="text-xs text-gray-400 text-center">
+        <p className="text-xs text-gray-600 text-center">
           Your PDF is sent securely to BackNine for extraction and saved to your account.
         </p>
       </div>
@@ -489,14 +489,14 @@ function PdfImportPanel({ onConfirm, onCancel }: {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-semibold text-gray-900">Review extracted results</p>
-          <p className="text-xs text-gray-400 mt-0.5">{preview.count} marker{preview.count !== 1 ? "s" : ""} found</p>
+          <p className="text-xs text-gray-600 mt-0.5">{preview.count} marker{preview.count !== 1 ? "s" : ""} found</p>
         </div>
-        <button onClick={onCancel} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+        <button onClick={onCancel} className="text-gray-600 hover:text-gray-700 text-xl leading-none">×</button>
       </div>
 
       {/* Date */}
       <div>
-        <label className="block text-xs text-gray-500 mb-1">Date</label>
+        <label className="block text-xs text-gray-600 mb-1">Date</label>
         <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)}
           className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900" />
       </div>
@@ -507,7 +507,7 @@ function PdfImportPanel({ onConfirm, onCancel }: {
         if (found.length === 0) return null;
         return (
           <div key={groupName}>
-            <p className="text-xs text-gray-400 uppercase tracking-widest mb-2">{groupName}</p>
+            <p className="text-xs text-gray-600 uppercase tracking-widest mb-2">{groupName}</p>
             <div className="grid grid-cols-2 gap-x-4 gap-y-2">
               {found.map(m => {
                 const val = parseFloat(editValues[m.key] ?? "");
@@ -515,8 +515,8 @@ function PdfImportPanel({ onConfirm, onCancel }: {
                 const s = STATUS_STYLE[status];
                 return (
                   <div key={m.key}>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      {m.label} <span className="text-gray-400">({m.unit})</span>
+                    <label className="block text-xs text-gray-600 mb-1">
+                      {m.label} <span className="text-gray-600">({m.unit})</span>
                     </label>
                     <div className="flex items-center gap-1.5">
                       <input
@@ -543,7 +543,7 @@ function PdfImportPanel({ onConfirm, onCancel }: {
 
       {/* Notes */}
       <div>
-        <label className="block text-xs text-gray-500 mb-1">Notes (optional)</label>
+        <label className="block text-xs text-gray-600 mb-1">Notes (optional)</label>
         <input type="text" value={notes} onChange={e => setNotes(e.target.value)}
           placeholder="e.g. fasted 12 hrs, Quest Diagnostics"
           className="w-full bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500" />
@@ -551,7 +551,7 @@ function PdfImportPanel({ onConfirm, onCancel }: {
 
       <div className="flex gap-2">
         <button onClick={onCancel}
-          className="flex-1 py-2.5 rounded-xl border border-gray-300 text-gray-500 hover:text-white text-sm font-medium transition-colors">
+          className="flex-1 py-2.5 rounded-xl border border-gray-300 text-gray-600 hover:text-white text-sm font-medium transition-colors">
           Cancel
         </button>
         <button onClick={handleConfirm} disabled={saving || preview.count === 0}
@@ -602,7 +602,7 @@ export default function LabsTab() {
   };
 
   if (loading) {
-    return <div className="text-center py-16 text-gray-400 text-sm">Loading labs…</div>;
+    return <div className="text-center py-16 text-gray-600 text-sm">Loading labs…</div>;
   }
 
   return (
@@ -641,7 +641,7 @@ export default function LabsTab() {
         <div className="space-y-3">
           <div className="flex justify-end">
             <button onClick={() => setInputMode("none")}
-              className="text-xs text-gray-400 hover:text-gray-700 transition-colors">
+              className="text-xs text-gray-600 hover:text-gray-700 transition-colors">
               ✕ Cancel
             </button>
           </div>
@@ -651,7 +651,7 @@ export default function LabsTab() {
 
       {/* History */}
       {entries.length === 0 && inputMode === "none" ? (
-        <div className="text-center py-12 text-gray-400 text-sm">
+        <div className="text-center py-12 text-gray-600 text-sm">
           No lab results yet. Import a PDF or enter values manually above.
         </div>
       ) : (

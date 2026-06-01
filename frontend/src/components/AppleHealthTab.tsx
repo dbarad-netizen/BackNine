@@ -56,7 +56,7 @@ export default function AppleHealthTab() {
     <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
       <div>
         <h2 className="text-2xl font-bold text-gray-900">Apple Health</h2>
-        <p className="mt-1 text-gray-500 text-sm">
+        <p className="mt-1 text-gray-600 text-sm">
           Pull steps, sleep, HRV, heart rate, body composition and more from Apple Health —
           including anything your Apple Watch, Withings, or other devices write to it.
         </p>
@@ -98,7 +98,7 @@ export default function AppleHealthTab() {
         <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-6 space-y-6">
           <div>
             <h3 className="font-semibold text-gray-900">Connect with Health Auto Export</h3>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-gray-600 mt-1">
               The easiest way — a free App Store app that sends your Health data to BackNine on a
               schedule. No coding, no Apple Developer account.
             </p>
@@ -107,7 +107,7 @@ export default function AppleHealthTab() {
           {/* Your credentials */}
           <div className="space-y-3">
             <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Sync URL</p>
+              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Sync URL</p>
               <div className="flex items-center gap-2">
                 <code className="flex-1 block bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono text-gray-700 truncate select-all">
                   {SYNC_URL}
@@ -121,7 +121,7 @@ export default function AppleHealthTab() {
               </div>
             </div>
             <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">
                 Header — <code className="bg-gray-100 px-1 rounded">X-AH-Key</code>
               </p>
               <div className="flex items-center gap-2">
@@ -135,7 +135,7 @@ export default function AppleHealthTab() {
                   {copied === "key" ? "Copied!" : "Copy"}
                 </button>
               </div>
-              <p className="text-[11px] text-gray-400 mt-1">
+              <p className="text-[11px] text-gray-600 mt-1">
                 This key is private — it links the data to your account. Don&apos;t share it.
               </p>
             </div>
@@ -160,14 +160,14 @@ export default function AppleHealthTab() {
             ))}
           </ol>
 
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-gray-600">
             After the first run, refresh this page — your data appears below and starts feeding your
             Longevity Score, leaderboard, and Coach Al.
           </p>
 
           {/* What gets synced */}
           <div className="rounded-xl bg-gray-50 border border-gray-100 p-4 space-y-2">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Data we can read</p>
+            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Data we can read</p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-gray-600">
               {["Steps", "Sleep + stages", "Active calories", "Resting HR", "HRV", "VO₂ Max", "Weight", "Body fat %", "Lean / muscle mass", "Blood pressure", "SpO₂", "Respiratory rate"].map((item) => (
                 <div key={item} className="flex items-center gap-1.5">
@@ -182,7 +182,7 @@ export default function AppleHealthTab() {
           <div className="border-t border-gray-100 pt-4">
             <button
               onClick={() => setShowShortcut(s => !s)}
-              className="text-xs font-medium text-gray-500 hover:text-gray-800"
+              className="text-xs font-medium text-gray-600 hover:text-gray-800"
             >
               {showShortcut ? "▲ Hide" : "▼ Prefer a free Apple Shortcut instead? (advanced)"}
             </button>
@@ -218,14 +218,14 @@ export default function AppleHealthTab() {
         <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-6 space-y-5">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-gray-800 text-lg">Your Data</h3>
-            <span className="text-xs text-gray-400">
+            <span className="text-xs text-gray-600">
               {summary!.days_synced} day{summary!.days_synced !== 1 ? "s" : ""} synced · as of {summary!.as_of}
             </span>
           </div>
 
           {/* Most recent */}
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Most Recent</p>
+            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">Most Recent</p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <MetricBox label="Steps"       value={fmt(summary!.today?.steps)}            unit="steps"     icon="👟" />
               <MetricBox label="Sleep"       value={fmt(summary!.today?.sleep_hours, 1)}   unit="hrs"       icon="😴" />
@@ -246,7 +246,7 @@ export default function AppleHealthTab() {
           {/* Body composition — only show if InBody data exists */}
           {(summary!.latest_body_fat_pct || summary!.latest_lean_mass_kg || summary!.latest_skeletal_muscle_kg) && (
             <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Body Composition (InBody)</p>
+              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">Body Composition (InBody)</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <MetricBox label="Body Fat"    value={fmt(summary!.latest_body_fat_pct, 1)} unit="%"    icon="📊" />
                 <MetricBox label="Lean Mass"   value={summary!.latest_lean_mass_kg ? kgToLb(summary!.latest_lean_mass_kg) : "—"} unit="lbs" icon="💪" />
@@ -258,7 +258,7 @@ export default function AppleHealthTab() {
 
           {/* 30-day averages */}
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">30-Day Averages</p>
+            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">30-Day Averages</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <AvgBox label="Avg Steps"      value={fmt(summary!.averages?.steps)} />
               <AvgBox label="Avg Sleep"      value={`${fmt(summary!.averages?.sleep_hours, 1)} hrs`} />
@@ -276,7 +276,7 @@ export default function AppleHealthTab() {
         <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center space-y-2">
           <p className="text-4xl">📱</p>
           <p className="font-medium text-gray-700">No data synced yet</p>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-600">
             Set up Health Auto Export above and run it once on your iPhone — your data shows up here.
           </p>
         </div>
@@ -288,12 +288,12 @@ export default function AppleHealthTab() {
 function MetricBox({ label, value, unit, icon }: { label: string; value: string; unit: string; icon: string }) {
   return (
     <div className="rounded-xl bg-gray-50 border border-gray-100 p-3 space-y-1">
-      <div className="flex items-center gap-1.5 text-xs text-gray-500">
+      <div className="flex items-center gap-1.5 text-xs text-gray-600">
         <span>{icon}</span>
         <span>{label}</span>
       </div>
       <p className="text-xl font-bold text-gray-900">{value}</p>
-      <p className="text-xs text-gray-400">{unit}</p>
+      <p className="text-xs text-gray-600">{unit}</p>
     </div>
   );
 }

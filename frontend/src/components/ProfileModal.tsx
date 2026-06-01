@@ -94,13 +94,13 @@ export default function ProfileModal({ onClose, initialTab = "profile" }: Props)
             <p className="font-semibold text-gray-900">
               {tab === "profile" ? "Health Profile" : "Friends"}
             </p>
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p className="text-xs text-gray-600 mt-0.5">
               {tab === "profile"
                 ? "Personalizes your longevity score & AI coaching"
                 : "Connect with friends to share activity & compete"}
             </p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none ml-3">✕</button>
+          <button onClick={onClose} className="text-gray-600 hover:text-gray-600 text-xl leading-none ml-3">✕</button>
         </div>
 
         {/* Tabs */}
@@ -112,7 +112,7 @@ export default function ProfileModal({ onClose, initialTab = "profile" }: Props)
               className={`flex-1 py-2.5 text-xs font-semibold transition-colors border-b-2 -mb-px ${
                 tab === t
                   ? "text-[#1B3829] border-[#1B3829]"
-                  : "text-gray-400 border-transparent hover:text-gray-600"
+                  : "text-gray-600 border-transparent hover:text-gray-600"
               }`}
             >
               {t === "profile" ? "👤 Profile" : "🤝 Friends"}
@@ -131,7 +131,7 @@ export default function ProfileModal({ onClose, initialTab = "profile" }: Props)
 
               {/* Display name */}
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1.5">Display Name</label>
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-widest mb-1.5">Display Name</label>
                 <input
                   type="text"
                   maxLength={40}
@@ -140,14 +140,14 @@ export default function ProfileModal({ onClose, initialTab = "profile" }: Props)
                   value={profile.name ?? ""}
                   onChange={e => setProfile(prev => ({ ...prev, name: e.target.value || null }))}
                 />
-                <p className="text-[10px] text-gray-400 mt-1">
+                <p className="text-[10px] text-gray-600 mt-1">
                   What your friends see in their Pulse feed and Friends list.
                 </p>
               </div>
 
               {/* Date of birth (age derives from this and stays current) */}
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1.5">Date of Birth</label>
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-widest mb-1.5">Date of Birth</label>
                 <input
                   type="date"
                   max={new Date().toISOString().slice(0, 10)}
@@ -166,7 +166,7 @@ export default function ProfileModal({ onClose, initialTab = "profile" }: Props)
                     dobAge = a >= 0 && a <= 130 ? a : null;
                   }
                   return (
-                    <p className="text-[10px] text-gray-400 mt-1">
+                    <p className="text-[10px] text-gray-600 mt-1">
                       {dobAge != null
                         ? `Age ${dobAge} · keeps your HRV norms & longevity score age-accurate automatically.`
                         : "Optional. Used to age-adjust your HRV norms and longevity score — and it stays current as you age."}
@@ -177,7 +177,7 @@ export default function ProfileModal({ onClose, initialTab = "profile" }: Props)
 
               {/* Biological sex */}
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1.5">Biological Sex</label>
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-widest mb-1.5">Biological Sex</label>
                 <div className="flex gap-2">
                   {(["male", "female"] as const).map(sex => (
                     <button
@@ -193,13 +193,13 @@ export default function ProfileModal({ onClose, initialTab = "profile" }: Props)
                     </button>
                   ))}
                 </div>
-                <p className="text-[10px] text-gray-400 mt-1">Used for body fat and VO2 max reference ranges.</p>
+                <p className="text-[10px] text-gray-600 mt-1">Used for body fat and VO2 max reference ranges.</p>
               </div>
 
               {/* Health goals */}
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1.5">
-                  Health Goals <span className="normal-case font-normal text-gray-400">(pick any)</span>
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-widest mb-1.5">
+                  Health Goals <span className="normal-case font-normal text-gray-600">(pick any)</span>
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   {GOAL_OPTIONS.map(({ id, label, icon }) => {
@@ -361,13 +361,13 @@ function FriendsPanel() {
 
       {/* Friends list */}
       <div>
-        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">
-          Your Friends <span className="normal-case font-normal text-gray-400">({friends.length})</span>
+        <label className="block text-xs font-semibold text-gray-600 uppercase tracking-widest mb-2">
+          Your Friends <span className="normal-case font-normal text-gray-600">({friends.length})</span>
         </label>
         {loading ? (
-          <p className="text-xs text-gray-400 italic">Loading…</p>
+          <p className="text-xs text-gray-600 italic">Loading…</p>
         ) : friends.length === 0 ? (
-          <p className="text-xs text-gray-400 italic">No friends yet — invite one below.</p>
+          <p className="text-xs text-gray-600 italic">No friends yet — invite one below.</p>
         ) : (
           <div className="space-y-1.5">
             {friends.map(f => {
@@ -385,7 +385,7 @@ function FriendsPanel() {
                     className={`text-xs px-2 py-1 rounded-md transition-colors leading-none ${
                       armed
                         ? "bg-red-500 hover:bg-red-600 text-white font-semibold"
-                        : "text-gray-300 hover:text-red-400 text-base"
+                        : "text-gray-500 hover:text-red-400 text-base"
                     }`}
                     title={armed ? "Tap again to confirm removal" : "Remove friend"}
                   >
@@ -400,7 +400,7 @@ function FriendsPanel() {
 
       {/* Invite a friend */}
       <div>
-        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">
+        <label className="block text-xs font-semibold text-gray-600 uppercase tracking-widest mb-2">
           Invite a Friend
         </label>
         {!invite ? (
@@ -429,12 +429,12 @@ function FriendsPanel() {
                 Expires in 72 hours · Single use
               </p>
             </div>
-            <p className="text-[10px] text-gray-400">
+            <p className="text-[10px] text-gray-600">
               Text or email this code to your friend. They paste it below to connect.
             </p>
             <button
               onClick={handleInvite}
-              className="text-[11px] text-gray-400 hover:text-[#1B3829] font-medium"
+              className="text-[11px] text-gray-600 hover:text-[#1B3829] font-medium"
             >
               Generate a new code
             </button>
@@ -444,7 +444,7 @@ function FriendsPanel() {
 
       {/* Accept a friend code — works for either a one-time invite or a share-link code */}
       <div>
-        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">
+        <label className="block text-xs font-semibold text-gray-600 uppercase tracking-widest mb-2">
           Got a friend code?
         </label>
         <div className="flex gap-2">

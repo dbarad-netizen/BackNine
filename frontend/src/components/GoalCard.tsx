@@ -123,7 +123,7 @@ export default function GoalCard({ onOpenChat, onActiveChange }: Props) {
             <CoachAlAvatar size={44} className="rounded-full ring-2 ring-gray-100 shrink-0" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
-                <p className="text-[10px] text-gray-400 uppercase tracking-widest font-semibold">Coach Al · Your Goal</p>
+                <p className="text-[10px] text-gray-600 uppercase tracking-widest font-semibold">Coach Al · Your Goal</p>
                 <span className="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-[#1B3829]/10 text-[#1B3829]">
                   Wk {goal.week}/{goal.total_weeks}
                 </span>
@@ -139,19 +139,19 @@ export default function GoalCard({ onOpenChat, onActiveChange }: Props) {
             <div className="flex items-baseline justify-between mb-1">
               <span className="text-sm font-semibold text-gray-900">
                 {fmt(goal.current, goal.unit)}
-                <span className="text-xs text-gray-400 font-normal"> now</span>
+                <span className="text-xs text-gray-600 font-normal"> now</span>
               </span>
-              <span className="text-xs text-gray-500">Goal: {fmt(goal.target, goal.unit)}</span>
+              <span className="text-xs text-gray-600">Goal: {fmt(goal.target, goal.unit)}</span>
             </div>
             <div className="h-2.5 rounded-full bg-gray-100 overflow-hidden">
               <div className="h-full rounded-full transition-all duration-700"
                 style={{ width: `${pct}%`, backgroundColor: pct >= 100 ? "#22c55e" : "#1B3829" }} />
             </div>
             <div className="flex items-center justify-between mt-1">
-              <span className="text-[10px] text-gray-400">
+              <span className="text-[10px] text-gray-600">
                 {goal.baseline != null ? `Started at ${fmt(goal.baseline, goal.unit)}` : "Tracking from now"}
               </span>
-              <span className="text-[10px] text-gray-400">
+              <span className="text-[10px] text-gray-600">
                 {goal.progress_pct != null ? `${pct}%` : "—"} · {goal.days_left}d left
               </span>
             </div>
@@ -197,19 +197,19 @@ export default function GoalCard({ onOpenChat, onActiveChange }: Props) {
           {/* Full plan toggle */}
           {goal.weeks.length > 0 && (
             <button onClick={() => setExpandPlan(e => !e)}
-              className="mt-3 text-[11px] font-medium text-gray-500 hover:text-gray-800">
+              className="mt-3 text-[11px] font-medium text-gray-600 hover:text-gray-800">
               {expandPlan ? "▲ Hide full plan" : `▼ See the full ${goal.total_weeks}-week plan`}
             </button>
           )}
           {expandPlan && (
             <div className="mt-2 space-y-2">
-              {goal.overview && <p className="text-[12px] text-gray-500 leading-relaxed">{goal.overview}</p>}
+              {goal.overview && <p className="text-[12px] text-gray-600 leading-relaxed">{goal.overview}</p>}
               {goal.weeks.map(w => (
                 <div key={w.week} className={`rounded-lg px-3 py-2 border ${w.week === goal.week ? "border-[#1B3829]/30 bg-[#1B3829]/5" : "border-gray-100 bg-gray-50"}`}>
                   <p className="text-[11px] font-semibold text-gray-700">Week {w.week}: {w.focus}</p>
                   <ul className="mt-0.5 space-y-0.5">
                     {w.actions.map((a, i) => (
-                      <li key={i} className="text-[11px] text-gray-500 leading-snug">• {a}</li>
+                      <li key={i} className="text-[11px] text-gray-600 leading-snug">• {a}</li>
                     ))}
                   </ul>
                 </div>
@@ -225,7 +225,7 @@ export default function GoalCard({ onOpenChat, onActiveChange }: Props) {
               ✓ Mark complete
             </button>
             <button onClick={handleAbandon}
-              className={`text-[11px] transition-colors ${abandonConfirm ? "text-red-500 font-semibold" : "text-gray-400 hover:text-gray-600"}`}>
+              className={`text-[11px] transition-colors ${abandonConfirm ? "text-red-500 font-semibold" : "text-gray-600 hover:text-gray-600"}`}>
               {abandonConfirm ? "Confirm?" : "Abandon"}
             </button>
           </div>
@@ -256,7 +256,7 @@ export default function GoalCard({ onOpenChat, onActiveChange }: Props) {
           </div>
         ) : (
           <>
-            <p className="text-[11px] text-gray-400 uppercase tracking-widest mb-1.5">What do you want to improve?</p>
+            <p className="text-[11px] text-gray-600 uppercase tracking-widest mb-1.5">What do you want to improve?</p>
             <div className="space-y-1.5 mb-3">
               {metrics.map(m => (
                 <button key={m.metric} onClick={() => setSelMetric(m.metric)}
@@ -264,7 +264,7 @@ export default function GoalCard({ onOpenChat, onActiveChange }: Props) {
                     selMetric === m.metric ? "border-[#1B3829] bg-[#1B3829]/5" : "border-gray-200 hover:bg-gray-50"
                   }`}>
                   <span className="text-sm font-medium text-gray-800">{m.label}</span>
-                  <span className="text-[11px] text-gray-400">
+                  <span className="text-[11px] text-gray-600">
                     {m.current != null ? `Now: ${fmt(m.current, m.unit)}` : "no data yet"}
                   </span>
                 </button>
@@ -274,19 +274,19 @@ export default function GoalCard({ onOpenChat, onActiveChange }: Props) {
             {selMetric && (
               <div className="space-y-3 border-t border-gray-100 pt-3">
                 <div className="flex items-center gap-2">
-                  <label className="text-xs text-gray-500 w-20 shrink-0">Target</label>
+                  <label className="text-xs text-gray-600 w-20 shrink-0">Target</label>
                   <input type="number" step="any" value={target} onChange={e => setTarget(e.target.value)}
                     placeholder={selOpt?.current != null ? `e.g. ${selOpt.current}` : "target value"}
                     className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-[#1B3829]" />
-                  <span className="text-xs text-gray-400">{selOpt?.unit?.trim() || ""}</span>
+                  <span className="text-xs text-gray-600">{selOpt?.unit?.trim() || ""}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <label className="text-xs text-gray-500 w-20 shrink-0">Timeframe</label>
+                  <label className="text-xs text-gray-600 w-20 shrink-0">Timeframe</label>
                   <div className="flex gap-1.5">
                     {DURATIONS.map(d => (
                       <button key={d} onClick={() => setDuration(d)}
                         className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                          duration === d ? "bg-[#1B3829] text-white" : "bg-gray-100 text-gray-500 hover:text-gray-800"
+                          duration === d ? "bg-[#1B3829] text-white" : "bg-gray-100 text-gray-600 hover:text-gray-800"
                         }`}>{d} wk</button>
                     ))}
                   </div>
@@ -302,7 +302,7 @@ export default function GoalCard({ onOpenChat, onActiveChange }: Props) {
                 {building ? "Coach Al is building your plan…" : "Build my plan"}
               </button>
               <button onClick={() => { setCreating(false); setSelMetric(null); setTarget(""); setError(null); }}
-                className="px-3 py-2.5 rounded-xl border border-gray-200 text-gray-500 text-sm hover:bg-gray-50">
+                className="px-3 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50">
                 Cancel
               </button>
             </div>
@@ -318,9 +318,9 @@ export default function GoalCard({ onOpenChat, onActiveChange }: Props) {
       <div className="flex items-start gap-3">
         <CoachAlAvatar size={40} className="rounded-full ring-2 ring-gray-100 shrink-0" />
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] text-gray-400 uppercase tracking-widest font-semibold mb-1">Coach Al · Your Goal</p>
+          <p className="text-[10px] text-gray-600 uppercase tracking-widest font-semibold mb-1">Coach Al · Your Goal</p>
           <p className="font-bold text-gray-900 text-[15px] leading-snug">Pick a goal and I&apos;ll coach you to it</p>
-          <p className="text-[13px] text-gray-500 leading-relaxed mt-1">
+          <p className="text-[13px] text-gray-600 leading-relaxed mt-1">
             Choose something to improve — your Longevity Score, body fat, VO₂ max, a training habit — and I&apos;ll build a week-by-week plan and track your progress.
           </p>
           <button onClick={startCreate}
