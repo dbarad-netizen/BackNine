@@ -2041,22 +2041,57 @@ export default function DashboardPage() {
                         </div>
                       ))}
                     </div>
-                    {/* Daily bars */}
+                    {/* Daily bars — stacked by macro (protein / carbs / fat).
+                        Each segment's height is proportional to that macro's
+                        calorie contribution (4·g for protein/carbs, 9·g for fat),
+                        so the totals match the calories number above. Hover for
+                        the per-day breakdown. */}
                     <div className="flex gap-1 items-end h-16">
                       {nutSummary.daily.map((day) => {
                         const maxCal = Math.max(...nutSummary.daily.map(d => d.calories), 1);
-                        const h = day.calories > 0 ? Math.max(8, Math.round((day.calories / maxCal) * 56)) : 4;
+                        const totalH = day.calories > 0
+                          ? Math.max(8, Math.round((day.calories / maxCal) * 56))
+                          : 4;
+                        const pKcal = (day.protein || 0) * 4;
+                        const cKcal = (day.carbs   || 0) * 4;
+                        const fKcal = (day.fat     || 0) * 9;
+                        const macroKcal = pKcal + cKcal + fKcal;
+                        // Scale segments to the macro-derived share so the stack
+                        // fills the same height the calories bar would have.
+                        const pH = macroKcal > 0 ? Math.round((pKcal / macroKcal) * totalH) : 0;
+                        const cH = macroKcal > 0 ? Math.round((cKcal / macroKcal) * totalH) : 0;
+                        const fH = macroKcal > 0 ? totalH - pH - cH : 0;
+                        const empty = day.calories === 0;
+                        const title = empty
+                          ? `${day.date}: no meals logged`
+                          : `${day.date}: ${day.calories} kcal · P ${day.protein}g · C ${day.carbs}g · F ${day.fat}g`;
                         return (
                           <div key={day.date} className="flex-1 flex flex-col items-center gap-1">
-                            <div
-                              className="w-full rounded-t transition-all duration-500"
-                              style={{ height: h, backgroundColor: day.calories > 0 ? "#22c55e" : "#E5E7EB" }}
-                              title={`${day.date}: ${day.calories} kcal`}
-                            />
+                            <div className="w-full flex flex-col-reverse rounded-t overflow-hidden transition-all duration-500"
+                              style={{ height: totalH }} title={title}>
+                              {empty ? (
+                                <div className="w-full h-full" style={{ backgroundColor: "#E5E7EB" }} />
+                              ) : macroKcal === 0 ? (
+                                // Calories logged but no macro detail — neutral fill.
+                                <div className="w-full h-full" style={{ backgroundColor: "#9CA3AF" }} />
+                              ) : (
+                                <>
+                                  <div className="w-full" style={{ height: pH, backgroundColor: "#6366f1" }} />
+                                  <div className="w-full" style={{ height: cH, backgroundColor: "#f59e0b" }} />
+                                  <div className="w-full" style={{ height: fH, backgroundColor: "#ef4444" }} />
+                                </>
+                              )}
+                            </div>
                             <p className="text-[9px] text-gray-600">{day.date.slice(5)}</p>
                           </div>
                         );
                       })}
+                    </div>
+                    {/* Color legend for the stacked macro bars above */}
+                    <div className="flex items-center justify-center gap-3 mt-2 text-[10px] text-gray-600">
+                      <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm" style={{backgroundColor:"#6366f1"}}/>Protein</span>
+                      <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm" style={{backgroundColor:"#f59e0b"}}/>Carbs</span>
+                      <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm" style={{backgroundColor:"#ef4444"}}/>Fat</span>
                     </div>
                     <p className="text-xs text-gray-600 mt-2">{nutSummary.days_logged} of 7 days logged</p>
                   </section>

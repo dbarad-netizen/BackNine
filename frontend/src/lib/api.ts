@@ -983,6 +983,10 @@ export const api = {
     leaderboard(): Promise<LeaderboardResponse> {
       return request("/api/friends/leaderboard");
     },
+    /** Friend detail view — 7-day sparklines, longevity, recent workouts. */
+    profile(friend_user_id: string): Promise<FriendProfile> {
+      return request(`/api/friends/${encodeURIComponent(friend_user_id)}/profile`);
+    },
     /** This week's auto-grouped league standings (Duolingo-style). */
     league(): Promise<LeagueResponse> {
       return request("/api/leagues/current");
@@ -1346,6 +1350,34 @@ export interface LeaderboardResponse {
   /** user_id of the per-metric leader, or null if no one has a value yet. */
   leaders: { steps: string | null; sleep: string | null; activity: string | null };
   date:    string;
+}
+
+// ── Friend detail (peer profile) ────────────────────────────────────────────
+
+export interface SparkPoint { date: string; value: number | null; }
+
+export interface FriendProfile {
+  user_id: string;
+  name:    string;
+  level:   number | null;
+  series: {
+    steps: SparkPoint[];
+    sleep: SparkPoint[];
+    hrv:   SparkPoint[];
+    rhr:   SparkPoint[];
+  };
+  longevity: {
+    score: number | null;
+    grade: string | null;
+    date:  string | null;
+  };
+  recent_workouts: Workout[];
+  latest_weight: {
+    date:            string;
+    weight_lbs:      number | null;
+    body_fat_pct?:   number | null;
+    muscle_mass_lbs?: number | null;
+  } | null;
 }
 
 // ── Notification types ──────────────────────────────────────────────────────

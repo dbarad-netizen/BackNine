@@ -3524,6 +3524,102 @@ async def react_to_event(event_id: str, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/friends/{friend_user_id}/profile")
+def friend_profile(friend_user_id: str, request: Request):
+    """A confirmed friend's detail view: 7-day sparklines (steps/sleep/HRV/RHR),
+    latest longevity score, recent workouts, latest weigh-in. Auth-gated to
+    confirmed friendships only — 403 otherwise."""
+    session = _require_session(request)
+    me = session["user_id"]
+    if not frd.are_friends(me, friend_user_id):
+        raise HTTPException(status_code=403, detail="Not friends")
+
+    name = _display_name_for(friend_user_id)
+    try:
+        levels = ach.levels_for([friend_user_id])
+    except Exception:
+        levels = {}
+    level = (levels.get(friend_user_id) or {}).get("level")
+
+    # Pull friend's Oura cache once for all four series.
+    try:
+        rm, slm, am, smm = oc.get_days(friend_user_id, days=10)
+    except Exception:
+        rm, slm, am, smm = {}, {}, {}, {}
+
+    today_d = datetime.now().date()
+    series_steps:  list[dict] = []
+    series_sleep:  list[dict] = []
+    series_hrv:    list[dict] = []
+    series_rhr:    list[dict] = []
+    for i in range(7):
+        d = (today_d - timedelta(days=6 - i)).isoformat()
+        # Steps: prefer AH (live throughout the day), else Oura.
+        steps_val = None
+        try:
+            ah_d = ah.get_day(friend_user_id, d)
+            if ah_d and ah_d.get("steps") is not None:
+                steps_val = ah_d.get("steps")
+        except Exception:
+            pass
+        if steps_val is None:
+            steps_val = (am.get(d) or {}).get("steps")
+        series_steps.append({"date": d, "value": steps_val})
+        series_sleep.append({"date": d, "value": (slm.get(d) or {}).get("score")})
+        series_hrv.append  ({"date": d, "value": (smm.get(d) or {}).get("hrv")})
+        series_rhr.append  ({"date": d, "value": (smm.get(d) or {}).get("rhr")})
+
+    # Latest longevity score (history is the source of truth — most recent row).
+    longevity = {"score": None, "grade": None, "date": None}
+    try:
+        lon_history = lonh.get_history(friend_user_id, days=14)
+        if lon_history:
+            latest = lon_history[-1]
+            longevity = {
+                "score": latest.get("score"),
+                "grade": latest.get("grade"),
+                "date":  latest.get("date"),
+            }
+    except Exception:
+        pass
+
+    # Recent workouts — last 5 across types (cardio, strength, sessions).
+    try:
+        recent_workouts = (trn.get_workouts(friend_user_id, days=21) or [])[:5]
+    except Exception:
+        recent_workouts = []
+
+    # Latest weigh-in (one row, no history — keeps the response small).
+    latest_weight = None
+    try:
+        wlog = nutr.get_weight_entries(friend_user_id) or []
+        if wlog:
+            w = wlog[-1]
+            latest_weight = {
+                "date":            w.get("date"),
+                "weight_lbs":      w.get("weight_lbs"),
+                "body_fat_pct":    w.get("body_fat_pct"),
+                "muscle_mass_lbs": w.get("muscle_mass_lbs"),
+            }
+    except Exception:
+        pass
+
+    return {
+        "user_id":         friend_user_id,
+        "name":            name,
+        "level":           level,
+        "series": {
+            "steps": series_steps,
+            "sleep": series_sleep,
+            "hrv":   series_hrv,
+            "rhr":   series_rhr,
+        },
+        "longevity":       longevity,
+        "recent_workouts": recent_workouts,
+        "latest_weight":   latest_weight,
+    }
+
+
 @app.get("/api/friends/leaderboard")
 def friend_leaderboard(request: Request, metric: Optional[str] = None):
     """Daily multi-metric leaderboard: self + each friend with all three

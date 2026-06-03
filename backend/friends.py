@@ -307,6 +307,31 @@ def _names_for(sb, user_ids: list[str]) -> dict[str, str]:
     return out
 
 
+def are_friends(uid_a: str, uid_b: str) -> bool:
+    """True if there's an active (non-deleted) friendship row between the pair.
+
+    Used as the auth gate for peer-profile reads — only confirmed friends can
+    pull a friend's 7-day detail.
+    """
+    if not uid_a or not uid_b or uid_a == uid_b:
+        return False
+    user_a, user_b = _ordered_pair(uid_a, uid_b)
+    try:
+        sb = _sb()
+        res = (
+            sb.table("friendships")
+            .select("user_id_a")
+            .eq("user_id_a", user_a)
+            .eq("user_id_b", user_b)
+            .is_("deleted_at", "null")
+            .limit(1)
+            .execute()
+        )
+        return bool(res.data)
+    except Exception:
+        return False
+
+
 def list_friends(user_id: str) -> list[dict]:
     """Return the user's currently-active friendships (filters soft-deleted rows).
 

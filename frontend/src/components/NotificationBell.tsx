@@ -138,32 +138,50 @@ export default function NotificationBell() {
             </p>
           )}
           <ul className="divide-y divide-gray-100">
-            {items.map(n => (
-              <li key={n.id} className={`px-4 py-2.5 ${n.unread ? "bg-blue-50/40" : ""}`}>
-                <div className="flex items-start gap-2.5">
-                  <span className="w-7 h-7 rounded-full bg-[#1B3829] text-white text-[11px] font-semibold flex items-center justify-center shrink-0 mt-0.5">
-                    {(n.actor_name || "?").slice(0, 1).toUpperCase()}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[12px] text-gray-800 leading-snug">{summarize(n)}</p>
-                    {n.preview && n.kind === "dm" && (
-                      <p className="text-[11px] text-gray-600 italic truncate mt-0.5">
-                        &ldquo;{n.preview}&rdquo;
-                      </p>
-                    )}
-                    {n.preview && n.kind === "comment" && (
-                      <p className="text-[11px] text-gray-600 italic truncate mt-0.5">
-                        &ldquo;{n.preview}&rdquo;
-                      </p>
-                    )}
-                    <p className="text-[10px] text-gray-600 mt-0.5">{timeAgo(n.created_at)}</p>
-                  </div>
-                  {n.unread && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0 mt-2.5" />
-                  )}
-                </div>
-              </li>
-            ))}
+            {items.map(n => {
+              const canDeepLink = !!n.event_id && (n.kind === "comment" || n.kind === "reaction");
+              const handleClick = () => {
+                if (canDeepLink && n.event_id) {
+                  // Deep-link to the Pulse event: PulseFeed listens for this hash
+                  // and scrolls/expands/focuses the reply input. Without this,
+                  // tapping a comment notification just closed the bell and left
+                  // the user stranded — couldn't find the conversation.
+                  window.location.hash = `pulse-${n.event_id}`;
+                }
+                setOpen(false);
+              };
+              const Wrapper = ({ children }: { children: React.ReactNode }) => canDeepLink ? (
+                <button onClick={handleClick} className="w-full text-left">{children}</button>
+              ) : <>{children}</>;
+              return (
+                <li key={n.id} className={`px-4 py-2.5 ${n.unread ? "bg-blue-50/40" : ""} ${canDeepLink ? "hover:bg-gray-50 transition-colors cursor-pointer" : ""}`}>
+                  <Wrapper>
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-7 h-7 rounded-full bg-[#1B3829] text-white text-[11px] font-semibold flex items-center justify-center shrink-0 mt-0.5">
+                        {(n.actor_name || "?").slice(0, 1).toUpperCase()}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] text-gray-800 leading-snug">{summarize(n)}</p>
+                        {n.preview && (n.kind === "dm" || n.kind === "comment") && (
+                          <p className="text-[11px] text-gray-600 italic truncate mt-0.5">
+                            &ldquo;{n.preview}&rdquo;
+                          </p>
+                        )}
+                        <p className="text-[10px] text-gray-600 mt-0.5">
+                          {timeAgo(n.created_at)}
+                          {canDeepLink && (
+                            <span className="ml-2 text-[#1B3829] font-semibold">Tap to reply →</span>
+                          )}
+                        </p>
+                      </div>
+                      {n.unread && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0 mt-2.5" />
+                      )}
+                    </div>
+                  </Wrapper>
+                </li>
+              );
+            })}
           </ul>
         </div>
       </div>

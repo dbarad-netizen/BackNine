@@ -21,6 +21,7 @@ import {
   type TauntKind,
 } from "@/lib/api";
 import FriendDmDrawer from "@/components/FriendDmDrawer";
+import FriendDetailModal from "@/components/FriendDetailModal";
 
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -79,6 +80,8 @@ export default function FriendLeaderboard() {
   const [sendingIds, setSendingIds] = useState<Set<string>>(new Set());
   /** Currently-open DM friend, or null when the drawer is closed. */
   const [dmFriend, setDmFriend] = useState<{ user_id: string; name: string } | null>(null);
+  // Friend detail modal — tap a friend's name to drill into their 7-day metrics.
+  const [detailFriend, setDetailFriend] = useState<{ user_id: string; name: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -194,11 +197,17 @@ export default function FriendLeaderboard() {
                   <span className="w-7 h-7 rounded-full bg-[#1B3829] text-white text-[11px] font-semibold flex items-center justify-center shrink-0">
                     {(e.name || "?").slice(0, 1).toUpperCase()}
                   </span>
-                  <p className={`flex-1 min-w-0 text-sm font-semibold truncate ${
-                    e.is_me ? "text-[#1B3829]" : "text-gray-900"
-                  }`}>
-                    {e.is_me ? "You" : e.name}
-                  </p>
+                  {e.is_me ? (
+                    <p className="flex-1 min-w-0 text-sm font-semibold truncate text-[#1B3829]">You</p>
+                  ) : (
+                    <button
+                      onClick={() => setDetailFriend({ user_id: e.user_id, name: e.name })}
+                      className="flex-1 min-w-0 text-sm font-semibold truncate text-gray-900 text-left hover:text-[#1B3829] transition-colors"
+                      title="View profile"
+                    >
+                      {e.name} <span className="text-[10px] text-gray-600 font-normal">›</span>
+                    </button>
+                  )}
                   {e.level != null && (
                     <span className="shrink-0 text-[9px] font-bold text-[#1B3829] bg-[#1B3829]/10 rounded px-1 py-0.5 leading-none">Lv{e.level}</span>
                   )}
@@ -340,6 +349,19 @@ export default function FriendLeaderboard() {
 
       {/* Private 1:1 chat drawer — fixed-positioned, overlays the page */}
       <FriendDmDrawer friend={dmFriend} onClose={() => setDmFriend(null)} />
+
+      {detailFriend && (
+        <FriendDetailModal
+          friendUserId={detailFriend.user_id}
+          friendName={detailFriend.name}
+          onClose={() => setDetailFriend(null)}
+          onOpenDm={(uid, nm) => {
+            // Close the detail modal first, then open the DM drawer for the same friend.
+            setDetailFriend(null);
+            setDmFriend({ user_id: uid, name: nm });
+          }}
+        />
+      )}
     </section>
   );
 }

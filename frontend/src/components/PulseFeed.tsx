@@ -136,6 +136,9 @@ export default function PulseFeed({ onInviteFriend }: Props) {
   // visible without an extra tap; cards with zero comments stay collapsed
   // until the user opens them.
   const [openComments, setOpenComments] = useState<Set<string>>(new Set());
+  // When a notification deep-links here, we set this to the event_id so the
+  // matching CommentThread can focus its reply input. Cleared after.
+  const [focusEventId, setFocusEventId] = useState<string | null>(null);
 
   const load = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true);
@@ -178,6 +181,35 @@ export default function PulseFeed({ onInviteFriend }: Props) {
   };
 
   useEffect(() => { load(false); }, [load]);
+
+  // Hash-driven deep-link from the notifications bell:
+  //   #pulse-{event_id}  → expand the matching event's thread, scroll it into
+  //   view, and signal its reply input to focus. This is what makes the bell
+  //   feel like a real conversation surface instead of a dead-end inbox.
+  useEffect(() => {
+    const handleHash = () => {
+      const m = (typeof window !== "undefined" ? window.location.hash : "").match(/^#pulse-([\w-]+)/);
+      if (!m) return;
+      const id = m[1];
+      setOpenComments(prev => {
+        if (prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+      });
+      setFocusEventId(id);
+      // Wait one tick so the article is rendered, then scroll it into view.
+      requestAnimationFrame(() => {
+        const el = document.getElementById(`pulse-event-${id}`);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+        // Clear the hash so a manual reload doesn't keep re-triggering this.
+        try { history.replaceState(null, "", window.location.pathname + window.location.search); } catch { /* ignore */ }
+      });
+    };
+    handleHash();
+    window.addEventListener("hashchange", handleHash);
+    return () => window.removeEventListener("hashchange", handleHash);
+  }, []);
 
   // Optimistic reaction toggle — flip locally first, then reconcile from server.
   const handleReact = async (eventId: string, emoji: string) => {
@@ -316,6 +348,7 @@ export default function PulseFeed({ onInviteFriend }: Props) {
           return (
             <article
               key={e.id}
+              id={`pulse-event-${e.id}`}
               className={`shrink-0 w-64 rounded-2xl p-3 flex flex-col gap-2 border ${
                 isMilestone
                   ? "border-green-200 bg-gradient-to-br from-green-50/60 to-white"
@@ -424,6 +457,8 @@ export default function PulseFeed({ onInviteFriend }: Props) {
             {openComments.has(e.id) && (
               <CommentThread
                 eventId={e.id}
+                shouldFocus={focusEventId === e.id}
+                onFocused={() => setFocusEventId(prev => prev === e.id ? null : prev)}
                 onCountChange={(n) => {
                   // Reflect the new count locally so the chip stays in sync
                   setEvents(prev => prev.map(ev =>
@@ -445,15 +480,34 @@ export default function PulseFeed({ onInviteFriend }: Props) {
 function CommentThread({
   eventId,
   onCountChange,
+  shouldFocus = false,
+  onFocused,
 }: {
   eventId: string;
   onCountChange: (n: number) => void;
+  /** Set when the user deep-linked here from a notification — auto-focus the
+   *  reply input so they can start typing immediately. */
+  shouldFocus?: boolean;
+  onFocused?: () => void;
 }) {
   const [comments, setComments] = useState<EventComment[] | null>(null);
   const [text, setText]         = useState("");
   const [sending, setSending]   = useState(false);
   const [error, setError]       = useState<string | null>(null);
   const bottomRef               = useRef<HTMLDivElement>(null);
+  const inputRef                = useRef<HTMLInputElement | null>(null);
+  // When shouldFocus flips true, focus the input and let the parent know we
+  // consumed the signal (so it doesn't keep re-firing).
+  useEffect(() => {
+    if (shouldFocus) {
+      // Small delay lets the parent's scrollIntoView finish before we steal focus.
+      const t = setTimeout(() => {
+        inputRef.current?.focus();
+        onFocused?.();
+      }, 400);
+      return () => clearTimeout(t);
+    }
+  }, [shouldFocus, onFocused]);
   // Only follow the thread once the user has posted in it. Without this, the
   // initial fetch populating the list fires scrollIntoView and yanks the whole
   // page down to this thread on first load.
@@ -537,6 +591,7 @@ function CommentThread({
       {/* Compose */}
       <div className="flex gap-1.5">
         <input
+          ref={inputRef}
           type="text"
           value={text}
           onChange={e => setText(e.target.value)}
