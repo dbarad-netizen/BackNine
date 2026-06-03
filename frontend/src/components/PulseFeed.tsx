@@ -189,13 +189,31 @@ export default function PulseFeed({ onInviteFriend }: Props) {
 
   // Hash-driven deep-link from the notifications bell:
   //   #pulse-{event_id}  → expand the matching event's thread, scroll it into
-  //   view, and signal its reply input to focus. This is what makes the bell
-  //   feel like a real conversation surface instead of a dead-end inbox.
+  //   view, and signal its reply input to focus. If the targeted event isn't
+  //   already in the feed (older than the recent-30 window, or it's the user's
+  //   own event with no conversation yet), we fetch it via the single-event
+  //   endpoint and prepend it so the deep-link always lands somewhere.
   useEffect(() => {
-    const handleHash = () => {
+    const handleHash = async () => {
       const m = (typeof window !== "undefined" ? window.location.hash : "").match(/^#pulse-([\w-]+)/);
       if (!m) return;
       const id = m[1];
+
+      // If the event isn't in the current feed, fetch the single-event payload
+      // and inject it at the top. Without this, the bell silently no-ops when
+      // the targeted event is the user's own (filtered out by default) or
+      // outside the limit=30 recent window.
+      const inFeed = events.some(ev => ev.id === id);
+      if (!inFeed) {
+        try {
+          const fresh = await api.friends.event(id);
+          setEvents(prev => prev.some(ev => ev.id === fresh.id) ? prev : [fresh, ...prev]);
+        } catch {
+          // 404 or permission failure — there's nothing to deep-link to.
+          return;
+        }
+      }
+
       setOpenComments(prev => {
         if (prev.has(id)) return prev;
         const next = new Set(prev);
@@ -214,6 +232,9 @@ export default function PulseFeed({ onInviteFriend }: Props) {
     handleHash();
     window.addEventListener("hashchange", handleHash);
     return () => window.removeEventListener("hashchange", handleHash);
+    // events is captured fresh from the closure each render; we intentionally
+    // re-attach the listener only on mount so a stale hash gets picked up once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Optimistic reaction toggle — flip locally first, then reconcile from server.

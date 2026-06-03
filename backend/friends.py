@@ -307,6 +307,76 @@ def _names_for(sb, user_ids: list[str]) -> dict[str, str]:
     return out
 
 
+def get_friend_event(viewer_id: str, event_id: str) -> Optional[dict]:
+    """Fetch a single activity_event with reactions + comment count, hydrated
+    the same way list_friend_events hydrates each row. Returns None if the
+    event doesn't exist or the viewer isn't permitted (must be author OR
+    friends with the author). Used by the notification deep-link path so the
+    targeted event can be injected into PulseFeed even when it falls outside
+    the recent-30 window of the regular feed.
+    """
+    sb = _sb()
+    try:
+        res = (
+            sb.table("activity_events")
+            .select("id, user_id, user_name, event_type, payload, created_at")
+            .eq("id", event_id)
+            .limit(1)
+            .execute()
+        )
+    except Exception:
+        return None
+    row = (res.data or [None])[0]
+    if not row:
+        return None
+    author = row["user_id"]
+    if author != viewer_id and not are_friends(viewer_id, author):
+        return None
+
+    # Live author name (matches list_friend_events behavior).
+    live_names = _names_for(sb, [author])
+    cached_name = row.get("user_name")
+    live_name = live_names.get(author)
+    author_name = (
+        live_name
+        or (cached_name if cached_name and cached_name != "BackNine user" else None)
+        or "Friend"
+    )
+
+    # Reactions + comment count for this one event.
+    try:
+        rx = (
+            sb.table("event_reactions")
+            .select("user_id, emoji")
+            .eq("event_id", event_id)
+            .execute()
+        )
+        rx_rows = rx.data or []
+    except Exception:
+        rx_rows = []
+    agg: dict[str, dict] = {}
+    for rr in rx_rows:
+        emoji = rr["emoji"]
+        slot = agg.setdefault(emoji, {"count": 0, "i_reacted": False})
+        slot["count"] += 1
+        if rr["user_id"] == viewer_id:
+            slot["i_reacted"] = True
+
+    comment_count = _comment_counts_for(sb, [event_id]).get(event_id, 0)
+
+    return {
+        **row,
+        "user_name":     author_name,
+        "is_me":         author == viewer_id,
+        "summary":       _summarize_event({**row, "user_name": author_name}),
+        "comment_count": comment_count,
+        "reactions": [
+            {"emoji": e, "count": v["count"], "i_reacted": v["i_reacted"]}
+            for e, v in agg.items()
+        ],
+    }
+
+
 def are_friends(uid_a: str, uid_b: str) -> bool:
     """True if there's an active (non-deleted) friendship row between the pair.
 

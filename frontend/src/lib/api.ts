@@ -965,6 +965,11 @@ export const api = {
     events(limit = 30): Promise<{ events: FriendActivityEvent[] }> {
       return request(`/api/friends/events?limit=${limit}`);
     },
+    /** Single hydrated event — for notification deep-links when the targeted
+     *  event isn't in the latest feed window. */
+    event(event_id: string): Promise<FriendActivityEvent> {
+      return request(`/api/friends/events/${encodeURIComponent(event_id)}`);
+    },
     react(event_id: string, emoji: string): Promise<{ event_id: string; reactions: ReactionSummary[] }> {
       return request(`/api/friends/events/${encodeURIComponent(event_id)}/react`, {
         method: "POST",

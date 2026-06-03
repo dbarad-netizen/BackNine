@@ -3459,6 +3459,19 @@ def restore_friend(friend_user_id: str, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/friends/events/{event_id}")
+def get_single_friend_event(event_id: str, request: Request):
+    """Single hydrated event — used by the notification deep-link path so the
+    targeted event can be shown even when it's older than the recent feed
+    window. 404 if the viewer isn't permitted to see it."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    event = frd.get_friend_event(user_id, event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return event
+
+
 @app.get("/api/friends/events")
 def list_friend_events(request: Request, limit: int = 30):
     """Recent activity events from the user's friends + themselves."""
