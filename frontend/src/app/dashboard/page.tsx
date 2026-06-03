@@ -2035,7 +2035,15 @@ export default function DashboardPage() {
                 {/* ─ Weekly summary ─ */}
                 {nutSummary && nutSummary.days_logged > 0 && (
                   <section className="rounded-2xl border border-gray-200 bg-white p-5">
-                    <p className="text-xs text-gray-600 uppercase tracking-widest mb-4">7-Day Average</p>
+                    <p className="text-xs text-gray-600 uppercase tracking-widest mb-1">
+                      {(() => {
+                        const n = nutSummary.avg_days_count ?? 0;
+                        if (n <= 0) return "Average — no complete days yet";
+                        if (n === 1) return "Average — 1 complete day";
+                        return `${n}-Day Average`;
+                      })()}
+                    </p>
+                    <p className="text-[10px] text-gray-500 mb-4">excludes today (partial)</p>
                     <div className="grid grid-cols-4 gap-2 mb-4">
                       {[
                         { label: "Calories",     val: nutSummary.avg_calories, unit: "kcal" },

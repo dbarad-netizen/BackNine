@@ -354,15 +354,26 @@ def weekly_summary(active_calories_by_date: Optional[dict] = None, user_id: str 
             "logged":   len(meals) > 0,
         })
 
+    # `days_logged` counts the whole window (including today) — that's the right
+    # number for the "X of 7 days logged" engagement indicator.
     logged_days = [d for d in daily if d["logged"]]
-    n = len(logged_days) or 1
+
+    # But the AVERAGE must exclude today, because today is a partial day. If a
+    # user has only logged breakfast, including today drags the 7-day avg down
+    # by ~70%. Compute averages from logged days that are not today.
+    today_iso       = today.isoformat()
+    avg_source_days = [d for d in logged_days if d["date"] != today_iso]
+    n = len(avg_source_days) or 1
     return {
-        "daily":        daily,
-        "days_logged":  len(logged_days),
-        "avg_calories": round(sum(d["calories"] for d in logged_days) / n),
-        "avg_protein":  round(sum(d["protein"]  for d in logged_days) / n, 1),
-        "avg_carbs":    round(sum(d["carbs"]    for d in logged_days) / n, 1),
-        "avg_fat":      round(sum(d["fat"]      for d in logged_days) / n, 1),
+        "daily":          daily,
+        "days_logged":    len(logged_days),
+        # Number of completed days backing the averages — usually 0..6 depending
+        # on how many of the prior 6 days had any meals logged.
+        "avg_days_count": len(avg_source_days),
+        "avg_calories":   round(sum(d["calories"] for d in avg_source_days) / n),
+        "avg_protein":    round(sum(d["protein"]  for d in avg_source_days) / n, 1),
+        "avg_carbs":      round(sum(d["carbs"]    for d in avg_source_days) / n, 1),
+        "avg_fat":        round(sum(d["fat"]      for d in avg_source_days) / n, 1),
     }
 
 

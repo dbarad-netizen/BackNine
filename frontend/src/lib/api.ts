@@ -396,6 +396,9 @@ export interface NutritionSummaryDay {
 export interface NutritionSummary {
   daily:        NutritionSummaryDay[];
   days_logged:  number;
+  // Number of complete days backing the averages (today is excluded so a
+  // partial day doesn't drag the trend down). Usually 0..6.
+  avg_days_count?: number;
   avg_calories: number;
   avg_protein:  number;
   avg_carbs:    number;
