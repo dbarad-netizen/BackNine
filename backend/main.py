@@ -17,7 +17,9 @@ from fastapi import FastAPI, HTTPException, Depends, Request, Response, UploadFi
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, JSONResponse, PlainTextResponse
 from dotenv import load_dotenv
-from jose import jwt, JWTError
+from jose import jwt, jwk, JWTError
+import httpx
+import time as _time
 
 from oura import build_auth_url, exchange_code, refresh_token as oura_refresh, fetch_all, fetch_workouts as oura_fetch_workouts, fetch_sessions as oura_fetch_sessions, parse_oura_data, parse_oura_vo2_max, fetch_personal_info
 from coaching import generate_coaching, coach_overall, coach_sleep, coach_activity
@@ -318,23 +320,80 @@ def _decode_session(token: str) -> Optional[dict]:
         return None
 
 
+# ── Supabase JWT verification ─────────────────────────────────────────────────
+# Supabase now signs user JWTs with asymmetric keys (ES256 / ECC P-256) via a
+# rotating "JWT Signing Keys" model, published at /auth/v1/.well-known/jwks.json.
+# Older projects used a single HS256 secret (SUPABASE_JWT_SECRET) — we still
+# fall back to that for back-compat in case a project is on the legacy model.
+
+_jwks_cache: dict = {"keys": None, "fetched_at": 0.0}
+_JWKS_TTL_SECONDS = 60 * 60   # refetch hourly; ample for key rotations
+
+
+def _get_supabase_jwks() -> Optional[list]:
+    """Fetch + cache Supabase's JWKS document. Returns the list of JWK dicts."""
+    now = _time.time()
+    cached = _jwks_cache["keys"]
+    if cached and (now - _jwks_cache["fetched_at"]) < _JWKS_TTL_SECONDS:
+        return cached
+    base = SUPABASE_URL.rstrip("/") if SUPABASE_URL else ""
+    if not base:
+        return None
+    try:
+        resp = httpx.get(f"{base}/auth/v1/.well-known/jwks.json", timeout=5.0)
+        resp.raise_for_status()
+        keys = (resp.json() or {}).get("keys", [])
+        _jwks_cache["keys"] = keys
+        _jwks_cache["fetched_at"] = now
+        return keys
+    except Exception:
+        # Don't kill the request on a JWKS hiccup — caller will fall through to
+        # the HS256 path or return 401. Keep any stale cache.
+        return cached
+
+
 def _verify_supabase_jwt(token: str) -> Optional[dict]:
     """
     Verify a JWT issued by Supabase Auth.
     Returns the claims dict (including sub = user UUID) or None if invalid.
+
+    Tries asymmetric (JWKS, ES256/RS256) first since that's the current Supabase
+    default; falls back to legacy HS256 for back-compat with older projects.
     """
-    if not SUPABASE_JWT_SECRET:
-        return None
+    # 1. Asymmetric path — read the kid from the header, look it up in JWKS.
     try:
-        claims = jwt.decode(
-            token,
-            SUPABASE_JWT_SECRET,
-            algorithms=[JWT_ALGO],
-            audience="authenticated",
-        )
-        return claims
-    except JWTError:
-        return None
+        header = jwt.get_unverified_header(token)
+        kid    = header.get("kid")
+        alg    = header.get("alg") or "ES256"
+        if kid and alg != "HS256":
+            jwks = _get_supabase_jwks()
+            if jwks:
+                key_dict = next((k for k in jwks if k.get("kid") == kid), None)
+                if key_dict:
+                    public_key = jwk.construct(key_dict, algorithm=alg)
+                    return jwt.decode(
+                        token,
+                        public_key,
+                        algorithms=[alg],
+                        audience="authenticated",
+                    )
+    except (JWTError, Exception):
+        # Fall through to HS256 attempt below
+        pass
+
+    # 2. Legacy HS256 path — used by older Supabase projects.
+    if SUPABASE_JWT_SECRET:
+        try:
+            return jwt.decode(
+                token,
+                SUPABASE_JWT_SECRET,
+                algorithms=["HS256"],
+                audience="authenticated",
+            )
+        except JWTError:
+            return None
+
+    return None
 
 
 # Transient OAuth state nonces (in-memory is fine — just a replay guard)
