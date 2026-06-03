@@ -162,9 +162,35 @@ function ConnectContent() {
             {showApple && (
               <div className="border-t border-zinc-800 px-5 py-4 space-y-4">
                 <p className="text-zinc-300 text-xs leading-relaxed">
-                  BackNine uses the free <a href="https://apps.apple.com/app/health-auto-export/id1115567069"
-                    target="_blank" rel="noopener" className="text-green-400 underline">Health Auto Export</a>{" "}
-                  app to send your HealthKit data here automatically. Setup takes 3 minutes.
+                  Two ways to sync Apple Health to BackNine. Pick one — both send
+                  the same data, just packaged differently.
+                </p>
+
+                {/* Path A — BackNine Shortcut (recommended once authored) */}
+                <div className="rounded-lg border border-green-700/60 bg-green-950/30 p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-300 text-xs font-semibold">Recommended · Free</span>
+                    <span className="text-[10px] text-amber-300 bg-amber-950/60 border border-amber-700/60 px-1.5 py-0.5 rounded">
+                      Install link coming soon
+                    </span>
+                  </div>
+                  <p className="text-white text-sm font-semibold">BackNine Sync Shortcut</p>
+                  <p className="text-zinc-300 text-xs leading-relaxed">
+                    A free iPhone Shortcut that reads your Apple Health data and sends it to
+                    BackNine on a daily schedule. Uses Apple&apos;s built-in Shortcuts app — no
+                    paid third-party app required. We&apos;re finalizing the one-tap install link;
+                    if you&apos;d like to hand-build it now, the URL + key below are everything
+                    you need (POST a flat JSON like <code className="text-green-300">{`{"date":"2026-06-03","steps":8200,...}`}</code>).
+                  </p>
+                </div>
+
+                {/* Path B — Health Auto Export */}
+                <p className="text-zinc-300 text-xs leading-relaxed pt-1">
+                  <span className="text-white font-semibold">Or:</span> use{" "}
+                  <a href="https://apps.apple.com/app/health-auto-export/id1115567069"
+                    target="_blank" rel="noopener" className="text-green-400 underline">Health Auto Export</a>
+                  {" "}— a one-time-purchase iOS app (~$5) that does the same job with a polished UI.
+                  Steps below assume HAE.
                 </p>
 
                 {/* Connection status — shows after the user has hit "Check sync" */}
