@@ -3621,7 +3621,7 @@ def friend_profile(friend_user_id: str, request: Request):
 
 
 @app.get("/api/friends/leaderboard")
-def friend_leaderboard(request: Request, metric: Optional[str] = None):
+def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Optional[str] = None):
     """Daily multi-metric leaderboard: self + each friend with all three
     metric values (steps, sleep score, activity score) plus per-metric leader
     flags. The `metric` query param is accepted for backwards compatibility
@@ -3711,27 +3711,34 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None):
         return None, anchor
 
     # Pull today's taunt set up-front so the UI knows which preset (if any)
-    # the user already sent to each friend today.
+    # the user already sent to each friend today. Use the client's device-local
+    # date when provided so the leaderboard's "today" matches the user's clock
+    # rather than ET — otherwise the freshness label mislabels current data as
+    # "from yesterday" or future for users in PT after 9pm.
     try:
         from zoneinfo import ZoneInfo
     except ImportError:
         from backports.zoneinfo import ZoneInfo  # type: ignore
-    today_str = datetime.now(tz=ZoneInfo("America/New_York")).date().isoformat()
+    today_str = (
+        date if (date and _valid_ymd(date))
+        else datetime.now(tz=ZoneInfo("America/New_York")).date().isoformat()
+    )
     taunts_today = frd.taunts_sent_today(user_id, today_str)  # {target_user_id: kind}
 
     def _per_day_values(uid: str, days: int = 7) -> dict[str, dict]:
         """Return {date_str: {steps, sleep, activity}} for the last N days.
         Used for the head-to-head tally — single fetch per user, then iterate.
+        Anchored on the same today_str the rest of the endpoint uses so the
+        tally matches the user's actual local day, not server ET.
         """
         try:
             rm, slm, am, smm = oc.get_days(uid, days=days + 2)
         except Exception:
             return {}
         try:
-            from zoneinfo import ZoneInfo
-        except ImportError:
-            from backports.zoneinfo import ZoneInfo  # type: ignore
-        today = datetime.now(tz=ZoneInfo("America/New_York")).date()
+            today = datetime.strptime(today_str, "%Y-%m-%d").date()
+        except Exception:
+            today = datetime.now().date()
         out: dict[str, dict] = {}
         for i in range(days):
             d = (today - timedelta(days=i)).isoformat()

@@ -981,7 +981,10 @@ export const api = {
       });
     },
     leaderboard(): Promise<LeaderboardResponse> {
-      return request("/api/friends/leaderboard");
+      // Send the device-local date so the leaderboard's "today" matches the
+      // user's clock, not server ET — otherwise freshness labels misfire after
+      // 9pm PT (ET has rolled to tomorrow but the user's day is still today).
+      return request(`/api/friends/leaderboard?date=${localToday()}`);
     },
     /** Friend detail view — 7-day sparklines, longevity, recent workouts. */
     profile(friend_user_id: string): Promise<FriendProfile> {
