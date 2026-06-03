@@ -202,10 +202,13 @@ export default function FriendLeaderboard() {
                   ) : (
                     <button
                       onClick={() => setDetailFriend({ user_id: e.user_id, name: e.name })}
-                      className="flex-1 min-w-0 text-sm font-semibold truncate text-gray-900 text-left hover:text-[#1B3829] transition-colors"
-                      title="View profile"
+                      className="flex-1 min-w-0 text-sm font-semibold text-left text-gray-900 hover:text-[#1B3829] hover:bg-[#1B3829]/5 rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors flex items-center gap-1.5 group"
+                      title={`View ${e.name}'s 7-day metrics`}
                     >
-                      {e.name} <span className="text-[10px] text-gray-600 font-normal">›</span>
+                      <span className="truncate">{e.name}</span>
+                      <span className="text-[9px] font-bold text-[#1B3829] bg-[#1B3829]/10 rounded px-1.5 py-0.5 leading-none whitespace-nowrap shrink-0 group-hover:bg-[#1B3829] group-hover:text-white transition-colors">
+                        View →
+                      </span>
                     </button>
                   )}
                   {e.level != null && (

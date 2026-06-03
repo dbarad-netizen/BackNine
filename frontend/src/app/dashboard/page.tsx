@@ -1191,7 +1191,15 @@ export default function DashboardPage() {
               {new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
             </span>
             <RefreshButton />
-            <NotificationBell />
+            <NotificationBell
+              onDeepLinkPulse={(eventId) => {
+                // Switch to the Scorecard (where PulseFeed lives) AND set the
+                // hash before navigation completes, so PulseFeed's mount-effect
+                // sees it and scrolls/expands/focuses the targeted event.
+                setSection("coaching");
+                window.location.hash = `pulse-${eventId}`;
+              }}
+            />
             {/* Desktop-only utility icons — mobile uses the ☰ menu */}
             <button
               onClick={() => setShowShare(true)}

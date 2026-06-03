@@ -44,7 +44,15 @@ function summarize(n: Notification): string {
   return `${n.actor_name} did something`;
 }
 
-export default function NotificationBell() {
+interface Props {
+  /** When set, called instead of (or alongside) hash-setting for comment/reaction
+   *  notifications so the parent can also switch tabs to the Scorecard. The bell
+   *  is in the header and may be tapped from any section; without this the deep
+   *  link sets a hash but PulseFeed isn't mounted to handle it. */
+  onDeepLinkPulse?: (eventId: string) => void;
+}
+
+export default function NotificationBell({ onDeepLinkPulse }: Props = {}) {
   const [items, setItems] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
@@ -143,10 +151,15 @@ export default function NotificationBell() {
               const handleClick = () => {
                 if (canDeepLink && n.event_id) {
                   // Deep-link to the Pulse event: PulseFeed listens for this hash
-                  // and scrolls/expands/focuses the reply input. Without this,
-                  // tapping a comment notification just closed the bell and left
-                  // the user stranded — couldn't find the conversation.
-                  window.location.hash = `pulse-${n.event_id}`;
+                  // and scrolls/expands/focuses the reply input. The callback
+                  // lets the dashboard also switch the active section back to
+                  // Scorecard — without it the hash sets but PulseFeed isn't
+                  // mounted to handle it when the user is on another tab.
+                  if (onDeepLinkPulse) {
+                    onDeepLinkPulse(n.event_id);
+                  } else {
+                    window.location.hash = `pulse-${n.event_id}`;
+                  }
                 }
                 setOpen(false);
               };

@@ -148,7 +148,12 @@ export default function PulseFeed({ onInviteFriend }: Props) {
         api.friends.events(30),
         api.friends.list(),
       ]);
-      const visible = evRes.events.filter(e => !e.is_me);
+      // Hide your own events by default (your Pulse is your friends' wins) BUT
+      // keep your own events that have at least one comment — those are active
+      // conversations. Without this exception, notifications about Chris
+      // commenting on your event deep-linked to a card the feed had filtered
+      // out, and "Tap to reply" silently did nothing.
+      const visible = evRes.events.filter(e => !e.is_me || (e.comment_count ?? 0) > 0);
       setEvents(visible);
       setFriends(frRes.friends);
       setHasFriends(frRes.friends.length > 0);
