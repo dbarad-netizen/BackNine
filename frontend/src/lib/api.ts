@@ -744,6 +744,17 @@ export const api = {
   appleHealthData(days = 30): Promise<AppleHealthSummary> {
     return request(`/api/apple-health/data?days=${days}`);
   },
+  /** Connection + freshness status for the AH integration. Lets the setup page
+   *  show "connected · 14 days of data · last sync 2h ago" instead of leaving
+   *  the user guessing whether their iOS Shortcut is actually working. */
+  appleHealthStatus(): Promise<{
+    connected:    boolean;
+    last_sync_at: string | null;
+    latest_date:  string | null;
+    days_synced:  number;
+  }> {
+    return request("/api/apple-health/status");
+  },
 
   // ── Insights ──────────────────────────────────────────────────────────────
   insights(days = 60, options?: RequestInit): Promise<{ insights: Insight[]; days_analyzed: number }> {

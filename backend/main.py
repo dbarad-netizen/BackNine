@@ -4184,6 +4184,52 @@ async def get_apple_health_key(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/apple-health/status")
+async def apple_health_status(request: Request):
+    """Connection + freshness status for the AH integration.
+
+    Powers the /connect page's "Test sync" affordance and any "connected · last
+    sync N hours ago" indicator. Distinguishes between three states: never
+    synced (connected=False), recently synced (last_sync_at within ~36h), and
+    stale (older). Also returns the number of days with at least one metric
+    recorded, so users see "14 days of data" as confirmation it's working.
+    """
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        db = get_supabase()
+        if not db:
+            return {"connected": False, "last_sync_at": None, "days_synced": 0, "latest_date": None}
+        # Most-recent updated_at across all of this user's daily rows.
+        last_res = (
+            db.table("apple_health_daily")
+            .select("date, updated_at")
+            .eq("user_id", user_id)
+            .order("updated_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        rows = last_res.data or []
+        if not rows:
+            return {"connected": False, "last_sync_at": None, "days_synced": 0, "latest_date": None}
+        # Distinct days with data. Cheap count using head=True semantics.
+        count_res = (
+            db.table("apple_health_daily")
+            .select("date", count="exact")
+            .eq("user_id", user_id)
+            .execute()
+        )
+        days_synced = count_res.count or len(count_res.data or [])
+        return {
+            "connected":    True,
+            "last_sync_at": rows[0].get("updated_at"),
+            "latest_date":  rows[0].get("date"),
+            "days_synced":  days_synced,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/apple-health/sync")
 async def apple_health_sync(request: Request):
     """

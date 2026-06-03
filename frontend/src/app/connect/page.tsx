@@ -17,7 +17,13 @@ function ConnectContent() {
   const [appleKey,   setAppleKey]   = useState<string | null>(null);
   const [showApple,  setShowApple]  = useState(false);
   const [copying,    setCopying]    = useState(false);
+  const [copyingUrl, setCopyingUrl] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
+  // Apple Health connection status — for the "Check sync" button.
+  const [ahStatus, setAhStatus] = useState<{
+    connected: boolean; last_sync_at: string | null; latest_date: string | null; days_synced: number;
+  } | null>(null);
+  const [checkingStatus, setCheckingStatus] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -53,6 +59,29 @@ function ConnectContent() {
         setAppleKey("error");
       }
     }
+    // Probe for existing sync data so returning users see their status without
+    // having to click "Check sync" again.
+    if (ahStatus === null) {
+      try {
+        const s = await api.appleHealthStatus();
+        setAhStatus(s);
+      } catch {
+        /* leave null — user can tap Check sync */
+      }
+    }
+  };
+
+  // Tiny "synced 2h ago" formatter for the connection status pill.
+  const timeAgo = (iso: string): string => {
+    try {
+      const diffMin = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+      if (diffMin < 1)   return "just now";
+      if (diffMin < 60)  return `${diffMin} min ago`;
+      const h = Math.round(diffMin / 60);
+      if (h < 24)        return `${h}h ago`;
+      const d = Math.round(h / 24);
+      return `${d}d ago`;
+    } catch { return ""; }
   };
 
   const handleCopy = () => {
@@ -131,57 +160,122 @@ function ConnectContent() {
 
             {/* Apple Health setup panel */}
             {showApple && (
-              <div className="border-t border-zinc-800 px-5 py-4 space-y-3">
+              <div className="border-t border-zinc-800 px-5 py-4 space-y-4">
                 <p className="text-zinc-300 text-xs leading-relaxed">
-                  Use the <span className="text-white font-medium">BackNine iOS shortcut</span> to
-                  automatically sync Apple Health data daily. Paste your personal API key into the
-                  shortcut to connect.
+                  BackNine uses the free <a href="https://apps.apple.com/app/health-auto-export/id1115567069"
+                    target="_blank" rel="noopener" className="text-green-400 underline">Health Auto Export</a>{" "}
+                  app to send your HealthKit data here automatically. Setup takes 3 minutes.
                 </p>
 
-                {/* API Key */}
-                <div>
-                  <p className="text-zinc-500 text-xs mb-1.5">Your personal API key</p>
-                  {!appleKey ? (
-                    <div className="flex items-center gap-2">
-                      <div className="h-4 w-4 rounded-full border-2 border-green-400 border-t-transparent animate-spin" />
-                      <span className="text-zinc-500 text-xs">Loading…</span>
+                {/* Connection status — shows after the user has hit "Check sync" */}
+                {ahStatus && (
+                  ahStatus.connected ? (
+                    <div className="rounded-lg border border-green-700 bg-green-950/40 px-3 py-2">
+                      <p className="text-green-300 text-xs font-semibold">✓ Connected</p>
+                      <p className="text-green-400/80 text-[10px] mt-0.5">
+                        {ahStatus.days_synced} day{ahStatus.days_synced === 1 ? "" : "s"} of data
+                        {ahStatus.latest_date ? ` · latest ${ahStatus.latest_date}` : ""}
+                        {ahStatus.last_sync_at ? ` · synced ${timeAgo(ahStatus.last_sync_at)}` : ""}
+                      </p>
                     </div>
-                  ) : appleKey === "error" ? (
-                    <p className="text-red-400 text-xs">Failed to load API key. Try refreshing.</p>
                   ) : (
+                    <div className="rounded-lg border border-amber-700 bg-amber-950/40 px-3 py-2">
+                      <p className="text-amber-300 text-xs font-semibold">No data received yet</p>
+                      <p className="text-amber-400/80 text-[10px] mt-0.5">
+                        Finish the steps below, then tap Check sync again after running the export.
+                      </p>
+                    </div>
+                  )
+                )}
+
+                {/* The two values the user needs: URL and Key */}
+                <div className="space-y-2">
+                  <div>
+                    <p className="text-zinc-500 text-[10px] mb-1 uppercase tracking-wide">REST API URL</p>
                     <div className="flex items-center gap-2">
-                      <code className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-green-300 font-mono truncate">
-                        {appleKey}
+                      <code className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-[11px] text-zinc-200 font-mono truncate">
+                        {BACKEND}/api/apple-health/sync
                       </code>
                       <button
-                        onClick={handleCopy}
+                        onClick={() => {
+                          navigator.clipboard.writeText(`${BACKEND}/api/apple-health/sync`).then(() => {
+                            setCopyingUrl(true);
+                            setTimeout(() => setCopyingUrl(false), 1800);
+                          });
+                        }}
                         className="shrink-0 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg px-3 py-2 text-xs font-medium transition-colors"
                       >
-                        {copying ? "Copied!" : "Copy"}
+                        {copyingUrl ? "Copied!" : "Copy"}
                       </button>
                     </div>
-                  )}
+                  </div>
+                  <div>
+                    <p className="text-zinc-500 text-[10px] mb-1 uppercase tracking-wide">Header — X-AH-Key</p>
+                    {!appleKey ? (
+                      <div className="flex items-center gap-2">
+                        <div className="h-4 w-4 rounded-full border-2 border-green-400 border-t-transparent animate-spin" />
+                        <span className="text-zinc-500 text-xs">Loading…</span>
+                      </div>
+                    ) : appleKey === "error" ? (
+                      <p className="text-red-400 text-xs">Failed to load API key. Try refreshing.</p>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-[11px] text-green-300 font-mono truncate">
+                          {appleKey}
+                        </code>
+                        <button
+                          onClick={handleCopy}
+                          className="shrink-0 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg px-3 py-2 text-xs font-medium transition-colors"
+                        >
+                          {copying ? "Copied!" : "Copy"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                {/* Steps */}
-                <ol className="space-y-1.5 text-xs text-zinc-400">
+                {/* Step-by-step */}
+                <ol className="space-y-2 text-xs text-zinc-300">
                   <li className="flex gap-2">
                     <span className="text-green-500 font-bold shrink-0">1.</span>
-                    Download the BackNine iOS Shortcut from iCloud
+                    <span>Install <span className="text-white">Health Auto Export</span> from the App Store and grant it Health permissions.</span>
                   </li>
                   <li className="flex gap-2">
                     <span className="text-green-500 font-bold shrink-0">2.</span>
-                    Open the shortcut and paste your API key when prompted
+                    <span>In the app: <span className="text-white">Automations → Add → REST API</span>. Paste the URL above as the endpoint, add an <span className="text-white">X-AH-Key</span> header with your key.</span>
                   </li>
                   <li className="flex gap-2">
                     <span className="text-green-500 font-bold shrink-0">3.</span>
-                    Allow Health permissions when asked
+                    <span>Select metrics: <span className="text-white">Steps, Sleep Analysis, Active Energy, Resting Heart Rate, Heart Rate Variability, Body Mass, VO₂ Max, Body Fat Percentage, Respiratory Rate</span>. (Skip anything you don&apos;t track.)</span>
                   </li>
                   <li className="flex gap-2">
                     <span className="text-green-500 font-bold shrink-0">4.</span>
-                    Run the shortcut once manually, then set it to run daily via Automation
+                    <span>Set the schedule to <span className="text-white">Daily</span>, save, then tap <span className="text-white">Test Now</span> in HAE to send your first batch.</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="text-green-500 font-bold shrink-0">5.</span>
+                    <span>Come back here and tap Check sync below to confirm it worked.</span>
                   </li>
                 </ol>
+
+                {/* Check sync button */}
+                <button
+                  onClick={async () => {
+                    setCheckingStatus(true);
+                    try {
+                      const s = await api.appleHealthStatus();
+                      setAhStatus(s);
+                    } catch {
+                      setAhStatus({ connected: false, last_sync_at: null, latest_date: null, days_synced: 0 });
+                    } finally {
+                      setCheckingStatus(false);
+                    }
+                  }}
+                  disabled={checkingStatus}
+                  className="w-full py-2.5 rounded-xl bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors"
+                >
+                  {checkingStatus ? "Checking…" : ahStatus?.connected ? "Re-check sync" : "Check sync"}
+                </button>
               </div>
             )}
           </div>
