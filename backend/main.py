@@ -359,40 +359,88 @@ def _verify_supabase_jwt(token: str) -> Optional[dict]:
 
     Tries asymmetric (JWKS, ES256/RS256) first since that's the current Supabase
     default; falls back to legacy HS256 for back-compat with older projects.
+    Logs each step to stdout so failures are visible in Render logs.
     """
+    log_prefix = "[supa-jwt]"
+
     # 1. Asymmetric path — read the kid from the header, look it up in JWKS.
     try:
         header = jwt.get_unverified_header(token)
         kid    = header.get("kid")
         alg    = header.get("alg") or "ES256"
+        print(f"{log_prefix} header alg={alg} kid={kid}", flush=True)
+
         if kid and alg != "HS256":
             jwks = _get_supabase_jwks()
-            if jwks:
+            if not jwks:
+                print(f"{log_prefix} JWKS fetch returned empty (SUPABASE_URL set? net ok?)", flush=True)
+            else:
+                print(f"{log_prefix} JWKS has {len(jwks)} key(s)", flush=True)
                 key_dict = next((k for k in jwks if k.get("kid") == kid), None)
-                if key_dict:
-                    public_key = jwk.construct(key_dict, algorithm=alg)
-                    return jwt.decode(
-                        token,
-                        public_key,
-                        algorithms=[alg],
-                        audience="authenticated",
-                    )
-    except (JWTError, Exception):
-        # Fall through to HS256 attempt below
-        pass
+                if not key_dict:
+                    print(f"{log_prefix} no JWK matches kid={kid}; available={[k.get('kid') for k in jwks]}", flush=True)
+                else:
+                    # Approach A: jose's jwk.construct + jwt.decode
+                    try:
+                        public_key = jwk.construct(key_dict, algorithm=alg)
+                        claims = jwt.decode(
+                            token, public_key,
+                            algorithms=[alg],
+                            audience="authenticated",
+                        )
+                        print(f"{log_prefix} verified via jose.jwk.construct sub={claims.get('sub')}", flush=True)
+                        return claims
+                    except Exception as e:
+                        print(f"{log_prefix} jose.jwk.construct path failed: {type(e).__name__}: {e}", flush=True)
+
+                    # Approach B: pass JWK dict directly to jwt.decode (older jose API)
+                    try:
+                        claims = jwt.decode(
+                            token, key_dict,
+                            algorithms=[alg],
+                            audience="authenticated",
+                        )
+                        print(f"{log_prefix} verified via dict-direct sub={claims.get('sub')}", flush=True)
+                        return claims
+                    except Exception as e:
+                        print(f"{log_prefix} dict-direct path failed: {type(e).__name__}: {e}", flush=True)
+
+                    # Approach C: build EC public key with cryptography, verify with PyJWT-style flow
+                    try:
+                        from cryptography.hazmat.primitives.asymmetric import ec
+                        from jose.utils import base64url_decode
+                        x = int.from_bytes(base64url_decode(key_dict["x"].encode()), "big")
+                        y = int.from_bytes(base64url_decode(key_dict["y"].encode()), "big")
+                        pub_numbers = ec.EllipticCurvePublicNumbers(x, y, ec.SECP256R1())
+                        public_key  = pub_numbers.public_key()
+                        claims = jwt.decode(
+                            token, public_key,
+                            algorithms=[alg],
+                            audience="authenticated",
+                        )
+                        print(f"{log_prefix} verified via cryptography-direct sub={claims.get('sub')}", flush=True)
+                        return claims
+                    except Exception as e:
+                        print(f"{log_prefix} cryptography-direct path failed: {type(e).__name__}: {e}", flush=True)
+    except Exception as e:
+        print(f"{log_prefix} header parse / outer failure: {type(e).__name__}: {e}", flush=True)
 
     # 2. Legacy HS256 path — used by older Supabase projects.
     if SUPABASE_JWT_SECRET:
         try:
-            return jwt.decode(
+            claims = jwt.decode(
                 token,
                 SUPABASE_JWT_SECRET,
                 algorithms=["HS256"],
                 audience="authenticated",
             )
-        except JWTError:
+            print(f"{log_prefix} verified via legacy HS256 sub={claims.get('sub')}", flush=True)
+            return claims
+        except JWTError as e:
+            print(f"{log_prefix} legacy HS256 path failed: {e}", flush=True)
             return None
 
+    print(f"{log_prefix} all verification paths exhausted → returning None", flush=True)
     return None
 
 
