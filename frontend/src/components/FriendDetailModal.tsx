@@ -134,30 +134,72 @@ export default function FriendDetailModal({ friendUserId, friendName, onClose, o
 
           {!loading && !error && data && (
             <>
-              {/* 7-day sparklines for the four headline metrics */}
+              {/* 7-day sparklines for the four headline metrics — with the
+                  viewer's own latest value below the friend's, so every tile
+                  is a side-by-side comparison. */}
               <section>
-                <p className="text-[10px] text-gray-600 uppercase tracking-widest font-semibold mb-2">
-                  Last 7 days
-                </p>
+                <div className="flex items-baseline justify-between mb-2">
+                  <p className="text-[10px] text-gray-600 uppercase tracking-widest font-semibold">
+                    Last 7 days
+                  </p>
+                  {data.you && (
+                    <p className="text-[10px] text-gray-500">
+                      {data.name.split(" ")[0]} vs {data.you.name.split(" ")[0] || "you"}
+                    </p>
+                  )}
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   {([
-                    { key: "steps", label: "Steps",      color: "#22c55e", fmt: (v: number | null) => fmtNumber(v) },
-                    { key: "sleep", label: "Sleep score", color: "#6366f1", fmt: (v: number | null) => v == null ? "—" : `${Math.round(v)}` },
-                    { key: "hrv",   label: "HRV",         color: "#f59e0b", fmt: (v: number | null) => fmtNumber(v, " ms") },
-                    { key: "rhr",   label: "Resting HR",  color: "#ef4444", fmt: (v: number | null) => fmtNumber(v, " bpm") },
-                  ] as const).map(({ key, label, color, fmt }) => {
-                    const series = data.series[key];
-                    const latest = lastValue(series);
-                    const avg7   = avgValue(series);
-                    const seed = `Quick one — your ${label.toLowerCase()} has been ${avg7 != null ? `around ${fmt(avg7)} this week` : "showing up in BackNine"}. How are you feeling?`;
+                    { key: "steps", label: "Steps",      color: "#22c55e", higherIsBetter: true,  fmt: (v: number | null) => fmtNumber(v) },
+                    { key: "sleep", label: "Sleep score", color: "#6366f1", higherIsBetter: true,  fmt: (v: number | null) => v == null ? "—" : `${Math.round(v)}` },
+                    { key: "hrv",   label: "HRV",         color: "#f59e0b", higherIsBetter: true,  fmt: (v: number | null) => fmtNumber(v, " ms") },
+                    { key: "rhr",   label: "Resting HR",  color: "#ef4444", higherIsBetter: false, fmt: (v: number | null) => fmtNumber(v, " bpm") },
+                  ] as const).map(({ key, label, color, higherIsBetter, fmt }) => {
+                    const series      = data.series[key];
+                    const friendLatest= lastValue(series);
+                    const friendAvg   = avgValue(series);
+                    const youSeries   = data.you?.series[key];
+                    const youLatest   = youSeries ? lastValue(youSeries) : null;
+                    // Compare against most-recent values. Direction matters:
+                    // lower RHR is better; everything else higher is better.
+                    let leader: "friend" | "you" | null = null;
+                    let delta: number | null = null;
+                    if (friendLatest != null && youLatest != null) {
+                      delta = friendLatest - youLatest;
+                      if (Math.abs(delta) > 0.5) {
+                        const friendAhead = higherIsBetter ? delta > 0 : delta < 0;
+                        leader = friendAhead ? "friend" : "you";
+                      }
+                    }
+                    const friendFirst = data.name.split(" ")[0];
+                    const seed = (friendLatest != null && youLatest != null)
+                      ? `Your ${label.toLowerCase()} today is ${fmt(friendLatest)} — mine is ${fmt(youLatest)}. How are you feeling about it?`
+                      : `Quick one — how's your ${label.toLowerCase()} been this week?`;
                     return (
                       <button key={key} onClick={() => dm(seed)}
                         className="text-left rounded-xl bg-gray-50 border border-gray-100 p-3 hover:border-[#1B3829]/30 transition-colors">
                         <div className="flex items-baseline justify-between mb-1">
                           <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">{label}</p>
-                          <p className="text-[10px] text-gray-600">avg {fmt(avg7)}</p>
+                          <p className="text-[10px] text-gray-600">avg {fmt(friendAvg)}</p>
                         </div>
-                        <p className="text-sm font-bold text-gray-900 mb-1.5 tabular-nums">{fmt(latest)}</p>
+                        {/* Friend value (primary — this is the friend's profile) */}
+                        <div className="flex items-baseline gap-1.5">
+                          <p className="text-sm font-bold text-gray-900 tabular-nums">{fmt(friendLatest)}</p>
+                          <p className="text-[10px] text-gray-500 truncate">{friendFirst}</p>
+                          {leader === "friend" && (
+                            <span className="text-[9px] font-semibold text-green-700 ml-auto shrink-0">↑ ahead</span>
+                          )}
+                        </div>
+                        {/* Viewer value — only show when we have a number to compare */}
+                        {data.you && (
+                          <div className="flex items-baseline gap-1.5 mt-0.5 mb-1.5">
+                            <p className="text-xs font-semibold text-gray-700 tabular-nums">{fmt(youLatest)}</p>
+                            <p className="text-[10px] text-gray-500">you</p>
+                            {leader === "you" && (
+                              <span className="text-[9px] font-semibold text-green-700 ml-auto shrink-0">↑ ahead</span>
+                            )}
+                          </div>
+                        )}
                         <Sparkline points={series} color={color} />
                       </button>
                     );
@@ -165,24 +207,42 @@ export default function FriendDetailModal({ friendUserId, friendName, onClose, o
                 </div>
               </section>
 
-              {/* Longevity score */}
+              {/* Longevity score — side-by-side */}
               {data.longevity.score != null && (
                 <section className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-                  <div className="flex items-baseline justify-between">
+                  <p className="text-[10px] text-gray-600 uppercase tracking-widest font-semibold mb-2">Longevity Score</p>
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <p className="text-[10px] text-gray-600 uppercase tracking-widest font-semibold">Longevity Score</p>
-                      <p className="text-2xl font-bold text-gray-900 mt-0.5">
+                      <p className="text-[10px] text-gray-500 mb-0.5">{data.name.split(" ")[0]}</p>
+                      <p className="text-2xl font-bold text-gray-900">
                         {data.longevity.score}<span className="text-sm text-gray-600 font-normal">/100</span>
                       </p>
+                      {data.longevity.grade && (
+                        <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#1B3829]/10 text-[#1B3829] mt-1">
+                          {data.longevity.grade}
+                        </span>
+                      )}
                     </div>
-                    {data.longevity.grade && (
-                      <span className="text-xs font-semibold px-2 py-1 rounded-full bg-[#1B3829]/10 text-[#1B3829]">
-                        {data.longevity.grade}
-                      </span>
-                    )}
+                    <div>
+                      <p className="text-[10px] text-gray-500 mb-0.5">You</p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        {data.you?.longevity.score != null
+                          ? <>{data.you.longevity.score}<span className="text-sm text-gray-600 font-normal">/100</span></>
+                          : <span className="text-gray-400 text-base font-normal">—</span>}
+                      </p>
+                      {data.you?.longevity.grade && (
+                        <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 mt-1">
+                          {data.you.longevity.grade}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <button onClick={() => dm(`Your Longevity Score is ${data.longevity.score} (${data.longevity.grade}) — what's been working for you?`)}
-                    className="mt-2 text-[11px] font-semibold text-[#1B3829] hover:underline">
+                  <button onClick={() => dm(
+                    data.you?.longevity.score != null
+                      ? `Your Longevity Score is ${data.longevity.score} (${data.longevity.grade}). Mine is ${data.you.longevity.score}. What's been working for you?`
+                      : `Your Longevity Score is ${data.longevity.score} (${data.longevity.grade}) — what's been working for you?`
+                  )}
+                    className="mt-3 text-[11px] font-semibold text-[#1B3829] hover:underline">
                     Ask about this →
                   </button>
                 </section>
@@ -213,17 +273,36 @@ export default function FriendDetailModal({ friendUserId, friendName, onClose, o
                 </section>
               )}
 
-              {/* Latest weigh-in */}
-              {data.latest_weight && data.latest_weight.weight_lbs != null && (
+              {/* Latest weigh-in — side-by-side (only when at least one side has data) */}
+              {(data.latest_weight?.weight_lbs != null || data.you?.latest_weight?.weight_lbs != null) && (
                 <section className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-                  <p className="text-[10px] text-gray-600 uppercase tracking-widest font-semibold mb-1">Latest weigh-in</p>
-                  <p className="text-sm font-bold text-gray-900">
-                    {data.latest_weight.weight_lbs} lbs
-                    {data.latest_weight.body_fat_pct != null && (
-                      <span className="text-gray-600 font-normal"> · {data.latest_weight.body_fat_pct}% fat</span>
-                    )}
-                  </p>
-                  <p className="text-[10px] text-gray-600 mt-0.5">as of {data.latest_weight.date}</p>
+                  <p className="text-[10px] text-gray-600 uppercase tracking-widest font-semibold mb-2">Latest weigh-in</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-[10px] text-gray-500 mb-0.5">{data.name.split(" ")[0]}</p>
+                      {data.latest_weight?.weight_lbs != null ? (
+                        <>
+                          <p className="text-sm font-bold text-gray-900">{data.latest_weight.weight_lbs} lbs</p>
+                          {data.latest_weight.body_fat_pct != null && (
+                            <p className="text-[10px] text-gray-600">{data.latest_weight.body_fat_pct}% fat</p>
+                          )}
+                          <p className="text-[10px] text-gray-500 mt-0.5">{data.latest_weight.date}</p>
+                        </>
+                      ) : <p className="text-sm text-gray-400">—</p>}
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gray-500 mb-0.5">You</p>
+                      {data.you?.latest_weight?.weight_lbs != null ? (
+                        <>
+                          <p className="text-sm font-bold text-gray-900">{data.you.latest_weight.weight_lbs} lbs</p>
+                          {data.you.latest_weight.body_fat_pct != null && (
+                            <p className="text-[10px] text-gray-600">{data.you.latest_weight.body_fat_pct}% fat</p>
+                          )}
+                          <p className="text-[10px] text-gray-500 mt-0.5">{data.you.latest_weight.date}</p>
+                        </>
+                      ) : <p className="text-sm text-gray-400">—</p>}
+                    </div>
+                  </div>
                 </section>
               )}
 

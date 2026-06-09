@@ -3657,26 +3657,17 @@ async def react_to_event(event_id: str, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/friends/{friend_user_id}/profile")
-def friend_profile(friend_user_id: str, request: Request):
-    """A confirmed friend's detail view: 7-day sparklines (steps/sleep/HRV/RHR),
-    latest longevity score, recent workouts, latest weigh-in. Auth-gated to
-    confirmed friendships only — 403 otherwise."""
-    session = _require_session(request)
-    me = session["user_id"]
-    if not frd.are_friends(me, friend_user_id):
-        raise HTTPException(status_code=403, detail="Not friends")
+def _build_user_health_snapshot(user_id: str) -> dict:
+    """Compact health snapshot for a single user — used by friend_profile to
+    return both the friend's data AND the viewer's data side-by-side.
 
-    name = _display_name_for(friend_user_id)
+    Returns: { series: {steps, sleep, hrv, rhr}, longevity, recent_workouts,
+               latest_weight }. All fields nullable so a non-Oura / brand-new
+               user still gets a valid shape (None/empty values).
+    """
+    # 7-day sparklines from Oura + AH (steps prefer AH when live).
     try:
-        levels = ach.levels_for([friend_user_id])
-    except Exception:
-        levels = {}
-    level = (levels.get(friend_user_id) or {}).get("level")
-
-    # Pull friend's Oura cache once for all four series.
-    try:
-        rm, slm, am, smm = oc.get_days(friend_user_id, days=10)
+        rm, slm, am, smm = oc.get_days(user_id, days=10)
     except Exception:
         rm, slm, am, smm = {}, {}, {}, {}
 
@@ -3687,10 +3678,9 @@ def friend_profile(friend_user_id: str, request: Request):
     series_rhr:    list[dict] = []
     for i in range(7):
         d = (today_d - timedelta(days=6 - i)).isoformat()
-        # Steps: prefer AH (live throughout the day), else Oura.
         steps_val = None
         try:
-            ah_d = ah.get_day(friend_user_id, d)
+            ah_d = ah.get_day(user_id, d)
             if ah_d and ah_d.get("steps") is not None:
                 steps_val = ah_d.get("steps")
         except Exception:
@@ -3702,10 +3692,9 @@ def friend_profile(friend_user_id: str, request: Request):
         series_hrv.append  ({"date": d, "value": (smm.get(d) or {}).get("hrv")})
         series_rhr.append  ({"date": d, "value": (smm.get(d) or {}).get("rhr")})
 
-    # Latest longevity score (history is the source of truth — most recent row).
     longevity = {"score": None, "grade": None, "date": None}
     try:
-        lon_history = lonh.get_history(friend_user_id, days=14)
+        lon_history = lonh.get_history(user_id, days=14)
         if lon_history:
             latest = lon_history[-1]
             longevity = {
@@ -3716,16 +3705,14 @@ def friend_profile(friend_user_id: str, request: Request):
     except Exception:
         pass
 
-    # Recent workouts — last 5 across types (cardio, strength, sessions).
     try:
-        recent_workouts = (trn.get_workouts(friend_user_id, days=21) or [])[:5]
+        recent_workouts = (trn.get_workouts(user_id, days=21) or [])[:5]
     except Exception:
         recent_workouts = []
 
-    # Latest weigh-in (one row, no history — keeps the response small).
     latest_weight = None
     try:
-        wlog = nutr.get_weight_entries(friend_user_id) or []
+        wlog = nutr.get_weight_entries(user_id) or []
         if wlog:
             w = wlog[-1]
             latest_weight = {
@@ -3738,9 +3725,6 @@ def friend_profile(friend_user_id: str, request: Request):
         pass
 
     return {
-        "user_id":         friend_user_id,
-        "name":            name,
-        "level":           level,
         "series": {
             "steps": series_steps,
             "sleep": series_sleep,
@@ -3750,6 +3734,51 @@ def friend_profile(friend_user_id: str, request: Request):
         "longevity":       longevity,
         "recent_workouts": recent_workouts,
         "latest_weight":   latest_weight,
+    }
+
+
+@app.get("/api/friends/{friend_user_id}/profile")
+def friend_profile(friend_user_id: str, request: Request):
+    """A confirmed friend's detail view with side-by-side comparison against
+    the viewer's own data. 7-day sparklines (steps/sleep/HRV/RHR), latest
+    longevity score, recent workouts, latest weigh-in — for BOTH the friend
+    AND the viewer. Auth-gated to confirmed friendships only — 403 otherwise.
+    """
+    session = _require_session(request)
+    me = session["user_id"]
+    if not frd.are_friends(me, friend_user_id):
+        raise HTTPException(status_code=403, detail="Not friends")
+
+    name = _display_name_for(friend_user_id)
+    try:
+        levels = ach.levels_for([friend_user_id, me])
+    except Exception:
+        levels = {}
+    level    = (levels.get(friend_user_id) or {}).get("level")
+    my_level = (levels.get(me) or {}).get("level")
+
+    friend_snap = _build_user_health_snapshot(friend_user_id)
+    you_snap    = _build_user_health_snapshot(me)
+
+    return {
+        "user_id":         friend_user_id,
+        "name":            name,
+        "level":           level,
+        # Friend's snapshot (unchanged shape — backwards-compatible with the
+        # existing FriendDetailModal that doesn't know about `you` yet).
+        "series":          friend_snap["series"],
+        "longevity":       friend_snap["longevity"],
+        "recent_workouts": friend_snap["recent_workouts"],
+        "latest_weight":   friend_snap["latest_weight"],
+        # Viewer's snapshot for side-by-side comparison.
+        "you": {
+            "name":            _display_name_for(me),
+            "level":           my_level,
+            "series":          you_snap["series"],
+            "longevity":       you_snap["longevity"],
+            "recent_workouts": you_snap["recent_workouts"],
+            "latest_weight":   you_snap["latest_weight"],
+        },
     }
 
 

@@ -1384,10 +1384,9 @@ export interface LeaderboardResponse {
 
 export interface SparkPoint { date: string; value: number | null; }
 
-export interface FriendProfile {
-  user_id: string;
-  name:    string;
-  level:   number | null;
+// Shared per-user snapshot shape, used for BOTH the friend and the viewer in
+// the friend detail / comparison view.
+export interface FriendHealthSnapshot {
   series: {
     steps: SparkPoint[];
     sleep: SparkPoint[];
@@ -1406,6 +1405,15 @@ export interface FriendProfile {
     body_fat_pct?:   number | null;
     muscle_mass_lbs?: number | null;
   } | null;
+}
+
+export interface FriendProfile extends FriendHealthSnapshot {
+  user_id: string;
+  name:    string;
+  level:   number | null;
+  // The viewer's own snapshot — drives the side-by-side comparison view.
+  // Optional for backwards compat with older backend deploys.
+  you?: FriendHealthSnapshot & { name: string; level: number | null };
 }
 
 // ── Notification types ──────────────────────────────────────────────────────
