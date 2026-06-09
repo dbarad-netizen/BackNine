@@ -1372,43 +1372,74 @@ export default function DashboardPage() {
             {/* Getting Started card — shown until a data source is connected.
                 Frames all three paths (Oura / Apple Health / manual) so a
                 no-wearable user feels guided rather than blocked. */}
-            {data.has_oura === false && !data.has_apple_health && (
-              <div className="rounded-2xl border border-[#1B3829]/15 bg-white p-5 shadow-sm">
+            {/* Get-started card — only shows when:
+                  (1) no device connected, AND
+                  (2) no manually-logged data exists yet (meal/workout/weight), AND
+                  (3) user hasn't dismissed it via the "Hide" link.
+                Hiding logic prevents the card from sticking around after a user
+                has actually started using BackNine. The dismissal is in
+                localStorage so it persists per device. */}
+            {(() => {
+              if (data.has_oura !== false) return null;
+              if (data.has_apple_health) return null;
+              const hasMeals    = (nutToday?.meals?.length ?? 0) > 0
+                                || (nutSummary?.days_logged ?? 0) > 0;
+              const hasWorkouts = (weightLog?.length ?? 0) > 0;
+              if (hasMeals || hasWorkouts) return null;
+              if (typeof window !== "undefined"
+                  && localStorage.getItem("bn_getstarted_dismissed") === "1") return null;
+              return (
+              <div className="rounded-2xl border border-[#1B3829]/15 bg-white p-5 shadow-sm relative">
+                <button
+                  onClick={() => {
+                    localStorage.setItem("bn_getstarted_dismissed", "1");
+                    // Force a re-render — easiest way: nudge a no-op state.
+                    setSection(section);
+                  }}
+                  className="absolute top-3 right-3 text-[11px] text-gray-500 hover:text-gray-900 underline-offset-2 hover:underline"
+                  aria-label="Hide this card"
+                >
+                  Hide
+                </button>
                 <p className="font-bold text-gray-900 text-sm mb-1">👋 Let&apos;s get your data flowing</p>
                 <p className="text-xs text-gray-600 mb-4 leading-relaxed">
-                  BackNine gets more useful with every source you connect — but you can start with any of these:
+                  Pick whichever feels easiest right now. You can always add more later.
                 </p>
                 <div className="space-y-2">
                   <a href="/connect"
                     className="flex items-center gap-3 rounded-xl border border-gray-200 hover:border-[#1B3829]/40 px-3 py-2.5 transition-colors">
-                    <span className="text-xl shrink-0">💍</span>
+                    <span className="text-xl shrink-0">📲</span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900">Connect Oura Ring</p>
-                      <p className="text-[11px] text-gray-600">Readiness, sleep, HRV, recovery</p>
+                      <p className="text-sm font-semibold text-gray-900">Connect a device</p>
+                      <p className="text-[11px] text-gray-600">Oura Ring, Apple Health, or both</p>
                     </div>
                     <span className="text-gray-600 text-sm shrink-0">→</span>
                   </a>
-                  <button onClick={() => setSection("apple-health")}
+                  <button onClick={() => setSection("nutrition")}
                     className="w-full flex items-center gap-3 rounded-xl border border-gray-200 hover:border-[#1B3829]/40 px-3 py-2.5 transition-colors text-left">
-                    <span className="text-xl shrink-0">🍎</span>
+                    <span className="text-xl shrink-0">🍽️</span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900">Set up Apple Health</p>
-                      <p className="text-[11px] text-gray-600">Steps, sleep &amp; HRV from your iPhone / Watch</p>
+                      <p className="text-sm font-semibold text-gray-900">Log a meal</p>
+                      <p className="text-[11px] text-gray-600">Snap a photo, describe it, or pick from a list</p>
                     </div>
                     <span className="text-gray-600 text-sm shrink-0">→</span>
                   </button>
-                  <button onClick={() => openChatRef.current?.()}
+                  <button onClick={() => setSection("training")}
                     className="w-full flex items-center gap-3 rounded-xl border border-gray-200 hover:border-[#1B3829]/40 px-3 py-2.5 transition-colors text-left">
-                    <span className="text-xl shrink-0">✏️</span>
+                    <span className="text-xl shrink-0">🏋️</span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900">Start manually</p>
-                      <p className="text-[11px] text-gray-600">Log a workout or weigh-in, or ask Coach Al anything</p>
+                      <p className="text-sm font-semibold text-gray-900">Log a workout</p>
+                      <p className="text-[11px] text-gray-600">Strength, cardio, or just describe what you did</p>
                     </div>
                     <span className="text-gray-600 text-sm shrink-0">→</span>
                   </button>
                 </div>
+                <p className="text-[10px] text-gray-500 text-center mt-4">
+                  Or <button onClick={() => openChatRef.current?.()} className="underline hover:text-gray-700">ask Coach Al</button> what to focus on first.
+                </p>
               </div>
-            )}
+              );
+            })()}
 
             {/* ── Coach Al's Morning Briefing ── */}
             <MorningBriefing onOpenChat={() => openChatRef.current?.()} />
