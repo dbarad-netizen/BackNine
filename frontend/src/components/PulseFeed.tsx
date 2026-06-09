@@ -275,7 +275,7 @@ export default function PulseFeed({ onInviteFriend }: Props) {
     return (
       <section>
         <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-600 mb-2">
-          Friend Pulse
+          Activity
         </h3>
         <div className="flex gap-2 overflow-hidden">
           {[0, 1].map(i => (
@@ -291,7 +291,7 @@ export default function PulseFeed({ onInviteFriend }: Props) {
     return (
       <section>
         <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-600 mb-2">
-          Friend Pulse
+          Activity
         </h3>
         <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/60 px-4 py-5 text-center">
           <p className="text-sm text-gray-600 font-medium mb-1">🤝 Better with friends</p>
@@ -317,7 +317,7 @@ export default function PulseFeed({ onInviteFriend }: Props) {
       <section>
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-600">
-            Friend Pulse
+            Activity
           </h3>
           <button
             onClick={() => load(true)}
@@ -345,7 +345,7 @@ export default function PulseFeed({ onInviteFriend }: Props) {
     <section>
       <div className="flex items-center justify-between mb-2 gap-2">
         <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-600 truncate">
-          Friend Pulse
+          Activity
           {namedFriends.length > 0 && (
             <span className="ml-1 normal-case font-normal text-gray-600">
               · with <span className="text-[#1B3829] font-semibold">

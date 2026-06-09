@@ -248,6 +248,80 @@ export default function FriendDetailModal({ friendUserId, friendName, onClose, o
                 </section>
               )}
 
+              {/* Supplement stack — side-by-side, only render if either side
+                  has anything. Highlight shared supplements (matched by lowercase
+                  name) so the conversation can start with "we both take X". */}
+              {((data.supplements?.length ?? 0) > 0 || (data.you?.supplements?.length ?? 0) > 0) && (() => {
+                const friendStack = data.supplements ?? [];
+                const yourStack   = data.you?.supplements ?? [];
+                const friendNames = new Set(friendStack.map(s => s.name.toLowerCase()));
+                const yourNames   = new Set(yourStack.map(s => s.name.toLowerCase()));
+                const shared      = friendStack.filter(s => yourNames.has(s.name.toLowerCase()));
+                const dmSeed = shared.length > 0
+                  ? `Saw we both take ${shared.slice(0, 3).map(s => s.name).join(", ")}. How's it working for you?`
+                  : friendStack.length > 0
+                    ? `Curious about your stack — ${friendStack.slice(0, 2).map(s => s.name).join(" + ")}${friendStack.length > 2 ? " and others" : ""}. What's it doing for you?`
+                    : "What supplements are you taking these days?";
+                return (
+                  <section className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                    <div className="flex items-baseline justify-between mb-2">
+                      <p className="text-[10px] text-gray-600 uppercase tracking-widest font-semibold">Supplement stack</p>
+                      {shared.length > 0 && (
+                        <span className="text-[10px] text-emerald-700 font-semibold">
+                          {shared.length} shared
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <p className="text-[10px] text-gray-500 mb-1">{data.name.split(" ")[0]}</p>
+                        {friendStack.length === 0 ? (
+                          <p className="text-xs text-gray-400 italic">No stack shared</p>
+                        ) : (
+                          <ul className="space-y-1">
+                            {friendStack.map((s, i) => {
+                              const isShared = yourNames.has(s.name.toLowerCase());
+                              return (
+                                <li key={`f-${i}`} className={`text-xs ${isShared ? "text-emerald-800 font-semibold" : "text-gray-900"}`}>
+                                  {isShared && <span className="mr-1">✓</span>}
+                                  {s.name}
+                                  {s.dose && <span className="text-gray-600 font-normal"> · {s.dose}</span>}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-gray-500 mb-1">You</p>
+                        {yourStack.length === 0 ? (
+                          <p className="text-xs text-gray-400 italic">No stack logged yet</p>
+                        ) : (
+                          <ul className="space-y-1">
+                            {yourStack.map((s, i) => {
+                              const isShared = friendNames.has(s.name.toLowerCase());
+                              return (
+                                <li key={`y-${i}`} className={`text-xs ${isShared ? "text-emerald-800 font-semibold" : "text-gray-900"}`}>
+                                  {isShared && <span className="mr-1">✓</span>}
+                                  {s.name}
+                                  {s.dose && <span className="text-gray-600 font-normal"> · {s.dose}</span>}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                    {friendStack.length > 0 && (
+                      <button onClick={() => dm(dmSeed)}
+                        className="mt-3 text-[11px] font-semibold text-[#1B3829] hover:underline">
+                        Ask about this →
+                      </button>
+                    )}
+                  </section>
+                );
+              })()}
+
               {/* Recent workouts */}
               {data.recent_workouts.length > 0 && (
                 <section>

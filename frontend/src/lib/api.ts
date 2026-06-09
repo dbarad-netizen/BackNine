@@ -1405,6 +1405,13 @@ export interface FriendHealthSnapshot {
     body_fat_pct?:   number | null;
     muscle_mass_lbs?: number | null;
   } | null;
+  // Supplement stack shared between friends. Empty array if the user hasn't
+  // logged any supplements in their Nutrition tab.
+  supplements?: Array<{
+    name:    string;
+    dose?:   string | null;
+    timing?: string | null;
+  }>;
 }
 
 export interface FriendProfile extends FriendHealthSnapshot {

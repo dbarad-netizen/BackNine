@@ -1145,7 +1145,7 @@ export default function DashboardPage() {
     { id: "coaching",     label: "Scorecard", icon: "📋" },
     { id: "nutrition",    label: "Nutrition", icon: "🥗" },
     { id: "training",     label: "Training",  icon: "🏋️" },
-    { id: "challenges",   label: "Compete",   icon: "🏆" },
+    { id: "challenges",   label: "Clubhouse", icon: "🏛️" },
     { id: "gear",         label: "Gear",      icon: "🛒" },
     { id: "apple-health", label: "Metrics",   icon: "📊" },
   ];
@@ -1789,17 +1789,21 @@ export default function DashboardPage() {
               );
             })()}
 
-            {/* ── Weekly League (auto-grouped competition) ── */}
-            <WeeklyLeague onInvite={() => setShowShare(true)} />
-
-            {/* ── Today's Leaderboard (self + friends ranked) ── */}
-            <FriendLeaderboard />
-
-            {/* ── Groups (Crews) — shared group chat ── */}
-            <GroupsSection />
-
-            {/* ── Friend Pulse feed ── */}
-            <PulseFeed onInviteFriend={() => { setProfileInitialTab("friends"); setShowProfile(true); }} />
+            {/* ── Clubhouse teaser ──
+                The full Pulse feed, Leaderboard, League, Groups and Challenges
+                now live in the Clubhouse tab. Scorecard keeps a single CTA so
+                people don't lose the entry point. */}
+            <button
+              onClick={() => { setSection("challenges"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+              className="w-full flex items-center gap-3 rounded-2xl border border-[#1B3829]/15 bg-white px-4 py-3 hover:bg-[#1B3829]/5 transition-colors text-left shadow-sm"
+            >
+              <span className="text-2xl shrink-0">🏛️</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-gray-900">Clubhouse</p>
+                <p className="text-[11px] text-gray-600">Today&apos;s leaderboard, Pulse, league, challenges</p>
+              </div>
+              <span className="text-[#1B3829] text-sm font-semibold shrink-0">Enter →</span>
+            </button>
 
             {/* ── Quick action: enter a meal / macros (logs inline — no tab switch) ── */}
             <button
@@ -2257,7 +2261,35 @@ export default function DashboardPage() {
         {/* ── LABS ── */}
         {/* ── CHALLENGES ── */}
         {section === "challenges" && (
-          <div>
+          <div className="space-y-4">
+            {/* Clubhouse header — sets context that this is the social hub */}
+            <div className="rounded-2xl border border-[#1B3829]/15 bg-gradient-to-br from-[#1B3829] to-[#2D6A4F] px-5 py-4 text-white">
+              <div className="flex items-center gap-3">
+                <span className="text-3xl shrink-0">🏛️</span>
+                <div className="min-w-0">
+                  <h1 className="text-base font-bold">Clubhouse</h1>
+                  <p className="text-[11px] text-white/75 leading-snug">
+                    Where you and your friends compete, compare, and cheer each other on.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Today's leaderboard — self + friends, ranked.
+                Most active card; goes first so it loads what you'd open the
+                Clubhouse to see first. */}
+            <FriendLeaderboard />
+
+            {/* Weekly league — engagement-points race over a 7-day window. */}
+            <WeeklyLeague onInvite={() => setShowShare(true)} />
+
+            {/* Pulse feed — friend milestones, comments, reactions. */}
+            <PulseFeed onInviteFriend={() => { setProfileInitialTab("friends"); setShowProfile(true); }} />
+
+            {/* Groups (Crews) — shared group chat + standings. */}
+            <GroupsSection />
+
+            {/* Challenges — head-to-head bets / streak challenges between friends. */}
             <ChallengeTab />
           </div>
         )}

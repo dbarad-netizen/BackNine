@@ -3724,6 +3724,25 @@ def _build_user_health_snapshot(user_id: str) -> dict:
     except Exception:
         pass
 
+    # Supplements — shared between confirmed friends so they can compare stacks.
+    # Reads the same column the user manages in their own Nutrition tab.
+    supplements: list[dict] = []
+    try:
+        prof = _get_profile(user_id)
+        raw = prof.get("supplements") or []
+        if isinstance(raw, list):
+            # Trust _sanitize_supplements at write-time; here we just defensively
+            # copy the shape we expect (name + optional dose/timing).
+            for s in raw:
+                if isinstance(s, dict) and (s.get("name") or "").strip():
+                    supplements.append({
+                        "name":   (s.get("name") or "").strip(),
+                        "dose":   (s.get("dose") or "").strip() or None,
+                        "timing": (s.get("timing") or "").strip() or None,
+                    })
+    except Exception:
+        supplements = []
+
     return {
         "series": {
             "steps": series_steps,
@@ -3734,6 +3753,7 @@ def _build_user_health_snapshot(user_id: str) -> dict:
         "longevity":       longevity,
         "recent_workouts": recent_workouts,
         "latest_weight":   latest_weight,
+        "supplements":     supplements,
     }
 
 
@@ -3770,6 +3790,7 @@ def friend_profile(friend_user_id: str, request: Request):
         "longevity":       friend_snap["longevity"],
         "recent_workouts": friend_snap["recent_workouts"],
         "latest_weight":   friend_snap["latest_weight"],
+        "supplements":     friend_snap["supplements"],
         # Viewer's snapshot for side-by-side comparison.
         "you": {
             "name":            _display_name_for(me),
@@ -3778,6 +3799,7 @@ def friend_profile(friend_user_id: str, request: Request):
             "longevity":       you_snap["longevity"],
             "recent_workouts": you_snap["recent_workouts"],
             "latest_weight":   you_snap["latest_weight"],
+            "supplements":     you_snap["supplements"],
         },
     }
 
