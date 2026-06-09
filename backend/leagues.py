@@ -12,7 +12,7 @@ has Oura). Points reward the daily habits we want:
   • Daily check-in        +10  per day
   • Logged a workout      +20  per day with ≥1 workout
   • Logged a meal          +5  per day with ≥1 meal
-  • Logged a weigh-in     +10  per day with a weigh-in
+  • Logged a weigh-in      +5  per day with a weigh-in
   • Steps (tracker bonus)  +1  per 1,000 steps that week (Oura)
 
 This gives even a user with zero friends and no wearable a live, refreshing
@@ -83,7 +83,9 @@ def _names_for(sb, ids: list[str]) -> dict[str, str]:
 PTS_CHECKIN   = 10   # per day checked in
 PTS_WORKOUT   = 20   # per day with ≥1 workout
 PTS_MEAL      = 5    # per day with ≥1 meal logged
-PTS_WEIGHIN   = 10   # per day with a weigh-in
+PTS_WEIGHIN   = 5    # per day with a weigh-in (lowered from 10 — weigh-ins are
+                     # quick to do; keeping scoring fair vs higher-effort actions
+                     # like a workout or meal log)
 PTS_PER_KSTEP = 1    # per 1,000 steps that week (Oura tracker bonus)
 
 # Single source of truth for scoring categories. `map_key` is the key in the

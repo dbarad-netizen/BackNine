@@ -34,6 +34,10 @@ export default function MorningBriefing({ onOpenChat }: Props) {
   // Today's check-in. null = not yet loaded, undefined = loaded but not logged.
   const [todayMood, setTodayMood] = useState<Mood | null | undefined>(null);
   const [savingMood, setSavingMood] = useState(false);
+  // Collapse the briefing card once the user has acknowledged it (typically by
+  // logging today's mood). They've already read the long-form note — keep the
+  // chrome around so they can re-expand, but free up the scroll real estate.
+  const [collapsed, setCollapsed] = useState(false);
   // 'saved' shows ✓ briefly; 'error' shows a retry hint. Cleared after ~2s.
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle");
   // Re-checking / overriding the "waiting for last night's sleep" state.
@@ -48,7 +52,11 @@ export default function MorningBriefing({ onOpenChat }: Props) {
         if (brRes.status === "fulfilled") setData(brRes.value);
         else setError(brRes.reason instanceof Error ? brRes.reason.message : "Briefing unavailable");
         if (ckRes.status === "fulfilled") {
-          setTodayMood(ckRes.value.today?.mood ?? undefined);
+          const m = ckRes.value.today?.mood ?? undefined;
+          setTodayMood(m);
+          // Returning later in the day: if today's mood was already logged
+          // (so they've engaged with the briefing earlier), start collapsed.
+          if (m) setCollapsed(true);
         } else {
           setTodayMood(undefined);
         }
@@ -69,6 +77,9 @@ export default function MorningBriefing({ onOpenChat }: Props) {
       setSaveStatus("saved");
       // Clear the "✓ Saved" indicator after a beat so it doesn't linger.
       setTimeout(() => setSaveStatus(prevStatus => prevStatus === "saved" ? "idle" : prevStatus), 2000);
+      // Auto-collapse the briefing once they've engaged. Slightly delayed so
+      // they catch the ✓ confirmation before the card folds up.
+      setTimeout(() => setCollapsed(true), 1800);
     } catch {
       // Roll back the optimistic selection and surface a retry hint.
       setTodayMood(prev);
@@ -159,6 +170,45 @@ export default function MorningBriefing({ onOpenChat }: Props) {
   // Last night's Oura sleep hasn't synced yet — show a "syncing" state instead
   // of building the briefing on an older night's data.
   const pending = data.sleep_status === "pending";
+
+  // ─── Collapsed mode ────────────────────────────────────────────────────────
+  // Once the user has acknowledged today's briefing (typically by logging a
+  // mood), fold the long narrative away to free up dashboard real estate. The
+  // chrome stays so they can re-expand at any time.
+  if (collapsed) {
+    const moodEmoji = MOODS.find(m => m.value === todayMood)?.emoji;
+    return (
+      <button
+        type="button"
+        onClick={() => setCollapsed(false)}
+        className="w-full rounded-2xl overflow-hidden shadow-sm text-left transition-transform hover:scale-[1.005] active:scale-[0.998]"
+        style={{ background: "linear-gradient(135deg, #1B3829 0%, #2D6A4F 100%)" }}
+        aria-label="Expand today's briefing"
+      >
+        <div className="px-4 py-3 flex items-center gap-3">
+          <CoachAlAvatar size={36} className="rounded-full ring-2 ring-white/30 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] text-white/60 uppercase tracking-widest font-semibold">
+              Coach Al · Today&apos;s Briefing
+            </p>
+            <p className="text-[12px] text-white/85 truncate">
+              {moodEmoji && <span className="mr-1">{moodEmoji}</span>}
+              You&apos;ve read today&apos;s note — tap to re-open
+            </p>
+          </div>
+          {showAppStreak && (
+            <span
+              className="text-[10px] text-white bg-orange-500/40 rounded-full px-2 py-0.5 font-semibold flex items-center gap-1 border border-orange-300/30 shrink-0"
+              title={`You've opened BackNine ${appStreak} days in a row`}
+            >
+              <span>🔥</span><span>{appStreak}</span>
+            </span>
+          )}
+          <span className="text-white/60 text-sm shrink-0" aria-hidden>▼</span>
+        </div>
+      </button>
+    );
+  }
 
   return (
     <section

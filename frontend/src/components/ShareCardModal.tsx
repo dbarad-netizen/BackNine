@@ -251,14 +251,11 @@ export default function ShareCardModal({ onClose, longevity }: Props) {
     return () => { cancelled = true; };
   }, []);
 
-  const available = useMemo<CardKey[]>(() => {
-    const order: CardKey[] = [];
-    if (longevity?.score != null) order.push("longevity");
-    if (appStreak != null && appStreak >= 2) order.push("streak");
-    if (h2h) order.push("h2h");
-    order.push("generic");
-    return order;
-  }, [longevity, appStreak, h2h]);
+  // For now we ship invite-only. The Longevity / Streak / Matchup brag cards
+  // are still wired up (data fetches above), but hidden behind a feature flag
+  // until we revisit how brag cards fit into the social IA (Clubhouse work).
+  // Re-enable by adding `longevity`, `streak`, `h2h` back to this list.
+  const available = useMemo<CardKey[]>(() => ["generic"], []);
 
   // Default to the most brag-worthy available card once data settles.
   useEffect(() => {
@@ -367,20 +364,23 @@ export default function ShareCardModal({ onClose, longevity }: Props) {
         </div>
 
         <div className="p-5 space-y-4">
-          {/* Card-type tabs */}
-          <div className="flex gap-1.5 flex-wrap">
-            {available.map(k => (
-              <button
-                key={k}
-                onClick={() => setTab(k)}
-                className={`text-[12px] font-semibold px-3 py-1.5 rounded-full transition-colors ${
-                  tab === k ? "bg-[#1B3829] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}
-              >
-                {TAB_LABEL[k]}
-              </button>
-            ))}
-          </div>
+          {/* Card-type tabs — hidden when there's only one option (invite-only
+              mode). Re-appears automatically when the brag cards come back. */}
+          {available.length > 1 && (
+            <div className="flex gap-1.5 flex-wrap">
+              {available.map(k => (
+                <button
+                  key={k}
+                  onClick={() => setTab(k)}
+                  className={`text-[12px] font-semibold px-3 py-1.5 rounded-full transition-colors ${
+                    tab === k ? "bg-[#1B3829] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}
+                >
+                  {TAB_LABEL[k]}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Preview */}
           <div className="rounded-2xl overflow-hidden bg-gray-100 aspect-square flex items-center justify-center">
