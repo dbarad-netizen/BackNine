@@ -19,6 +19,7 @@ import { scoreColor, fmtDate } from "@/lib/utils";
 import ScoreRing from "@/components/ScoreRing";
 import SupplementsCard from "@/components/SupplementsCard";
 import AppleHealthCard from "@/components/AppleHealthCard";
+import DayMealsDrawer from "@/components/DayMealsDrawer";
 import CoachCard from "@/components/CoachCard";
 import TrendChart from "@/components/TrendChart";
 import TrainingTab, { WorkoutLogger } from "@/components/TrainingTab";
@@ -859,6 +860,8 @@ export default function DashboardPage() {
   // Nutrition state
   const [nutToday,   setNutToday]   = useState<NutritionToday | null>(null);
   const [nutSummary, setNutSummary] = useState<NutritionSummary | null>(null);
+  // Day being inspected in the historical meal-log drawer (null = closed).
+  const [drawerDate, setDrawerDate] = useState<string | null>(null);
   const [weightLog,  setWeightLog]  = useState<WeightEntry[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [nutLoading,   setNutLoading]   = useState(false);
@@ -2057,11 +2060,12 @@ export default function DashboardPage() {
                         </div>
                       ))}
                     </div>
+                    <p className="text-[10px] text-gray-500 mb-1.5">Tap any bar to review or edit that day&apos;s meals.</p>
                     {/* Daily bars — stacked by macro (protein / carbs / fat).
                         Each segment's height is proportional to that macro's
                         calorie contribution (4·g for protein/carbs, 9·g for fat),
-                        so the totals match the calories number above. Hover for
-                        the per-day breakdown. */}
+                        so the totals match the calories number above. Tap a bar
+                        to open the day-meals drawer with edit + delete. */}
                     <div className="flex gap-1 items-end h-16">
                       {nutSummary.daily.map((day) => {
                         const maxCal = Math.max(...nutSummary.daily.map(d => d.calories), 1);
@@ -2072,23 +2076,29 @@ export default function DashboardPage() {
                         const cKcal = (day.carbs   || 0) * 4;
                         const fKcal = (day.fat     || 0) * 9;
                         const macroKcal = pKcal + cKcal + fKcal;
-                        // Scale segments to the macro-derived share so the stack
-                        // fills the same height the calories bar would have.
                         const pH = macroKcal > 0 ? Math.round((pKcal / macroKcal) * totalH) : 0;
                         const cH = macroKcal > 0 ? Math.round((cKcal / macroKcal) * totalH) : 0;
                         const fH = macroKcal > 0 ? totalH - pH - cH : 0;
                         const empty = day.calories === 0;
                         const title = empty
-                          ? `${day.date}: no meals logged`
-                          : `${day.date}: ${day.calories} kcal · P ${day.protein}g · C ${day.carbs}g · F ${day.fat}g`;
+                          ? `${day.date}: no meals logged — tap to review`
+                          : `${day.date}: ${day.calories} kcal · P ${day.protein}g · C ${day.carbs}g · F ${day.fat}g — tap to review`;
                         return (
-                          <div key={day.date} className="flex-1 flex flex-col items-center gap-1">
-                            <div className="w-full flex flex-col-reverse rounded-t overflow-hidden transition-all duration-500"
-                              style={{ height: totalH }} title={title}>
+                          // Tap the bar to drill into that day's meals (edit + delete).
+                          // Buttonifying the bar lets keyboard users open it too.
+                          <button
+                            key={day.date}
+                            type="button"
+                            onClick={() => setDrawerDate(day.date)}
+                            className="flex-1 flex flex-col items-center gap-1 group focus:outline-none"
+                            title={title}
+                            aria-label={`Open meal log for ${day.date}`}
+                          >
+                            <div className="w-full flex flex-col-reverse rounded-t overflow-hidden transition-all duration-500 group-hover:ring-2 group-hover:ring-green-500/40 group-focus-visible:ring-2 group-focus-visible:ring-green-500"
+                              style={{ height: totalH }}>
                               {empty ? (
                                 <div className="w-full h-full" style={{ backgroundColor: "#E5E7EB" }} />
                               ) : macroKcal === 0 ? (
-                                // Calories logged but no macro detail — neutral fill.
                                 <div className="w-full h-full" style={{ backgroundColor: "#9CA3AF" }} />
                               ) : (
                                 <>
@@ -2098,8 +2108,8 @@ export default function DashboardPage() {
                                 </>
                               )}
                             </div>
-                            <p className="text-[9px] text-gray-600">{day.date.slice(5)}</p>
-                          </div>
+                            <p className="text-[9px] text-gray-600 group-hover:text-gray-900">{day.date.slice(5)}</p>
+                          </button>
                         );
                       })}
                     </div>
@@ -2261,6 +2271,22 @@ export default function DashboardPage() {
 
       {/* ── Coach Al chat ── */}
       <ChatWidget onRegisterOpen={opener => { openChatRef.current = opener; }} />
+
+      {/* ── Day-meals drawer (opened by tapping a bar in the 7-day chart) ── */}
+      {drawerDate && (
+        <DayMealsDrawer
+          date={drawerDate}
+          onClose={() => setDrawerDate(null)}
+          onChanged={() => {
+            // Refetch the weekly summary so the chart + averages reflect the edit.
+            api.nutritionSummary().then(setNutSummary).catch(() => {});
+            // Also refetch today if the day they edited is today.
+            if (drawerDate === new Date().toISOString().slice(0, 10)) {
+              api.nutritionToday().then(setNutToday).catch(() => {});
+            }
+          }}
+        />
+      )}
 
       {/* ── Profile modal ── */}
       {showProfile && (

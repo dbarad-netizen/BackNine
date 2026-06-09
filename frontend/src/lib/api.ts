@@ -629,6 +629,12 @@ export const api = {
     const qs = date ? `?date=${date}` : "";
     return request(`/api/nutrition/meals/${id}${qs}`, { method: "DELETE" });
   },
+  updateMeal(id: string, patch: Partial<Pick<Meal, "name" | "calories" | "protein" | "carbs" | "fat" | "meal_type">>): Promise<Meal> {
+    return request(`/api/nutrition/meals/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    });
+  },
   weightEntries():      Promise<{ entries: WeightEntry[] }> { return request("/api/nutrition/weight"); },
   logWeight(entry: Partial<WeightEntry> & { weight_lbs: number }): Promise<WeightEntry> {
     return request("/api/nutrition/weight", {

@@ -156,6 +156,40 @@ def delete_meal(date_str: str, meal_id: str, user_id: str = "default") -> bool:
     return bool(res.data)
 
 
+def update_meal(meal_id: str, user_id: str, fields: dict) -> Optional[dict]:
+    """Update mutable fields on a single meal.
+
+    Allowed: name, calories, protein, carbs, fat, meal_type. Anything else is
+    silently ignored so a malicious / stale frontend can't overwrite user_id,
+    id, logged_at, etc. Returns the updated row or None if not found.
+    """
+    allowed = {"name", "calories", "protein", "carbs", "fat", "meal_type"}
+    patch: dict = {}
+    for k, v in (fields or {}).items():
+        if k not in allowed:
+            continue
+        if k == "name":
+            patch[k] = str(v).strip()
+        elif k == "meal_type":
+            patch[k] = str(v).strip() or "meal"
+        elif k == "calories":
+            try:    patch[k] = round(float(v))
+            except: pass
+        else:  # protein / carbs / fat — one decimal
+            try:    patch[k] = round(float(v), 1)
+            except: pass
+    if not patch:
+        return None
+    sb = _sb()
+    res = (sb.table("nutrition_meals")
+             .update(patch)
+             .eq("id", meal_id)
+             .eq("user_id", user_id)
+             .execute())
+    rows = res.data or []
+    return rows[0] if rows else None
+
+
 def recent_foods(user_id: str, limit: int = 12) -> List[dict]:
     """Distinct recently-logged foods for one-tap re-logging (most recent first)."""
     sb = _sb()

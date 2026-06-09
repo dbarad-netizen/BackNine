@@ -1686,6 +1686,19 @@ def remove_meal(meal_id: str, request: Request, date: str = None):
     return {"status": "deleted"}
 
 
+@app.patch("/api/nutrition/meals/{meal_id}")
+async def edit_meal(meal_id: str, request: Request):
+    """Edit a single logged meal. Body may contain any of: name, calories,
+    protein, carbs, fat, meal_type. Anything else is ignored."""
+    session = _require_session(request)
+    uid     = session["user_id"]
+    body    = await request.json()
+    updated = nutr.update_meal(meal_id, uid, body)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Meal not found or nothing to update")
+    return updated
+
+
 @app.get("/api/nutrition/weight")
 def get_weight(request: Request):
     session = _require_session(request)
