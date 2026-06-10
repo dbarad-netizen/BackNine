@@ -212,9 +212,20 @@ export default function MorningBriefing({ onOpenChat }: Props) {
 
   return (
     <section
-      className="rounded-2xl overflow-hidden shadow-sm"
+      className="rounded-2xl overflow-hidden shadow-sm relative"
       style={{ background: "linear-gradient(135deg, #1B3829 0%, #2D6A4F 65%, #3a8a63 100%)" }}
     >
+      {/* Upper-right Hide button — folds the briefing back to its compact
+          collapsed state. Sits in the corner so it doesn't compete with the
+          title row but stays trivially discoverable. */}
+      <button
+        onClick={() => setCollapsed(true)}
+        className="absolute top-2 right-2 w-7 h-7 rounded-full bg-white/10 hover:bg-white/25 text-white/80 hover:text-white text-xs flex items-center justify-center transition-colors z-10"
+        title="Hide briefing — tap the header to reopen"
+        aria-label="Collapse briefing"
+      >
+        ✕
+      </button>
       <div className="px-5 pt-5 pb-4 flex items-start gap-4">
         <CoachAlAvatar size={52} className="rounded-full ring-2 ring-white/30 shrink-0" />
         <div className="flex-1 min-w-0">
@@ -341,27 +352,14 @@ export default function MorningBriefing({ onOpenChat }: Props) {
             </>
           )}
         </div>
-        <div className="flex items-center gap-3 shrink-0">
-          {/* Manual collapse — companion to the auto-collapse-after-mood
-              behavior. Once they've re-expanded, they need a way to fold
-              the card back. */}
+        {onOpenChat && (
           <button
-            onClick={() => setCollapsed(true)}
-            className="text-[11px] text-white/70 hover:text-white transition-colors flex items-center gap-1"
-            title="Hide briefing — tap the header to reopen"
-            aria-label="Collapse briefing"
+            onClick={onOpenChat}
+            className="text-[11px] text-white/80 hover:text-white font-semibold flex items-center gap-1 transition-colors shrink-0"
           >
-            <span aria-hidden>▲</span> Hide
+            Talk to Coach Al →
           </button>
-          {onOpenChat && (
-            <button
-              onClick={onOpenChat}
-              className="text-[11px] text-white/80 hover:text-white font-semibold flex items-center gap-1 transition-colors"
-            >
-              Talk to Coach Al →
-            </button>
-          )}
-        </div>
+        )}
       </div>
     </section>
   );
