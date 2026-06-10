@@ -341,14 +341,27 @@ export default function MorningBriefing({ onOpenChat }: Props) {
             </>
           )}
         </div>
-        {onOpenChat && (
+        <div className="flex items-center gap-3 shrink-0">
+          {/* Manual collapse — companion to the auto-collapse-after-mood
+              behavior. Once they've re-expanded, they need a way to fold
+              the card back. */}
           <button
-            onClick={onOpenChat}
-            className="text-[11px] text-white/80 hover:text-white font-semibold flex items-center gap-1 transition-colors shrink-0"
+            onClick={() => setCollapsed(true)}
+            className="text-[11px] text-white/70 hover:text-white transition-colors flex items-center gap-1"
+            title="Hide briefing — tap the header to reopen"
+            aria-label="Collapse briefing"
           >
-            Talk to Coach Al →
+            <span aria-hidden>▲</span> Hide
           </button>
-        )}
+          {onOpenChat && (
+            <button
+              onClick={onOpenChat}
+              className="text-[11px] text-white/80 hover:text-white font-semibold flex items-center gap-1 transition-colors"
+            >
+              Talk to Coach Al →
+            </button>
+          )}
+        </div>
       </div>
     </section>
   );
