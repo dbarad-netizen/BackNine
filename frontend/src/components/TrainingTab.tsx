@@ -688,10 +688,12 @@ function StretchRoutineView({ routine, onClose }: { routine: StretchRoutine; onC
 function RecentWorkouts({
   workouts,
   onDelete,
+  onUpdated,
   onStretch,
 }: {
   workouts: Workout[];
   onDelete: (id: string) => void;
+  onUpdated: (w: Workout) => void;
   onStretch: (muscleGroups: string[]) => void;
 }) {
   if (workouts.length === 0) {
@@ -706,12 +708,65 @@ function RecentWorkouts({
   const sorted = [...workouts].sort((a, b) =>
     (b.logged_at || b.date).localeCompare(a.logged_at || a.date));
 
+  // Inline edit state — one workout at a time. Editable headline fields only:
+  // date, type/activity, duration_min, notes, plus cardio extras. Sets/reps
+  // editing would warrant a deeper modal; punted to v2.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft,     setDraft]     = useState<{
+    date: string; type: string; duration_min: string; notes: string;
+    distance_mi: string; avg_hr: string; calories_kcal: string;
+  } | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const beginEdit = (w: Workout) => {
+    setEditingId(w.id);
+    setDraft({
+      date:          w.date,
+      type:          w.type,
+      duration_min:  w.duration_min != null ? String(w.duration_min) : "",
+      notes:         w.notes || "",
+      distance_mi:   w.distance_meters != null ? (w.distance_meters / 1609.34).toFixed(2) : "",
+      avg_hr:        w.avg_hr != null ? String(w.avg_hr) : "",
+      calories_kcal: w.calories_kcal != null ? String(w.calories_kcal) : "",
+    });
+  };
+  const cancelEdit = () => { setEditingId(null); setDraft(null); };
+  const saveEdit = async (w: Workout) => {
+    if (!draft) return;
+    setSaving(true);
+    try {
+      const patch: Parameters<typeof api.updateWorkout>[1] = {
+        date:         draft.date.trim() || w.date,
+        type:         draft.type.trim() || w.type,
+        duration_min: draft.duration_min === "" ? undefined : Number(draft.duration_min),
+        notes:        draft.notes,
+      };
+      // Cardio extras — only send if there's a real value to avoid wiping them.
+      if (w.kind === "cardio") {
+        if (draft.distance_mi !== "")   patch.distance_meters = Math.round(Number(draft.distance_mi) * 1609.34);
+        if (draft.avg_hr !== "")        patch.avg_hr          = Number(draft.avg_hr);
+        if (draft.calories_kcal !== "") patch.calories_kcal   = Number(draft.calories_kcal);
+        // Treat `type` as the activity for cardio rows so the column reads naturally.
+        if (draft.type.trim()) patch.activity = draft.type.trim().toLowerCase();
+      }
+      const updated = await api.updateWorkout(w.id, patch);
+      onUpdated(updated);
+      cancelEdit();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5">
       <p className="text-xs text-gray-600 uppercase tracking-widest mb-4">Recent Workouts</p>
       <div className="space-y-2.5">
         {sorted.slice(0, 5).map(w => {
           const vol = w.total_volume_lbs;
+          const isEditing = editingId === w.id;
+          const isOura    = w.source === "oura";
           return (
             <div key={w.id} className="rounded-xl bg-gray-50 border border-gray-100 px-3 py-3">
               <div className="flex items-start justify-between gap-2">
@@ -720,7 +775,7 @@ function RecentWorkouts({
                     <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${TYPE_BADGE[w.type] ?? "bg-gray-100 text-gray-600"}`}>
                       {workoutGlyph(w)} {TYPE_LABEL[w.type] ?? w.type}
                     </span>
-                    {w.source === "oura" && (
+                    {isOura && (
                       <span
                         className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700"
                         title="Imported from your Oura Ring"
@@ -753,9 +808,90 @@ function RecentWorkouts({
                     )}
                   </div>
                 </div>
-                <button onClick={() => onDelete(w.id)} title="Delete workout"
-                  className="text-gray-500 hover:text-red-400 text-lg leading-none transition-colors shrink-0">×</button>
+                <div className="flex items-center gap-1 shrink-0">
+                  {!isEditing && !isOura && (
+                    <button onClick={() => beginEdit(w)} title="Edit workout"
+                      className="text-gray-500 hover:text-[#1B3829] text-xs font-medium px-2 py-1 rounded hover:bg-gray-100 transition-colors">
+                      Edit
+                    </button>
+                  )}
+                  <button onClick={() => onDelete(w.id)} title="Delete workout"
+                    className="text-gray-500 hover:text-red-400 text-lg leading-none transition-colors px-1">×</button>
+                </div>
               </div>
+
+              {/* Inline edit form — appears below the summary so the user still
+                  sees context while editing. Oura-imported rows are read-only
+                  since they get re-synced from Oura. */}
+              {isEditing && draft && !isOura && (
+                <div className="mt-3 pt-3 border-t border-gray-200 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="block">
+                      <span className="text-[10px] text-gray-600 uppercase tracking-wide">Date</span>
+                      <input type="date" value={draft.date}
+                        onChange={e => setDraft({ ...draft, date: e.target.value })}
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900 focus:outline-none focus:border-green-500" />
+                    </label>
+                    <label className="block">
+                      <span className="text-[10px] text-gray-600 uppercase tracking-wide">{w.kind === "cardio" ? "Activity" : "Type"}</span>
+                      <input type="text" value={draft.type}
+                        onChange={e => setDraft({ ...draft, type: e.target.value })}
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900 focus:outline-none focus:border-green-500" />
+                    </label>
+                  </div>
+                  <div className={`grid gap-2 ${w.kind === "cardio" ? "grid-cols-4" : "grid-cols-1"}`}>
+                    <label className="block">
+                      <span className="text-[10px] text-gray-600 uppercase tracking-wide">Duration (min)</span>
+                      <input type="number" inputMode="numeric" value={draft.duration_min}
+                        onChange={e => setDraft({ ...draft, duration_min: e.target.value })}
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900 focus:outline-none focus:border-green-500" />
+                    </label>
+                    {w.kind === "cardio" && (
+                      <>
+                        <label className="block">
+                          <span className="text-[10px] text-gray-600 uppercase tracking-wide">Miles</span>
+                          <input type="number" step="0.01" inputMode="decimal" value={draft.distance_mi}
+                            onChange={e => setDraft({ ...draft, distance_mi: e.target.value })}
+                            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900 focus:outline-none focus:border-green-500" />
+                        </label>
+                        <label className="block">
+                          <span className="text-[10px] text-gray-600 uppercase tracking-wide">Avg HR</span>
+                          <input type="number" inputMode="numeric" value={draft.avg_hr}
+                            onChange={e => setDraft({ ...draft, avg_hr: e.target.value })}
+                            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900 focus:outline-none focus:border-green-500" />
+                        </label>
+                        <label className="block">
+                          <span className="text-[10px] text-gray-600 uppercase tracking-wide">Calories</span>
+                          <input type="number" inputMode="numeric" value={draft.calories_kcal}
+                            onChange={e => setDraft({ ...draft, calories_kcal: e.target.value })}
+                            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900 focus:outline-none focus:border-green-500" />
+                        </label>
+                      </>
+                    )}
+                  </div>
+                  <label className="block">
+                    <span className="text-[10px] text-gray-600 uppercase tracking-wide">Notes</span>
+                    <input type="text" value={draft.notes}
+                      onChange={e => setDraft({ ...draft, notes: e.target.value })}
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900 focus:outline-none focus:border-green-500" />
+                  </label>
+                  {w.exercises.length > 0 && (
+                    <p className="text-[10px] text-gray-600 italic">
+                      Sets and reps aren&apos;t editable here yet — delete and re-log to fix those.
+                    </p>
+                  )}
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={() => saveEdit(w)} disabled={saving}
+                      className="flex-1 py-2 rounded-lg bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-sm font-semibold">
+                      {saving ? "Saving…" : "Save"}
+                    </button>
+                    <button onClick={cancelEdit}
+                      className="flex-1 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-900 text-sm font-medium">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Clear action — not a category tag */}
               {w.type === "lifting" && w.muscle_groups.length > 0 && (
@@ -876,6 +1012,12 @@ export default function TrainingTab({
     } catch (e) { console.error(e); }
   };
 
+  const handleUpdatedWorkout = (updated: Workout) => {
+    setWorkouts(prev => prev.map(w => w.id === updated.id ? updated : w));
+    // Training load may have shifted (duration delta), refresh recommendation.
+    api.trainingRecommendation().then(setRec).catch(() => {});
+  };
+
   const handleStretch = async (muscleGroups: string[]) => {
     try {
       const routine = await api.stretchRoutine(muscleGroups, 10);
@@ -928,6 +1070,7 @@ export default function TrainingTab({
       <RecentWorkouts
         workouts={workouts}
         onDelete={handleDeleteWorkout}
+        onUpdated={handleUpdatedWorkout}
         onStretch={handleStretch}
       />
 

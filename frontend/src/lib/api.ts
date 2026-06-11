@@ -661,6 +661,12 @@ export const api = {
   deleteWorkout(id: string): Promise<void> {
     return request(`/api/training/workouts/${id}`, { method: "DELETE" });
   },
+  updateWorkout(id: string, patch: Partial<Pick<Workout, "date" | "type" | "duration_min" | "notes" | "activity" | "distance_meters" | "avg_hr" | "calories_kcal">>): Promise<Workout> {
+    return request(`/api/training/workouts/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    });
+  },
   parseWorkout(text: string): Promise<ParsedWorkout> {
     return request("/api/training/parse-workout", { method: "POST", body: JSON.stringify({ text }) });
   },

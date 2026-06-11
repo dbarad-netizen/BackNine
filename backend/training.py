@@ -451,6 +451,49 @@ def add_workout(
     return (res.data or [entry])[0]
 
 
+def update_workout(user_id: str, workout_id: str, fields: dict) -> Optional[dict]:
+    """Patch mutable headline fields on a workout.
+
+    Editable: date, type, duration_min, notes, activity, distance_meters,
+    avg_hr, calories_kcal. Everything else (id, user_id, exercises array,
+    total_volume_lbs, muscle_groups, source, external_id, logged_at) stays
+    locked so stale clients can't corrupt the row. For deep edits to the
+    sets/reps array the user should delete + re-log; we can extend later.
+    Returns the updated row or None if not found.
+    """
+    if not user_id or not workout_id:
+        return None
+    allowed = {"date", "type", "duration_min", "notes", "activity",
+               "distance_meters", "avg_hr", "calories_kcal"}
+    patch: dict = {}
+    for k, v in (fields or {}).items():
+        if k not in allowed:
+            continue
+        if k in ("type", "activity", "notes", "date"):
+            patch[k] = str(v).strip()
+        elif k in ("duration_min", "avg_hr", "calories_kcal"):
+            try:    patch[k] = int(float(v))
+            except: pass
+        elif k == "distance_meters":
+            try:    patch[k] = float(v)
+            except: pass
+    if not patch:
+        return None
+    try:
+        sb = _sb()
+        res = (
+            sb.table("training_workouts")
+              .update(patch)
+              .eq("user_id", user_id)
+              .eq("id", workout_id)
+              .execute()
+        )
+        rows = res.data or []
+        return rows[0] if rows else None
+    except Exception:
+        return None
+
+
 def delete_workout(user_id: str, workout_id: str) -> bool:
     """Delete one of the user's workouts. Returns True if a row was removed."""
     if not user_id or not workout_id:

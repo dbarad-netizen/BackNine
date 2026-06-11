@@ -1850,6 +1850,19 @@ def remove_workout(workout_id: str, request: Request):
     return {"status": "deleted"}
 
 
+@app.patch("/api/training/workouts/{workout_id}")
+async def edit_workout(workout_id: str, request: Request):
+    """Edit headline fields on a logged workout. Body may include: date, type,
+    duration_min, notes, activity, distance_meters, avg_hr, calories_kcal.
+    Anything else is silently ignored."""
+    session = _require_session(request)
+    body    = await request.json()
+    updated = trn.update_workout(session["user_id"], workout_id, body)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Workout not found or nothing to update")
+    return updated
+
+
 @app.get("/api/training/templates")
 def list_training_templates(request: Request):
     session = _require_session(request)
