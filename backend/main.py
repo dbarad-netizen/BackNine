@@ -2881,6 +2881,35 @@ async def health_chat(request: Request):
 
 # ── Morning Briefing ──────────────────────────────────────────────────────────
 
+@app.post("/api/coach/react")
+async def coach_react(request: Request):
+    """One-line Coach Al reaction to a user action. Best-effort: never 500.
+
+    Body: { action: "meal_logged" | "workout_logged" | "weight_logged",
+            details: { ... action-specific ... } }
+    Returns: { text: string | null }   ← null if generation failed or no key
+    """
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    action  = (body.get("action") or "").strip()
+    details = body.get("details") or {}
+    profile = _get_profile(user_id) or {}
+    try:
+        goal = gl.get_active_with_pace(user_id)
+    except Exception:
+        goal = None
+    try:
+        import coach_reactions as cr
+        text = cr.generate_reaction(action, details, profile, goal)
+    except Exception:
+        text = None
+    return {"text": text}
+
+
 @app.get("/api/todays-move")
 def get_todays_move(request: Request):
     """One concrete, actionable recommendation for the user right now.

@@ -15,7 +15,12 @@ import { api, type MealDraftItem, type FoodItem } from "@/lib/api";
 
 interface Props {
   date?: string;
-  onLogged: () => void;
+  /** Fires after a successful log. Receives an aggregated summary of just-logged
+   *  items so the caller can hook Coach Al reactions / toasts. Optional argument
+   *  keeps existing call sites that don't need it backwards-compatible. */
+  onLogged: (justLogged?: {
+    name: string; calories: number; protein: number; carbs: number; fat: number;
+  }) => void;
 }
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
@@ -58,7 +63,20 @@ export default function MealQuickAdd({ date, onLogged }: Props) {
     try {
       await api.logMealsBatch(items, date);
       flash(label);
-      onLogged();
+      // Aggregate the batch so the Coach Al reaction has something concrete
+      // to react to. For a single-item log this == the item; for multi-item
+      // it's the combined meal.
+      const summary = items.reduce(
+        (acc, it) => ({
+          name:     items.length === 1 ? it.name : items.map(i => i.name).slice(0, 3).join(" + "),
+          calories: acc.calories + (it.calories || 0),
+          protein:  acc.protein  + (it.protein  || 0),
+          carbs:    acc.carbs    + (it.carbs    || 0),
+          fat:      acc.fat      + (it.fat      || 0),
+        }),
+        { name: "", calories: 0, protein: 0, carbs: 0, fat: 0 }
+      );
+      onLogged(summary);
       refreshRecents();
       return true;
     } catch (e) {

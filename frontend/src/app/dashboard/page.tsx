@@ -22,6 +22,7 @@ import AppleHealthCard from "@/components/AppleHealthCard";
 import DayMealsDrawer from "@/components/DayMealsDrawer";
 import ManualLogCard from "@/components/ManualLogCard";
 import TodaysMoveCard from "@/components/TodaysMoveCard";
+import CoachReactionToast from "@/components/CoachReactionToast";
 import CoachCard from "@/components/CoachCard";
 import TrendChart from "@/components/TrendChart";
 import TrainingTab, { WorkoutLogger } from "@/components/TrainingTab";
@@ -864,6 +865,9 @@ export default function DashboardPage() {
   const [nutSummary, setNutSummary] = useState<NutritionSummary | null>(null);
   // Day being inspected in the historical meal-log drawer (null = closed).
   const [drawerDate, setDrawerDate] = useState<string | null>(null);
+  // Coach Al's one-line reaction to the user's most recent action. Cleared
+  // when the toast auto-dismisses. Null = no active reaction.
+  const [coachReaction, setCoachReaction] = useState<string | null>(null);
   const [weightLog,  setWeightLog]  = useState<WeightEntry[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [nutLoading,   setNutLoading]   = useState(false);
@@ -1831,13 +1835,24 @@ export default function DashboardPage() {
               <span className="text-[#1B3829] text-sm font-semibold shrink-0">Enter →</span>
             </button>
 
-            {/* ── Quick action: enter a meal / macros (logs inline — no tab switch) ── */}
+            {/* ── Quick action: enter a meal / macros (logs inline — no tab switch) ──
+                Collapsed summary matches the Body & Weight pill below: a one-line
+                "what does this look like today" peek so users see value without
+                tapping. */}
             <button
               onClick={() => setShowMealAdd(v => !v)}
               className="w-full py-3 rounded-2xl border border-[#1B3829]/25 bg-white text-sm font-semibold text-[#1B3829] hover:bg-[#1B3829]/5 transition-colors flex items-center justify-center gap-2 shadow-sm"
             >
               <span className="text-base leading-none">🍳</span>
               {showMealAdd ? "Hide meal/macros" : "Enter a meal/macros"}
+              {!showMealAdd && nutToday && (nutToday.meals?.length ?? 0) > 0 && (
+                <span className="text-xs font-normal text-[#1B3829]/60">
+                  · {nutToday.totals.calories} / {nutToday.settings.calorie_target} kcal
+                </span>
+              )}
+              {!showMealAdd && nutToday && (nutToday.meals?.length ?? 0) === 0 && (
+                <span className="text-xs font-normal text-[#1B3829]/60">· nothing logged yet</span>
+              )}
             </button>
             {showMealAdd && (
               <div className="space-y-2">
@@ -1865,12 +1880,30 @@ export default function DashboardPage() {
 
                 <MealQuickAdd
                   date={nutToday?.date}
-                  onLogged={() => api.nutritionToday().then(setNutToday).catch(() => {})}
+                  onLogged={async (loggedMeal) => {
+                    // Refetch today's nutrition so totals update in place.
+                    const fresh = await api.nutritionToday().catch(() => null);
+                    if (fresh) setNutToday(fresh);
+                    // Fire a Coach Al reaction in the background. Best-effort —
+                    // if it fails or returns null, nothing renders.
+                    api.coachReact("meal_logged", {
+                      meal:    loggedMeal,
+                      totals:  fresh?.totals,
+                      targets: fresh?.settings ? {
+                        calories: fresh.settings.calorie_target,
+                        protein:  fresh.settings.protein_g,
+                        carbs:    fresh.settings.carbs_g,
+                        fat:      fresh.settings.fat_g,
+                      } : undefined,
+                    }).then(r => { if (r.text) setCoachReaction(r.text); }).catch(() => {});
+                  }}
                 />
               </div>
             )}
 
-            {/* ── Quick action: log a workout (inline — no tab switch) ── */}
+            {/* ── Quick action: log a workout (inline — no tab switch) ──
+                Workout-count summary would need a separate fetch (not on
+                DashboardData); kept as a clean action button for now. */}
             <button
               onClick={() => setShowWorkoutAdd(v => !v)}
               className="w-full py-3 rounded-2xl border border-[#1B3829]/25 bg-white text-sm font-semibold text-[#1B3829] hover:bg-[#1B3829]/5 transition-colors flex items-center justify-center gap-2 shadow-sm"
@@ -2360,6 +2393,13 @@ export default function DashboardPage() {
 
       {/* ── Coach Al chat ── */}
       <ChatWidget onRegisterOpen={opener => { openChatRef.current = opener; }} />
+
+      {/* ── Coach Al reaction toast — fires after meal/workout/weight logs ── */}
+      <CoachReactionToast
+        text={coachReaction}
+        onDismiss={() => setCoachReaction(null)}
+        onOpenChat={(seed) => openChatRef.current?.(seed)}
+      />
 
       {/* ── Day-meals drawer (opened by tapping a bar in the 7-day chart) ── */}
       {drawerDate && (

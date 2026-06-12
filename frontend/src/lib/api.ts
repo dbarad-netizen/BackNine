@@ -770,6 +770,15 @@ export const api = {
   /** Coach Al's one-action recommendation for right now. Generated on each
    *  call (no caching) so it stays responsive to actions just taken. */
   todaysMove(): Promise<TodaysMove> { return request("/api/todays-move"); },
+  /** Generates a one-sentence Coach Al reaction to a logged action. The text
+   *  may be null if generation failed — call sites should noop in that case. */
+  coachReact(action: "meal_logged" | "workout_logged" | "weight_logged",
+             details: Record<string, unknown>): Promise<{ text: string | null }> {
+    return request("/api/coach/react", {
+      method: "POST",
+      body: JSON.stringify({ action, details }),
+    });
+  },
   appleHealthKey(): Promise<{ api_key: string }> {
     return request("/api/apple-health/key");
   },
