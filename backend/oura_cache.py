@@ -58,6 +58,28 @@ def store_days(user_id: str, rm: dict, slm: dict, am: dict, smm: dict) -> int:
             rows[i : i + 100], on_conflict="user_id,date"
         ).execute()
 
+    # Dual-write to the unified device_readings table. oura_daily_cache stays
+    # the canonical Oura-specific store (it holds JSON blobs that downstream
+    # readers walk); device_readings is the cross-source resolver. Best-effort.
+    try:
+        import device_readings as _dr
+        for d in all_dates:
+            a  = am.get(d) or {}
+            sm = smm.get(d) or {}
+            # Steps + active calories from activity model
+            _dr.upsert_reading(user_id, "oura", "steps",           d, a.get("steps"),       "count")
+            _dr.upsert_reading(user_id, "oura", "active_calories", d, a.get("active_cal"),  "kcal")
+            # Sleep hours from total_sleep_duration (seconds → hours)
+            sleep_sec = sm.get("total")
+            if sleep_sec:
+                _dr.upsert_reading(user_id, "oura", "sleep_hours", d,
+                                   round(float(sleep_sec) / 3600, 2), "hours")
+            # HRV + RHR from the per-night summary
+            _dr.upsert_reading(user_id, "oura", "hrv",        d, sm.get("hrv"), "ms")
+            _dr.upsert_reading(user_id, "oura", "resting_hr", d, sm.get("rhr"), "bpm")
+    except Exception:
+        pass
+
     return len(rows)
 
 

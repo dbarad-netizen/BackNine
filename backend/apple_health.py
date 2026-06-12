@@ -245,6 +245,37 @@ def sync_day(user_id: str, payload: dict) -> dict:
         row, on_conflict="user_id,date"
     ).execute()
 
+    # Dual-write to the unified device_readings table. AH stays the canonical
+    # AH-specific store for now (some queries still hit it); device_readings
+    # is the cross-source resolver table that future integrations also write
+    # into. Best-effort: failures here don't break the AH ingestion path.
+    try:
+        import device_readings as _dr
+        # Map AH field names → canonical metric names + units. The set is
+        # intentionally narrow — only metrics the resolver knows about and
+        # the dashboard reads.
+        _AH_TO_METRIC = {
+            "steps":                   ("steps",                  "count"),
+            "sleep_hours":             ("sleep_hours",            "hours"),
+            "active_calories":         ("active_calories",        "kcal"),
+            "resting_hr":              ("resting_hr",             "bpm"),
+            "hrv":                     ("hrv",                    "ms"),
+            "weight_kg":               ("weight_kg",              "kg"),
+            "vo2_max":                 ("vo2_max",                "ml/kg/min"),
+            "respiratory_rate":        ("respiratory_rate",       "breaths/min"),
+            "body_fat_percentage":     ("body_fat_pct",           "pct"),
+            "lean_body_mass_kg":       ("lean_body_mass_kg",      "kg"),
+            "skeletal_muscle_mass_kg": ("skeletal_muscle_mass_kg","kg"),
+            "spo2":                    ("spo2",                   "pct"),
+            "blood_pressure_systolic": ("blood_pressure_systolic","mmHg"),
+            "blood_pressure_diastolic":("blood_pressure_diastolic","mmHg"),
+        }
+        for ah_key, (metric, unit) in _AH_TO_METRIC.items():
+            if ah_key in row and row[ah_key] is not None:
+                _dr.upsert_reading(user_id, "apple_health", metric, date_str, row[ah_key], unit)
+    except Exception:
+        pass
+
     return get_day(user_id, date_str) or row
 
 
