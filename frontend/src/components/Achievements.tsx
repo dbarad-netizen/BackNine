@@ -20,17 +20,18 @@ export default function Achievements() {
     api.achievements().then(setData).catch(() => {});
   }, []);
 
-  if (!data || data.total === 0) return null;
-
-  const justUnlocked = data.badges.filter(b => data.newly_unlocked.includes(b.id));
-  const level = data.level ?? null;
-  const newlyXp = data.newly_xp ?? 0;
-
   // "Next up" — the locked badge closest to unlocking. Picks the one with the
   // highest progress ratio so the user sees an attainable goal, not a moonshot.
   // Falls back to null if no locked badges have measurable progress (early
   // user with no streaks / counts yet, or all badges already unlocked).
+  //
+  // IMPORTANT: this useMemo must run on every render of this component,
+  // BEFORE any conditional early return — Rules of Hooks. The previous
+  // version had the early return on top, which made React throw "rendered
+  // more hooks than during the previous render" once `data` populated and
+  // crashed the whole dashboard. Don't move this back below the early return.
   const nextUp = useMemo(() => {
+    if (!data) return null;
     const candidates = data.badges.filter(b =>
       !b.earned
       && b.progress
@@ -44,7 +45,13 @@ export default function Achievements() {
       return rb - ra;
     });
     return candidates[0];
-  }, [data.badges]);
+  }, [data]);
+
+  if (!data || data.total === 0) return null;
+
+  const justUnlocked = data.badges.filter(b => data.newly_unlocked.includes(b.id));
+  const level = data.level ?? null;
+  const newlyXp = data.newly_xp ?? 0;
 
   return (
     <>
