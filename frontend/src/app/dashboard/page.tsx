@@ -1480,7 +1480,17 @@ export default function DashboardPage() {
             <TodaysMoveCard
               onOpenChat={(seed) => openChatRef.current?.(seed)}
               onNavSection={(s) => { setSection(s); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-              onOpenMealLogger={() => setShowMealAdd(true)}
+              onOpenMealLogger={() => {
+                // Expand the meal form AND scroll to it. The pill lives near
+                // the bottom of the Scorecard — without the scroll, tapping
+                // from Today's Move (top of page) does nothing visible.
+                // setTimeout gives React a tick to render the expanded form
+                // before we scroll, so the form is in the layout when measured.
+                setShowMealAdd(true);
+                setTimeout(() => {
+                  document.getElementById("meal-quick-add")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }, 60);
+              }}
               onOpenWorkoutLogger={() => { setSection("training"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
               onOpenWeightLog={() => { setSection("nutrition"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
             />
@@ -1852,8 +1862,12 @@ export default function DashboardPage() {
             {/* ── Quick action: enter a meal / macros (logs inline — no tab switch) ──
                 Collapsed summary matches the Body & Weight pill below: a one-line
                 "what does this look like today" peek so users see value without
-                tapping. */}
+                tapping.
+                id="meal-quick-add" so Today's Move CTAs ("Log meal") can scroll
+                here after expanding — the form is far below the fold, and users
+                tapping the top-of-page CTA otherwise see nothing happen. */}
             <button
+              id="meal-quick-add"
               onClick={() => setShowMealAdd(v => !v)}
               className="w-full py-3 rounded-2xl border border-[#1B3829]/25 bg-white text-sm font-semibold text-[#1B3829] hover:bg-[#1B3829]/5 transition-colors flex items-center justify-center gap-2 shadow-sm"
             >
