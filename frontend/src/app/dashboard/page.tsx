@@ -868,6 +868,20 @@ export default function DashboardPage() {
   // Coach Al's one-line reaction to the user's most recent action. Cleared
   // when the toast auto-dismisses. Null = no active reaction.
   const [coachReaction, setCoachReaction] = useState<string | null>(null);
+  // Scorecard fold model: the lower-priority "explore" block (Achievements,
+  // GearPicks, ActiveCompetitions) starts collapsed so the daily experience
+  // is shorter. Choice persists per device.
+  const [scorecardExploreOpen, setScorecardExploreOpen] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("bn_scorecard_explore_open") === "1";
+  });
+  const toggleScorecardExplore = () => {
+    setScorecardExploreOpen(prev => {
+      const next = !prev;
+      try { localStorage.setItem("bn_scorecard_explore_open", next ? "1" : "0"); } catch { /* no-op */ }
+      return next;
+    });
+  };
   const [weightLog,  setWeightLog]  = useState<WeightEntry[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [nutLoading,   setNutLoading]   = useState(false);
@@ -1981,16 +1995,10 @@ export default function DashboardPage() {
             </div>
             )}
 
-            {/* ── Active Competitions strip ── */}
-            <ActiveCompetitions onJump={() => setSection("challenges")} />
-
-            {/* ── Achievements / badges ── */}
-            <Achievements />
-
             {/* ── Coach Al Goal & Weekly Insight ──
-                When the user has an active goal, the Goal card rises above the
-                Weekly Insight so their committed target leads. No active goal →
-                Insight leads and the Goal card (its "set a goal" prompt) sits below. */}
+                Stays ABOVE the explore fold because these are daily-relevant.
+                Goal card rises above the Weekly Insight when active so the
+                committed target leads. No active goal → Insight leads. */}
             {goalActive ? (
               <>
                 <GoalCard onOpenChat={(seed) => openChatRef.current?.(seed)} onActiveChange={handleGoalActive} />
@@ -2002,6 +2010,24 @@ export default function DashboardPage() {
                 <GoalCard onOpenChat={(seed) => openChatRef.current?.(seed)} onActiveChange={handleGoalActive} />
               </>
             )}
+
+            {/* ── Explore fold ──
+                Lower-priority management / exploration cards: Active
+                Competitions strip, Achievements progress, Gear picks. Collapsed
+                by default so the daily Scorecard is shorter. User preference
+                persists per device via localStorage. */}
+            <button
+              onClick={toggleScorecardExplore}
+              className="w-full py-2 rounded-xl border border-gray-200 bg-white text-xs font-semibold text-gray-700 hover:text-[#1B3829] hover:border-[#1B3829]/30 transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+              aria-expanded={scorecardExploreOpen}
+            >
+              <span>{scorecardExploreOpen ? "Hide" : "Show more"} — competitions · achievements · gear</span>
+              <span className="text-gray-500" aria-hidden>{scorecardExploreOpen ? "▴" : "▾"}</span>
+            </button>
+            {scorecardExploreOpen && (
+              <>
+                <ActiveCompetitions onJump={() => setSection("challenges")} />
+                <Achievements />
 
             {/* ── Picked For You (smart gear recommendations) — bottom of Scorecard ── */}
             <GearPicks
@@ -2036,6 +2062,8 @@ export default function DashboardPage() {
               })()}
               onJump={() => setSection("gear")}
             />
+              </>
+            )}
 
           </div>
           );
