@@ -65,6 +65,15 @@ def _build_system_prompt(
         "DETAIL STYLE:\n"
         "• ONE sentence explaining WHY this is today's move.\n"
         "• Tie to actual numbers from the data — never invent.\n\n"
+        "ARITHMETIC RULES — READ CAREFULLY:\n"
+        "• DO NOT perform any subtraction, addition, or other arithmetic yourself.\n"
+        "• The data below already includes pre-computed REMAINING / GAP values "
+        "where relevant. Cite those values directly.\n"
+        "• If you cite a number, it MUST appear verbatim in the data below — "
+        "either as a raw value or as a pre-computed remaining/gap value.\n"
+        "• If a calorie/protein/etc. line says 'REMAINING TO HIT TARGET: 1440 kcal', "
+        "your recommendation must say 1440, not 800 and not 2000.\n"
+        "• If a line says 'OVER by 200g', do NOT recommend MORE of that thing.\n\n"
         "CTA SELECTION:\n"
         "• If the action is 'log a meal' or 'eat X' → cta_kind = 'meal'\n"
         "• If 'log a workout' or 'do X workout' → cta_kind = 'workout'\n"
@@ -121,7 +130,13 @@ def _build_system_prompt(
         if focus:
             parts.append(f"  • This week's focus: {focus}")
 
-    # Nutrition state
+    # Nutrition state.
+    #
+    # IMPORTANT: pre-compute the gaps server-side and feed them directly to
+    # Haiku. The previous prompt sent raw "560 / 2000" pairs and asked the
+    # model to subtract — Haiku confidently produced wrong arithmetic
+    # ("eat 800 to hit 2000" when 560 was already in). Treat the LLM like
+    # the prose layer, not the math layer.
     nutrition = health_context.get("nutrition") or {}
     if nutrition:
         c = nutrition.get("consumed") or {}
@@ -129,10 +144,32 @@ def _build_system_prompt(
         parts.append("\n=== NUTRITION TODAY ===")
         parts.append(f"  • Meals logged: {nutrition.get('meals_logged', 0)}")
         if c or t:
-            parts.append(f"  • Calories: {c.get('calories', 0)} / {t.get('calories', '—')}")
-            parts.append(f"  • Protein:  {c.get('protein', 0)}g / {t.get('protein', '—')}g")
-            parts.append(f"  • Carbs:    {c.get('carbs', 0)}g / {t.get('carbs', '—')}g")
-            parts.append(f"  • Fat:      {c.get('fat', 0)}g / {t.get('fat', '—')}g")
+            def _gap_line(label: str, consumed_key: str, target_key: str, unit: str) -> str:
+                cur = c.get(consumed_key) or 0
+                tgt = t.get(target_key)
+                if tgt is None:
+                    return f"  • {label}: {cur}{unit} consumed (no target set)"
+                gap = round(float(tgt) - float(cur))
+                if gap <= 0:
+                    over = abs(gap)
+                    return (
+                        f"  • {label}: {cur}{unit} consumed of {tgt}{unit} target — "
+                        f"{'AT TARGET' if over == 0 else f'OVER by {over}{unit}'}"
+                    )
+                return (
+                    f"  • {label}: {cur}{unit} consumed of {tgt}{unit} target — "
+                    f"REMAINING TO HIT TARGET: {gap}{unit}"
+                )
+
+            parts.append(_gap_line("Calories", "calories", "calories", " kcal"))
+            parts.append(_gap_line("Protein",  "protein",  "protein",  "g"))
+            parts.append(_gap_line("Carbs",    "carbs",    "carbs",    "g"))
+            parts.append(_gap_line("Fat",      "fat",      "fat",      "g"))
+            parts.append(
+                "  (Use the REMAINING value directly — do NOT subtract yourself, "
+                "do NOT recompute. If recommending more food, cite the REMAINING "
+                "value exactly. If OVER, acknowledge it and don't recommend more.)"
+            )
 
     # Body composition (latest weigh-in)
     body = health_context.get("body") or {}
