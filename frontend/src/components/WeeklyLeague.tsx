@@ -1,7 +1,11 @@
 "use client";
 
 /**
- * WeeklyLeague — Duolingo-style weekly competition on the Scorecard.
+ * WeeklyLeague — global weekly engagement-point leaderboard, shown in the
+ * Clubhouse. Was originally framed as a Duolingo-style tier system
+ * (Bronze/Silver/Gold/…) but the promotion mechanic was never implemented,
+ * so we dropped the tier metaphor and use the universal "Weekly Leaderboard"
+ * label. Real competition lives in the friend matchups + engagement points.
  *
  * Everyone is auto-grouped into a league for the Mon–Sun week and ranked by
  * engagement points (daily check-in, logging workouts/meals/weigh-ins, plus a
@@ -94,7 +98,11 @@ export default function WeeklyLeague({ onInvite }: Props) {
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-xl leading-none">🏆</span>
           <div className="min-w-0">
-            <p className="text-white font-bold text-sm leading-tight truncate">{league.tier_name} League</p>
+            {/* Tier metaphor (Bronze/Silver/Gold…) was dropped because the
+                promotion mechanic was never built — see LeagueGlance.tsx. We
+                ignore league.tier_name and render the universal "Weekly
+                Leaderboard" header instead. */}
+            <p className="text-white font-bold text-sm leading-tight truncate">Weekly Leaderboard</p>
             <p className="text-white/60 text-[10px] uppercase tracking-widest">
               {member_count} {member_count === 1 ? "player" : "players"} · this week
             </p>
