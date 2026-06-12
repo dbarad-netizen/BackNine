@@ -756,6 +756,29 @@ export const api = {
   appleHealthKey(): Promise<{ api_key: string }> {
     return request("/api/apple-health/key");
   },
+  /** Manual daily-stats log for users without a connected device. Any subset
+   *  of fields is valid — submit just what you know. Date defaults to today. */
+  manualLog(payload: {
+    date?:                      string;
+    steps?:                     number;
+    sleep_hours?:               number;
+    weight_lbs?:                number;
+    weight_kg?:                 number;
+    resting_hr?:                number;
+    hrv?:                       number;
+    active_calories?:           number;
+    body_fat_percentage?:       number;
+    vo2_max?:                   number;
+    respiratory_rate?:          number;
+    spo2?:                      number;
+    blood_pressure_systolic?:   number;
+    blood_pressure_diastolic?:  number;
+  }): Promise<{ status: string; date: string; fields_logged: string[] }> {
+    return request("/api/manual-log", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
   appleHealthData(days = 30): Promise<AppleHealthSummary> {
     return request(`/api/apple-health/data?days=${days}`);
   },

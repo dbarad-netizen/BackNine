@@ -20,6 +20,7 @@ import ScoreRing from "@/components/ScoreRing";
 import SupplementsCard from "@/components/SupplementsCard";
 import AppleHealthCard from "@/components/AppleHealthCard";
 import DayMealsDrawer from "@/components/DayMealsDrawer";
+import ManualLogCard from "@/components/ManualLogCard";
 import CoachCard from "@/components/CoachCard";
 import TrendChart from "@/components/TrendChart";
 import TrainingTab, { WorkoutLogger } from "@/components/TrainingTab";
@@ -1441,6 +1442,18 @@ export default function DashboardPage() {
               </div>
               );
             })()}
+
+            {/* ── Manual quick-log for non-Oura users ──
+                Always available (no dismiss). Lets users without HAE / Shortcut
+                still feed BackNine. Logs go to device_readings (source=manual)
+                AND apple_health_daily so the dashboard surfaces them today. */}
+            {data.has_oura === false && (
+              <ManualLogCard onLogged={() => {
+                // Refetch the dashboard so the freshly-logged values show up
+                // in the AppleHealthCard / rings.
+                api.dashboard().then(setData).catch(() => {});
+              }} />
+            )}
 
             {/* ── Coach Al's Morning Briefing ── */}
             <MorningBriefing onOpenChat={() => openChatRef.current?.()} />

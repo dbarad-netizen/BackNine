@@ -4414,6 +4414,94 @@ async def apple_health_status(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/manual-log")
+async def manual_log(request: Request):
+    """User-typed daily values for users without a connected device.
+
+    Body: { date?: "YYYY-MM-DD" (default today, user-local from client),
+            steps?, sleep_hours?, weight_lbs?, weight_kg?, resting_hr?, hrv?,
+            active_calories?, body_fat_percentage?, vo2_max? }
+    Any missing/null field is skipped — partial logs are fine ("just my steps
+    today" is a valid submission).
+
+    Writes through to both:
+      1. device_readings (source = "manual") — the new unified store
+      2. apple_health_daily — so the existing dashboard read paths surface the
+         data immediately. When we switch reads to device_readings this second
+         write becomes redundant and we can drop it.
+    """
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    date_str = (body.get("date") or "").strip() or datetime.now().strftime("%Y-%m-%d")
+    if not _valid_ymd(date_str):
+        raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
+
+    # Whitelist + light coercion. Anything not here is ignored.
+    NUMERIC_KEYS = {
+        "steps", "sleep_hours", "weight_lbs", "weight_kg", "resting_hr", "hrv",
+        "active_calories", "body_fat_percentage", "vo2_max", "respiratory_rate",
+        "spo2", "blood_pressure_systolic", "blood_pressure_diastolic",
+    }
+    cleaned: dict = {}
+    for k in NUMERIC_KEYS:
+        if k in body and body[k] not in (None, ""):
+            try:
+                cleaned[k] = float(body[k])
+            except (TypeError, ValueError):
+                pass
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="At least one metric value is required")
+
+    # 1. Canonical write path — same `sync_day` the Shortcut/HAE uses. It
+    #    converts weight_lbs → weight_kg and writes apple_health_daily. As a
+    #    side effect (since the recent dual-write was added) it also writes
+    #    to device_readings as source="apple_health" — but we want "manual"
+    #    attribution for these values, so we'll fix that up below.
+    payload = dict(cleaned)
+    payload["date"] = date_str
+    ah.sync_day(user_id, payload)
+
+    # 2. Re-attribute the just-written readings to source="manual" in the
+    #    unified table. (device_readings is keyed by source, so the
+    #    apple_health rows from sync_day's dual-write are separate rows; we
+    #    just add the manual rows alongside them, with manual ranked lowest
+    #    by the resolver so they don't beat real device data.)
+    try:
+        import device_readings as _dr
+        # Convert weight_lbs → kg for the manual write so the metric is uniform.
+        manual_values: dict = {}
+        if "weight_lbs" in cleaned and "weight_kg" not in cleaned:
+            manual_values["weight_kg"] = round(cleaned["weight_lbs"] * 0.453592, 2)
+        for key, metric_unit in {
+            "steps":                   ("steps",                  "count"),
+            "sleep_hours":             ("sleep_hours",            "hours"),
+            "active_calories":         ("active_calories",        "kcal"),
+            "resting_hr":              ("resting_hr",             "bpm"),
+            "hrv":                     ("hrv",                    "ms"),
+            "weight_kg":               ("weight_kg",              "kg"),
+            "vo2_max":                 ("vo2_max",                "ml/kg/min"),
+            "respiratory_rate":        ("respiratory_rate",       "breaths/min"),
+            "body_fat_percentage":     ("body_fat_pct",           "pct"),
+            "spo2":                    ("spo2",                   "pct"),
+            "blood_pressure_systolic": ("blood_pressure_systolic","mmHg"),
+            "blood_pressure_diastolic":("blood_pressure_diastolic","mmHg"),
+        }.items():
+            if key in cleaned:
+                metric, unit = metric_unit
+                _dr.upsert_reading(user_id, "manual", metric, date_str, cleaned[key], unit)
+        for metric, value in manual_values.items():
+            _dr.upsert_reading(user_id, "manual", metric, date_str, value, "kg")
+    except Exception:
+        pass
+
+    return {"status": "ok", "date": date_str, "fields_logged": list(cleaned.keys())}
+
+
 @app.post("/api/apple-health/sync")
 async def apple_health_sync(request: Request):
     """
