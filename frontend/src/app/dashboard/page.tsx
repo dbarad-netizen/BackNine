@@ -23,6 +23,7 @@ import DayMealsDrawer from "@/components/DayMealsDrawer";
 import ManualLogCard from "@/components/ManualLogCard";
 import TodaysMoveCard from "@/components/TodaysMoveCard";
 import CoachReactionToast from "@/components/CoachReactionToast";
+import LeagueGlance from "@/components/LeagueGlance";
 import CoachCard from "@/components/CoachCard";
 import TrendChart from "@/components/TrendChart";
 import TrainingTab, { WorkoutLogger } from "@/components/TrainingTab";
@@ -37,7 +38,6 @@ import CoachAlAvatar from "@/components/CoachAlAvatar";
 import MorningBriefing from "@/components/MorningBriefing";
 import WeeklyInsight from "@/components/WeeklyInsight";
 import GoalCard from "@/components/GoalCard";
-import ActiveCompetitions from "@/components/ActiveCompetitions";
 import GearPicks from "@/components/GearPicks";
 import PulseFeed from "@/components/PulseFeed";
 import FriendLeaderboard from "@/components/FriendLeaderboard";
@@ -868,20 +868,6 @@ export default function DashboardPage() {
   // Coach Al's one-line reaction to the user's most recent action. Cleared
   // when the toast auto-dismisses. Null = no active reaction.
   const [coachReaction, setCoachReaction] = useState<string | null>(null);
-  // Scorecard fold model: the lower-priority "explore" block (Achievements,
-  // GearPicks, ActiveCompetitions) starts collapsed so the daily experience
-  // is shorter. Choice persists per device.
-  const [scorecardExploreOpen, setScorecardExploreOpen] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return localStorage.getItem("bn_scorecard_explore_open") === "1";
-  });
-  const toggleScorecardExplore = () => {
-    setScorecardExploreOpen(prev => {
-      const next = !prev;
-      try { localStorage.setItem("bn_scorecard_explore_open", next ? "1" : "0"); } catch { /* no-op */ }
-      return next;
-    });
-  };
   const [weightLog,  setWeightLog]  = useState<WeightEntry[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [nutLoading,   setNutLoading]   = useState(false);
@@ -2057,25 +2043,17 @@ export default function DashboardPage() {
               </>
             )}
 
-            {/* ── Explore fold ──
-                Lower-priority management / exploration cards: Active
-                Competitions strip, Achievements progress, Gear picks. Collapsed
-                by default so the daily Scorecard is shorter. User preference
-                persists per device via localStorage. */}
-            <button
-              onClick={toggleScorecardExplore}
-              className="w-full py-2 rounded-xl border border-gray-200 bg-white text-xs font-semibold text-gray-700 hover:text-[#1B3829] hover:border-[#1B3829]/30 transition-colors flex items-center justify-center gap-1.5 shadow-sm"
-              aria-expanded={scorecardExploreOpen}
-            >
-              <span>{scorecardExploreOpen ? "Hide" : "Show more"} — competitions · achievements</span>
-              <span className="text-gray-500" aria-hidden>{scorecardExploreOpen ? "▴" : "▾"}</span>
-            </button>
-            {scorecardExploreOpen && (
-              <>
-                <ActiveCompetitions onJump={() => setSection("challenges")} />
-                <Achievements />
-              </>
-            )}
+            {/* ── League at a glance ──
+                Replaces the Active Competitions strip (redundant with the
+                Clubhouse teaser above). Tier badge + your rank + days left in
+                the week → tap to drop into the full Clubhouse standings. */}
+            <LeagueGlance onOpen={() => { setSection("challenges"); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
+
+            {/* ── Achievements "Next up" ──
+                Promoted out of the previous expander — it shows the closest
+                badge to unlock with a progress bar and the level info. Small,
+                motivating, daily-relevant. Earns its place above the fold. */}
+            <Achievements />
 
             {/* ── Picked For You (smart gear recommendations) ──
                 Pulled out of the Explore fold and made always-visible on the
