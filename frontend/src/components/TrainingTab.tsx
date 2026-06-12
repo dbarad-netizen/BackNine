@@ -698,9 +698,12 @@ function RecentWorkouts({
 }) {
   if (workouts.length === 0) {
     return (
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 text-center">
-        <p className="text-gray-600 text-sm">No workouts logged yet</p>
-        <p className="text-gray-500 text-xs mt-1">Log your first session above</p>
+      <div className="rounded-2xl border border-gray-200 bg-white p-6 text-center">
+        <div className="text-3xl mb-2">🏋️</div>
+        <p className="text-gray-900 font-semibold text-sm mb-1">No workouts logged yet</p>
+        <p className="text-gray-600 text-xs leading-relaxed max-w-xs mx-auto">
+          Tap <span className="font-semibold text-[#1B3829]">＋ Log a workout</span> above to start your history. Strength, cardio, or just a quick freeform note — anything counts.
+        </p>
       </div>
     );
   }

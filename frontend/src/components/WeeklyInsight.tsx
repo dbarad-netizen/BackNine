@@ -62,7 +62,20 @@ export default function WeeklyInsight({ onOpenChat }: Props) {
     );
   }
 
-  if (!data) return null; // endpoint down — never block the dashboard
+  // Endpoint down — used to return null which silently hid the card.
+  // Show a compact placeholder so the user knows the feature exists.
+  if (!data) {
+    return (
+      <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+        <p className="text-[10px] text-gray-600 uppercase tracking-widest font-semibold mb-1">
+          Weekly Insight
+        </p>
+        <p className="text-xs text-gray-600">
+          Coach Al will surface a weekly trend here once we have ~5 days of data. Check back after a few sessions.
+        </p>
+      </section>
+    );
+  }
 
   const accent =
     data.stat?.direction === "negative" ? "#f59e0b"

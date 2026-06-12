@@ -155,9 +155,34 @@ export default function MorningBriefing({ onOpenChat }: Props) {
     );
   }
 
-  // Soft failure — never block the dashboard if the endpoint is down.
+  // Soft failure — used to return null which silently hid the hero card.
+  // Now shows a compact fallback so the user knows the briefing exists but
+  // didn't load, with a retry path. The dashboard still works either way.
   if (error || !data) {
-    return null;
+    return (
+      <section
+        className="rounded-2xl shadow-sm overflow-hidden border border-[#1B3829]/15"
+        style={{ background: "linear-gradient(135deg, #1B3829 0%, #2D6A4F 100%)" }}
+      >
+        <div className="px-5 py-4 flex items-start gap-3">
+          <CoachAlAvatar size={40} className="rounded-full ring-2 ring-white/30 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] text-white/60 uppercase tracking-widest font-semibold mb-1">
+              Coach Al · Today&apos;s Briefing
+            </p>
+            <p className="text-white text-[13px] leading-snug">
+              Couldn&apos;t load today&apos;s briefing — usually means the server is waking up.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-2 text-[12px] text-white/90 hover:text-white font-semibold underline-offset-2 hover:underline"
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      </section>
+    );
   }
 
   // Split the narrative into paragraphs. Coach Al is instructed to write 2 paragraphs.

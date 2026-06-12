@@ -72,7 +72,13 @@ function leaderTally(leaders: LeaderboardResponse["leaders"]): Record<string, nu
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export default function FriendLeaderboard() {
+interface Props {
+  /** Open the invite / share-card modal. When provided, the empty state
+   *  (no friends yet) shows a CTA so the Clubhouse doesn't look broken. */
+  onInvite?: () => void;
+}
+
+export default function FriendLeaderboard({ onInvite }: Props = {}) {
   const [data, setData] = useState<LeaderboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
@@ -128,9 +134,35 @@ export default function FriendLeaderboard() {
     }
   };
 
-  // Silent if no friends connected
+  // Empty state: no friends yet. Used to silently return null, which made
+  // the Clubhouse leaderboard slot vanish. Now shows a CTA so the user has
+  // a clear next action — invite someone, then come back to compete.
   const friendCount = (data?.entries || []).filter(e => !e.is_me).length;
-  if (!loading && friendCount === 0) return null;
+  if (!loading && friendCount === 0) {
+    return (
+      <section>
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-600 mb-2">
+          Today&apos;s Matchup
+        </h3>
+        <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-5 py-6 text-center">
+          <div className="text-3xl mb-2">🤝</div>
+          <p className="text-gray-900 font-semibold text-sm mb-1">Better with friends</p>
+          <p className="text-gray-600 text-xs leading-relaxed max-w-xs mx-auto mb-3">
+            The leaderboard lights up the moment a friend joins. Side-by-side stats,
+            head-to-head matchups, and trash talk built in.
+          </p>
+          {onInvite && (
+            <button
+              onClick={onInvite}
+              className="px-4 py-2 rounded-xl bg-[#1B3829] hover:bg-[#2D6A4F] text-white text-xs font-semibold transition-colors"
+            >
+              Invite a friend
+            </button>
+          )}
+        </div>
+      </section>
+    );
+  }
 
   if (loading || !data) {
     return (

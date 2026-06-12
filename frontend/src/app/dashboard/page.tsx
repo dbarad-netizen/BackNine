@@ -2304,7 +2304,7 @@ export default function DashboardPage() {
             {/* Today's leaderboard — self + friends, ranked.
                 Most active card; goes first so it loads what you'd open the
                 Clubhouse to see first. */}
-            <FriendLeaderboard />
+            <FriendLeaderboard onInvite={() => setShowShare(true)} />
 
             {/* Weekly league — engagement-points race over a 7-day window. */}
             <WeeklyLeague onInvite={() => setShowShare(true)} />
