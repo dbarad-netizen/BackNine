@@ -21,6 +21,7 @@ import SupplementsCard from "@/components/SupplementsCard";
 import AppleHealthCard from "@/components/AppleHealthCard";
 import DayMealsDrawer from "@/components/DayMealsDrawer";
 import ManualLogCard from "@/components/ManualLogCard";
+import TodaysMoveCard from "@/components/TodaysMoveCard";
 import CoachCard from "@/components/CoachCard";
 import TrendChart from "@/components/TrendChart";
 import TrainingTab, { WorkoutLogger } from "@/components/TrainingTab";
@@ -1454,6 +1455,17 @@ export default function DashboardPage() {
                 api.dashboard().then(setData).catch(() => {});
               }} />
             )}
+
+            {/* ── Today's Move — Coach Al's single concrete recommendation ──
+                Sits ABOVE the briefing because this is the action layer; the
+                briefing below is the synthesis layer. */}
+            <TodaysMoveCard
+              onOpenChat={(seed) => openChatRef.current?.(seed)}
+              onNavSection={(s) => { setSection(s); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+              onOpenMealLogger={() => setShowMealAdd(true)}
+              onOpenWorkoutLogger={() => { setSection("training"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+              onOpenWeightLog={() => { setSection("nutrition"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+            />
 
             {/* ── Coach Al's Morning Briefing ── */}
             <MorningBriefing onOpenChat={() => openChatRef.current?.()} />

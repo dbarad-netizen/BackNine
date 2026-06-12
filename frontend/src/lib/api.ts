@@ -405,6 +405,20 @@ export interface NutritionSummary {
   avg_fat:      number;
 }
 
+// ── Today's Move ──────────────────────────────────────────────────────────────
+export type TodaysMoveCta =
+  | "chat" | "meal" | "workout" | "weight" | "walk"
+  | "nav_nutrition" | "nav_training" | "nav_clubhouse" | "none";
+
+export interface TodaysMove {
+  emoji:     string;
+  title:     string;
+  detail:    string;
+  cta_label: string;
+  cta_kind:  TodaysMoveCta;
+  cta_seed?: string;     // optional Coach Al chat seed when cta_kind === "chat"
+}
+
 // ── Training types ────────────────────────────────────────────────────────────
 
 export interface ExerciseInfo {
@@ -753,6 +767,9 @@ export const api = {
   },
 
   // ── Apple Health ─────────────────────────────────────────────────────────────
+  /** Coach Al's one-action recommendation for right now. Generated on each
+   *  call (no caching) so it stays responsive to actions just taken. */
+  todaysMove(): Promise<TodaysMove> { return request("/api/todays-move"); },
   appleHealthKey(): Promise<{ api_key: string }> {
     return request("/api/apple-health/key");
   },
