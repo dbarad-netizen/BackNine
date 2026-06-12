@@ -77,9 +77,11 @@ export default function MorningBriefing({ onOpenChat }: Props) {
       setSaveStatus("saved");
       // Clear the "✓ Saved" indicator after a beat so it doesn't linger.
       setTimeout(() => setSaveStatus(prevStatus => prevStatus === "saved" ? "idle" : prevStatus), 2000);
-      // Auto-collapse the briefing once they've engaged. Slightly delayed so
-      // they catch the ✓ confirmation before the card folds up.
-      setTimeout(() => setCollapsed(true), 1800);
+      // Intentionally NOT auto-collapsing here — picking a mood is an
+      // acknowledgment that they SAW the briefing, not that they're done
+      // reading it. Folding the card away mid-read frustrates users. The
+      // briefing collapses on the NEXT page load (if today's mood is already
+      // logged), and the user can manually fold it via the ✕ button.
     } catch {
       // Roll back the optimistic selection and surface a retry hint.
       setTodayMood(prev);
