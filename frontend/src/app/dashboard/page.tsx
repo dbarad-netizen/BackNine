@@ -1038,6 +1038,38 @@ export default function DashboardPage() {
   if (!data)   return <>{onboardingOverlay}</>;
 
   const { today, trend, coaches, training_load, readiness_forecast, prediction_accuracy } = data;
+
+  // Gear-picks signals — computed once and reused across the Scorecard,
+  // Nutrition, and Training tabs. Gear has commercial value (affiliate
+  // revenue) so it earns persistent visibility throughout the app.
+  const gearSignals = (() => {
+    const recent = trend.slice(-7);
+    const avg = (key: keyof typeof recent[number]): number | null => {
+      const vals = recent
+        .map(d => d[key])
+        .filter((v): v is number => typeof v === "number" && v > 0);
+      return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    };
+    const hrvVals = recent.map(d => d.hrv).filter((v): v is number => typeof v === "number" && v > 0);
+    let hrvDirection: "rising" | "falling" | "stable" | null = null;
+    if (hrvVals.length >= 4) {
+      const half = Math.floor(hrvVals.length / 2);
+      const firstAvg  = hrvVals.slice(0, half).reduce((a, b) => a + b, 0) / half;
+      const secondAvg = hrvVals.slice(half).reduce((a, b) => a + b, 0) / (hrvVals.length - half);
+      hrvDirection = secondAvg > firstAvg + 1 ? "rising" : secondAvg < firstAvg - 1 ? "falling" : "stable";
+    }
+    return {
+      hasOura:          data.has_oura !== false,
+      longevityKeys:    Object.keys(data.longevity_score?.components ?? {}),
+      sleepScoreAvg7d:  avg("sleep"),
+      sleepHrsAvg7d:    avg("total_hrs"),
+      stepsAvg7d:       avg("steps"),
+      hrvDirection,
+      rhrAvg7d:         avg("rhr"),
+      readinessAvg7d:   avg("readiness"),
+      trainingLoadZone: training_load?.zone ?? null,
+    };
+  })();
   const sm  = today.sleep_model   as Record<string, number | null>;
   const rdy = today.readiness     as Record<string, number | null>;
   const sl  = today.sleep         as Record<string, number | null>;
@@ -2035,49 +2067,21 @@ export default function DashboardPage() {
               className="w-full py-2 rounded-xl border border-gray-200 bg-white text-xs font-semibold text-gray-700 hover:text-[#1B3829] hover:border-[#1B3829]/30 transition-colors flex items-center justify-center gap-1.5 shadow-sm"
               aria-expanded={scorecardExploreOpen}
             >
-              <span>{scorecardExploreOpen ? "Hide" : "Show more"} — competitions · achievements · gear</span>
+              <span>{scorecardExploreOpen ? "Hide" : "Show more"} — competitions · achievements</span>
               <span className="text-gray-500" aria-hidden>{scorecardExploreOpen ? "▴" : "▾"}</span>
             </button>
             {scorecardExploreOpen && (
               <>
                 <ActiveCompetitions onJump={() => setSection("challenges")} />
                 <Achievements />
-
-            {/* ── Picked For You (smart gear recommendations) — bottom of Scorecard ── */}
-            <GearPicks
-              signals={(() => {
-                const recent = trend.slice(-7);
-                const avg = (key: keyof typeof recent[number]): number | null => {
-                  const vals = recent
-                    .map(d => d[key])
-                    .filter((v): v is number => typeof v === "number" && v > 0);
-                  return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
-                };
-                // HRV direction: compare first vs second half of the week
-                const hrvVals = recent.map(d => d.hrv).filter((v): v is number => typeof v === "number" && v > 0);
-                let hrvDirection: "rising" | "falling" | "stable" | null = null;
-                if (hrvVals.length >= 4) {
-                  const half = Math.floor(hrvVals.length / 2);
-                  const firstAvg  = hrvVals.slice(0, half).reduce((a, b) => a + b, 0) / half;
-                  const secondAvg = hrvVals.slice(half).reduce((a, b) => a + b, 0) / (hrvVals.length - half);
-                  hrvDirection = secondAvg > firstAvg + 1 ? "rising" : secondAvg < firstAvg - 1 ? "falling" : "stable";
-                }
-                return {
-                  hasOura:          data.has_oura !== false,
-                  longevityKeys:    Object.keys(data.longevity_score?.components ?? {}),
-                  sleepScoreAvg7d:  avg("sleep"),
-                  sleepHrsAvg7d:    avg("total_hrs"),
-                  stepsAvg7d:       avg("steps"),
-                  hrvDirection,
-                  rhrAvg7d:         avg("rhr"),
-                  readinessAvg7d:   avg("readiness"),
-                  trainingLoadZone: training_load?.zone ?? null,
-                };
-              })()}
-              onJump={() => setSection("gear")}
-            />
               </>
             )}
+
+            {/* ── Picked For You (smart gear recommendations) ──
+                Pulled out of the Explore fold and made always-visible on the
+                Scorecard. Gear is a commercial surface — impressions matter
+                for affiliate revenue, so this earns persistent placement. */}
+            <GearPicks signals={gearSignals} onJump={() => setSection("gear")} />
 
           </div>
           );
@@ -2283,6 +2287,10 @@ export default function DashboardPage() {
                 </div>
               </>
             )}
+
+            {/* ── Picked For You — gear surfaced in Nutrition too.
+                Persistent visibility supports affiliate revenue. */}
+            <GearPicks signals={gearSignals} onJump={() => setSection("gear")} />
           </div>
         )}
 
@@ -2356,6 +2364,10 @@ export default function DashboardPage() {
               </p>
             </section>
             <TrainingTab autoOpenLogger={autoLogWorkout} onLoggerOpened={() => setAutoLogWorkout(false)} />
+
+            {/* ── Picked For You — gear in Training is the most natural
+                commercial fit (shoes, mats, recovery tools, supplements). */}
+            <GearPicks signals={gearSignals} onJump={() => setSection("gear")} />
           </div>
         )}
 
