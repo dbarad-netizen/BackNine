@@ -1196,10 +1196,11 @@ export default function DashboardPage() {
             <RefreshButton />
             <NotificationBell
               onDeepLinkPulse={(eventId) => {
-                // Switch to the Scorecard (where PulseFeed lives) AND set the
-                // hash before navigation completes, so PulseFeed's mount-effect
-                // sees it and scrolls/expands/focuses the targeted event.
-                setSection("coaching");
+                // PulseFeed now lives in the Clubhouse tab (section id is still
+                // "challenges" internally for backwards compat). Switch sections
+                // AND set the hash before navigation completes so PulseFeed's
+                // mount-effect sees it and scrolls/expands/focuses the event.
+                setSection("challenges");
                 window.location.hash = `pulse-${eventId}`;
               }}
             />
