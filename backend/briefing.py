@@ -259,6 +259,11 @@ def _build_system_prompt(
                 "but only if it's at least 3 days. Otherwise skip it.)"
             )
 
+    # Append the shared voice/brand block (golf metaphor allowance) so the
+    # briefing inherits the same instructions as every other Coach Al surface.
+    from coach_voice import VOICE_BLOCK
+    parts.append("\n" + VOICE_BLOCK)
+
     return "\n".join(parts)
 
 

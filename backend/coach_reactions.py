@@ -59,6 +59,11 @@ def _system_prompt(action_kind: str) -> str:
             "Steady = celebrate consistency. Down toward goal = note progress. "
             "Up doesn't always mean bad — water, glycogen, life. Be honest, not punishing."
         )
+    # Shared Coach Al voice/brand block. Reactions are ≤20 words so the
+    # golf-metaphor allowance will mostly not fire — that's correct. The
+    # block keeps voice consistent if the model does see room for one.
+    from coach_voice import VOICE_BLOCK
+    base += "\n\n" + VOICE_BLOCK
     return base
 
 

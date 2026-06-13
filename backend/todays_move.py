@@ -186,6 +186,12 @@ def _build_system_prompt(
         if names:
             parts.append(f"\n=== STACK ===\n  • Supplements: {names}")
 
+    # Shared Coach Al voice/brand block — controls the golf-metaphor allowance
+    # so every surface speaks with the same voice. Same block used by briefing,
+    # chat, reactions, etc.
+    from coach_voice import VOICE_BLOCK
+    parts.append("\n" + VOICE_BLOCK)
+
     return "\n".join(parts)
 
 

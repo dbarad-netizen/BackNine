@@ -302,6 +302,11 @@ def _build_system_prompt(health_context: dict, profile: dict) -> str:
         "• You are Coach Al — bring energy and genuine care to every response."
     )
 
+    # Shared voice/brand block (golf metaphor allowance) — same one used by
+    # briefing, today's move, and reactions.
+    from coach_voice import VOICE_BLOCK
+    prompt_parts.append("\n" + VOICE_BLOCK)
+
     return "\n".join(prompt_parts)
 
 

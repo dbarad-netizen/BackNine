@@ -77,6 +77,10 @@ def _build_system_prompt(insight: dict, profile: dict) -> str:
     else:
         parts.append(f"Based on {insight.get('n')} days of data.")
 
+    # Shared Coach Al voice/brand block (golf metaphor allowance).
+    from coach_voice import VOICE_BLOCK
+    parts.append("\n" + VOICE_BLOCK)
+
     return "\n".join(parts)
 
 
