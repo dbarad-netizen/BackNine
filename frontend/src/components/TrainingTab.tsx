@@ -14,6 +14,7 @@ import {
   type StretchRoutine,
   type TrainingSettings,
 } from "@/lib/api";
+import { Button } from "@/components/ui/Button";
 
 const TYPE_ICON: Record<string, string>  = { lifting: "🏋️", stretching: "🧘", mobility: "🔄", cardio: "🏃" };
 const TYPE_LABEL: Record<string, string> = { lifting: "Lifting", stretching: "Stretch", mobility: "Mobility", cardio: "Cardio" };
@@ -884,14 +885,12 @@ function RecentWorkouts({
                     </p>
                   )}
                   <div className="flex gap-2 pt-1">
-                    <button onClick={() => saveEdit(w)} disabled={saving}
-                      className="flex-1 py-2 rounded-lg bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-sm font-semibold">
+                    <Button variant="accent" className="flex-1" onClick={() => saveEdit(w)} disabled={saving}>
                       {saving ? "Saving…" : "Save"}
-                    </button>
-                    <button onClick={cancelEdit}
-                      className="flex-1 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-900 text-sm font-medium">
+                    </Button>
+                    <Button variant="secondary" className="flex-1" onClick={cancelEdit}>
                       Cancel
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}

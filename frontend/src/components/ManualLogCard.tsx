@@ -13,6 +13,7 @@
 
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { Button } from "@/components/ui/Button";
 
 interface Props {
   /** Called after a successful log so the parent can refetch the dashboard. */
@@ -137,20 +138,12 @@ export default function ManualLogCard({ onLogged }: Props) {
       {saved && <p className="text-xs text-emerald-700 font-semibold">{saved}</p>}
 
       <div className="flex gap-2 pt-1">
-        <button
-          onClick={handleSubmit}
-          disabled={saving}
-          className="flex-1 py-2 rounded-lg bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-sm font-semibold"
-        >
+        <Button variant="accent" className="flex-1" onClick={handleSubmit} disabled={saving}>
           {saving ? "Saving…" : "Save"}
-        </button>
-        <button
-          onClick={() => setDraft(EMPTY)}
-          disabled={saving}
-          className="flex-1 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 disabled:opacity-50 text-gray-900 text-sm font-medium"
-        >
+        </Button>
+        <Button variant="secondary" className="flex-1" onClick={() => setDraft(EMPTY)} disabled={saving}>
           Clear
-        </button>
+        </Button>
       </div>
 
       <p className="text-[10px] text-gray-500">

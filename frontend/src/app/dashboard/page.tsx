@@ -49,6 +49,7 @@ import NotificationBell from "@/components/NotificationBell";
 import ShareCardModal from "@/components/ShareCardModal";
 import OnboardingModal from "@/components/OnboardingModal";
 import Footer from "@/components/Footer";
+import { Button } from "@/components/ui/Button";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Legend,
 } from "recharts";
@@ -1754,13 +1755,15 @@ export default function DashboardPage() {
                                   onChange={e => setVo2Input(e.target.value)}
                                   className="w-20 rounded border border-gray-200 bg-gray-50 px-2 py-1 text-[10px] text-gray-900 focus:outline-none focus:border-green-400"
                                 />
-                                <button
+                                <Button
+                                  variant="accent"
+                                  size="sm"
                                   onClick={handleSaveVo2}
                                   disabled={vo2Saving || !vo2Input}
-                                  className="rounded bg-green-600 px-2 py-1 text-[10px] font-semibold text-white disabled:opacity-40 hover:bg-green-700 transition-colors"
+                                  className="!h-auto !px-2 !py-1 !text-[10px]"
                                 >
                                   {vo2Saved ? "✓" : vo2Saving ? "…" : "Save"}
-                                </button>
+                                </Button>
                                 <button
                                   onClick={() => { setVo2Editing(false); setVo2Input(""); }}
                                   className="text-[10px] text-gray-600 hover:text-gray-600"
@@ -1800,13 +1803,14 @@ export default function DashboardPage() {
                                 className="w-24 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs text-gray-900 focus:outline-none focus:border-green-400"
                               />
                               <span className="text-[10px] text-gray-600">ml/kg/min</span>
-                              <button
+                              <Button
+                                variant="accent"
+                                size="sm"
                                 onClick={handleSaveVo2}
                                 disabled={vo2Saving || !vo2Input}
-                                className="rounded-lg bg-green-600 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-40 hover:bg-green-700 transition-colors"
                               >
                                 {vo2Saved ? "✓ Saved" : vo2Saving ? "…" : "Save"}
-                              </button>
+                              </Button>
                             </div>
                             <p className="pl-3.5 text-[10px] text-gray-600">
                               From your Oura app or Apple Health → Cardio Fitness. Will auto-sync once connected.

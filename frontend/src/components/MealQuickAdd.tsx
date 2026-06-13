@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type MealDraftItem, type FoodItem } from "@/lib/api";
+import { Button } from "@/components/ui/Button";
 
 interface Props {
   date?: string;
@@ -186,10 +187,9 @@ export default function MealQuickAdd({ date, onLogged }: Props) {
           placeholder="e.g. 2 eggs, toast with butter, a banana"
           className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#2D6A4F]"
         />
-        <button onClick={parseText} disabled={!text.trim() || parsing !== null}
-          className="shrink-0 rounded-lg bg-[#1B3829] hover:bg-[#2D6A4F] px-3 py-2 text-xs font-semibold text-white transition-colors disabled:opacity-40">
+        <Button variant="primary" size="sm" onClick={parseText} disabled={!text.trim() || parsing !== null} className="shrink-0">
           {parsing === "text" ? "…" : "Add"}
-        </button>
+        </Button>
       </div>
 
       {/* Photo: camera by default, upload as fallback */}
@@ -247,11 +247,10 @@ export default function MealQuickAdd({ date, onLogged }: Props) {
             </div>
           ))}
           <div className="flex items-center gap-2 pt-1">
-            <button onClick={logDraft} disabled={logging}
-              className="flex-1 rounded-lg bg-[#1B3829] hover:bg-[#2D6A4F] py-2 text-xs font-semibold text-white transition-colors disabled:opacity-40">
+            <Button variant="primary" size="sm" onClick={logDraft} disabled={logging} className="flex-1">
               {logging ? "Logging…" : `Log ${draft.length} item${draft.length !== 1 ? "s" : ""}`}
-            </button>
-            <button onClick={() => setDraft(null)} className="px-3 py-2 text-xs text-gray-600 hover:text-gray-800">Cancel</button>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setDraft(null)}>Cancel</Button>
           </div>
         </div>
       )}
@@ -283,7 +282,7 @@ export default function MealQuickAdd({ date, onLogged }: Props) {
             <div className="flex gap-2">
               {(["search", "custom"] as const).map(m => (
                 <button key={m} onClick={() => setManualMode(m)}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${manualMode === m ? "bg-[#1B3829] text-white" : "bg-gray-100 text-gray-600 hover:text-gray-800"}`}>
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${manualMode === m ? "bg-brand-800 text-white" : "bg-gray-100 text-gray-600 hover:text-gray-800"}`}>
                   {m === "search" ? "Search food" : "Custom"}
                 </button>
               ))}
@@ -318,10 +317,9 @@ export default function MealQuickAdd({ date, onLogged }: Props) {
                     </div>
                   </div>
                 )}
-                <button disabled={!selected || logging} onClick={addSearch}
-                  className="w-full py-2 rounded-lg bg-[#1B3829] hover:bg-[#2D6A4F] disabled:opacity-30 text-white text-xs font-semibold transition-colors">
+                <Button variant="primary" size="sm" fullWidth disabled={!selected || logging} onClick={addSearch}>
                   + Add to log
-                </button>
+                </Button>
               </div>
             ) : (
               <div className="space-y-2">
@@ -336,10 +334,9 @@ export default function MealQuickAdd({ date, onLogged }: Props) {
                     </div>
                   ))}
                 </div>
-                <button disabled={!custom.name || !custom.calories || logging} onClick={addCustom}
-                  className="w-full py-2 rounded-lg bg-[#1B3829] hover:bg-[#2D6A4F] disabled:opacity-30 text-white text-xs font-semibold transition-colors">
+                <Button variant="primary" size="sm" fullWidth disabled={!custom.name || !custom.calories || logging} onClick={addCustom}>
                   + Add to log
-                </button>
+                </Button>
               </div>
             )}
           </div>
