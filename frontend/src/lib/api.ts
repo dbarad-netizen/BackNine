@@ -768,8 +768,10 @@ export const api = {
 
   // ── Apple Health ─────────────────────────────────────────────────────────────
   /** Coach Al's one-action recommendation for right now. Generated on each
-   *  call (no caching) so it stays responsive to actions just taken. */
-  todaysMove(): Promise<TodaysMove> { return request("/api/todays-move"); },
+   *  call (no caching) so it stays responsive to actions just taken.
+   *  Sends the device-local date so the backend (running UTC on Render)
+   *  doesn't think it's tomorrow after ~4pm PT. */
+  todaysMove(): Promise<TodaysMove> { return request(`/api/todays-move?date=${localToday()}`); },
   /** Generates a one-sentence Coach Al reaction to a logged action. The text
    *  may be null if generation failed — call sites should noop in that case. */
   coachReact(action: "meal_logged" | "workout_logged" | "weight_logged",
@@ -800,9 +802,13 @@ export const api = {
     blood_pressure_systolic?:   number;
     blood_pressure_diastolic?:  number;
   }): Promise<{ status: string; date: string; fields_logged: string[] }> {
+    // Auto-attach the device-local date when the caller didn't specify one.
+    // Without this, the backend defaults to datetime.now() which is UTC on
+    // Render, causing late-evening west-coast users to log "tomorrow".
+    const withDate = { date: localToday(), ...payload };
     return request("/api/manual-log", {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify(withDate),
     });
   },
   appleHealthData(days = 30): Promise<AppleHealthSummary> {
