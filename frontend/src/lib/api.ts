@@ -575,12 +575,19 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const isFormData = options?.body instanceof FormData;
   const token = getToken();
   const authHeader = token ? { "Authorization": `Bearer ${token}` } : {};
+  // X-User-Local-Date — pinned in ONE place so every API call carries the
+  // user's device-local "today" with it. Backend `_user_local_today(request)`
+  // helper reads this. Without this, Render (UTC) silently rolls over to
+  // tomorrow after ~4pm PT, which is the bug we kept re-introducing every
+  // time we added a new endpoint that touched "today".
+  const tzHeader = { "X-User-Local-Date": localToday() };
   const res = await fetch(`${BASE}${path}`, {
     credentials: "include",
     ...options,
-    headers: isFormData ? authHeader : {
+    headers: isFormData ? { ...authHeader, ...tzHeader } : {
       "Content-Type": "application/json",
       ...authHeader,
+      ...tzHeader,
       ...options?.headers,
     },
   });

@@ -10,7 +10,7 @@ Routes:
   DELETE /api/wearables/{provider}   → disconnect a wearable
 """
 import os, secrets
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, date
 from typing import Optional, Tuple
 
 from fastapi import FastAPI, HTTPException, Depends, Request, Response, UploadFile, File, BackgroundTasks
@@ -1096,7 +1096,7 @@ async def get_dashboard(request: Request, days: int = 120):
     # missing — Oura processes scores quickly but session detail takes longer.
     # Re-fetching live catches the moment Oura finishes processing.
     if cache_hit:
-        today_str_check = datetime.now().strftime("%Y-%m-%d")
+        today_str_check = _user_local_today_iso(request)
         if slm.get(today_str_check) and not smm.get(today_str_check):
             cache_hit = False  # force live fetch to try to get today's session
 
@@ -1574,6 +1574,38 @@ def _valid_ymd(s: str) -> bool:
         return False
 
 
+# ── Device-local date helpers ─────────────────────────────────────────────────
+# Render runs UTC. After ~4pm PT, datetime.now() server-side rolls to tomorrow
+# while the user's clock still says today. Every endpoint that asks "what's
+# today for this user?" must read from the client instead.
+#
+# Convention: the frontend api.ts request() wrapper sets X-User-Local-Date on
+# every call. Helpers below pull from that header. They also accept query/body
+# overrides where the existing endpoint already plumbed one. Anything that
+# wants "the user's today" should call these and never call datetime.now()
+# directly.
+
+def _user_local_today(request: Request) -> date:
+    """The user's device-local 'today' as a date. Reads X-User-Local-Date
+    (set by the frontend api wrapper). Falls back to UTC server time + a
+    warning log so we can find callers bypassing the wrapper."""
+    raw = (request.headers.get("X-User-Local-Date") or "").strip()
+    if raw and _valid_ymd(raw):
+        try:
+            return datetime.strptime(raw, "%Y-%m-%d").date()
+        except ValueError:
+            pass
+    # Anything reaching this log line is a request that didn't go through the
+    # api.ts wrapper — likely an external Shortcut/webhook OR a stale client.
+    print(f"[tz] X-User-Local-Date missing on {request.url.path} — falling back to UTC", flush=True)
+    return datetime.now().date()
+
+
+def _user_local_today_iso(request: Request) -> str:
+    """ISO string form of _user_local_today() — most callers want this."""
+    return _user_local_today(request).isoformat()
+
+
 @app.get("/api/nutrition/today")
 def get_today_nutrition(request: Request, date: Optional[str] = None):
     session  = _require_session(request)
@@ -1581,7 +1613,7 @@ def get_today_nutrition(request: Request, date: Optional[str] = None):
     # Prefer the caller's local date (the client knows the user's timezone).
     # Falling back to server time would use UTC and roll over too early/late,
     # which made evening meals reappear as "today" the next morning.
-    today    = date if (date and _valid_ymd(date)) else datetime.now().strftime("%Y-%m-%d")
+    today    = date if (date and _valid_ymd(date)) else _user_local_today_iso(request)
     meals    = nutr.get_meals(today, uid)
     settings = nutr.get_settings(uid)
     totals = {
@@ -1598,7 +1630,7 @@ async def log_meal(request: Request):
     session = _require_session(request)
     uid     = session["user_id"]
     body    = await request.json()
-    today   = datetime.now().strftime("%Y-%m-%d")
+    today   = _user_local_today_iso(request)
     entry   = nutr.add_meal(
         body.get("date", today),
         body["name"],
@@ -1618,7 +1650,7 @@ async def log_meals_batch(request: Request):
     session = _require_session(request)
     uid     = session["user_id"]
     body    = await request.json()
-    today   = datetime.now().strftime("%Y-%m-%d")
+    today   = _user_local_today_iso(request)
     date_str = body.get("date", today)
     out = []
     for m in (body.get("meals") or []):
@@ -1679,7 +1711,7 @@ async def parse_meal_photo(request: Request):
 def remove_meal(meal_id: str, request: Request, date: str = None):
     session = _require_session(request)
     uid     = session["user_id"]
-    today   = date or datetime.now().strftime("%Y-%m-%d")
+    today   = date or _user_local_today_iso(request)
     ok = nutr.delete_meal(today, meal_id, uid)
     if not ok:
         raise HTTPException(status_code=404, detail="Meal not found")
@@ -1710,7 +1742,7 @@ async def log_weight(request: Request):
     session = _require_session(request)
     uid     = session["user_id"]
     body    = await request.json()
-    today   = datetime.now().strftime("%Y-%m-%d")
+    today   = _user_local_today_iso(request)
     entry   = nutr.add_weight_entry(
         date_str                 = body.get("date", today),
         weight_lbs               = body["weight_lbs"],
@@ -1810,7 +1842,7 @@ async def log_workout(request: Request):
     session = _require_session(request)
     user_id = session["user_id"]
     body = await request.json()
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = _user_local_today_iso(request)
     entry = trn.add_workout(
         user_id      = user_id,
         date_str     = body.get("date", today),
@@ -1919,7 +1951,7 @@ async def get_training_recommendation(request: Request):
     try:
         raw = await fetch_all(access_token, days=7)
         rm, _, _, smm = parse_oura_data(raw)
-        today_str = datetime.now().strftime("%Y-%m-%d")
+        today_str = _user_local_today_iso(request)
         rdy = rm.get(today_str) or (rm[sorted(rm)[-1]] if rm else {})
         sm  = smm.get(today_str) or (smm[sorted(smm)[-1]] if smm else {})
         readiness_score = rdy.get("score", 70) or 70
@@ -1974,7 +2006,7 @@ async def log_lab(request: Request):
     session  = _require_session(request)
     uid      = session["user_id"]
     body     = await request.json()
-    today    = datetime.now().strftime("%Y-%m-%d")
+    today    = _user_local_today_iso(request)
     notes    = body.pop("notes", "")
     date_str = body.pop("date", today)
     body.pop("id",        None)
@@ -2005,7 +2037,7 @@ async def import_lab_pdf(request: Request, file: UploadFile = File(...)):
     contents = await file.read()
     date_str, extracted = lbs.parse_pdf(contents)
     return {
-        "date":      date_str or datetime.now().strftime("%Y-%m-%d"),
+        "date":      date_str or _user_local_today_iso(request),
         "extracted": extracted,   # {marker_key: float}
         "count":     len(extracted),
     }
@@ -2926,13 +2958,13 @@ def get_todays_move(request: Request, date: Optional[str] = None):
     session  = _require_session(request)
     user_id  = session["user_id"]
     profile  = _get_profile(user_id) or {}
-    # Use client's local date when provided; fall back to server (UTC) only
-    # if the client didn't send one. The frontend api client always sends it.
+    # Device-local "today" via the X-User-Local-Date header (set by api.ts).
+    # The legacy ?date= query param is still honored for direct backend tests.
     if date and _valid_ymd(date):
         today_iso = date
         today_d   = datetime.strptime(date, "%Y-%m-%d").date()
     else:
-        today_d   = datetime.now().date()
+        today_d   = _user_local_today(request)
         today_iso = today_d.isoformat()
 
     # Yesterday's mood (if logged) — useful coloring signal.
@@ -4548,7 +4580,7 @@ async def manual_log(request: Request):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 
-    date_str = (body.get("date") or "").strip() or datetime.now().strftime("%Y-%m-%d")
+    date_str = (body.get("date") or "").strip() or _user_local_today_iso(request)
     if not _valid_ymd(date_str):
         raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
 
@@ -4682,8 +4714,9 @@ async def debug_sleep(request: Request):
     raw = await fetch_all(access_token, days=7)
     rm, slm, am, smm = parse_oura_data(raw)
 
-    today_str     = datetime.now().strftime("%Y-%m-%d")
-    yesterday_str = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+    today_d       = _user_local_today(request)
+    today_str     = today_d.isoformat()
+    yesterday_str = (today_d - timedelta(days=1)).isoformat()
 
     if slm.get(today_str):
         anchor = today_str
