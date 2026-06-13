@@ -60,7 +60,15 @@ export default function CoachReactionToast({ text, onDismiss, onOpenChat }: Prop
           {onOpenChat && (
             <button
               onClick={() => {
-                onOpenChat(`Tell me more about: "${text}"`);
+                // Seed format matters: a `Tell me more about: "<text>"` seed
+                // makes the chat Coach Al think the user is quoting a prior
+                // claim he made — but the chat is a separate LLM call with
+                // no memory of generating the toast, so he disclaims it.
+                // (Backend coach_voice.VOICE_BLOCK also teaches him to own
+                // notes from other surfaces; this phrasing pairs with that.)
+                // "Talk to me about" is forward-looking and matches the
+                // button label so the user's chat bubble reads naturally.
+                onOpenChat(`Talk to me about this — the note that just popped up: "${text}"`);
                 onDismiss();
               }}
               className="mt-1.5 text-[11px] font-semibold text-[#1B3829] hover:underline"
