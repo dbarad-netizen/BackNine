@@ -21,7 +21,6 @@ import SupplementsCard from "@/components/SupplementsCard";
 import AppleHealthCard from "@/components/AppleHealthCard";
 import DayMealsDrawer from "@/components/DayMealsDrawer";
 import ManualLogCard from "@/components/ManualLogCard";
-import TodaysMoveCard from "@/components/TodaysMoveCard";
 import CoachReactionToast from "@/components/CoachReactionToast";
 import LeagueGlance from "@/components/LeagueGlance";
 import CoachCard from "@/components/CoachCard";
@@ -1492,27 +1491,6 @@ export default function DashboardPage() {
                 api.dashboard().then(setData).catch(() => {});
               }} />
             )}
-
-            {/* ── Today's Move — Coach Al's single concrete recommendation ──
-                Sits ABOVE the briefing because this is the action layer; the
-                briefing below is the synthesis layer. */}
-            <TodaysMoveCard
-              onOpenChat={(seed) => openChatRef.current?.(seed)}
-              onNavSection={(s) => { setSection(s); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-              onOpenMealLogger={() => {
-                // Expand the meal form AND scroll to it. The pill lives near
-                // the bottom of the Scorecard — without the scroll, tapping
-                // from Today's Move (top of page) does nothing visible.
-                // setTimeout gives React a tick to render the expanded form
-                // before we scroll, so the form is in the layout when measured.
-                setShowMealAdd(true);
-                setTimeout(() => {
-                  document.getElementById("meal-quick-add")?.scrollIntoView({ behavior: "smooth", block: "start" });
-                }, 60);
-              }}
-              onOpenWorkoutLogger={() => { setSection("training"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-              onOpenWeightLog={() => { setSection("nutrition"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-            />
 
             {/* ── Coach Al's Morning Briefing ── */}
             <MorningBriefing onOpenChat={() => openChatRef.current?.()} />
