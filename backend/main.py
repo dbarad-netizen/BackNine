@@ -3738,10 +3738,16 @@ def _build_user_health_snapshot(user_id: str) -> dict:
     Returns: { series: {steps, sleep, hrv, rhr}, longevity, recent_workouts,
                latest_weight }. All fields nullable so a non-Oura / brand-new
                user still gets a valid shape (None/empty values).
+
+    Window: 14 days. The friend-detail modal renders both users' series on
+    one chart so 14 days reads "current trend" without crowding 7 days'
+    worth of empty space.
     """
-    # 7-day sparklines from Oura + AH (steps prefer AH when live).
+    # 14-day sparklines from Oura + AH (steps prefer AH when live). The wider
+    # fetch buffer (days=20) gives a few days of slack for backfill / late
+    # syncs that may land outside the strict window.
     try:
-        rm, slm, am, smm = oc.get_days(user_id, days=10)
+        rm, slm, am, smm = oc.get_days(user_id, days=20)
     except Exception:
         rm, slm, am, smm = {}, {}, {}, {}
 
@@ -3750,8 +3756,8 @@ def _build_user_health_snapshot(user_id: str) -> dict:
     series_sleep:  list[dict] = []
     series_hrv:    list[dict] = []
     series_rhr:    list[dict] = []
-    for i in range(7):
-        d = (today_d - timedelta(days=6 - i)).isoformat()
+    for i in range(14):
+        d = (today_d - timedelta(days=13 - i)).isoformat()
         steps_val = None
         try:
             ah_d = ah.get_day(user_id, d)

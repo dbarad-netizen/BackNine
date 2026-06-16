@@ -24,48 +24,88 @@ interface Props {
   onOpenDm: (friendUserId: string, friendName: string, seed?: string) => void;
 }
 
-// ── Tiny inline SVG sparkline — no chart lib, no extra deps ──
-function Sparkline({
-  points, color, height = 36,
-}: { points: SparkPoint[]; color: string; height?: number }) {
-  const vals = points.map(p => (typeof p.value === "number" ? p.value : null));
-  const real = vals.filter((v): v is number => v != null);
-  if (real.length < 2) {
+// ── Comparison chart — friend's series vs yours, same y-scale, no deps ──
+//
+// Replaces a single-line sparkline so the user actually SEES the comparison
+// over time, not just "their trend next to one of my numbers." Friend = solid
+// in the metric color; you = solid gray. Both autoscale to a shared y-range
+// so the visual contrast is real (one line above the other = leading on that
+// metric over the window).
+function ComparisonChart({
+  friendPoints, youPoints, color, height = 44,
+}: {
+  friendPoints: SparkPoint[];
+  youPoints?:   SparkPoint[];
+  color:        string;
+  height?:      number;
+}) {
+  const toVals = (pts: SparkPoint[] | undefined): (number | null)[] =>
+    (pts || []).map(p => (typeof p.value === "number" ? p.value : null));
+
+  const friendVals = toVals(friendPoints);
+  const youVals    = toVals(youPoints);
+
+  // Both series share the same x-axis (one point per day, oldest left).
+  // We treat the friend's length as the canonical window — backend produces
+  // 14 entries for both. If the viewer hasn't data for some days, those
+  // appear as gaps in the gray line, not a flat zero.
+  const len = friendVals.length;
+  const realAll = [...friendVals, ...youVals].filter((v): v is number => v != null);
+  if (realAll.length < 2 || len < 2) {
     return (
-      <div className="text-[10px] text-gray-500 italic h-9 flex items-center">
-        Not enough data
+      <div className="text-[10px] text-gray-500 italic h-11 flex items-center">
+        Not enough data yet
       </div>
     );
   }
-  const max = Math.max(...real);
-  const min = Math.min(...real);
+
+  const max  = Math.max(...realAll);
+  const min  = Math.min(...realAll);
   const span = max - min || 1;
-  const W = 100;            // viewBox width — CSS scales it
-  const H = height;
-  const xs = vals.map((_, i) => (vals.length === 1 ? W / 2 : (i / (vals.length - 1)) * W));
-  const ys = vals.map(v => (v == null ? null : H - ((v - min) / span) * (H - 4) - 2));
-  // Build path; break into separate segments around nulls so missing days
-  // don't draw a straight line through the gap.
-  const segments: string[] = [];
-  let cur = "";
-  for (let i = 0; i < xs.length; i++) {
-    if (ys[i] == null) {
-      if (cur) { segments.push(cur); cur = ""; }
-      continue;
+  const W    = 100;          // viewBox width — scaled by CSS
+  const H    = height;
+
+  // Build a piecewise SVG path for any series of (date-indexed) values.
+  // Nulls break the line so missing days don't draw a straight slope across them.
+  const buildPath = (vals: (number | null)[]): { d: string[]; xs: number[]; ys: (number | null)[]; lastIdx: number } => {
+    const xs = vals.map((_, i) => (vals.length === 1 ? W / 2 : (i / (vals.length - 1)) * W));
+    const ys = vals.map(v => (v == null ? null : H - ((v - min) / span) * (H - 6) - 3));
+    const d: string[] = [];
+    let cur = "";
+    for (let i = 0; i < xs.length; i++) {
+      if (ys[i] == null) {
+        if (cur) { d.push(cur); cur = ""; }
+        continue;
+      }
+      cur += `${cur ? "L" : "M"}${xs[i]},${ys[i]}`;
     }
-    cur += `${cur ? "L" : "M"}${xs[i]},${ys[i]}`;
-  }
-  if (cur) segments.push(cur);
-  // Marker for the latest non-null value (rightmost).
-  let lastIdx = -1;
-  for (let i = vals.length - 1; i >= 0; i--) { if (vals[i] != null) { lastIdx = i; break; } }
+    if (cur) d.push(cur);
+    let lastIdx = -1;
+    for (let i = vals.length - 1; i >= 0; i--) { if (vals[i] != null) { lastIdx = i; break; } }
+    return { d, xs, ys, lastIdx };
+  };
+
+  // Align the viewer's series to the friend's length: pad with leading nulls
+  // if shorter (rare, but possible if the friend has more history than you).
+  const youAligned = youVals.length === len ? youVals : Array(Math.max(0, len - youVals.length)).fill(null).concat(youVals).slice(-len);
+  const friend = buildPath(friendVals);
+  const you    = youVals.length > 0 ? buildPath(youAligned) : null;
+
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-9">
-      {segments.map((seg, i) => (
-        <path key={i} d={seg} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-11">
+      {/* You — drawn first so the friend's color sits on top */}
+      {you && you.d.map((seg, i) => (
+        <path key={`y-${i}`} d={seg} fill="none" stroke="#9ca3af" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" opacity="0.85" />
       ))}
-      {lastIdx >= 0 && ys[lastIdx] != null && (
-        <circle cx={xs[lastIdx]} cy={ys[lastIdx] as number} r="2" fill={color} />
+      {you && you.lastIdx >= 0 && you.ys[you.lastIdx] != null && (
+        <circle cx={you.xs[you.lastIdx]} cy={you.ys[you.lastIdx] as number} r="1.6" fill="#9ca3af" />
+      )}
+      {/* Friend — primary color */}
+      {friend.d.map((seg, i) => (
+        <path key={`f-${i}`} d={seg} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      ))}
+      {friend.lastIdx >= 0 && friend.ys[friend.lastIdx] != null && (
+        <circle cx={friend.xs[friend.lastIdx]} cy={friend.ys[friend.lastIdx] as number} r="2" fill={color} />
       )}
     </svg>
   );
@@ -134,17 +174,24 @@ export default function FriendDetailModal({ friendUserId, friendName, onClose, o
 
           {!loading && !error && data && (
             <>
-              {/* 7-day sparklines for the four headline metrics — with the
-                  viewer's own latest value below the friend's, so every tile
-                  is a side-by-side comparison. */}
+              {/* 14-day comparison chart for the four headline metrics —
+                  two overlaid series per tile (friend in color, you in gray)
+                  on a shared y-scale. Trends, not single readings. */}
               <section>
                 <div className="flex items-baseline justify-between mb-2">
                   <p className="text-[10px] text-gray-600 uppercase tracking-widest font-semibold">
-                    Last 7 days
+                    Last 14 days
                   </p>
                   {data.you && (
-                    <p className="text-[10px] text-gray-500">
-                      {data.name.split(" ")[0]} vs {data.you.name.split(" ")[0] || "you"}
+                    <p className="text-[10px] text-gray-500 flex items-center gap-1.5">
+                      <span className="inline-flex items-center gap-1">
+                        <span className="w-2.5 h-0.5 rounded-full bg-gray-900" />
+                        {data.name.split(" ")[0]}
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <span className="w-2.5 h-0.5 rounded-full bg-gray-400" />
+                        you
+                      </span>
                     </p>
                   )}
                 </div>
@@ -200,7 +247,7 @@ export default function FriendDetailModal({ friendUserId, friendName, onClose, o
                             )}
                           </div>
                         )}
-                        <Sparkline points={series} color={color} />
+                        <ComparisonChart friendPoints={series} youPoints={youSeries} color={color} />
                       </button>
                     );
                   })}
