@@ -22,7 +22,6 @@ import AppleHealthCard from "@/components/AppleHealthCard";
 import DayMealsDrawer from "@/components/DayMealsDrawer";
 import ManualLogCard from "@/components/ManualLogCard";
 import CoachReactionToast from "@/components/CoachReactionToast";
-import LeagueGlance from "@/components/LeagueGlance";
 import CoachCard from "@/components/CoachCard";
 import TrendChart from "@/components/TrendChart";
 import TrainingTab, { WorkoutLogger } from "@/components/TrainingTab";
@@ -1851,9 +1850,6 @@ export default function DashboardPage() {
               onInvite={() => setShowShare(true)}
               onSeeMore={() => { setSection("challenges"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
             />
-            {/* LeagueGlance lower on the Scorecard still gives the rank /
-                week-progress glance — kept; only the redundant "Clubhouse"
-                teaser card that lived here was removed. */}
 
             {/* ── Quick action: enter a meal / macros (logs inline — no tab switch) ──
                 Collapsed summary matches the Body & Weight pill below: a one-line
@@ -2021,11 +2017,12 @@ export default function DashboardPage() {
               </>
             )}
 
-            {/* ── League at a glance ──
-                Replaces the Active Competitions strip (redundant with the
-                Clubhouse teaser above). Tier badge + your rank + days left in
-                the week → tap to drop into the full Clubhouse standings. */}
-            <LeagueGlance onOpen={() => { setSection("challenges"); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
+            {/* LeagueGlance used to live here as a "Weekly Leaderboard ·
+                engagement points" pill that linked to Clubhouse. Removed
+                because Today's Leaderboard at the top of the Scorecard
+                already carries the leaderboard surface and has its own
+                "See full Clubhouse →" link. Keeping two leaderboard CTAs
+                was redundant. */}
 
             {/* ── Achievements "Next up" ──
                 Promoted out of the previous expander — it shows the closest

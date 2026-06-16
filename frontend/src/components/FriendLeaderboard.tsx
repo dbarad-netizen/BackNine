@@ -203,7 +203,7 @@ export default function FriendLeaderboard({ onInvite, onSeeMore }: Props = {}) {
     <section>
       <div className="flex items-center justify-between mb-2 gap-2">
         <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-600">
-          Today&apos;s Matchup
+          Today&apos;s Leaderboard
         </h3>
         {onSeeMore ? (
           // Scorecard placement: send the user to the Clubhouse where the
