@@ -32,24 +32,33 @@ const MEDAL = ["🥇", "🥈", "🥉"];
 
 /** Compact column labels for the per-task grid header / legend chips. */
 const SHORT: Record<string, string> = {
-  checkin: "Check-in", workout: "Workout", meal: "Meal", weighin: "Weigh-in", steps: "Steps",
+  checkin: "Check-in", workout: "Workout", meal: "Meal", weighin: "Weigh-in",
+  goal_pace: "Goal pace", steps: "Steps",
 };
 
 /** Shown when the backend hasn't returned a personal breakdown (older API or
  * soft-fail). Same point values as backend/leagues.py — keep in sync. */
 const FALLBACK_RULES: LeagueBreakdownItem[] = [
-  { key: "checkin", label: "Daily check-in", icon: "✅", per: 10, per_unit: "day",       count: 0, points: 0 },
-  { key: "workout", label: "Workouts",       icon: "💪", per: 20, per_unit: "first/day", count: 0, points: 0,
+  { key: "checkin",   label: "Daily check-in", icon: "✅", per: 10, per_unit: "day",       count: 0, points: 0 },
+  { key: "workout",   label: "Workouts",       icon: "💪", per: 20, per_unit: "first/day", count: 0, points: 0,
     tier: { extra_per: 5, max_per_day: 3 } },
-  { key: "meal",    label: "Log a meal",     icon: "🍳", per: 5,  per_unit: "day",       count: 0, points: 0 },
-  { key: "weighin", label: "Log a weigh-in", icon: "⚖️", per: 5,  per_unit: "day",       count: 0, points: 0 },
-  { key: "steps",   label: "Steps (Oura)",   icon: "👟", per: 1,  per_unit: "1k steps",  count: 0, points: 0 },
+  { key: "meal",      label: "Log a meal",     icon: "🍳", per: 5,  per_unit: "day",       count: 0, points: 0 },
+  { key: "weighin",   label: "Log a weigh-in", icon: "⚖️", per: 5,  per_unit: "day",       count: 0, points: 0 },
+  { key: "goal_pace", label: "Goal pace",      icon: "🎯", per: 15, per_unit: "week",      count: 0, points: 0,
+    tier: { behind_pts: 5 } },
+  { key: "steps",     label: "Steps (Oura)",   icon: "👟", per: 1,  per_unit: "1k steps",  count: 0, points: 0 },
 ];
 
 /** Render the points rule for a category as compact text for the pill row.
- *  Handles the workout tiered case specifically so it reads truthfully. */
-function ruleLabel(c: { per: number; per_unit: string; tier?: { extra_per: number; max_per_day: number } }): string {
-  if (c.tier) {
+ *  Handles both tiered shapes:
+ *    - workouts: `{ extra_per, max_per_day }` (additional points per repeat action)
+ *    - goal pace: `{ behind_pts }` (alternate value for the behind-pace bucket)
+ */
+function ruleLabel(c: { key?: string; per: number; per_unit: string; tier?: { extra_per?: number; max_per_day?: number; behind_pts?: number } }): string {
+  if (c.tier?.behind_pts != null) {
+    return `+${c.per} on pace · +${c.tier.behind_pts} behind`;
+  }
+  if (c.tier?.extra_per != null && c.tier?.max_per_day != null) {
     return `+${c.per} 1st · +${c.tier.extra_per} each more (max ${c.tier.max_per_day}/day)`;
   }
   if (c.per_unit === "1k steps") return `+${c.per}/1k`;

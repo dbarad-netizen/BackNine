@@ -1391,11 +1391,17 @@ export interface LeagueStanding {
 }
 
 /** Tiered points payload for categories whose math isn't a simple per × count.
- *  Currently only set on the workout category: first workout/day = `per`,
- *  each additional workout (up to `max_per_day`) = `extra_per`. */
+ *  Two shapes today:
+ *    - workouts: `{ extra_per, max_per_day }` — first/day = `per`, each
+ *      additional workout (up to `max_per_day`) = `extra_per`.
+ *    - goal_pace: `{ behind_pts }` — `per` is the on-pace bonus; users
+ *      behind pace get `behind_pts` instead. Both are optional so future
+ *      categories can opt into either pattern.
+ */
 export interface LeagueCategoryTier {
-  extra_per:   number;
-  max_per_day: number;
+  extra_per?:   number;
+  max_per_day?: number;
+  behind_pts?:  number;
 }
 
 export interface LeagueCategory {

@@ -257,6 +257,92 @@ def _enrich(goal_row: dict, today_str: str, current: Optional[float]) -> dict:
     }
 
 
+def pace_points_for_users(
+    user_ids: list[str],
+    week_start_iso: str,
+    today_iso: str,
+    min_active_days: int = 4,
+) -> dict[str, int]:
+    """Compute the weekly Goal Pace bonus per user for the current league week.
+
+    Returns {user_id: pts} where pts is 5 or 15. Users who don't qualify
+    (no active goal, or goal active for fewer than `min_active_days` of the
+    week, or no progress data yet) are simply omitted from the dict.
+
+      • +15 if user has an active goal AND is on or ahead of pace
+        (statuses: well_ahead | ahead | on_track | reached)
+      • +5  if user has an active goal but is behind, slightly behind,
+        or just getting started (gives some credit for showing up)
+      • 0   if the goal has no pace yet (no data) → omitted
+
+    Activation guard: a goal created on Saturday shouldn't sweep up points
+    on Sunday's score. We require the goal to have been ACTIVE for at least
+    `min_active_days` of the 7-day league week (default 4). This is a one-off
+    check against goal start_date + end_date; once the goal's been around
+    a few days, every subsequent week qualifies automatically.
+    """
+    if not user_ids:
+        return {}
+    sb = _sb()
+    try:
+        today_d      = date.fromisoformat(today_iso)
+        week_start_d = date.fromisoformat(week_start_iso)
+    except Exception:
+        return {}
+    try:
+        res = (
+            sb.table("user_goals")
+            .select("*")
+            .in_("user_id", user_ids)
+            .eq("status", "active")
+            .execute()
+        )
+    except Exception:
+        return {}
+    out: dict[str, int] = {}
+    for row in (res.data or []):
+        uid    = row["user_id"]
+        metric = row.get("metric")
+        if metric not in METRICS:
+            continue
+        try:
+            g_start = date.fromisoformat(str(row["start_date"]))
+            g_end   = date.fromisoformat(str(row["end_date"]))
+        except Exception:
+            continue
+        # Activation guard — how many days this week was the goal actually active?
+        # Inclusive of both endpoints; capped at the 7-day league window.
+        active_window_start = max(g_start, week_start_d)
+        active_window_end   = min(g_end, today_d)
+        days_active = max(0, min(7, (active_window_end - active_window_start).days + 1))
+        if days_active < min_active_days:
+            continue
+        # Replay the same _pace() logic _enrich uses, but inline so we don't
+        # round-trip through get_active_goal for every user.
+        meta         = METRICS[metric]
+        cur          = current_value(uid, metric)
+        plan         = row.get("plan") or {}
+        weeks_plan   = plan.get("weeks") or []
+        total_weeks  = row.get("duration_weeks") or max(1, round((g_end - g_start).days / 7))
+        week_num     = min(total_weeks, max(1, (today_d - g_start).days // 7 + 1))
+        this_week    = next(
+            (w for w in weeks_plan if w.get("week") == week_num),
+            (weeks_plan[week_num - 1] if 0 < week_num <= len(weeks_plan) else None),
+        )
+        progress_pct = _progress_pct(row.get("baseline"), cur, row["target"])
+        pace         = _pace(
+            meta["label"], row.get("baseline"), cur, progress_pct,
+            g_start, g_end, today_d, this_week,
+        )
+        status = pace.get("status")
+        if status in ("well_ahead", "ahead", "on_track", "reached"):
+            out[uid] = 15
+        elif status in ("slightly_behind", "behind", "starting"):
+            out[uid] = 5
+        # "no_data" → omit (no progress signal yet; no points)
+    return out
+
+
 def get_active_goal(user_id: str, today_str: str) -> Optional[dict]:
     sb = _sb()
     res = (
