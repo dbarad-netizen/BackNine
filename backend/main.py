@@ -793,7 +793,21 @@ async def oura_auth_callback(
 
 @app.post("/auth/logout")
 def logout(response: Response):
-    response.delete_cookie(_session_cookie_name())
+    # CRITICAL: delete_cookie() must mirror the attributes used by set_cookie().
+    # The session cookie is set with samesite="none", secure=True, httponly=True,
+    # path="/". A bare delete_cookie() emits a Set-Cookie with samesite default
+    # (Lax) and secure=False — browsers (especially Safari on iOS) treat that as
+    # a DIFFERENT cookie, so they don't actually clear the original. Result: the
+    # user "logs out" but the cookie persists, next request re-authenticates,
+    # and they bounce right back into the previous session. This bit us on
+    # mobile when switching between accounts.
+    response.delete_cookie(
+        key=_session_cookie_name(),
+        path="/",
+        httponly=True,
+        secure=True,
+        samesite="none",
+    )
     return {"status": "logged_out"}
 
 
@@ -1551,7 +1565,14 @@ def disconnect_wearable(provider: str, request: Request, response: Response):
     session = _require_session(request)
     if session.get("provider") != provider:
         raise HTTPException(status_code=404, detail="Wearable not connected")
-    response.delete_cookie(_session_cookie_name())
+    # Same attribute-mirror requirement as /auth/logout — see comment there.
+    response.delete_cookie(
+        key=_session_cookie_name(),
+        path="/",
+        httponly=True,
+        secure=True,
+        samesite="none",
+    )
     db = get_supabase()
     if db and session.get("user_id"):
         db.table("wearable_connections").delete().eq("user_id", session["user_id"]).eq("provider", provider).execute()
