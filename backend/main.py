@@ -3604,6 +3604,19 @@ def abandon_goal(goal_id: str, request: Request):
     return {"status": "abandoned"}
 
 
+@app.post("/api/goals/{goal_id}/regenerate")
+def regenerate_goal_plan(goal_id: str, request: Request):
+    """Regenerate the cached Coach Al plan on an existing goal — picks up
+    any prompt updates (voice block changes, new rules) without making the
+    user re-create the goal from scratch."""
+    session = _require_session(request)
+    today_iso = _user_local_today_iso(request)
+    row = gl.regenerate_plan(session["user_id"], goal_id, today_iso)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Goal not found or could not be regenerated")
+    return row
+
+
 # ── Achievements / badges ─────────────────────────────────────────────────────
 
 @app.get("/api/achievements")

@@ -47,6 +47,7 @@ export default function GoalCard({ onOpenChat, onActiveChange }: Props) {
   const [building, setBuilding] = useState(false);
   const [expandPlan, setExpandPlan] = useState(false);
   const [abandonConfirm, setAbandonConfirm] = useState(false);
+  const [regenerating, setRegenerating]     = useState(false);
   const [error, setError]     = useState<string | null>(null);
 
   useEffect(() => {
@@ -86,6 +87,19 @@ export default function GoalCard({ onOpenChat, onActiveChange }: Props) {
     try { await api.goal.complete(goal.id); } catch { /* ignore */ }
     setGoal(null);
     onActiveChange?.(false);
+  };
+
+  const handleRegenerate = async () => {
+    if (!goal || regenerating) return;
+    setRegenerating(true);
+    try {
+      const fresh = await api.goal.regenerate(goal.id);
+      setGoal(fresh);
+    } catch {
+      /* best-effort — silent fail keeps the existing plan in place */
+    } finally {
+      setRegenerating(false);
+    }
   };
 
   const handleAbandon = async () => {
@@ -227,6 +241,10 @@ export default function GoalCard({ onOpenChat, onActiveChange }: Props) {
             <button onClick={handleAbandon}
               className={`text-[11px] transition-colors ${abandonConfirm ? "text-red-500 font-semibold" : "text-gray-600 hover:text-gray-600"}`}>
               {abandonConfirm ? "Confirm?" : "Abandon"}
+            </button>
+            <button onClick={handleRegenerate} disabled={regenerating}
+              className="text-[11px] text-gray-600 hover:text-[#1B3829] transition-colors disabled:opacity-50">
+              {regenerating ? "Regenerating…" : "Regenerate plan"}
             </button>
           </div>
           {onOpenChat && (

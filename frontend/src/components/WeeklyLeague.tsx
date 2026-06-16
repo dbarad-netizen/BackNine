@@ -20,6 +20,12 @@ import { api, type LeagueResponse, type LeagueBreakdownItem, type LeagueCategory
 interface Props {
   /** Open the share/invite sheet — surfaced when the league is sparse. */
   onInvite?: () => void;
+  /** When set, renders a "See full Clubhouse →" link in the header so this
+   *  card on the Scorecard surface always has a clear path back to the
+   *  rest of the social hub (Pulse, groups, challenges). No link rendered
+   *  when undefined (Clubhouse placement, where the card already IS the
+   *  destination). */
+  onSeeMore?: () => void;
 }
 
 const MEDAL = ["🥇", "🥈", "🥉"];
@@ -59,7 +65,7 @@ function quickestWin(items: LeagueBreakdownItem[]): LeagueBreakdownItem | null {
   return untapped.reduce((best, i) => (i.per > best.per ? i : best));
 }
 
-export default function WeeklyLeague({ onInvite }: Props) {
+export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
   const [data, setData] = useState<LeagueResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [showScoring, setShowScoring] = useState(false);
@@ -119,11 +125,21 @@ export default function WeeklyLeague({ onInvite }: Props) {
             </p>
           </div>
         </div>
-        {days_left != null && (
-          <span className="text-[10px] text-white bg-white/15 backdrop-blur-sm rounded-full px-2.5 py-1 font-semibold shrink-0">
-            {days_left === 0 ? "Final day" : `${days_left}d left`}
-          </span>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {days_left != null && (
+            <span className="text-[10px] text-white bg-white/15 backdrop-blur-sm rounded-full px-2.5 py-1 font-semibold">
+              {days_left === 0 ? "Final day" : `${days_left}d left`}
+            </span>
+          )}
+          {onSeeMore && (
+            <button
+              onClick={onSeeMore}
+              className="text-[10px] text-white/90 hover:text-white font-semibold underline-offset-2 hover:underline"
+            >
+              Clubhouse →
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Standings */}

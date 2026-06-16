@@ -1001,6 +1001,12 @@ export const api = {
     remove(id: string): Promise<{ status: string }> {
       return request(`/api/goals/${encodeURIComponent(id)}`, { method: "DELETE" });
     },
+    /** Re-run goal_coach.generate_plan against the same goal parameters.
+     *  Useful when we've updated Coach Al's prompts (e.g. new voice block
+     *  rules) and existing cached plans should be refreshed. */
+    regenerate(id: string): Promise<Goal> {
+      return request(`/api/goals/${encodeURIComponent(id)}/regenerate`, { method: "POST" });
+    },
   },
 
   // ── Daily check-in ────────────────────────────────────────────────────────

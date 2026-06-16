@@ -315,6 +315,56 @@ def create_goal(user_id: str, metric: str, target: float, duration_weeks: int, t
     return _enrich(row, today_str, baseline)
 
 
+def regenerate_plan(user_id: str, goal_id: str, today_str: str) -> Optional[dict]:
+    """Re-run goal_coach.generate_plan against the same goal parameters and
+    persist the fresh `plan` JSON. Returns the enriched goal row, or None
+    if the goal can't be found / isn't owned by the caller.
+
+    Why this exists: plans are cached at create-time, so a Coach-Al prompt
+    improvement (e.g. the "use BackNine's tools, not external apps" rule
+    added to VOICE_BLOCK) won't show up on existing goals until they're
+    regenerated. This is the user-facing escape hatch.
+    """
+    sb = _sb()
+    try:
+        res = (
+            sb.table("user_goals")
+            .select("*")
+            .eq("user_id", user_id)
+            .eq("id", goal_id)
+            .limit(1)
+            .execute()
+        )
+    except Exception:
+        return None
+    if not (res.data or []):
+        return None
+    row = res.data[0]
+    metric = row.get("metric")
+    if metric not in METRICS:
+        return None
+    meta     = METRICS[metric]
+    profile  = _profile(sb, user_id)
+    baseline = row.get("baseline")
+    target   = row.get("target")
+    duration = int(row.get("duration_weeks") or 8)
+    # Fresh plan, same parameters — new prompt instructions get picked up.
+    plan = goal_coach.generate_plan(meta["label"], meta["unit"], baseline, target, duration, profile)
+    try:
+        upd = (
+            sb.table("user_goals")
+            .update({"plan": plan})
+            .eq("user_id", user_id)
+            .eq("id", goal_id)
+            .execute()
+        )
+        row = (upd.data or [row])[0]
+    except Exception:
+        return None
+    cur = current_value(user_id, metric)
+    return _enrich(row, today_str, cur)
+
+
 def set_status(user_id: str, goal_id: str, status: str) -> bool:
     if status not in ("completed", "abandoned"):
         raise ValueError("Invalid status")

@@ -1842,11 +1842,15 @@ export default function DashboardPage() {
               );
             })()}
 
-            {/* ── Today's Leaderboard ──
-                Surface the actual leaderboard here on the Scorecard so users
-                see real data, not a click-through teaser. The header link
-                jumps to the Clubhouse for Pulse, league, groups, challenges. */}
-            <FriendLeaderboard
+            {/* ── Weekly Leaderboard ──
+                The engagement-points standings (check-ins, workouts, meals,
+                weigh-ins, steps) on the Scorecard top. Same component used in
+                Clubhouse; here it gets a "Clubhouse →" header link so users
+                still have a one-tap path to Pulse, groups, and challenges.
+                The daily-matchup FriendLeaderboard ("Today's Matchup") lives
+                only in the Clubhouse — kept off the Scorecard so we have
+                one leaderboard at a time, not two competing ones. */}
+            <WeeklyLeague
               onInvite={() => setShowShare(true)}
               onSeeMore={() => { setSection("challenges"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
             />
