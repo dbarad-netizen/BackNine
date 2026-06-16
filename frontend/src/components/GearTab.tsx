@@ -11,10 +11,23 @@ import {
   type GearDemand,
 } from "@/lib/api";
 
-// Flat lookup: catalog id -> { item, category icon }. Lets the Coach Al finder
-// turn the ids it returns back into full product cards.
-const ITEM_BY_ID = new Map<string, { item: GearItem; icon: string }>();
-GEAR.forEach((cat) => cat.items.forEach((it) => ITEM_BY_ID.set(it.id, { item: it, icon: cat.icon })));
+// Flat lookup: catalog id -> { item, category icon, category label }. Lets the
+// Coach Al finder turn the ids it returns back into full product cards, and
+// gives the Editor's Pick card the category name for context.
+const ITEM_BY_ID = new Map<string, { item: GearItem; icon: string; categoryLabel: string }>();
+GEAR.forEach((cat) =>
+  cat.items.forEach((it) => ITEM_BY_ID.set(it.id, { item: it, icon: cat.icon, categoryLabel: cat.label })),
+);
+
+// All items currently tagged "Editor's Pick" — the featured card above the
+// filter pills cycles through these. Add or remove the badge in gearData.ts
+// to change what shows up here; no other code changes needed.
+const EDITORS_PICKS: { item: GearItem; icon: string; categoryLabel: string }[] = [];
+GEAR.forEach((cat) =>
+  cat.items.forEach((it) => {
+    if (it.badge === "Editor's Pick") EDITORS_PICKS.push({ item: it, icon: cat.icon, categoryLabel: cat.label });
+  }),
+);
 
 // A distinctive glyph per item (derived from its name/brand) so the no-photo
 // placeholder reads as a varied, intentional catalog rather than one repeated
@@ -88,6 +101,13 @@ export default function GearTab() {
           Products we use and recommend — now with reviews from the BackNine community.
         </p>
       </div>
+
+      {/* ── Editor's Pick ──
+          A single featured card surfacing one curated item with a longer
+          editorial blurb. Rotates daily across items tagged "Editor's Pick"
+          in gearData.ts. Sits above the filter pills so it's the first thing
+          users see when they land on the Gear page. */}
+      <EditorsPickCard />
 
       {/* Category filter pills */}
       <div className="flex flex-wrap gap-2">
@@ -284,7 +304,7 @@ function GearFinder({
   const picks = (result?.picks || [])
     .map((p) => ({ pick: p, entry: ITEM_BY_ID.get(p.id) }))
     .filter(
-      (x): x is { pick: GearFinderPick; entry: { item: GearItem; icon: string } } => !!x.entry
+      (x): x is { pick: GearFinderPick; entry: { item: GearItem; icon: string; categoryLabel: string } } => !!x.entry
     );
 
   return (
@@ -418,6 +438,55 @@ function GearFinder({
         </div>
       )}
     </div>
+  );
+}
+
+/** EditorsPickCard — featured-item card at the top of the Gear page.
+ *
+ * Rotates through items badged "Editor's Pick" in gearData.ts. Rotation is
+ * deterministic by day so the same user sees the same pick all day (avoids
+ * a confusing reshuffle on refresh) and a different one tomorrow. */
+function EditorsPickCard() {
+  if (EDITORS_PICKS.length === 0) return null;
+  // Day-stable index: days since epoch modulo N picks.
+  const dayIndex = Math.floor(Date.now() / 86_400_000) % EDITORS_PICKS.length;
+  const { item, categoryLabel, icon } = EDITORS_PICKS[dayIndex];
+  const hue = brandHue(item.brand);
+  return (
+    <a
+      href={item.link}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="block rounded-2xl overflow-hidden border border-amber-300/60 bg-gradient-to-br from-amber-50 via-white to-white shadow-sm hover:shadow-md hover:border-amber-400 transition-all no-underline"
+    >
+      <div className="flex flex-col sm:flex-row">
+        {/* Visual */}
+        <div
+          className="flex items-center justify-center w-full sm:w-44 h-32 sm:h-auto shrink-0 text-6xl"
+          style={{ background: `hsl(${hue} 60% 92%)` }}
+          aria-hidden
+        >
+          {glyphFor(item, icon)}
+        </div>
+        {/* Copy */}
+        <div className="flex-1 p-5 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+              ★ Editor&apos;s Pick
+            </span>
+            <span className="text-[10px] text-gray-600 uppercase tracking-wide">{categoryLabel}</span>
+          </div>
+          <h3 className="text-lg font-bold text-gray-900 leading-tight">{item.name}</h3>
+          <p className="text-xs text-gray-600 font-medium">{item.brand} · {item.price}</p>
+          <p className="text-sm text-gray-700 leading-snug">{item.description}</p>
+          <div className="pt-1">
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#1B3829]">
+              See it →
+            </span>
+          </div>
+        </div>
+      </div>
+    </a>
   );
 }
 

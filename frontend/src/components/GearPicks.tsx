@@ -35,9 +35,25 @@ export interface GearSignals {
   trainingLoadZone: string | null;
 }
 
+/** Which tab the picks are showing on. Controls which categories are
+ *  considered relevant:
+ *    scorecard → everything (general health surface)
+ *    nutrition → Nutrition + Supplements only
+ *    training  → Fitness Equipment + Recovery + Wearables only
+ *  Default is "scorecard" so existing call sites stay unchanged. */
+export type GearContext = "scorecard" | "nutrition" | "training";
+
+const CONTEXT_CATEGORIES: Record<GearContext, Set<string> | null> = {
+  scorecard: null, // null = no filter
+  nutrition: new Set(["Nutrition", "Supplements"]),
+  training:  new Set(["Fitness Equipment", "Recovery", "Wearables"]),
+};
+
 interface Props {
   signals: GearSignals;
   onJump?: () => void;
+  /** Where this card is rendered — filters picks to relevant categories. */
+  context?: GearContext;
 }
 
 interface Recommendation {
@@ -158,7 +174,7 @@ function computeRecommendations(s: GearSignals): Recommendation[] {
   return out;
 }
 
-export default function GearPicks({ signals, onJump }: Props) {
+export default function GearPicks({ signals, onJump, context = "scorecard" }: Props) {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [visibleCount, setVisibleCount] = useState(PAGE);
 
@@ -175,7 +191,13 @@ export default function GearPicks({ signals, onJump }: Props) {
     try { await api.gear.dismiss(itemId); } catch { /* stays hidden locally regardless */ }
   };
 
-  const all     = computeRecommendations(signals);
+  // Filter by context (tab placement) so the Nutrition tab doesn't show
+  // foam rollers and the Training tab doesn't show protein bars stranded.
+  // Scorecard keeps the full list. The relevance whitelist is in
+  // CONTEXT_CATEGORIES above — edit there if you want to broaden a tab.
+  const allowed = CONTEXT_CATEGORIES[context];
+  const all     = computeRecommendations(signals)
+    .filter(r => !allowed || allowed.has(ITEM_CATEGORY[r.item.id] || ""));
   const visible = all.filter(r => !dismissed.has(r.item.id));
   const picks   = visible.slice(0, visibleCount);
   if (picks.length === 0) return null;

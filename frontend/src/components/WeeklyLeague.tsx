@@ -32,12 +32,23 @@ const SHORT: Record<string, string> = {
 /** Shown when the backend hasn't returned a personal breakdown (older API or
  * soft-fail). Same point values as backend/leagues.py — keep in sync. */
 const FALLBACK_RULES: LeagueBreakdownItem[] = [
-  { key: "checkin", label: "Daily check-in", icon: "✅", per: 10, per_unit: "day",      count: 0, points: 0 },
-  { key: "workout", label: "Log a workout",  icon: "💪", per: 20, per_unit: "day",      count: 0, points: 0 },
-  { key: "meal",    label: "Log a meal",     icon: "🍳", per: 5,  per_unit: "day",      count: 0, points: 0 },
-  { key: "weighin", label: "Log a weigh-in", icon: "⚖️", per: 10, per_unit: "day",      count: 0, points: 0 },
-  { key: "steps",   label: "Steps (Oura)",   icon: "👟", per: 1,  per_unit: "1k steps", count: 0, points: 0 },
+  { key: "checkin", label: "Daily check-in", icon: "✅", per: 10, per_unit: "day",       count: 0, points: 0 },
+  { key: "workout", label: "Workouts",       icon: "💪", per: 20, per_unit: "first/day", count: 0, points: 0,
+    tier: { extra_per: 5, max_per_day: 3 } },
+  { key: "meal",    label: "Log a meal",     icon: "🍳", per: 5,  per_unit: "day",       count: 0, points: 0 },
+  { key: "weighin", label: "Log a weigh-in", icon: "⚖️", per: 5,  per_unit: "day",       count: 0, points: 0 },
+  { key: "steps",   label: "Steps (Oura)",   icon: "👟", per: 1,  per_unit: "1k steps",  count: 0, points: 0 },
 ];
+
+/** Render the points rule for a category as compact text for the pill row.
+ *  Handles the workout tiered case specifically so it reads truthfully. */
+function ruleLabel(c: { per: number; per_unit: string; tier?: { extra_per: number; max_per_day: number } }): string {
+  if (c.tier) {
+    return `+${c.per} 1st · +${c.tier.extra_per} each more (max ${c.tier.max_per_day}/day)`;
+  }
+  if (c.per_unit === "1k steps") return `+${c.per}/1k`;
+  return `+${c.per}/${c.per_unit}`;
+}
 
 /** Pick the single highest-value daily habit the user hasn't earned yet this
  * week — the "quickest win" to climb the standings. Steps are excluded (they're
@@ -84,7 +95,7 @@ export default function WeeklyLeague({ onInvite }: Props) {
   const cats: LeagueCategory[] =
     data.categories && data.categories.length
       ? data.categories
-      : FALLBACK_RULES.map(({ key, label, icon, per, per_unit }) => ({ key, label, icon, per, per_unit }));
+      : FALLBACK_RULES.map(({ key, label, icon, per, per_unit, tier }) => ({ key, label, icon, per, per_unit, tier }));
   // The grid needs per-member category points; show it once the backend supplies them.
   const hasGrid = standings.some(s => s.points_by_cat && Object.keys(s.points_by_cat).length > 0);
 
@@ -187,7 +198,7 @@ export default function WeeklyLeague({ onInvite }: Props) {
               >
                 <span>{c.icon}</span>
                 <span className="font-medium text-gray-700">{SHORT[c.key] ?? c.label}</span>
-                <span className="font-semibold text-[#1B3829]">+{c.per}{c.per_unit === "day" ? "/day" : "/1k"}</span>
+                <span className="font-semibold text-[#1B3829]">{ruleLabel(c)}</span>
               </span>
             ))}
           </div>
@@ -204,7 +215,7 @@ export default function WeeklyLeague({ onInvite }: Props) {
                         <th
                           key={c.key}
                           className="text-center text-sm pb-2 px-0.5"
-                          title={`${SHORT[c.key] ?? c.label} · +${c.per}/${c.per_unit}`}
+                          title={`${SHORT[c.key] ?? c.label} · ${ruleLabel(c)}`}
                         >
                           {c.icon}
                         </th>
@@ -260,7 +271,7 @@ export default function WeeklyLeague({ onInvite }: Props) {
                     <span className="text-base leading-none shrink-0">{item.icon}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium text-gray-800 truncate">{item.label}</p>
-                      <p className="text-[10px] text-gray-600">+{item.per} per {item.per_unit}</p>
+                      <p className="text-[10px] text-gray-600">{ruleLabel(item)}</p>
                     </div>
                     {breakdown && (
                       <span className={`text-sm font-bold shrink-0 ${earned ? "text-[#1B3829]" : "text-gray-500"}`}>

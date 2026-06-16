@@ -1384,12 +1384,21 @@ export interface LeagueStanding {
   points_by_cat?: Record<string, number>;   // points per category key (grid)
 }
 
+/** Tiered points payload for categories whose math isn't a simple per × count.
+ *  Currently only set on the workout category: first workout/day = `per`,
+ *  each additional workout (up to `max_per_day`) = `extra_per`. */
+export interface LeagueCategoryTier {
+  extra_per:   number;
+  max_per_day: number;
+}
+
 export interface LeagueCategory {
   key:      string;   // checkin | workout | meal | weighin | steps
   label:    string;   // "Daily check-in"
   icon:     string;   // emoji (used as the grid column header)
   per:      number;   // points earned per unit
-  per_unit: string;   // "day" | "1k steps"
+  per_unit: string;   // "day" | "first/day" | "1k steps"
+  tier?:    LeagueCategoryTier; // when set, the rule is tiered (see above)
 }
 
 export interface LeagueBreakdownItem {
@@ -1397,9 +1406,10 @@ export interface LeagueBreakdownItem {
   label:    string;   // "Daily check-in"
   icon:     string;   // emoji
   per:      number;   // points earned per unit
-  per_unit: string;   // "day" | "1k steps"
+  per_unit: string;   // "day" | "first/day" | "1k steps"
   count:    number;   // how many units you've done this week
-  points:   number;   // count * per
+  points:   number;   // count * per (or the tiered total for workouts)
+  tier?:    LeagueCategoryTier;
 }
 
 export interface LeagueBreakdown {

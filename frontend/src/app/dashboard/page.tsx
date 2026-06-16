@@ -2245,8 +2245,10 @@ export default function DashboardPage() {
             )}
 
             {/* ── Picked For You — gear surfaced in Nutrition too.
-                Persistent visibility supports affiliate revenue. */}
-            <GearPicks signals={gearSignals} onJump={() => setSection("gear")} />
+                Persistent visibility supports affiliate revenue. Scoped to
+                nutrition-relevant categories (Nutrition + Supplements) so
+                we're not pitching foam rollers next to a meal logger. */}
+            <GearPicks signals={gearSignals} onJump={() => setSection("gear")} context="nutrition" />
           </div>
         )}
 
@@ -2323,7 +2325,8 @@ export default function DashboardPage() {
 
             {/* ── Picked For You — gear in Training is the most natural
                 commercial fit (shoes, mats, recovery tools, supplements). */}
-            <GearPicks signals={gearSignals} onJump={() => setSection("gear")} />
+            {/* Training tab — scoped to fitness/recovery/wearable picks. */}
+            <GearPicks signals={gearSignals} onJump={() => setSection("gear")} context="training" />
           </div>
         )}
 
