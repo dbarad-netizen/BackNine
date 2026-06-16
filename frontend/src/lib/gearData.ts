@@ -129,6 +129,14 @@ const GEAR: GearCategory[] = [
         price: "$25",
         link: "https://www.amazon.com/s?k=mouth+tape+for+sleeping",
       },
+      {
+        id: "weighted-blanket",
+        name: "Weighted Blanket (15 lb)",
+        brand: "Gravity",
+        description: "Even, gentle pressure mimics deep-touch stimulation — calms the nervous system, helps fall asleep faster, and reduces nighttime restlessness. Pick ~10% of your body weight.",
+        price: "$195",
+        link: "https://www.amazon.com/s?k=gravity+weighted+blanket",
+      },
     ],
   },
   {
