@@ -1843,21 +1843,17 @@ export default function DashboardPage() {
               );
             })()}
 
-            {/* ── Clubhouse teaser ──
-                The full Pulse feed, Leaderboard, League, Groups and Challenges
-                now live in the Clubhouse tab. Scorecard keeps a single CTA so
-                people don't lose the entry point. */}
-            <button
-              onClick={() => { setSection("challenges"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-              className="w-full flex items-center gap-3 rounded-2xl border border-[#1B3829]/15 bg-white px-4 py-3 hover:bg-[#1B3829]/5 transition-colors text-left shadow-sm"
-            >
-              <span className="text-2xl shrink-0">🏛️</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-gray-900">Clubhouse</p>
-                <p className="text-[11px] text-gray-600">Today&apos;s leaderboard, Pulse, league, challenges</p>
-              </div>
-              <span className="text-[#1B3829] text-sm font-semibold shrink-0">Enter →</span>
-            </button>
+            {/* ── Today's Leaderboard ──
+                Surface the actual leaderboard here on the Scorecard so users
+                see real data, not a click-through teaser. The header link
+                jumps to the Clubhouse for Pulse, league, groups, challenges. */}
+            <FriendLeaderboard
+              onInvite={() => setShowShare(true)}
+              onSeeMore={() => { setSection("challenges"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+            />
+            {/* LeagueGlance lower on the Scorecard still gives the rank /
+                week-progress glance — kept; only the redundant "Clubhouse"
+                teaser card that lived here was removed. */}
 
             {/* ── Quick action: enter a meal / macros (logs inline — no tab switch) ──
                 Collapsed summary matches the Body & Weight pill below: a one-line

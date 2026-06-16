@@ -76,9 +76,14 @@ interface Props {
   /** Open the invite / share-card modal. When provided, the empty state
    *  (no friends yet) shows a CTA so the Clubhouse doesn't look broken. */
   onInvite?: () => void;
+  /** When provided, replaces the Refresh button in the header with a
+   *  "See full Clubhouse →" link. Pass this when rendering on the
+   *  Scorecard so the user has a clear jump to the rest of the social
+   *  surfaces (Pulse, league, groups, challenges). */
+  onSeeMore?: () => void;
 }
 
-export default function FriendLeaderboard({ onInvite }: Props = {}) {
+export default function FriendLeaderboard({ onInvite, onSeeMore }: Props = {}) {
   const [data, setData] = useState<LeaderboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
@@ -200,12 +205,23 @@ export default function FriendLeaderboard({ onInvite }: Props = {}) {
         <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-600">
           Today&apos;s Matchup
         </h3>
-        <button
-          onClick={() => load()}
-          className="text-[11px] text-gray-600 hover:text-[#1B3829] font-medium transition-colors"
-        >
-          Refresh
-        </button>
+        {onSeeMore ? (
+          // Scorecard placement: send the user to the Clubhouse where the
+          // rest of the social surfaces live (Pulse, league, groups).
+          <button
+            onClick={onSeeMore}
+            className="text-[11px] text-[#1B3829] hover:underline font-semibold transition-colors"
+          >
+            See full Clubhouse →
+          </button>
+        ) : (
+          <button
+            onClick={() => load()}
+            className="text-[11px] text-gray-600 hover:text-[#1B3829] font-medium transition-colors"
+          >
+            Refresh
+          </button>
+        )}
       </div>
 
       <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">

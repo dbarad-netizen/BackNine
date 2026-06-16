@@ -52,6 +52,12 @@ def _build_system_prompt(metric_label: str, unit: str, baseline, target, duratio
     parts.append(f"Starting point: {base_str}")
     parts.append(f"Target: {target}{unit}")
     parts.append(f"Timeframe: {duration_weeks} weeks")
+
+    # Shared voice/brand block — golf metaphor allowance + "one Coach Al
+    # across the app" rule + "use BackNine's tools, not external apps"
+    # rule. Same block used by briefing, chat, reactions, weekly insight.
+    from coach_voice import VOICE_BLOCK
+    parts.append("\n" + VOICE_BLOCK)
     return "\n".join(parts)
 
 
