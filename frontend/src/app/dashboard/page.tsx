@@ -1900,22 +1900,18 @@ export default function DashboardPage() {
 
                 <MealQuickAdd
                   date={nutToday?.date}
-                  onLogged={async (loggedMeal) => {
+                  onLogged={async () => {
                     // Refetch today's nutrition so totals update in place.
                     const fresh = await api.nutritionToday().catch(() => null);
                     if (fresh) setNutToday(fresh);
-                    // Fire a Coach Al reaction in the background. Best-effort —
-                    // if it fails or returns null, nothing renders.
-                    api.coachReact("meal_logged", {
-                      meal:    loggedMeal,
-                      totals:  fresh?.totals,
-                      targets: fresh?.settings ? {
-                        calories: fresh.settings.calorie_target,
-                        protein:  fresh.settings.protein_g,
-                        carbs:    fresh.settings.carbs_g,
-                        fat:      fresh.settings.fat_g,
-                      } : undefined,
-                    }).then(r => { if (r.text) setCoachReaction(r.text); }).catch(() => {});
+                    // Note: we used to fire a Coach Al reaction here
+                    // (api.coachReact("meal_logged", …)). Removed — firing on
+                    // every meal made Coach Al feel like a pest. The Scorecard
+                    // macro bars already show the same info silently. Workout
+                    // and weigh-in reactions stay because those actions are
+                    // less frequent and the "I see you" beat lands better.
+                    // Backend VALID_ACTIONS still accepts "meal_logged" so
+                    // reviving this is a one-line frontend change if we want.
                   }}
                 />
               </div>
