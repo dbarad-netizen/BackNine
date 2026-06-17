@@ -156,7 +156,7 @@ export default function FriendDetailModal({ friendUserId, friendName, onClose, o
             <div className="min-w-0">
               <h2 className="text-sm font-bold text-gray-900 truncate">{data?.name || friendName}</h2>
               <p className="text-[11px] text-gray-600">
-                {data?.level != null ? `Level ${data.level} · ` : ""}Friend profile
+                Friend profile
               </p>
             </div>
           </div>

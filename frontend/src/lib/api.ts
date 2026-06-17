@@ -942,10 +942,7 @@ export const api = {
     return request(`/api/insight/weekly${refresh ? "?refresh=1" : ""}`);
   },
 
-  // ── Achievements / badges ──────────────────────────────────────────────────
-  achievements(): Promise<AchievementsResponse> {
-    return request("/api/achievements");
-  },
+  // (badges / XP / level method removed — gamification layer was killed)
 
   // ── Groups (Crews) ─────────────────────────────────────────────────────────
   groups: {
@@ -1147,38 +1144,9 @@ export interface WeeklyInsightResponse {
   has_data:     boolean;
 }
 
-export interface Badge {
-  id:          string;
-  name:        string;
-  emoji:       string;
-  category:    string;
-  description: string;
-  xp?:         number;
-  earned:      boolean;
-  earned_at:   string | null;
-  progress:    { current: number; target: number } | null;
-}
-
-export interface LevelInfo {
-  level:         number;
-  title:         string;       // e.g. "Committed"
-  xp:            number;       // total earned XP
-  xp_into_level: number;       // XP earned past the current level threshold
-  xp_for_next:   number;       // XP remaining to reach the next level
-  next_title:    string | null;
-  pct:           number;       // 0-100 progress to next level
-  is_max:        boolean;      // true at the top level (Legend)
-}
-
-export interface AchievementsResponse {
-  badges:         Badge[];
-  earned_count:   number;
-  total:          number;
-  newly_unlocked: string[];
-  xp?:            number;
-  newly_xp?:      number;
-  level?:         LevelInfo;
-}
+// Badge / LevelInfo / AchievementsResponse types removed — gamification
+// layer was killed. The league + streaks + leaderboards drive behavior;
+// the badge chip was decorative.
 
 export interface GearReview {
   id:         string;
@@ -1279,7 +1247,8 @@ export interface LeaderboardEntry {
   activity:      MetricValue;
   /** Weekly engagement points — the inclusive ranking metric (works without a wearable). */
   points:        number;
-  /** Achievement level — shown as a small status chip next to the name. */
+  /** @deprecated Always null — badge/XP/Level layer was removed. Key kept
+   *  for response-shape backwards-compat. Safe to remove on next API revision. */
   level?:        number | null;
   /** Which taunt (if any) the current user has sent to this friend today. */
   taunt_sent:    TauntKind | null;
@@ -1386,7 +1355,8 @@ export interface LeagueStanding {
   score:   number;   // weekly engagement points
   rank:    number;
   is_me:   boolean;
-  level?:  number | null;                    // achievement level (status chip)
+  /** @deprecated Always null — gamification layer removed. */
+  level?:  number | null;
   points_by_cat?: Record<string, number>;   // points per category key (grid)
 }
 
@@ -1488,6 +1458,7 @@ export interface FriendHealthSnapshot {
 export interface FriendProfile extends FriendHealthSnapshot {
   user_id: string;
   name:    string;
+  /** @deprecated Always null — gamification layer removed. */
   level:   number | null;
   // The viewer's own snapshot — drives the side-by-side comparison view.
   // Optional for backwards compat with older backend deploys.

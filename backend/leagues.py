@@ -363,13 +363,6 @@ def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
     scores = {uid: _score_from_maps(maps, uid) for uid in ids}
     my_breakdown = _breakdown_from_maps(maps, user_id)
     names = _names_for(sb, ids)
-    # Achievement level per member — a status chip next to each name.
-    try:
-        import achievements as _ach
-        levels = _ach.levels_for(ids)
-    except Exception:
-        levels = {}
-
     # Refresh cached scores (best-effort) so other surfaces can read them cheaply.
     for uid in ids:
         try:
@@ -384,7 +377,9 @@ def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
             "name":    names.get(uid, "Friend"),
             "score":   scores.get(uid, 0),
             "is_me":   uid == user_id,
-            "level":   (levels.get(uid) or {}).get("level"),
+            # `level` retained as null for client backwards-compat — the
+            # badge/XP/Level layer was removed.
+            "level":   None,
             "points_by_cat": _points_by_cat(maps, uid),
         }
         for uid in ids

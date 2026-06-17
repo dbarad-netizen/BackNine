@@ -41,7 +41,6 @@ import PulseFeed from "@/components/PulseFeed";
 import FriendLeaderboard from "@/components/FriendLeaderboard";
 import WeeklyLeague from "@/components/WeeklyLeague";
 import GroupsSection from "@/components/GroupsSection";
-import Achievements from "@/components/Achievements";
 import MealQuickAdd from "@/components/MealQuickAdd";
 import NotificationBell from "@/components/NotificationBell";
 import ShareCardModal from "@/components/ShareCardModal";
@@ -2024,11 +2023,9 @@ export default function DashboardPage() {
                 "See full Clubhouse →" link. Keeping two leaderboard CTAs
                 was redundant. */}
 
-            {/* ── Achievements "Next up" ──
-                Promoted out of the previous expander — it shows the closest
-                badge to unlock with a progress bar and the level info. Small,
-                motivating, daily-relevant. Earns its place above the fold. */}
-            <Achievements />
+            {/* Achievements card was here. The badge / XP / Level layer
+                was killed — duplicative of the league + streaks + leaderboard
+                which already drive behavior; the chip was decorative. */}
 
             {/* ── Picked For You (smart gear recommendations) ──
                 Pulled out of the Explore fold and made always-visible on the

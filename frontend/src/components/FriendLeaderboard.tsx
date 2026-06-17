@@ -259,9 +259,7 @@ export default function FriendLeaderboard({ onInvite, onSeeMore }: Props = {}) {
                       </span>
                     </button>
                   )}
-                  {e.level != null && (
-                    <span className="shrink-0 text-[9px] font-bold text-[#1B3829] bg-[#1B3829]/10 rounded px-1 py-0.5 leading-none">Lv{e.level}</span>
-                  )}
+                  {/* Level chip removed — gamification layer was killed. */}
                   {/* Weekly engagement points — the headline ranking everyone earns */}
                   <span
                     title="Engagement points this week"

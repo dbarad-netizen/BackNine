@@ -42,7 +42,6 @@ import friends as frd
 import leagues as lg
 import groups as grp
 import goals as gl
-import achievements as ach
 import gear_reviews as gr
 import gear_ai as gai
 import gear_demand as gd
@@ -3676,15 +3675,6 @@ def regenerate_goal_plan(goal_id: str, request: Request):
 
 # ── Achievements / badges ─────────────────────────────────────────────────────
 
-@app.get("/api/achievements")
-def get_achievements(request: Request):
-    session = _require_session(request)
-    try:
-        return ach.evaluate(session["user_id"], _display_name_for(session["user_id"]))
-    except Exception:
-        return {"badges": [], "earned_count": 0, "total": 0, "newly_unlocked": []}
-
-
 @app.get("/api/friends")
 def list_friends(request: Request):
     """List the current user's accepted friendships."""
@@ -3920,12 +3910,11 @@ def friend_profile(friend_user_id: str, request: Request):
         raise HTTPException(status_code=403, detail="Not friends")
 
     name = _display_name_for(friend_user_id)
-    try:
-        levels = ach.levels_for([friend_user_id, me])
-    except Exception:
-        levels = {}
-    level    = (levels.get(friend_user_id) or {}).get("level")
-    my_level = (levels.get(me) or {}).get("level")
+    # Note: badges/XP/levels were removed in the gamification simplification —
+    # the league + streaks + leaderboards already drive behavior and the
+    # level chip was decorative. `level` and `my_level` no longer set; the
+    # response still includes the keys for backward-compat with any client
+    # that reads them, but they're always None.
 
     friend_snap = _build_user_health_snapshot(friend_user_id)
     you_snap    = _build_user_health_snapshot(me)
@@ -3933,18 +3922,15 @@ def friend_profile(friend_user_id: str, request: Request):
     return {
         "user_id":         friend_user_id,
         "name":            name,
-        "level":           level,
-        # Friend's snapshot (unchanged shape — backwards-compatible with the
-        # existing FriendDetailModal that doesn't know about `you` yet).
+        "level":           None,  # gamification layer removed; key kept for backwards-compat
         "series":          friend_snap["series"],
         "longevity":       friend_snap["longevity"],
         "recent_workouts": friend_snap["recent_workouts"],
         "latest_weight":   friend_snap["latest_weight"],
         "supplements":     friend_snap["supplements"],
-        # Viewer's snapshot for side-by-side comparison.
         "you": {
             "name":            _display_name_for(me),
-            "level":           my_level,
+            "level":           None,
             "series":          you_snap["series"],
             "longevity":       you_snap["longevity"],
             "recent_workouts": you_snap["recent_workouts"],
@@ -4144,8 +4130,7 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
             # (check-in, workouts, meals, weigh-ins + step bonus). Non-wearable
             # users still rank here instead of showing all-zero.
             "points":   int(points_map.get(uid, 0)),
-            # Achievement level for the status chip (None until they've earned XP).
-            "level":    (levels_map.get(uid) or {}).get("level"),
+            "level":    None,  # gamification layer removed; key kept for backwards-compat
             # If you've taunted this friend today, surface which kind (else None).
             "taunt_sent":   None if is_me else taunts_today.get(uid),
             # 7-day head-to-head tally vs the current user (null for self).
@@ -4164,12 +4149,6 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
         points_map = lg.weekly_points(all_uids, today_str)
     except Exception:
         points_map = {}
-    # Achievement level per member — shown as a status chip on each row.
-    try:
-        levels_map = ach.levels_for(all_uids)
-    except Exception:
-        levels_map = {}
-
     entries: list[dict] = [_entry_for(user_id, _display_name_for(user_id), True)]
     for f in friends:
         entries.append(_entry_for(f["user_id"], f.get("name") or "Friend", False))
