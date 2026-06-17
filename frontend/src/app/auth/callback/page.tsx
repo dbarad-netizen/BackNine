@@ -10,27 +10,38 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase, storeSupabaseToken } from "@/lib/supabase";
+import { supabase, establishSession } from "@/lib/supabase";
 
 export default function AuthCallback() {
   const router  = useRouter();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data, error }) => {
+    // Each branch must AWAIT establishSession before redirecting — the
+    // dashboard's first API call needs the long-lived BackNine session,
+    // not the short-lived Supabase access token.
+    supabase.auth.getSession().then(async ({ data, error }) => {
       if (error || !data.session) {
         // Supabase may need to exchange the code from the URL hash/query first
-        supabase.auth.onAuthStateChange((event, session) => {
+        supabase.auth.onAuthStateChange(async (_event, session) => {
           if (session) {
-            storeSupabaseToken(session.access_token);
-            router.replace("/dashboard");
+            try {
+              await establishSession(session.access_token);
+              router.replace("/dashboard");
+            } catch (e) {
+              setError(e instanceof Error ? e.message : "Sign-in failed");
+            }
           }
         });
         if (error) setError(error.message);
         return;
       }
-      storeSupabaseToken(data.session.access_token);
-      router.replace("/dashboard");
+      try {
+        await establishSession(data.session.access_token);
+        router.replace("/dashboard");
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Sign-in failed");
+      }
     });
   }, [router]);
 

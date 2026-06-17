@@ -791,6 +791,42 @@ async def oura_auth_callback(
         return JSONResponse(status_code=500, content={"error": str(exc), "trace": traceback.format_exc()})
 
 
+@app.post("/auth/session")
+def exchange_supabase_for_session(request: Request, response: Response):
+    """Exchange a Supabase access token (sent as `Authorization: Bearer`)
+    for a long-lived BackNine session — the same shape Oura's OAuth flow
+    produces. Returns the new JWT in the response body AND sets it as
+    the HttpOnly session cookie (Secure + SameSite=None, 30 days).
+
+    Why: Supabase's access tokens are short-lived (~1h) and we weren't
+    using the refresh-token flow, so non-Oura users got bounced to the
+    login screen the next day. After this exchange runs, BackNine's
+    own session takes over and the Supabase token is no longer used.
+
+    The Supabase token itself is verified here (existing JWKS / HS256
+    helper) and then discarded — we never store it. The user_id baked
+    into the BackNine session is the Supabase user UUID (`sub`), which
+    matches how the rest of the app already identifies users.
+    """
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing Supabase token")
+    supa_token = auth[7:]
+    claims = _verify_supabase_jwt(supa_token)
+    if not claims or not claims.get("sub"):
+        raise HTTPException(status_code=401, detail="Invalid Supabase token")
+
+    session_data = {
+        "user_id":  claims["sub"],
+        "provider": "supabase",
+        # No access_token / refresh_token / expires_at — BackNine's session
+        # is self-contained. Wearable connections are tracked separately.
+    }
+    bn_token = _encode_session(session_data)
+    _set_session_cookie(response, session_data)
+    return {"token": bn_token, "user_id": claims["sub"]}
+
+
 @app.post("/auth/logout")
 def logout(response: Response):
     # CRITICAL: delete_cookie() must mirror the attributes used by set_cookie().

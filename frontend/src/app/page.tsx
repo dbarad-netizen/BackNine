@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { supabase, storeSupabaseToken } from "@/lib/supabase";
+import { supabase, establishSession } from "@/lib/supabase";
 import { captureReferralFromUrl } from "@/lib/api";
 
 const BACKEND = "https://backnine-hu60.onrender.com";
@@ -25,10 +25,17 @@ export default function Home() {
     // Oura OAuth round trip (localStorage persists across the redirect).
     captureReferralFromUrl();
 
-    supabase.auth.getSession().then(({ data }) => {
+    // Existing Supabase session on page load — establish a long-lived
+    // BackNine session before bouncing to the dashboard, otherwise the
+    // short-lived Supabase access token gets used and expires quickly.
+    supabase.auth.getSession().then(async ({ data }) => {
       if (data.session) {
-        storeSupabaseToken(data.session.access_token);
-        router.replace("/dashboard");
+        try {
+          await establishSession(data.session.access_token);
+          router.replace("/dashboard");
+        } catch {
+          // Surface as a soft state — user can sign in again manually.
+        }
       }
     });
     // Also check for existing Oura token
@@ -48,7 +55,10 @@ export default function Home() {
         const { data, error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
         if (data.session) {
-          storeSupabaseToken(data.session.access_token);
+          // Exchange Supabase token → 30-day BackNine session. Must await
+          // before the redirect or the dashboard's first API call uses the
+          // short-lived Supabase token.
+          await establishSession(data.session.access_token);
           router.replace("/dashboard");
         } else {
           setMessage("Check your email to confirm your account, then sign in.");
@@ -57,7 +67,7 @@ export default function Home() {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         if (data.session) {
-          storeSupabaseToken(data.session.access_token);
+          await establishSession(data.session.access_token);
           router.replace("/dashboard");
         }
       }
