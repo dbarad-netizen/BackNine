@@ -50,9 +50,13 @@ interface Props {
    *  is in the header and may be tapped from any section; without this the deep
    *  link sets a hash but PulseFeed isn't mounted to handle it. */
   onDeepLinkPulse?: (eventId: string) => void;
+  /** When set, tapping a `dm` notification opens the FriendDmDrawer for the
+   *  sender. Without this, dm rows render with no click handler — the user
+   *  sees the preview but has no way to act on it (real bug Chris hit). */
+  onDeepLinkDm?: (senderUserId: string, senderName: string) => void;
 }
 
-export default function NotificationBell({ onDeepLinkPulse }: Props = {}) {
+export default function NotificationBell({ onDeepLinkPulse, onDeepLinkDm }: Props = {}) {
   const [items, setItems] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
@@ -147,19 +151,22 @@ export default function NotificationBell({ onDeepLinkPulse }: Props = {}) {
           )}
           <ul className="divide-y divide-gray-100">
             {items.map(n => {
-              const canDeepLink = !!n.event_id && (n.kind === "comment" || n.kind === "reaction");
+              // Three deep-link paths now:
+              //   pulse  — comment/reaction with an event_id → opens Pulse event
+              //   dm     — dm kind → opens FriendDmDrawer for the sender
+              //   none   — taunts and anything else without a target surface
+              const canPulse = !!n.event_id && (n.kind === "comment" || n.kind === "reaction");
+              const canDm   = n.kind === "dm" && !!onDeepLinkDm && !!n.actor_id;
+              const canDeepLink = canPulse || canDm;
               const handleClick = () => {
-                if (canDeepLink && n.event_id) {
-                  // Deep-link to the Pulse event: PulseFeed listens for this hash
-                  // and scrolls/expands/focuses the reply input. The callback
-                  // lets the dashboard also switch the active section back to
-                  // Scorecard — without it the hash sets but PulseFeed isn't
-                  // mounted to handle it when the user is on another tab.
+                if (canPulse && n.event_id) {
                   if (onDeepLinkPulse) {
                     onDeepLinkPulse(n.event_id);
                   } else {
                     window.location.hash = `pulse-${n.event_id}`;
                   }
+                } else if (canDm && onDeepLinkDm) {
+                  onDeepLinkDm(n.actor_id, n.actor_name || "Friend");
                 }
                 setOpen(false);
               };

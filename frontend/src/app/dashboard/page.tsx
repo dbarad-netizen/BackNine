@@ -43,6 +43,7 @@ import WeeklyLeague from "@/components/WeeklyLeague";
 import GroupsSection from "@/components/GroupsSection";
 import MealQuickAdd from "@/components/MealQuickAdd";
 import NotificationBell from "@/components/NotificationBell";
+import FriendDmDrawer from "@/components/FriendDmDrawer";
 import ShareCardModal from "@/components/ShareCardModal";
 import OnboardingModal from "@/components/OnboardingModal";
 import Footer from "@/components/Footer";
@@ -866,6 +867,10 @@ export default function DashboardPage() {
   // Coach Al's one-line reaction to the user's most recent action. Cleared
   // when the toast auto-dismisses. Null = no active reaction.
   const [coachReaction, setCoachReaction] = useState<string | null>(null);
+  // DM drawer opened by tapping a "David sent you a message" notification.
+  // Lives at the dashboard level because the bell is in the header; the one
+  // FriendLeaderboard owns is tied to its tab and not always mounted.
+  const [bellDmFriend, setBellDmFriend] = useState<{ user_id: string; name: string } | null>(null);
   const [weightLog,  setWeightLog]  = useState<WeightEntry[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [nutLoading,   setNutLoading]   = useState(false);
@@ -1238,6 +1243,12 @@ export default function DashboardPage() {
                 // mount-effect sees it and scrolls/expands/focuses the event.
                 setSection("challenges");
                 window.location.hash = `pulse-${eventId}`;
+              }}
+              onDeepLinkDm={(senderId, senderName) => {
+                // Tapping a "X sent you a message" notification opens the DM
+                // drawer with that sender (Chris hit this bug: he saw the
+                // message preview but the row was inert).
+                setBellDmFriend({ user_id: senderId, name: senderName });
               }}
             />
             {/* Desktop-only utility icons — mobile uses the ☰ menu */}
@@ -2402,6 +2413,11 @@ export default function DashboardPage() {
       <ChatWidget onRegisterOpen={opener => { openChatRef.current = opener; }} />
 
       {/* ── Coach Al reaction toast — fires after meal/workout/weight logs ── */}
+      {/* Dashboard-level DM drawer fired by the notification bell. Separate
+          from FriendLeaderboard's own drawer (which fires on row taps) since
+          the bell is in the header and the leaderboard isn't always mounted. */}
+      <FriendDmDrawer friend={bellDmFriend} onClose={() => setBellDmFriend(null)} />
+
       <CoachReactionToast
         text={coachReaction}
         onDismiss={() => setCoachReaction(null)}
