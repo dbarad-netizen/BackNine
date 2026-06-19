@@ -1597,39 +1597,167 @@ export default function DashboardPage() {
                     )}
                   </div>
 
-                  {/* Three score rings */}
-                  <div className="grid grid-cols-3 gap-2 px-4 pb-4">
-                    {rings.map(({ label, score, color, stale }) => (
-                      <div key={label} className="flex flex-col items-center gap-1.5">
-                        <div className="relative w-20 h-20">
-                          <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                            <circle cx="50" cy="50" r="40" fill="none" stroke="#E5E7EB" strokeWidth="11"/>
-                            <circle cx="50" cy="50" r="40" fill="none"
-                              stroke={syncingToday ? "#D1D5DB" : stale ? color + "88" : color}
-                              strokeWidth="11" strokeLinecap="round"
-                              strokeDasharray={circ}
-                              strokeDashoffset={syncingToday ? circ : circ * (1 - (score ?? 0) / 100)}
-                              className="transition-all duration-700"
-                            />
-                          </svg>
-                          <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            {syncingToday ? (
-                              <span className="text-[10px] text-gray-600 text-center leading-tight px-1 animate-pulse">Syncing…</span>
-                            ) : score != null && score > 0 ? (
-                              <>
-                                <span className={`text-xl font-bold leading-none ${stale ? "text-gray-600" : "text-gray-900"}`}>{score}</span>
-                                <span className="text-[9px] text-gray-600 mt-0.5">{stale ? "last" : "/100"}</span>
-                              </>
-                            ) : (
-                              <span className="text-[11px] text-gray-600 text-center leading-tight px-1">—</span>
-                            )}
-                          </div>
+                  {/* ── Adaptive hero per user state (Slice 3) ──
+                      State A: no tracker  → Connect-Apple-Health invitation
+                      State B: AH only     → 2×2 stat grid from Apple Health (NO Oura rings)
+                      State C: Oura        → existing 3-ring grid (unchanged)
+                      Detection from dashboard payload: data.has_oura, data.has_apple_health.
+                      `data.has_oura !== false` matches both true and undefined to stay
+                      backwards-compatible with the original Oura-only shape. */}
+                  {(() => {
+                    const hasOura = data.has_oura !== false;
+                    const hasAH   = data.has_apple_health === true;
+                    const ah      = data.apple_health;
+
+                    if (hasOura) {
+                      // STATE C — original ring grid, unchanged behavior.
+                      return (
+                        <div className="grid grid-cols-3 gap-2 px-4 pb-4">
+                          {rings.map(({ label, score, color, stale }) => (
+                            <div key={label} className="flex flex-col items-center gap-1.5">
+                              <div className="relative w-20 h-20">
+                                <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+                                  <circle cx="50" cy="50" r="40" fill="none" stroke="#E5E7EB" strokeWidth="11"/>
+                                  <circle cx="50" cy="50" r="40" fill="none"
+                                    stroke={syncingToday ? "#D1D5DB" : stale ? color + "88" : color}
+                                    strokeWidth="11" strokeLinecap="round"
+                                    strokeDasharray={circ}
+                                    strokeDashoffset={syncingToday ? circ : circ * (1 - (score ?? 0) / 100)}
+                                    className="transition-all duration-700"
+                                  />
+                                </svg>
+                                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                  {syncingToday ? (
+                                    <span className="text-[10px] text-gray-600 text-center leading-tight px-1 animate-pulse">Syncing…</span>
+                                  ) : score != null && score > 0 ? (
+                                    <>
+                                      <span className={`text-xl font-bold leading-none ${stale ? "text-gray-600" : "text-gray-900"}`}>{score}</span>
+                                      <span className="text-[9px] text-gray-600 mt-0.5">{stale ? "last" : "/100"}</span>
+                                    </>
+                                  ) : (
+                                    <span className="text-[11px] text-gray-600 text-center leading-tight px-1">—</span>
+                                  )}
+                                </div>
+                              </div>
+                              <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest">{label}</p>
+                              <p className="text-[11px] font-medium" style={{ color: syncingToday ? "#9ca3af" : stale ? "#9ca3af" : color }}>{syncingToday ? "Updating…" : stale ? "Last known" : scoreLabel(score)}</p>
+                            </div>
+                          ))}
                         </div>
-                        <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest">{label}</p>
-                        <p className="text-[11px] font-medium" style={{ color: syncingToday ? "#9ca3af" : stale ? "#9ca3af" : color }}>{syncingToday ? "Updating…" : stale ? "Last known" : scoreLabel(score)}</p>
+                      );
+                    }
+
+                    if (hasAH && ah) {
+                      // STATE B — Apple Health 2×2 stat grid.
+                      // Each tile: big number, label, tiny trend hint, "as of" timestamp.
+                      // No Oura mentions anywhere on this state — per Q3.
+                      const t  = ah.today  || {};
+                      const av = ah.averages || {};
+                      const fmt = (v: number | null | undefined, decimals = 0) =>
+                        v == null ? "—" : decimals > 0 ? v.toFixed(decimals) : Math.round(v).toString();
+                      const trendIcon = (val: number | null | undefined, avg: number | null | undefined, lowerIsBetter = false) => {
+                        if (val == null || avg == null || !isFinite(avg) || avg === 0) return null;
+                        const delta = val - avg;
+                        const goodDir = lowerIsBetter ? delta < 0 : delta > 0;
+                        if (Math.abs(delta / avg) < 0.03) return { txt: "stable", color: "#5F5E5A" };
+                        const pct = Math.round((delta / avg) * 100);
+                        return {
+                          txt: `${pct > 0 ? "+" : ""}${pct}%`,
+                          color: goodDir ? "#3B6D11" : "#BA7517",
+                        };
+                      };
+                      const asOf = ah.as_of
+                        ? new Date(ah.as_of).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+                        : null;
+                      const tiles = [
+                        {
+                          key: "steps",  label: "Steps",      val: fmt(t.steps), unit: "",
+                          trend: trendIcon(t.steps, av.steps),
+                          stamp: "today",
+                        },
+                        {
+                          key: "sleep",  label: "Sleep",      val: t.sleep_hours != null ? `${Math.floor(t.sleep_hours)}h ${Math.round((t.sleep_hours - Math.floor(t.sleep_hours)) * 60)}m` : "—", unit: "",
+                          trend: trendIcon(t.sleep_hours, av.sleep_hours),
+                          stamp: "last night",
+                        },
+                        {
+                          key: "hrv",    label: "HRV",        val: fmt(t.hrv, 0), unit: "ms",
+                          trend: trendIcon(t.hrv, av.hrv),
+                          stamp: "overnight",
+                        },
+                        {
+                          key: "rhr",    label: "Resting HR", val: fmt(t.resting_hr, 0), unit: "bpm",
+                          trend: trendIcon(t.resting_hr, av.resting_hr, true),
+                          stamp: "this morning",
+                        },
+                      ];
+                      return (
+                        <div className="px-4 pb-4 space-y-3">
+                          <div className="grid grid-cols-2 gap-2">
+                            {tiles.map(tile => (
+                              <div key={tile.key} className="rounded-xl bg-gray-50 border border-gray-100 p-3">
+                                <div className="flex items-baseline justify-between mb-1">
+                                  <span className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">{tile.label}</span>
+                                  {tile.trend && (
+                                    <span className="text-[10px] font-medium" style={{ color: tile.trend.color }}>{tile.trend.txt}</span>
+                                  )}
+                                </div>
+                                <p className="text-xl font-bold text-gray-900 leading-tight tabular-nums">
+                                  {tile.val}{tile.unit && <span className="text-[10px] text-gray-600 font-normal ml-0.5">{tile.unit}</span>}
+                                </p>
+                                <p className="text-[10px] text-gray-600 mt-1">{tile.stamp}</p>
+                              </div>
+                            ))}
+                          </div>
+                          {asOf && (
+                            <p className="text-[10px] text-gray-600 text-center flex items-center justify-center gap-1.5">
+                              <span aria-hidden>🍎</span> From Apple Health · last sync {asOf}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    // STATE A — no tracker. Invitation hero + quick actions.
+                    // Per Q2 "not that hard": single CTA card, no banner spam.
+                    // Per Q3: tease Oura softly (link, not button) since user
+                    // could still want it; but Apple Health is the primary path.
+                    return (
+                      <div className="px-4 pb-4 space-y-3">
+                        <div className="rounded-xl text-white p-4" style={{ background: "linear-gradient(135deg, #1B3829 0%, #2D6A4F 100%)" }}>
+                          <p className="text-[10px] uppercase tracking-widest font-semibold mb-1.5" style={{ color: "#BFD6C8" }}>
+                            Get richer daily data
+                          </p>
+                          <p className="text-sm leading-snug mb-4">
+                            Connect Apple Health or Oura to unlock your readiness, sleep, and activity scores.
+                          </p>
+                          <button
+                            onClick={() => setSection("nutrition")}
+                            className="w-full bg-white text-[#1B3829] text-sm font-semibold rounded-lg py-3 flex items-center justify-center gap-2 hover:bg-gray-100 transition-colors"
+                          >
+                            <span aria-hidden>🍎</span> Connect Apple Health · free
+                          </button>
+                          <p className="text-center mt-3 text-[11px]" style={{ color: "#BFD6C8" }}>
+                            or <a href="#" onClick={(e) => { e.preventDefault(); setSection("nutrition"); }} className="underline">get an Oura ring</a>
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            onClick={() => { setSection("nutrition"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                            className="rounded-lg bg-white border border-gray-200 text-[#1B3829] text-xs font-medium py-2.5 flex items-center justify-center gap-1.5 hover:bg-gray-50 transition-colors"
+                          >
+                            <span aria-hidden>🍳</span> Log meal
+                          </button>
+                          <button
+                            onClick={() => { setSection("training"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                            className="rounded-lg bg-white border border-gray-200 text-[#1B3829] text-xs font-medium py-2.5 flex items-center justify-center gap-1.5 hover:bg-gray-50 transition-colors"
+                          >
+                            <span aria-hidden>🏋️</span> Log workout
+                          </button>
+                        </div>
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })()}
 
                   {/* Coach verdict */}
                   {coaches.overall?.msg && (
