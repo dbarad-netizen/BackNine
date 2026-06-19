@@ -27,10 +27,15 @@ interface Props {
 // ── Comparison chart — friend's series vs yours, same y-scale, no deps ──
 //
 // Replaces a single-line sparkline so the user actually SEES the comparison
-// over time, not just "their trend next to one of my numbers." Friend = solid
-// in the metric color; you = solid gray. Both autoscale to a shared y-range
-// so the visual contrast is real (one line above the other = leading on that
-// metric over the window).
+// over time, not just "their trend next to one of my numbers."
+//
+// Line styles are DELIBERATELY different (not just color):
+//   Friend → solid line in the metric color, larger end-dot
+//   You    → DASHED gray line, smaller end-dot
+// Color-only differentiation tested poorly (David: "hard to read which line
+// is for which user"); the dashed/solid contrast reads instantly even at
+// small sizes and survives color-blindness. Per-tile inline legend below
+// the section header reinforces it in context.
 function ComparisonChart({
   friendPoints, youPoints, color, height = 44,
 }: {
@@ -93,21 +98,43 @@ function ComparisonChart({
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-11">
-      {/* You — drawn first so the friend's color sits on top */}
+      {/* You — DASHED gray, drawn first so the friend's solid color sits on top */}
       {you && you.d.map((seg, i) => (
-        <path key={`y-${i}`} d={seg} fill="none" stroke="#9ca3af" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" opacity="0.85" />
+        <path key={`y-${i}`} d={seg} fill="none" stroke="#6b7280" strokeWidth="1.25"
+              strokeLinecap="round" strokeLinejoin="round" strokeDasharray="2.5,2" />
       ))}
       {you && you.lastIdx >= 0 && you.ys[you.lastIdx] != null && (
-        <circle cx={you.xs[you.lastIdx]} cy={you.ys[you.lastIdx] as number} r="1.6" fill="#9ca3af" />
+        <circle cx={you.xs[you.lastIdx]} cy={you.ys[you.lastIdx] as number} r="1.8" fill="#6b7280" />
       )}
-      {/* Friend — primary color */}
+      {/* Friend — solid metric color */}
       {friend.d.map((seg, i) => (
-        <path key={`f-${i}`} d={seg} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        <path key={`f-${i}`} d={seg} fill="none" stroke={color} strokeWidth="1.6"
+              strokeLinecap="round" strokeLinejoin="round" />
       ))}
       {friend.lastIdx >= 0 && friend.ys[friend.lastIdx] != null && (
-        <circle cx={friend.xs[friend.lastIdx]} cy={friend.ys[friend.lastIdx] as number} r="2" fill={color} />
+        <circle cx={friend.xs[friend.lastIdx]} cy={friend.ys[friend.lastIdx] as number} r="2.4" fill={color} />
       )}
     </svg>
+  );
+}
+
+/** Tiny in-tile legend: two strokes + names so each chart says explicitly
+ *  which line is which. Friend stroke is solid in the metric color; "You"
+ *  stroke is dashed gray — same visual language as the chart above. */
+function MiniLegend({ color, friendName }: { color: string; friendName: string }) {
+  return (
+    <div className="flex items-center gap-2 text-[9px] text-gray-600">
+      <span className="inline-flex items-center gap-1">
+        <span className="block w-3 h-[2px] rounded-full" style={{ background: color }} />
+        <span className="truncate max-w-[60px]">{friendName}</span>
+      </span>
+      <span className="inline-flex items-center gap-1">
+        <svg width="12" height="2" className="block">
+          <line x1="0" y1="1" x2="12" y2="1" stroke="#6b7280" strokeWidth="1.5" strokeDasharray="2.5,2" />
+        </svg>
+        <span>You</span>
+      </span>
+    </div>
   );
 }
 
@@ -183,14 +210,20 @@ export default function FriendDetailModal({ friendUserId, friendName, onClose, o
                     Last 14 days
                   </p>
                   {data.you && (
-                    <p className="text-[10px] text-gray-500 flex items-center gap-1.5">
+                    <p className="text-[10px] text-gray-500 flex items-center gap-2">
                       <span className="inline-flex items-center gap-1">
-                        <span className="w-2.5 h-0.5 rounded-full bg-gray-900" />
+                        {/* Solid swatch for the friend (chart uses each
+                            metric's color, so this section-level swatch
+                            uses the gray-900 neutral to stand in). */}
+                        <span className="w-3 h-[2px] rounded-full bg-gray-900" />
                         {data.name.split(" ")[0]}
                       </span>
                       <span className="inline-flex items-center gap-1">
-                        <span className="w-2.5 h-0.5 rounded-full bg-gray-400" />
-                        you
+                        {/* Dashed swatch for "you" — matches the chart line style. */}
+                        <svg width="12" height="2" className="block">
+                          <line x1="0" y1="1" x2="12" y2="1" stroke="#6b7280" strokeWidth="1.5" strokeDasharray="2.5,2" />
+                        </svg>
+                        You
                       </span>
                     </p>
                   )}
@@ -225,10 +258,19 @@ export default function FriendDetailModal({ friendUserId, friendName, onClose, o
                     return (
                       <button key={key} onClick={() => dm(seed)}
                         className="text-left rounded-xl bg-gray-50 border border-gray-100 p-3 hover:border-[#1B3829]/30 transition-colors">
-                        <div className="flex items-baseline justify-between mb-1">
+                        <div className="flex items-baseline justify-between mb-1 gap-2">
                           <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">{label}</p>
-                          <p className="text-[10px] text-gray-600">avg {fmt(friendAvg)}</p>
+                          <p className="text-[10px] text-gray-600 shrink-0">avg {fmt(friendAvg)}</p>
                         </div>
+                        {/* Per-tile inline legend so each chart explicitly tells
+                            the user which line is which (colored solid = friend,
+                            dashed gray = you). This was the fix for "hard to
+                            read which line is for which user." */}
+                        {data.you && (
+                          <div className="mb-1">
+                            <MiniLegend color={color} friendName={friendFirst} />
+                          </div>
+                        )}
                         {/* Friend value (primary — this is the friend's profile) */}
                         <div className="flex items-baseline gap-1.5">
                           <p className="text-sm font-bold text-gray-900 tabular-nums">{fmt(friendLatest)}</p>

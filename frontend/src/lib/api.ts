@@ -215,6 +215,11 @@ export interface Supplement {
   notes?:  string;
 }
 
+/** Peptides use the exact same shape as supplements today — separate type
+ *  so future divergence (cycle info, route of administration, etc.) doesn't
+ *  break supplements call sites. */
+export type Peptide = Supplement;
+
 export interface UserProfile {
   name?:           string | null;
   age?:            number | null;     // derived from birthdate when set
@@ -223,6 +228,7 @@ export interface UserProfile {
   health_goals?:   string[];
   vo2_max?:        number | null;
   supplements?:    Supplement[];
+  peptides?:       Peptide[];
 }
 
 export interface ChatMessage {

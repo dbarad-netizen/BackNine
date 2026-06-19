@@ -2681,19 +2681,27 @@ def _sanitize_supplements(raw) -> list[dict]:
     return out
 
 
+# Peptides use the same shape as supplements but live in their own column.
+# Kept as a distinct sanitize so we can diverge the rules later (e.g. larger
+# notes for cycle info) without affecting supplements.
+_sanitize_peptides = _sanitize_supplements
+
+
 @app.post("/api/profile")
 async def save_profile(request: Request):
     session = _require_session(request)
     user_id = session["user_id"]
     body = await request.json()
-    allowed = {"name", "age", "biological_sex", "height_cm", "health_goals", "vo2_max", "birthdate", "supplements"}
+    allowed = {"name", "age", "biological_sex", "height_cm", "health_goals", "vo2_max", "birthdate", "supplements", "peptides"}
     data = {k: v for k, v in body.items() if k in allowed}
     # Empty birthdate string clears it (Postgres date column rejects "").
     if "birthdate" in data and not data["birthdate"]:
         data["birthdate"] = None
-    # Sanitize supplements server-side so the DB only ever holds clean shapes.
+    # Sanitize server-side so the DB only ever holds clean shapes.
     if "supplements" in data:
         data["supplements"] = _sanitize_supplements(data["supplements"])
+    if "peptides" in data:
+        data["peptides"] = _sanitize_peptides(data["peptides"])
     data["user_id"] = user_id
     try:
         db = get_supabase()

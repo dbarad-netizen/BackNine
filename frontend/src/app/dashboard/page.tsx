@@ -18,6 +18,7 @@ import {
 import { scoreColor, fmtDate } from "@/lib/utils";
 import ScoreRing from "@/components/ScoreRing";
 import SupplementsCard from "@/components/SupplementsCard";
+import PeptidesCard from "@/components/PeptidesCard";
 import AppleHealthCard from "@/components/AppleHealthCard";
 import DayMealsDrawer from "@/components/DayMealsDrawer";
 import ManualLogCard from "@/components/ManualLogCard";
@@ -2231,6 +2232,15 @@ export default function DashboardPage() {
                   onSave={async (next) => {
                     const updated = await api.saveProfile({ ...(profile ?? {}), supplements: next });
                     setProfile(prev => ({ ...(prev ?? {}), ...updated, supplements: next }));
+                  }}
+                />
+
+                {/* ─ Peptides (separate from supplements — distinct mental category) ─ */}
+                <PeptidesCard
+                  peptides={profile?.peptides ?? []}
+                  onSave={async (next) => {
+                    const updated = await api.saveProfile({ ...(profile ?? {}), peptides: next });
+                    setProfile(prev => ({ ...(prev ?? {}), ...updated, peptides: next }));
                   }}
                 />
 
