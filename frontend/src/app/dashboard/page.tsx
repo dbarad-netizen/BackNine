@@ -919,6 +919,46 @@ export default function DashboardPage() {
       .catch(() => {});
   }, []);
 
+  // ── Foreground refetch loop ────────────────────────────────────────────────
+  // Refetch the dashboard every 15 minutes while the tab is visible. Without
+  // this, a user who leaves the app open at 8am still sees 8am's data at
+  // noon — even after Oura/Apple Health have synced today's. Pauses while
+  // the tab is hidden so we don't hammer the backend from background tabs.
+  // (Non-Oura UX rethink, Slice 2.)
+  useEffect(() => {
+    const REFETCH_MS = 15 * 60 * 1000;
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    const start = () => {
+      if (timer) return;
+      timer = setInterval(() => {
+        if (document.visibilityState !== "visible") return;
+        api.dashboard().then(setData).catch(() => {});
+      }, REFETCH_MS);
+    };
+    const stop = () => {
+      if (timer) { clearInterval(timer); timer = null; }
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        // Coming back to the tab after a while — refetch immediately, then
+        // restart the timer.
+        api.dashboard().then(setData).catch(() => {});
+        start();
+      } else {
+        stop();
+      }
+    };
+
+    start();
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
+
   // Reload nutrition data when the Nutrition tab OR the Scorecard is opened.
   // The Scorecard's inline quick-actions (Enter a meal/macros panel, Body &
   // Weight pill) read nutToday/weightLog too, so without fetching here they'd be
@@ -1509,11 +1549,15 @@ export default function DashboardPage() {
             {(() => {
               const hour = new Date().getHours();
               const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
-              // Morning gap: today's Oura data hasn't synced yet (anchor is an
-              // older day). Show "Syncing…" rather than presenting yesterday's
-              // scores as today's. After ~2pm we stop waiting and fall back to
-              // showing the last-known values (current behavior).
-              const syncingToday = !anchorIsToday && hour < 14;
+              // Honest staleness: if the data anchor isn't today, ALWAYS show
+              // "Syncing…" — no matter the hour. David's complaint was that the
+              // ring showed yesterday's data for most of the day, then "just got
+              // updated" much later. The old `&& hour < 14` gate let stale
+              // values bleed through past 2pm. Per the non-Oura UX proposal
+              // (Q1: hide stale), we no longer surface yesterday's number as
+              // if it were today's. The score trend card still shows
+              // yesterday's value with proper date framing.
+              const syncingToday = !anchorIsToday;
               const dayFull  = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
               const scoreColor = (s: number | undefined) =>
                 !s ? "#9ca3af" : s >= 85 ? "#22c55e" : s >= 70 ? "#f59e0b" : "#ef4444";
@@ -1706,10 +1750,50 @@ export default function DashboardPage() {
                     </div>
                   ) : null}
 
-                  {/* Component breakdown — scored metrics */}
-                  {Object.keys(lon.components).length > 0 && (
+                  {/* Component breakdown — ALL 6 canonical slots, stable order.
+                      Missing components render as "—" with an inline How-to-unlock
+                      hint instead of being silently dropped, so the card has the
+                      same shape every day. Caption below honestly counts how
+                      many of the 6 are contributing. (Non-Oura UX rethink, Slice 1.) */}
+                  {(() => {
+                    // Canonical 6 — must match backend/longevity.py components dict.
+                    const CANONICAL: { key: string; label: string; max: number; hint: string }[] = [
+                      { key: "hrv",      label: "Heart Rate Variability", max: 25, hint: "Connect Apple Health or Oura" },
+                      { key: "rhr",      label: "Resting Heart Rate",     max: 20, hint: "Connect Apple Health or Oura" },
+                      { key: "vo2_max",  label: "VO2 Max",                max: 20, hint: "Tap edit to enter manually" },
+                      { key: "sleep",    label: "Sleep (7-day avg)",      max: 15, hint: "Connect Apple Health or Oura" },
+                      { key: "body_fat", label: "Body Fat %",             max: 10, hint: "Enter via the Log Weigh-In card" },
+                      { key: "steps",    label: "Daily Steps (avg)",      max: 10, hint: "Connect Apple Health or Oura" },
+                    ];
+                    const present = lon.components;
+                    return (
                     <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">
-                      {Object.values(lon.components).map(comp => {
+                      {CANONICAL.map(slot => {
+                        const comp  = present[slot.key];
+                        if (!comp) {
+                          // Empty slot — honest "—" with action affordance and
+                          // a stable visual presence so the grid never changes shape.
+                          const isVo2 = slot.key === "vo2_max";
+                          return (
+                            <div key={slot.key} className="space-y-1 opacity-60">
+                              <div className="flex justify-between text-[10px]">
+                                <span className="text-gray-600 truncate pr-1">{slot.label}</span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <span className="text-gray-500">—/{slot.max}</span>
+                                  {isVo2 && !vo2Editing && (
+                                    <button
+                                      onClick={() => { setVo2Editing(true); setVo2Input(""); setVo2Saved(false); }}
+                                      className="text-[9px] text-blue-400 hover:text-blue-600 underline leading-none"
+                                      title="Update VO2 Max"
+                                    >edit</button>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="h-1.5 w-full bg-gray-100 rounded-full" />
+                              <p className="text-[9px] text-gray-500 italic leading-tight">{slot.hint}</p>
+                            </div>
+                          );
+                        }
                         const pct = Math.round((comp.points / comp.max) * 100);
                         const barColor = pct >= 80 ? "#22c55e" : pct >= 60 ? "#84cc16" : pct >= 40 ? "#f59e0b" : "#ef4444";
                         const isVo2 = comp.label === "VO2 Max";
@@ -1762,60 +1846,25 @@ export default function DashboardPage() {
                         );
                       })}
                     </div>
-                  )}
-
-                  {/* Missing metrics — show what would unlock a higher score */}
-                  {(() => {
-                    const present = new Set(Object.keys(lon.components));
-                    const missingBodyFat = !present.has("body_fat");
-                    const missingVo2    = !present.has("vo2_max");
-                    if (!missingBodyFat && !missingVo2) return null;
-                    return (
-                      <div className="pt-2 border-t border-gray-100 space-y-2">
-                        <p className="text-[10px] text-gray-600 font-medium uppercase tracking-widest">Unlock more points</p>
-
-                        {/* VO2 Max — inline entry */}
-                        {missingVo2 && (
-                          <div className="space-y-1.5">
-                            <div className="flex items-center gap-2 text-[10px] text-gray-600">
-                              <span className="w-1.5 h-1.5 rounded-full bg-gray-300 shrink-0" />
-                              <span><span className="font-medium text-gray-600">VO2 Max</span> (+20 pts max)</span>
-                            </div>
-                            <div className="flex items-center gap-2 pl-3.5">
-                              <input
-                                type="number"
-                                min={10} max={90} step={0.1}
-                                placeholder="e.g. 45"
-                                value={vo2Input}
-                                onChange={e => setVo2Input(e.target.value)}
-                                className="w-24 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs text-gray-900 focus:outline-none focus:border-green-400"
-                              />
-                              <span className="text-[10px] text-gray-600">ml/kg/min</span>
-                              <Button
-                                variant="accent"
-                                size="sm"
-                                onClick={handleSaveVo2}
-                                disabled={vo2Saving || !vo2Input}
-                              >
-                                {vo2Saved ? "✓ Saved" : vo2Saving ? "…" : "Save"}
-                              </Button>
-                            </div>
-                            <p className="pl-3.5 text-[10px] text-gray-600">
-                              From your Oura app or Apple Health → Cardio Fitness. Will auto-sync once connected.
-                            </p>
-                          </div>
-                        )}
-
-                        {/* Body fat — redirect to weigh-in card */}
-                        {missingBodyFat && (
-                          <div className="flex items-center gap-2 text-[10px] text-gray-600">
-                            <span className="w-1.5 h-1.5 rounded-full bg-gray-300 shrink-0" />
-                            <span><span className="font-medium text-gray-600">Body Fat %</span> (+10 pts max) — enter via the Log Weigh-In card below</span>
-                          </div>
-                        )}
-                      </div>
                     );
                   })()}
+
+                  {/* Honest "N of 6 contributing" caption — replaces the old
+                      `data_coverage` line which used variable wording depending
+                      on what was present. Always says the same thing. */}
+                  {(() => {
+                    const total = 6;
+                    const contributing = Object.keys(lon.components).length;
+                    if (contributing >= total) return null;
+                    return (
+                      <p className="text-[10px] text-gray-600 italic">
+                        {contributing} of {total} metrics contributing — connect Apple Health to unlock the rest.
+                      </p>
+                    );
+                  })()}
+
+                  {/* (The old "Unlock more points" section was removed —
+                      each empty slot now carries its own hint inline.) */}
 
                   {/* Top improvement tip — highlight the lowest-scoring component */}
                   {(() => {
