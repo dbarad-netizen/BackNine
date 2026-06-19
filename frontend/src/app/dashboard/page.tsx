@@ -20,6 +20,7 @@ import ScoreRing from "@/components/ScoreRing";
 import SupplementsCard from "@/components/SupplementsCard";
 import PeptidesCard from "@/components/PeptidesCard";
 import AppleHealthCard from "@/components/AppleHealthCard";
+import BloodPressureCard from "@/components/BloodPressureCard";
 import DayMealsDrawer from "@/components/DayMealsDrawer";
 import ManualLogCard from "@/components/ManualLogCard";
 import CoachReactionToast from "@/components/CoachReactionToast";
@@ -1457,6 +1458,13 @@ export default function DashboardPage() {
             {data.has_apple_health && data.apple_health && (
               <AppleHealthCard data={data.apple_health} />
             )}
+
+            {/* ── Blood Pressure tracker ──
+                Cardiovascular anchor signal. Manual entry now (Withings/Omron
+                via Apple Health later). Lives high on the Scorecard because
+                BP is one of the things people actually need to share with
+                their doctor — the Doctor's Report PDF will pull from here. */}
+            <BloodPressureCard />
 
             {/* Getting Started card — shown until a data source is connected.
                 Frames all three paths (Oura / Apple Health / manual) so a

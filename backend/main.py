@@ -25,6 +25,7 @@ from oura import build_auth_url, exchange_code, refresh_token as oura_refresh, f
 from coaching import generate_coaching, coach_overall, coach_sleep, coach_activity
 from models import DashboardResponse, DailyMetrics, WearableConnection
 import nutrition as nutr
+import bp
 import training as trn
 import labs as lbs
 import challenges as chl
@@ -1791,6 +1792,52 @@ async def edit_meal(meal_id: str, request: Request):
 def get_weight(request: Request):
     session = _require_session(request)
     return {"entries": nutr.get_weight_entries(session["user_id"])}
+
+
+# ── Blood pressure log ────────────────────────────────────────────────────────
+# Manual entry now; Apple Health Withings/Omron syncs flow through the AH
+# sync path later. Anchors the cardiovascular signals for the Doctor's
+# Report PDF.
+
+@app.get("/api/bp")
+def list_bp(request: Request, days: int = 90):
+    session = _require_session(request)
+    return {
+        "readings": bp.list_readings(session["user_id"], days=days),
+        "summary":  bp.summary(session["user_id"], days=30),
+    }
+
+
+@app.post("/api/bp")
+async def log_bp(request: Request):
+    session = _require_session(request)
+    body    = await request.json()
+    today   = _user_local_today_iso(request)
+    try:
+        saved = bp.log_reading(
+            user_id     = session["user_id"],
+            systolic    = int(body["systolic"]),
+            diastolic   = int(body["diastolic"]),
+            pulse       = int(body["pulse"]) if body.get("pulse") else None,
+            when        = body.get("date") or today,
+            time_of_day = (body.get("time_of_day") or "morning"),
+            notes       = body.get("notes"),
+            source      = "manual",
+        )
+    except (KeyError, ValueError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if not saved:
+        raise HTTPException(status_code=500, detail="Couldn't save reading")
+    return saved
+
+
+@app.delete("/api/bp/{reading_id}")
+def delete_bp(reading_id: str, request: Request):
+    session = _require_session(request)
+    ok = bp.delete_reading(session["user_id"], reading_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Reading not found")
+    return {"status": "deleted"}
 
 
 @app.post("/api/nutrition/weight")

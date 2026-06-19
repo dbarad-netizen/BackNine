@@ -354,6 +354,30 @@ export interface NutritionToday {
   settings: NutritionSettings;
 }
 
+// ── Blood pressure ─────────────────────────────────────────────────────────
+export type BPTimeOfDay = "morning" | "midday" | "evening" | "other";
+
+export interface BPReading {
+  id:          string;
+  date:        string;        // ISO YYYY-MM-DD
+  time_of_day: BPTimeOfDay;
+  systolic:    number;
+  diastolic:   number;
+  pulse?:      number | null;
+  notes?:      string | null;
+  source:      "manual" | "apple_health" | "withings";
+  created_at:  string;
+}
+
+export interface BPSummary {
+  count:   number;
+  days:    number;
+  average?: { systolic: number | null; diastolic: number | null };
+  morning?: { systolic: number | null; diastolic: number | null; n: number };
+  evening?: { systolic: number | null; diastolic: number | null; n: number };
+  latest?:  { date: string; time: BPTimeOfDay; systolic: number; diastolic: number; pulse: number | null };
+}
+
 export interface WeightEntry {
   id:                       string;
   date:                     string;
@@ -649,6 +673,22 @@ export const api = {
     });
   },
   weightEntries():      Promise<{ entries: WeightEntry[] }> { return request("/api/nutrition/weight"); },
+
+  // ── Blood pressure log ─────────────────────────────────────────────────────
+  /** List BP readings + recent-window summary stats. days=0 → all-time. */
+  bpList(days = 90): Promise<{ readings: BPReading[]; summary: BPSummary }> {
+    return request(`/api/bp?days=${days}`);
+  },
+  /** Save a single reading. Defaults `date` to today and `time_of_day` to morning. */
+  bpLog(entry: { systolic: number; diastolic: number; pulse?: number; date?: string; time_of_day?: BPTimeOfDay; notes?: string }): Promise<BPReading> {
+    return request("/api/bp", {
+      method: "POST",
+      body: JSON.stringify({ ...entry, date: entry.date || localToday() }),
+    });
+  },
+  bpDelete(id: string): Promise<{ status: string }> {
+    return request(`/api/bp/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
   logWeight(entry: Partial<WeightEntry> & { weight_lbs: number }): Promise<WeightEntry> {
     return request("/api/nutrition/weight", {
       method: "POST",
