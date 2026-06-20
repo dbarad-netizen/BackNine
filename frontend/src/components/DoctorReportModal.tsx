@@ -98,6 +98,27 @@ export default function DoctorReportModal({ open, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/40 flex items-start justify-center p-2 sm:p-6 print:bg-white print:p-0 print:static print:inset-auto">
+      {/* Print-only CSS: when the user hits Print / save as PDF, hide
+          everything in the page EXCEPT the report article inside this
+          modal. The classic "print only this element" pattern using
+          visibility (not display) so layout is preserved during the
+          browser's print routine. Without this, the underlying dashboard
+          (Coach Al, leaderboard, gear picks, etc.) prints after the
+          report — which is bad for a clinical handoff. */}
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          #bn-doctor-report-print,
+          #bn-doctor-report-print * { visibility: visible !important; }
+          #bn-doctor-report-print {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            background: white !important;
+          }
+        }
+      `}</style>
       <div className="bg-white w-full max-w-4xl rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[95vh] print:max-h-none print:shadow-none print:rounded-none">
 
         {/* Controls — hidden in print */}
@@ -164,7 +185,7 @@ function ReportBody({ data }: { data: DoctorReportPayload }) {
   const hasAH = !!ah && ((ah.days_synced ?? 0) > 0 || Object.keys(ah.today).length > 0);
 
   return (
-    <article className="p-5 sm:p-8 text-sm text-gray-900 print:p-6">
+    <article id="bn-doctor-report-print" className="p-5 sm:p-8 text-sm text-gray-900 print:p-6">
       {/* ── Patient header ──────────────────────────────────────────────── */}
       <header className="mb-6 pb-4 border-b border-gray-200">
         <h1 className="text-2xl font-bold text-gray-900 mb-1">Personal Health Report</h1>
