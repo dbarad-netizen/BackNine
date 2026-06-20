@@ -247,16 +247,31 @@ def parse_oura_data(raw: dict) -> tuple[dict, dict, dict, dict]:
         sleep_need_sec = rec.get("sleep_need", {})
         if isinstance(sleep_need_sec, dict):
             sleep_need_sec = sleep_need_sec.get("long_sleep", 0) or 0
+        # Breathing Disturbance Index (disturbances/hour). This is Oura's
+        # clinical-grade input for the "Varied" / "Steady" nighttime breathing
+        # tag in the app — and the most relevant signal when discussing sleep
+        # apnea screening with a physician. Oura has rolled this field out
+        # under at least two names across API versions, and on some accounts
+        # it sits on the readiness contributor. We try all three so older
+        # backfilled nights still get a value where possible.
+        bdi = (
+            rec.get("breathing_disturbance_index")
+            or rec.get("respiratory_disturbance_index")
+            or None
+        )
         _smm_raw.setdefault(day, []).append({
             "total":         total,
             "deep":          rec.get("deep_sleep_duration") or 0,
             "rem":           rec.get("rem_sleep_duration") or 0,
             "hrv":           rec.get("average_hrv"),
             "rhr":           rec.get("lowest_heart_rate"),
+            "avg_hr":        rec.get("average_heart_rate"),
             # average_breath: respiratory rate during sleep (breaths/min). Used
             # in the Doctor's Report — elevated/rising rates are a soft signal
             # for sleep apnea, illness, or stress that clinicians want to see.
             "breath":        rec.get("average_breath"),
+            "bdi":           bdi,
+            "restless":      rec.get("restless_periods"),  # awakening/restless count
             "efficiency":    rec.get("efficiency"),
             "bedtime_start": rec.get("bedtime_start"),
             "sleep_need":    sleep_need_sec or None,
@@ -292,13 +307,33 @@ def parse_oura_data(raw: dict) -> tuple[dict, dict, dict, dict]:
         # Best efficiency from the longest session
         longest = max(sessions, key=lambda s: s["total"])
 
+        # Weighted average heart rate (weight by session length).
+        ahr_pairs = [(s["avg_hr"], s["total"]) for s in sessions if s.get("avg_hr") is not None]
+        if ahr_pairs:
+            ahr_sum = sum(w for _, w in ahr_pairs)
+            avg_hr  = round(sum(h * w for h, w in ahr_pairs) / ahr_sum) if ahr_sum else None
+        else:
+            avg_hr = None
+
+        # BDI: take the maximum across overlapping sessions to be conservative
+        # — a clinician wants the worst case, not the smoothed average.
+        bdi_vals = [s["bdi"] for s in sessions if s.get("bdi") is not None]
+        max_bdi = max(bdi_vals) if bdi_vals else None
+
+        # Total restless periods across the night (sum across split sessions).
+        restless_vals = [s["restless"] for s in sessions if s.get("restless") is not None]
+        total_restless = sum(restless_vals) if restless_vals else None
+
         smm[day] = {
             "total":         total_sleep,
             "deep":          total_deep  or None,
             "rem":           total_rem   or None,
             "hrv":           avg_hrv,
             "rhr":           min_rhr,
+            "avg_hr":        avg_hr,
             "breath":        avg_breath,
+            "bdi":           max_bdi,
+            "restless":      total_restless,
             # SpO2 from the separate daily_spo2 endpoint, merged in by day.
             # None when the ring model doesn't measure it.
             "spo2":          spo2_by_day.get(day),

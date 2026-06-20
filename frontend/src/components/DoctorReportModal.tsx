@@ -154,7 +154,7 @@ export default function DoctorReportModal({ open, onClose }: Props) {
 }
 
 function ReportBody({ data }: { data: DoctorReportPayload }) {
-  const { patient, blood_pressure: bp, sleep_cardio: sc, apple_health: ah, weight, stack, range, generated_at } = data;
+  const { patient, blood_pressure: bp, sleep_cardio: sc, breathing_screening: bs, apple_health: ah, weight, stack, range, generated_at } = data;
 
   // Are we Oura-blank? When the user has no Oura connection none of the
   // cardio series have data; render the AH summary instead (or, when neither
@@ -266,6 +266,88 @@ function ReportBody({ data }: { data: DoctorReportPayload }) {
           </div>
         ) : (
           <p className="text-xs text-gray-600 italic">No sleep or cardio data in this window.</p>
+        )}
+      </section>
+
+      {/* ── Sleep & Breathing Screening ─────────────────────────────────
+          Dedicated section for sleep apnea / OSA consults. Surfaces Oura's
+          Breathing Disturbance Index (BDI) — disturbances per hour, the
+          numeric signal behind the "Varied" tag in the Oura app — alongside
+          per-night HRV/RHR/SpO2 context. Strictly observational; the
+          report's footer disclaimer covers it. */}
+      <section className="mb-6 print:break-inside-avoid">
+        <h2 className="text-base font-semibold text-gray-900 mb-1">Sleep &amp; Breathing Screening</h2>
+        <p className="text-[11px] text-gray-600 mb-2 leading-snug">
+          Per-night Breathing Disturbance Index (BDI) from Oura&apos;s sleep model.
+          Higher BDI = more breathing variations per hour. Provided for clinical
+          context — not a diagnosis.
+        </p>
+        {bs.nights.length === 0 ? (
+          <p className="text-xs text-gray-600 italic">
+            No breathing-screening data in this window. (Oura&apos;s nightly BDI is
+            published several hours after wake — check back later if last
+            night just synced.)
+          </p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+              <div className="rounded-lg border border-gray-200 px-3 py-2.5 bg-white">
+                <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Mean BDI</p>
+                <p className="text-lg font-bold text-gray-900 leading-tight">{numOrDash(bs.mean_bdi, 1)}<span className="text-[11px] text-gray-600 font-normal ml-1">/hr</span></p>
+                <p className="text-[10px] text-gray-600">{bs.nights_with_bdi} nights</p>
+              </div>
+              <div className="rounded-lg border border-gray-200 px-3 py-2.5 bg-white">
+                <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Highest BDI</p>
+                <p className="text-lg font-bold text-gray-900 leading-tight">{numOrDash(bs.max_bdi, 1)}<span className="text-[11px] text-gray-600 font-normal ml-1">/hr</span></p>
+                <p className="text-[10px] text-gray-600">worst night</p>
+              </div>
+              <div className="rounded-lg border border-gray-200 px-3 py-2.5 bg-white col-span-2">
+                <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Classification distribution</p>
+                <div className="flex gap-3 mt-0.5 text-[11px]">
+                  <span><span className="font-bold text-gray-900">{bs.classification?.["Steady"] ?? 0}</span> <span className="text-gray-600">Steady</span></span>
+                  <span><span className="font-bold text-gray-900">{bs.classification?.["Varied"] ?? 0}</span> <span className="text-gray-600">Varied</span></span>
+                  <span><span className="font-bold text-gray-900">{bs.classification?.["Frequent variations"] ?? 0}</span> <span className="text-gray-600">Frequent</span></span>
+                  {(bs.classification?.["Unknown"] ?? 0) > 0 && (
+                    <span><span className="font-bold text-gray-900">{bs.classification?.["Unknown"]}</span> <span className="text-gray-600">No BDI data</span></span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="text-left text-[10px] uppercase tracking-wide text-gray-600 border-b border-gray-200">
+                  <th className="py-1.5 pr-2 font-semibold">Night</th>
+                  <th className="py-1.5 pr-2 font-semibold">BDI</th>
+                  <th className="py-1.5 pr-2 font-semibold">Label</th>
+                  <th className="py-1.5 pr-2 font-semibold">Breath</th>
+                  <th className="py-1.5 pr-2 font-semibold">Avg HR</th>
+                  <th className="py-1.5 pr-2 font-semibold">Low HR</th>
+                  <th className="py-1.5 pr-2 font-semibold">SpO₂</th>
+                  <th className="py-1.5 font-semibold">Restless</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bs.nights.slice(0, 30).map(n => (
+                  <tr key={n.date} className="border-b border-gray-100">
+                    <td className="py-1 pr-2">{fmtDate(n.date)}</td>
+                    <td className="py-1 pr-2 font-mono">{numOrDash(n.bdi, 1)}</td>
+                    <td className={`py-1 pr-2 ${n.label === "Frequent variations" ? "text-red-600 font-semibold" : n.label === "Varied" ? "text-amber-700 font-medium" : "text-gray-700"}`}>
+                      {n.label ?? "—"}
+                    </td>
+                    <td className="py-1 pr-2 font-mono">{numOrDash(n.breath, 1)}</td>
+                    <td className="py-1 pr-2 font-mono">{numOrDash(n.avg_hr)}</td>
+                    <td className="py-1 pr-2 font-mono">{numOrDash(n.rhr)}</td>
+                    <td className="py-1 pr-2 font-mono">{numOrDash(n.spo2, 1)}</td>
+                    <td className="py-1 font-mono">{numOrDash(n.restless)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {bs.nights.length > 30 && (
+              <p className="text-[10px] text-gray-600 mt-1.5">Showing 30 of {bs.nights.length} nights (newest first).</p>
+            )}
+          </>
         )}
       </section>
 
