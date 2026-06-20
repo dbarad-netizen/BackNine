@@ -5,6 +5,8 @@ import {
   api,
   getPendingReferral,
   clearPendingReferral,
+  readDashboardCache,
+  writeDashboardCache,
   type DashboardData,
   type NutritionToday,
   type NutritionSummary,
@@ -882,14 +884,29 @@ export default function DashboardPage() {
   const [vo2Editing,   setVo2Editing]   = useState(false);
 
   useEffect(() => {
+    // Paint immediately from localStorage cache if we have one — the user sees
+    // their dashboard instead of a spinner, and any fresh data swaps in when
+    // the network call lands a second or two later. Stale-while-revalidate
+    // pattern; the cache helper enforces a 1-hour TTL and clears on logout.
+    const cached = readDashboardCache() as DashboardData | null;
+    if (cached) {
+      setData(cached);
+      setLoading(false);   // skip the full-page spinner — we have something to show
+    }
+
     api.dashboard()
       .then((d) => {
         setData(d);
+        writeDashboardCache(d);
         // Fetch the Longevity trend AFTER the dashboard resolves so today's
         // score has been recorded (and any first-time backfill has run).
         api.longevityHistory().then(setLonHistory).catch(() => {});
       })
-      .catch((e) => setError(e.message))
+      .catch((e) => {
+        // Only surface a hard error when we have nothing to show. If a cached
+        // payload is up, a transient network blip shouldn't blank the page.
+        if (!cached) setError(e.message);
+      })
       .finally(() => setLoading(false));
     // Pre-load weight entries so Body Composition card is ready on Scorecard
     api.weightEntries()
@@ -934,7 +951,7 @@ export default function DashboardPage() {
       if (timer) return;
       timer = setInterval(() => {
         if (document.visibilityState !== "visible") return;
-        api.dashboard().then(setData).catch(() => {});
+        api.dashboard().then(d => { setData(d); writeDashboardCache(d); }).catch(() => {});
       }, REFETCH_MS);
     };
     const stop = () => {
@@ -945,7 +962,7 @@ export default function DashboardPage() {
       if (document.visibilityState === "visible") {
         // Coming back to the tab after a while — refetch immediately, then
         // restart the timer.
-        api.dashboard().then(setData).catch(() => {});
+        api.dashboard().then(d => { setData(d); writeDashboardCache(d); }).catch(() => {});
         start();
       } else {
         stop();

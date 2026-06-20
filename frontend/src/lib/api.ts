@@ -45,7 +45,49 @@ export function getToken(): string | null {
 
 export function clearToken(): void {
   _token = null;
-  if (typeof window !== "undefined") localStorage.removeItem("bn_token");
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("bn_token");
+    clearDashboardCache();
+  }
+}
+
+// ── Dashboard cache (stale-while-revalidate) ───────────────────────────────
+// On every dashboard mount, we paint from this cache immediately so the user
+// sees their data instead of a spinner. Then api.dashboard() runs in the
+// background and the page updates in place when fresh data lands.
+//
+// Cache is cleared on logout (above) so a previous user's dashboard never
+// leaks into a new session.
+const DASHBOARD_CACHE_KEY = "bn_dashboard_cache";
+const DASHBOARD_CACHE_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour — older than this, don't pretend it's fresh
+
+export function readDashboardCache(): unknown {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(DASHBOARD_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    if (typeof parsed._ts !== "number") return null;
+    if (Date.now() - parsed._ts > DASHBOARD_CACHE_MAX_AGE_MS) return null;
+    return parsed.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeDashboardCache(data: unknown): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify({ _ts: Date.now(), data }));
+  } catch {
+    /* quota or serialization issue — silently skip; the network fetch still works */
+  }
+}
+
+export function clearDashboardCache(): void {
+  if (typeof window === "undefined") return;
+  try { localStorage.removeItem(DASHBOARD_CACHE_KEY); } catch { /* noop */ }
 }
 
 // ── Pending referral (shareable invite cards) ───────────────────────────────────

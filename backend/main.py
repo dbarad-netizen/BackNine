@@ -1051,8 +1051,38 @@ def _empty_dashboard_payload(session: dict) -> dict:
     }
 
 
+async def _refresh_oura_cache_bg(user_id: str, access_token: str, days: int) -> None:
+    """Background-task: refresh Oura day summaries + import workouts.
+
+    Used by the dashboard endpoint's stale-while-revalidate path: when we have
+    cache that's recent-enough to serve immediately (<2h) we return it and
+    spawn this to update the cache for the *next* request. Best-effort — any
+    error is swallowed; the next dashboard hit will retry the live fetch
+    inline if the cache is still stale.
+    """
+    try:
+        raw = await fetch_all(access_token, days=days)
+        live_rm, live_slm, live_am, live_smm = parse_oura_data(raw)
+        if live_rm or live_slm or live_am or live_smm:
+            try:
+                oc.store_days(user_id, live_rm, live_slm, live_am, live_smm)
+            except Exception:
+                pass
+        try:
+            _ow = await oura_fetch_workouts(access_token, days=30)
+            _os = await oura_fetch_sessions(access_token, days=30)
+            if _ow or _os:
+                trn.import_oura_events(user_id, _ow, _os)
+        except Exception:
+            pass
+    except Exception:
+        # Auth errors, 5xx from Oura — drop silently. The inline path will
+        # surface them next time the cache truly goes cold.
+        pass
+
+
 @app.get("/api/dashboard")
-async def get_dashboard(request: Request, days: int = 120):
+async def get_dashboard(request: Request, background_tasks: BackgroundTasks, days: int = 120):
     session = _require_session(request)
     user_id = session["user_id"]
 
@@ -1149,6 +1179,27 @@ async def get_dashboard(request: Request, days: int = 120):
         today_str_check = _user_local_today_iso(request)
         if slm.get(today_str_check) and not smm.get(today_str_check):
             cache_hit = False  # force live fetch to try to get today's session
+
+    # ── Stale-while-revalidate ─────────────────────────────────────────────────
+    # If we missed the strict 30-min freshness window but the cache is still
+    # under 2 hours old, serve cache immediately and refresh Oura in the
+    # background. This kills the "spins a little and loads health data" wait
+    # that users hit on every page visit — Oura's API adds ~2-4 sec to every
+    # cold dashboard load, even when our cache is only 45 minutes stale.
+    # Background refresh is best-effort; the next dashboard hit either reads
+    # the freshly-updated cache, or (if the background task failed) falls
+    # through to the inline live fetch below.
+    if not cache_hit and have_cache:
+        swr_ok = False
+        try:
+            swr_ok = oc.is_fresh(user_id, max_age_hours=2.0)
+        except Exception:
+            pass
+        if swr_ok:
+            cache_hit = True
+            background_tasks.add_task(
+                _refresh_oura_cache_bg, user_id, access_token, days
+            )
 
     if not cache_hit:
         try:
