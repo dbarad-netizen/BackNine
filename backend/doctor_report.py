@@ -87,19 +87,17 @@ def _bp_section(user_id: str, days: int) -> dict:
     }
 
 
-def _classify_bdi(bdi: Optional[float]) -> Optional[str]:
-    """Map BDI to Oura's qualitative label, using their published bands.
-    Pure presentation — no clinical judgment lives here."""
-    if bdi is None:
+def _classify_efficiency(eff: Optional[int]) -> Optional[str]:
+    """Per-night sleep-fragmentation label based on Oura's efficiency score.
+    These thresholds are ours, presented transparently in the report so a
+    clinician sees the same banding logic we do."""
+    if eff is None:
         return None
-    # Oura's app shows Steady (low BDI) → Varied (mid) → Frequent variations
-    # (high). These thresholds approximate the bands their UI uses; clinicians
-    # should rely on the raw number, not the label.
-    if bdi < 5:
-        return "Steady"
-    if bdi < 15:
-        return "Varied"
-    return "Frequent variations"
+    if eff >= 90:
+        return "Restful"
+    if eff >= 80:
+        return "Variable"
+    return "Fragmented"
 
 
 def _sleep_cardio_section(smm: dict, slm: dict, start: str, end: str) -> dict:
@@ -259,51 +257,66 @@ def _patient_section(profile: dict) -> dict:
     }
 
 
-def _breathing_screening_section(smm: dict, start: str, end: str) -> dict:
-    """Dedicated section for the sleep-apnea conversation. Pulls per-night
-    Breathing Disturbance Index, average heart rate, and a Steady/Varied
-    classification matching Oura's own categorization.
+def _sleep_fragmentation_section(smm: dict, start: str, end: str) -> dict:
+    """Sleep Quality & Fragmentation — what we can honestly show given that
+    Oura's app-only Breathing Disturbance Index isn't in the public API.
 
-    Returns a list of nightly rows (newest first) PLUS aggregates so the
-    doctor can scan distributions without doing math: mean BDI, max BDI,
-    and the count of nights in each classification bucket. If the user's
-    ring doesn't surface BDI at all (older accounts, missing field), the
-    `nights` list is empty and the modal shows an honest empty state."""
+    Per night: efficiency %, awake minutes, restless events, breath rate,
+    HR avg, RHR, SpO₂, and a Restful/Variable/Fragmented label based on
+    efficiency.
+
+    Aggregates: mean efficiency, mean awake-time, mean restless-events,
+    label distribution. This is the signal a sleep clinician will scan
+    when discussing whether a polysomnography is warranted."""
     rows: list[dict] = []
     for d, row in smm.items():
         if not (start <= d <= end):
             continue
-        bdi = row.get("bdi")
-        if bdi is None and row.get("breath") is None and row.get("restless") is None:
-            continue  # truly nothing useful for this night
+        # Skip nights with nothing useful to show.
+        if (row.get("efficiency") is None and row.get("breath") is None
+                and row.get("restless") is None and row.get("awake") is None):
+            continue
+        awake_sec = row.get("awake")
+        awake_min = round(awake_sec / 60, 1) if awake_sec else None
         rows.append({
-            "date":     d,
-            "bdi":      bdi,
-            "label":    _classify_bdi(bdi),
-            "breath":   row.get("breath"),
-            "rhr":      row.get("rhr"),
-            "avg_hr":   row.get("avg_hr"),
-            "restless": row.get("restless"),
-            "spo2":     row.get("spo2"),
+            "date":       d,
+            "efficiency": row.get("efficiency"),
+            "label":      _classify_efficiency(row.get("efficiency")),
+            "awake_min":  awake_min,
+            "restless":   row.get("restless"),
+            "breath":     row.get("breath"),
+            "rhr":        row.get("rhr"),
+            "avg_hr":     row.get("avg_hr"),
+            "spo2":       row.get("spo2"),
         })
     rows.sort(key=lambda r: r["date"], reverse=True)
 
-    bdis = [r["bdi"] for r in rows if r["bdi"] is not None]
-    mean_bdi = round(sum(bdis) / len(bdis), 1) if bdis else None
-    max_bdi  = max(bdis) if bdis else None
+    effs   = [r["efficiency"] for r in rows if r["efficiency"] is not None]
+    awakes = [r["awake_min"]  for r in rows if r["awake_min"]  is not None]
+    rests  = [r["restless"]   for r in rows if r["restless"]   is not None]
 
-    # Classification counts — what the doctor wants to see at a glance.
-    buckets = {"Steady": 0, "Varied": 0, "Frequent variations": 0, "Unknown": 0}
+    mean_eff      = int(round(sum(effs)   / len(effs)))   if effs   else None
+    mean_awake    = round(sum(awakes) / len(awakes), 1)   if awakes else None
+    mean_restless = int(round(sum(rests)  / len(rests)))  if rests  else None
+
+    buckets = {"Restful": 0, "Variable": 0, "Fragmented": 0, "Unknown": 0}
     for r in rows:
         lab = r["label"] or "Unknown"
         buckets[lab] = buckets.get(lab, 0) + 1
 
     return {
-        "nights":             rows,
-        "mean_bdi":           mean_bdi,
-        "max_bdi":            max_bdi,
-        "nights_with_bdi":    len(bdis),
-        "classification":     buckets,
+        "nights":         rows,
+        "mean_efficiency": mean_eff,
+        "mean_awake_min":  mean_awake,
+        "mean_restless":   mean_restless,
+        "classification":  buckets,
+        "note":            (
+            "Oura's app-only Nighttime Breathing Disturbance Index is not "
+            "exposed in their public API. The signals below — sleep efficiency, "
+            "minutes awake after sleep onset, restless events, average breath "
+            "rate, and overnight SpO₂ — are what Oura makes available and "
+            "what a clinician can use to interpret sleep fragmentation."
+        ),
     }
 
 
@@ -331,7 +344,7 @@ def build_report(user_id: str, profile: dict, *, days: int = 30, end_iso: Option
         "patient":          _patient_section(profile),
         "blood_pressure":   _bp_section(user_id, days),
         "sleep_cardio":     _sleep_cardio_section(smm, slm, start, end),
-        "breathing_screening": _breathing_screening_section(smm, start, end),
+        "sleep_fragmentation": _sleep_fragmentation_section(smm, start, end),
         "apple_health":     _apple_health_section(user_id, days),
         "weight":           _weight_section(user_id, start, end),
         "stack":            _stack_section(profile),

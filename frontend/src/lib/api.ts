@@ -462,25 +462,28 @@ export interface DoctorReportPayload {
      *  user's ring model doesn't measure SpO2. */
     spo2:           DoctorReportSeries;
   };
-  /** Sleep & Breathing Screening — surfaces Oura's Breathing Disturbance
-   *  Index (BDI, disturbances/hour) per night with a Steady/Varied/Frequent
-   *  classification matching Oura's app. Designed for the sleep-apnea
-   *  consult: aggregates + a nightly table the physician can scan. */
-  breathing_screening: {
+  /** Sleep Quality & Fragmentation — what Oura's public API actually
+   *  exposes (their BDI is app-only). Per-night efficiency + awake minutes
+   *  + restless events + a Restful/Variable/Fragmented label, plus the
+   *  cardio context (breath, HR, SpO₂). Designed for sleep-apnea consult
+   *  prep. */
+  sleep_fragmentation: {
     nights: Array<{
-      date:     string;
-      bdi:      number | null;
-      label:    string | null;       // Steady / Varied / Frequent variations / null
-      breath:   number | null;
-      rhr:      number | null;
-      avg_hr:   number | null;
-      restless: number | null;
-      spo2:     number | null;
+      date:       string;
+      efficiency: number | null;
+      label:      string | null;      // Restful / Variable / Fragmented / null
+      awake_min:  number | null;
+      restless:   number | null;
+      breath:     number | null;
+      rhr:        number | null;
+      avg_hr:     number | null;
+      spo2:       number | null;
     }>;
-    mean_bdi:        number | null;
-    max_bdi:         number | null;
-    nights_with_bdi: number;
+    mean_efficiency: number | null;
+    mean_awake_min:  number | null;
+    mean_restless:   number | null;
     classification:  Record<string, number>;
+    note:            string;
   };
   apple_health: {
     as_of:       string | null;
