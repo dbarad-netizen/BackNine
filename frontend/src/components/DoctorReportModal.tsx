@@ -233,6 +233,22 @@ function ReportBody({ data }: { data: DoctorReportPayload }) {
               </div>
             </div>
 
+            {bp.readings.length >= 2 && (
+              <div className="mb-3 border border-gray-200 rounded-lg p-2 bg-white">
+                <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold mb-1">Trend</p>
+                <TrendChart
+                  series={[
+                    { label: "Systolic",  color: "#dc2626", points: [...bp.readings].reverse().map(r => ({ date: r.date, value: r.systolic })) },
+                    { label: "Diastolic", color: "#2563eb", points: [...bp.readings].reverse().map(r => ({ date: r.date, value: r.diastolic })) },
+                  ]}
+                  references={[
+                    { value: 120, label: "120", color: "#94a3b8" },
+                    { value: 80,  label: "80",  color: "#94a3b8" },
+                  ]}
+                />
+              </div>
+            )}
+
             <table className="w-full text-xs border-collapse">
               <thead>
                 <tr className="text-left text-[10px] uppercase tracking-wide text-gray-600 border-b border-gray-200">
@@ -321,6 +337,39 @@ function ReportBody({ data }: { data: DoctorReportPayload }) {
               </div>
             </div>
 
+            {sf.nights.length >= 2 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                <div className="border border-gray-200 rounded-lg p-2 bg-white">
+                  <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold mb-1">Efficiency trend</p>
+                  <TrendChart
+                    series={[{
+                      label: "Efficiency %",
+                      color: "#059669",
+                      points: [...sf.nights].reverse()
+                        .filter(n => n.efficiency !== null && n.efficiency !== undefined)
+                        .map(n => ({ date: n.date, value: n.efficiency as number })),
+                    }]}
+                    references={[{ value: 85, label: "85% normal", color: "#94a3b8" }]}
+                    yMax={100}
+                  />
+                </div>
+                <div className="border border-gray-200 rounded-lg p-2 bg-white">
+                  <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold mb-1">WASO trend (min)</p>
+                  <TrendChart
+                    series={[{
+                      label: "WASO",
+                      color: "#d97706",
+                      points: [...sf.nights].reverse()
+                        .filter(n => n.awake_min !== null && n.awake_min !== undefined)
+                        .map(n => ({ date: n.date, value: n.awake_min as number })),
+                    }]}
+                    references={[{ value: 30, label: "30 min", color: "#94a3b8" }]}
+                    yMin={0}
+                  />
+                </div>
+              </div>
+            )}
+
             <table className="w-full text-xs border-collapse">
               <thead>
                 <tr className="text-left text-[10px] uppercase tracking-wide text-gray-600 border-b border-gray-200">
@@ -370,6 +419,21 @@ function ReportBody({ data }: { data: DoctorReportPayload }) {
                 </span>
               )}
             </p>
+            {weight.entries.length >= 2 && (
+              <div className="mb-3 border border-gray-200 rounded-lg p-2 bg-white">
+                <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold mb-1">Weight trend</p>
+                <TrendChart
+                  series={[{
+                    label: "Weight (lbs)",
+                    color: "#0891b2",
+                    points: weight.entries
+                      .filter(e => e.weight_lbs !== null && e.weight_lbs !== undefined)
+                      .map(e => ({ date: e.date, value: e.weight_lbs as number })),
+                  }]}
+                />
+              </div>
+            )}
+
             <table className="w-full text-xs border-collapse">
               <thead>
                 <tr className="text-left text-[10px] uppercase tracking-wide text-gray-600 border-b border-gray-200">
@@ -415,6 +479,146 @@ function ReportBody({ data }: { data: DoctorReportPayload }) {
     </article>
   );
 }
+
+// ── TrendChart ─────────────────────────────────────────────────────────────
+// Pure inline-SVG line chart used in the Doctor's Report. Designed to print
+// cleanly (no chart library, no canvas, no JS execution required after the
+// SVG is in the DOM — Chrome's print routine just rasterizes the vector).
+//
+// Conventions:
+//  - Each series points are rendered left-to-right in array order. Caller
+//    is responsible for sorting chronologically (oldest first).
+//  - Y-axis range auto-fits unless yMin/yMax explicitly passed.
+//  - Reference lines render BEHIND the data lines, dashed, with a label
+//    pinned to the right edge.
+//  - A small dot highlights the last data point of each series.
+
+interface TrendSeries {
+  label:  string;
+  color:  string;
+  points: Array<{ date: string; value: number }>;
+}
+interface TrendReference {
+  value: number;
+  label: string;
+  color: string;
+}
+
+function TrendChart({
+  series, references, height = 140, yMin, yMax,
+}: {
+  series:      TrendSeries[];
+  references?: TrendReference[];
+  height?:     number;
+  yMin?:       number;
+  yMax?:       number;
+}) {
+  const allValues = series.flatMap(s => s.points.map(p => p.value));
+  const refValues = (references ?? []).map(r => r.value);
+  if (allValues.length === 0) {
+    return <p className="text-xs text-gray-600 italic">No data to chart.</p>;
+  }
+
+  const dataMin = yMin ?? Math.min(...allValues, ...refValues);
+  const dataMax = yMax ?? Math.max(...allValues, ...refValues);
+  const pad     = (dataMax - dataMin) * 0.1 || 1;
+  const lo      = dataMin - pad;
+  const hi      = dataMax + pad;
+
+  const margin  = { top: 10, right: 60, bottom: 26, left: 36 };
+  const width   = 600;
+  const innerW  = width  - margin.left - margin.right;
+  const innerH  = height - margin.top  - margin.bottom;
+
+  const nPoints = Math.max(...series.map(s => s.points.length), 1);
+  const xFor    = (i: number) => margin.left + (i / Math.max(1, nPoints - 1)) * innerW;
+  const yFor    = (v: number) => margin.top  + (1 - (v - lo) / (hi - lo)) * innerH;
+
+  const fmtShort = (iso: string): string => {
+    try {
+      const d = new Date(iso + "T12:00:00");
+      return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    } catch { return iso; }
+  };
+
+  const firstDate = series[0]?.points[0]?.date;
+  const lastDate  = series[0]?.points[series[0].points.length - 1]?.date;
+
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      className="w-full"
+      preserveAspectRatio="xMidYMid meet"
+      role="img"
+    >
+      {/* Y-axis line */}
+      <line
+        x1={margin.left} y1={margin.top}
+        x2={margin.left} y2={margin.top + innerH}
+        stroke="#d1d5db" strokeWidth="0.5"
+      />
+      {/* X-axis line */}
+      <line
+        x1={margin.left}            y1={margin.top + innerH}
+        x2={margin.left + innerW}   y2={margin.top + innerH}
+        stroke="#d1d5db" strokeWidth="0.5"
+      />
+
+      {/* Y-axis tick labels (hi / lo) */}
+      <text x={margin.left - 4} y={margin.top + 4}        textAnchor="end" fontSize="9" fill="#6b7280">{Math.round(hi)}</text>
+      <text x={margin.left - 4} y={margin.top + innerH}   textAnchor="end" fontSize="9" fill="#6b7280">{Math.round(lo)}</text>
+
+      {/* Reference lines (drawn first so they sit behind data) */}
+      {(references ?? []).map((r, i) => (
+        <g key={`ref-${i}`}>
+          <line
+            x1={margin.left}             y1={yFor(r.value)}
+            x2={margin.left + innerW}    y2={yFor(r.value)}
+            stroke={r.color} strokeWidth="0.75" strokeDasharray="3,3"
+          />
+          <text
+            x={margin.left + innerW + 4} y={yFor(r.value) + 3}
+            fontSize="9" fill={r.color}
+          >{r.label}</text>
+        </g>
+      ))}
+
+      {/* Data lines */}
+      {series.map((s, sIdx) => {
+        if (s.points.length === 0) return null;
+        const polyline = s.points.map((p, i) => `${xFor(i)},${yFor(p.value)}`).join(" ");
+        const last     = s.points[s.points.length - 1];
+        return (
+          <g key={`s-${sIdx}`}>
+            <polyline fill="none" stroke={s.color} strokeWidth="1.5" points={polyline} />
+            <circle cx={xFor(s.points.length - 1)} cy={yFor(last.value)} r="2.5" fill={s.color} />
+          </g>
+        );
+      })}
+
+      {/* X-axis: first + last date stamps */}
+      {firstDate && (
+        <text x={margin.left}              y={margin.top + innerH + 14} fontSize="9" fill="#6b7280">{fmtShort(firstDate)}</text>
+      )}
+      {lastDate && firstDate !== lastDate && (
+        <text x={margin.left + innerW}     y={margin.top + innerH + 14} textAnchor="end" fontSize="9" fill="#6b7280">{fmtShort(lastDate)}</text>
+      )}
+
+      {/* Legend — only if multiple series */}
+      {series.length > 1 && (
+        <g transform={`translate(${margin.left}, ${height - 4})`}>
+          {series.map((s, i) => (
+            <g key={`legend-${i}`} transform={`translate(${i * 100}, 0)`}>
+              <line x1={0} y1={-3} x2={10} y2={-3} stroke={s.color} strokeWidth="1.5" />
+              <text x={14} y={0} fontSize="9" fill="#374151">{s.label}</text>
+            </g>
+          ))}
+        </g>
+      )}
+    </svg>
+  );
+}
+
 
 function StackBlock({ title, items, empty }: { title: string; items: { name: string; dose?: string; timing?: string; notes?: string }[]; empty: string }) {
   return (
