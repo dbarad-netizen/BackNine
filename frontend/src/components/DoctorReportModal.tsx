@@ -244,7 +244,7 @@ function ReportBody({ data }: { data: DoctorReportPayload }) {
                 </tr>
               </thead>
               <tbody>
-                {bp.readings.slice(0, 20).map(r => (
+                {bp.readings.map(r => (
                   <tr key={r.id} className="border-b border-gray-100">
                     <td className="py-1 pr-2">{fmtDate(r.date)}</td>
                     <td className="py-1 pr-2 capitalize">{r.time_of_day}</td>
@@ -255,9 +255,6 @@ function ReportBody({ data }: { data: DoctorReportPayload }) {
                 ))}
               </tbody>
             </table>
-            {bp.readings.length > 20 && (
-              <p className="text-[10px] text-gray-600 mt-1.5">Showing 20 of {bp.readings.length} readings (newest first).</p>
-            )}
           </>
         )}
       </section>
@@ -338,7 +335,7 @@ function ReportBody({ data }: { data: DoctorReportPayload }) {
                 </tr>
               </thead>
               <tbody>
-                {sf.nights.slice(0, 30).map(n => (
+                {sf.nights.map(n => (
                   <tr key={n.date} className="border-b border-gray-100">
                     <td className="py-1 pr-2">{fmtDate(n.date)}</td>
                     <td className="py-1 pr-2 font-mono">{numOrDash(n.efficiency)}</td>
@@ -354,9 +351,6 @@ function ReportBody({ data }: { data: DoctorReportPayload }) {
                 ))}
               </tbody>
             </table>
-            {sf.nights.length > 30 && (
-              <p className="text-[10px] text-gray-600 mt-1.5">Showing 30 of {sf.nights.length} nights (newest first).</p>
-            )}
           </>
         )}
       </section>
@@ -386,7 +380,7 @@ function ReportBody({ data }: { data: DoctorReportPayload }) {
                 </tr>
               </thead>
               <tbody>
-                {weight.entries.slice(-12).reverse().map((e, i) => (
+                {[...weight.entries].reverse().map((e, i) => (
                   <tr key={`${e.date}-${i}`} className="border-b border-gray-100">
                     <td className="py-1 pr-2">{fmtDate(e.date)}</td>
                     <td className="py-1 pr-2 font-mono">{numOrDash(e.weight_lbs, 1)}</td>
