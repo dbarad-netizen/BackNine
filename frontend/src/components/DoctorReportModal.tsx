@@ -303,27 +303,23 @@ function ReportBody({ data }: { data: DoctorReportPayload }) {
           <p className="text-xs text-gray-600 italic">No sleep data in this window.</p>
         ) : (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
               <div className="rounded-lg border border-gray-200 px-3 py-2.5 bg-white">
                 <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Mean efficiency</p>
                 <p className="text-lg font-bold text-gray-900 leading-tight">{numOrDash(sf.mean_efficiency)}<span className="text-[11px] text-gray-600 font-normal ml-1">%</span></p>
+                <p className="text-[10px] text-gray-600">≥85% normal</p>
               </div>
               <div className="rounded-lg border border-gray-200 px-3 py-2.5 bg-white">
-                <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Avg awake</p>
-                <p className="text-lg font-bold text-gray-900 leading-tight">{numOrDash(sf.mean_awake_min, 1)}<span className="text-[11px] text-gray-600 font-normal ml-1">min</span></p>
-                <p className="text-[10px] text-gray-600">after sleep onset</p>
-              </div>
-              <div className="rounded-lg border border-gray-200 px-3 py-2.5 bg-white">
-                <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Avg restless</p>
-                <p className="text-lg font-bold text-gray-900 leading-tight">{numOrDash(sf.mean_restless)}</p>
-                <p className="text-[10px] text-gray-600">events / night</p>
+                <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Avg WASO</p>
+                <p className="text-lg font-bold text-gray-900 leading-tight">{numOrDash(sf.mean_waso_min, 1)}<span className="text-[11px] text-gray-600 font-normal ml-1">min</span></p>
+                <p className="text-[10px] text-gray-600">&lt;30 min normal</p>
               </div>
               <div className="rounded-lg border border-gray-200 px-3 py-2.5 bg-white">
                 <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Night classifications</p>
                 <div className="flex gap-2 mt-0.5 text-[11px] flex-wrap">
-                  <span><span className="font-bold text-gray-900">{sf.classification?.["Restful"] ?? 0}</span> <span className="text-gray-600">Restful</span></span>
-                  <span><span className="font-bold text-gray-900">{sf.classification?.["Variable"] ?? 0}</span> <span className="text-gray-600">Variable</span></span>
-                  <span><span className="font-bold text-gray-900">{sf.classification?.["Fragmented"] ?? 0}</span> <span className="text-gray-600">Fragmented</span></span>
+                  <span><span className="font-bold text-gray-900">{sf.classification?.["Normal"] ?? 0}</span> <span className="text-gray-600">Normal</span></span>
+                  <span><span className="font-bold text-gray-900">{sf.classification?.["Borderline"] ?? 0}</span> <span className="text-gray-600">Borderline</span></span>
+                  <span><span className="font-bold text-gray-900">{sf.classification?.["Poor"] ?? 0}</span> <span className="text-gray-600">Poor</span></span>
                 </div>
               </div>
             </div>
@@ -334,8 +330,7 @@ function ReportBody({ data }: { data: DoctorReportPayload }) {
                   <th className="py-1.5 pr-2 font-semibold">Night</th>
                   <th className="py-1.5 pr-2 font-semibold">Eff %</th>
                   <th className="py-1.5 pr-2 font-semibold">Label</th>
-                  <th className="py-1.5 pr-2 font-semibold">Awake</th>
-                  <th className="py-1.5 pr-2 font-semibold">Restless</th>
+                  <th className="py-1.5 pr-2 font-semibold" title="Wake After Sleep Onset, in minutes">WASO</th>
                   <th className="py-1.5 pr-2 font-semibold">Breath</th>
                   <th className="py-1.5 pr-2 font-semibold">Avg HR</th>
                   <th className="py-1.5 pr-2 font-semibold">Low HR</th>
@@ -347,11 +342,10 @@ function ReportBody({ data }: { data: DoctorReportPayload }) {
                   <tr key={n.date} className="border-b border-gray-100">
                     <td className="py-1 pr-2">{fmtDate(n.date)}</td>
                     <td className="py-1 pr-2 font-mono">{numOrDash(n.efficiency)}</td>
-                    <td className={`py-1 pr-2 ${n.label === "Fragmented" ? "text-red-600 font-semibold" : n.label === "Variable" ? "text-amber-700 font-medium" : "text-gray-700"}`}>
+                    <td className={`py-1 pr-2 ${n.label === "Poor" ? "text-red-600 font-semibold" : n.label === "Borderline" ? "text-amber-700 font-medium" : "text-gray-700"}`}>
                       {n.label ?? "—"}
                     </td>
                     <td className="py-1 pr-2 font-mono">{numOrDash(n.awake_min, 1)}</td>
-                    <td className="py-1 pr-2 font-mono">{numOrDash(n.restless)}</td>
                     <td className="py-1 pr-2 font-mono">{numOrDash(n.breath, 1)}</td>
                     <td className="py-1 pr-2 font-mono">{numOrDash(n.avg_hr)}</td>
                     <td className="py-1 pr-2 font-mono">{numOrDash(n.rhr)}</td>

@@ -471,17 +471,16 @@ export interface DoctorReportPayload {
     nights: Array<{
       date:       string;
       efficiency: number | null;
-      label:      string | null;      // Restful / Variable / Fragmented / null
-      awake_min:  number | null;
-      restless:   number | null;
+      label:      string | null;      // Normal / Borderline / Poor / null
+      awake_min:  number | null;      // WASO in minutes
+      restless:   number | null;      // raw Oura field, kept but not rendered
       breath:     number | null;
       rhr:        number | null;
       avg_hr:     number | null;
       spo2:       number | null;
     }>;
     mean_efficiency: number | null;
-    mean_awake_min:  number | null;
-    mean_restless:   number | null;
+    mean_waso_min:   number | null;
     classification:  Record<string, number>;
     note:            string;
   };

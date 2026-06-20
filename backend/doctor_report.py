@@ -88,16 +88,17 @@ def _bp_section(user_id: str, days: int) -> dict:
 
 
 def _classify_efficiency(eff: Optional[int]) -> Optional[str]:
-    """Per-night sleep-fragmentation label based on Oura's efficiency score.
-    These thresholds are ours, presented transparently in the report so a
-    clinician sees the same banding logic we do."""
+    """Per-night classification based on Oura's sleep efficiency score.
+    Thresholds use the bands commonly cited in sleep medicine literature
+    (≥85% normal, 75-84% borderline, <75% poor). Presented transparently
+    in the report so the physician sees the banding logic we used."""
     if eff is None:
         return None
-    if eff >= 90:
-        return "Restful"
-    if eff >= 80:
-        return "Variable"
-    return "Fragmented"
+    if eff >= 85:
+        return "Normal"
+    if eff >= 75:
+        return "Borderline"
+    return "Poor"
 
 
 def _sleep_cardio_section(smm: dict, slm: dict, start: str, end: str) -> dict:
@@ -299,23 +300,31 @@ def _sleep_fragmentation_section(smm: dict, start: str, end: str) -> dict:
     mean_awake    = round(sum(awakes) / len(awakes), 1)   if awakes else None
     mean_restless = int(round(sum(rests)  / len(rests)))  if rests  else None
 
-    buckets = {"Restful": 0, "Variable": 0, "Fragmented": 0, "Unknown": 0}
+    buckets = {"Normal": 0, "Borderline": 0, "Poor": 0, "Unknown": 0}
     for r in rows:
         lab = r["label"] or "Unknown"
         buckets[lab] = buckets.get(lab, 0) + 1
 
+    # mean_restless is computed but not surfaced in the report — the underlying
+    # `restless_periods` field uses Oura's internal units which don't map
+    # cleanly onto clinical terminology (it's not awakenings/hour), so we drop
+    # it to avoid misleading a clinician.
+    _ = mean_restless
+
     return {
         "nights":         rows,
         "mean_efficiency": mean_eff,
-        "mean_awake_min":  mean_awake,
-        "mean_restless":   mean_restless,
+        "mean_waso_min":   mean_awake,
         "classification":  buckets,
         "note":            (
+            "Sleep efficiency is the percentage of time in bed spent actually "
+            "asleep. WASO (Wake After Sleep Onset) is total minutes awake "
+            "within the sleep period after first falling asleep — clinically "
+            "normal is under 30 minutes. Labels use efficiency bands from sleep "
+            "medicine literature (≥85% Normal, 75–84% Borderline, <75% Poor). "
             "Oura's app-only Nighttime Breathing Disturbance Index is not "
-            "exposed in their public API. The signals below — sleep efficiency, "
-            "minutes awake after sleep onset, restless events, average breath "
-            "rate, and overnight SpO₂ — are what Oura makes available and "
-            "what a clinician can use to interpret sleep fragmentation."
+            "exposed in their public API; the signals below are what's "
+            "available and clinically interpretable."
         ),
     }
 
