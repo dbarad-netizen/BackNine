@@ -262,6 +262,11 @@ export interface Supplement {
  *  break supplements call sites. */
 export type Peptide = Supplement;
 
+/** Medications — same data shape as supplements/peptides; surfaced separately
+ *  in the Doctor's Report so Rx items don't blur into OTC supplements when a
+ *  physician is scanning. */
+export type Medication = Supplement;
+
 export interface UserProfile {
   name?:           string | null;
   age?:            number | null;     // derived from birthdate when set
@@ -271,6 +276,7 @@ export interface UserProfile {
   vo2_max?:        number | null;
   supplements?:    Supplement[];
   peptides?:       Peptide[];
+  medications?:    Medication[];
 }
 
 export interface ChatMessage {
@@ -418,6 +424,59 @@ export interface BPSummary {
   morning?: { systolic: number | null; diastolic: number | null; n: number };
   evening?: { systolic: number | null; diastolic: number | null; n: number };
   latest?:  { date: string; time: BPTimeOfDay; systolic: number; diastolic: number; pulse: number | null };
+}
+
+// ── Doctor's Report ────────────────────────────────────────────────────────
+// The aggregated payload behind the print-friendly clinical report. Pure data —
+// the modal renders sections + a window.print() trigger; no scoring or
+// interpretation crosses this boundary.
+export interface DoctorReportTrendPoint { date: string; value: number; }
+export interface DoctorReportSeries {
+  trend:    DoctorReportTrendPoint[];
+  average:  number | null;
+  unit?:    string;
+}
+
+export interface DoctorReportPayload {
+  generated_at: string;          // ISO timestamp
+  range:        { start: string; end: string; days: number };
+  patient: {
+    name:           string | null;
+    birthdate:      string | null;
+    age:            number | null;
+    biological_sex: "male" | "female" | null;
+    height_cm:      number | null;
+  };
+  blood_pressure: {
+    readings_count: number;
+    summary:        BPSummary;
+    readings:       BPReading[];
+  };
+  sleep_cardio: {
+    sleep_hours:    DoctorReportSeries;
+    sleep_score:    DoctorReportSeries;
+    hrv:            DoctorReportSeries;
+    rhr:            DoctorReportSeries;
+    breathing_rate: DoctorReportSeries;
+    /** Overnight oxygen saturation (Oura daily_spo2). Empty trend when the
+     *  user's ring model doesn't measure SpO2. */
+    spo2:           DoctorReportSeries;
+  };
+  apple_health: {
+    as_of:       string | null;
+    today:       Record<string, number | null>;
+    averages:    Record<string, number | null>;
+    days_synced: number | null;
+  } | null;
+  weight: {
+    entries:   Array<{ date: string; weight_lbs: number | null; body_fat_pct: number | null; notes: string | null }>;
+    delta_lbs: number | null;
+  };
+  stack: {
+    medications: Medication[];
+    supplements: Supplement[];
+    peptides:    Peptide[];
+  };
 }
 
 export interface WeightEntry {
@@ -730,6 +789,17 @@ export const api = {
   },
   bpDelete(id: string): Promise<{ status: string }> {
     return request(`/api/bp/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+
+  // ── Doctor's Report ──────────────────────────────────────────────────────
+  /** Aggregate BP + sleep + cardio + weight + medication stack into the
+   *  print-ready clinical report payload. days defaults to 30; end defaults
+   *  to today (server-side). */
+  doctorReport(opts: { days?: number; end?: string } = {}): Promise<DoctorReportPayload> {
+    const days = opts.days ?? 30;
+    const qs = new URLSearchParams({ days: String(days) });
+    if (opts.end) qs.set("end", opts.end);
+    return request(`/api/doctor-report?${qs.toString()}`);
   },
   logWeight(entry: Partial<WeightEntry> & { weight_lbs: number }): Promise<WeightEntry> {
     return request("/api/nutrition/weight", {

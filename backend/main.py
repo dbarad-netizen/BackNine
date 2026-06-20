@@ -26,6 +26,7 @@ from coaching import generate_coaching, coach_overall, coach_sleep, coach_activi
 from models import DashboardResponse, DailyMetrics, WearableConnection
 import nutrition as nutr
 import bp
+import doctor_report as dr
 import training as trn
 import labs as lbs
 import challenges as chl
@@ -1891,6 +1892,25 @@ def delete_bp(reading_id: str, request: Request):
     return {"status": "deleted"}
 
 
+@app.get("/api/doctor-report")
+def get_doctor_report(request: Request, days: int = 30, end: str | None = None):
+    """Aggregate BP + sleep + cardio + weight + medication stack into the
+    Doctor's Report payload. Observational only — the frontend renders a
+    print-friendly view the user can save as PDF and bring to their physician.
+
+    days defaults to 30 (the doctor-friendly window). end defaults to today.
+    Both are bounded server-side to defend against silly inputs.
+    """
+    session = _require_session(request)
+    user_id = session["user_id"]
+    profile = _get_profile(user_id) or {}
+    try:
+        days_int = max(1, min(int(days), 365))
+    except Exception:
+        days_int = 30
+    return dr.build_report(user_id, profile, days=days_int, end_iso=end)
+
+
 @app.post("/api/nutrition/weight")
 async def log_weight(request: Request):
     session = _require_session(request)
@@ -2784,13 +2804,18 @@ def _sanitize_supplements(raw) -> list[dict]:
 # notes for cycle info) without affecting supplements.
 _sanitize_peptides = _sanitize_supplements
 
+# Medications: same shape (name/dose/timing/notes). Lives in its own column so
+# the Doctor's Report can keep Rx items visually separate from over-the-counter
+# supplements and peptides — important for clinical conversations.
+_sanitize_medications = _sanitize_supplements
+
 
 @app.post("/api/profile")
 async def save_profile(request: Request):
     session = _require_session(request)
     user_id = session["user_id"]
     body = await request.json()
-    allowed = {"name", "age", "biological_sex", "height_cm", "health_goals", "vo2_max", "birthdate", "supplements", "peptides"}
+    allowed = {"name", "age", "biological_sex", "height_cm", "health_goals", "vo2_max", "birthdate", "supplements", "peptides", "medications"}
     data = {k: v for k, v in body.items() if k in allowed}
     # Empty birthdate string clears it (Postgres date column rejects "").
     if "birthdate" in data and not data["birthdate"]:
@@ -2800,6 +2825,8 @@ async def save_profile(request: Request):
         data["supplements"] = _sanitize_supplements(data["supplements"])
     if "peptides" in data:
         data["peptides"] = _sanitize_peptides(data["peptides"])
+    if "medications" in data:
+        data["medications"] = _sanitize_medications(data["medications"])
     data["user_id"] = user_id
     try:
         db = get_supabase()

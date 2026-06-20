@@ -133,6 +133,11 @@ async def fetch_all(access_token: str, days: int = 120) -> dict:
     optional_endpoints = {
         "sleepDetail":        f"{OURA_API_BASE}/sleep?start_date={start}&end_date={end}",
         "cardiovascularAge":  f"{OURA_API_BASE}/daily_cardiovascular_age?start_date={start}&end_date={end}",
+        # Daily SpO2 — overnight oxygen saturation %. Surfaced in the Doctor's
+        # Report (consistent low values can hint at sleep apnea / altitude
+        # exposure). Some Oura ring generations don't measure SpO2, in which
+        # case this endpoint returns an empty data array — handled below.
+        "spo2":               f"{OURA_API_BASE}/daily_spo2?start_date={start}&end_date={end}",
     }
 
     results: dict = {}
@@ -174,6 +179,28 @@ async def fetch_all(access_token: str, days: int = 120) -> dict:
 def parse_oura_data(raw: dict) -> tuple[dict, dict, dict, dict]:
     """Parse raw Oura API response into daily metric dicts."""
     rm, slm, am, smm = {}, {}, {}, {}
+
+    # SpO2: map of day -> average overnight oxygen saturation (%). Merged
+    # into smm at the end so the Doctor's Report can render it alongside
+    # HRV / RHR / breathing rate without re-fetching. Older ring models
+    # don't measure SpO2 — `data` will be empty in that case.
+    spo2_by_day: dict = {}
+    for rec in raw.get("spo2", {}).get("data", []):
+        day = rec.get("day", "")
+        if not day:
+            continue
+        agg = rec.get("spo2_percentage") or {}
+        # Oura returns either a number directly or a nested {"average": x}
+        # depending on API version — handle both shapes.
+        if isinstance(agg, dict):
+            val = agg.get("average")
+        else:
+            val = agg
+        if val is not None:
+            try:
+                spo2_by_day[day] = round(float(val), 1)
+            except Exception:
+                pass
 
     # Readiness
     for rec in raw.get("readiness", {}).get("data", []):
@@ -226,6 +253,10 @@ def parse_oura_data(raw: dict) -> tuple[dict, dict, dict, dict]:
             "rem":           rec.get("rem_sleep_duration") or 0,
             "hrv":           rec.get("average_hrv"),
             "rhr":           rec.get("lowest_heart_rate"),
+            # average_breath: respiratory rate during sleep (breaths/min). Used
+            # in the Doctor's Report — elevated/rising rates are a soft signal
+            # for sleep apnea, illness, or stress that clinicians want to see.
+            "breath":        rec.get("average_breath"),
             "efficiency":    rec.get("efficiency"),
             "bedtime_start": rec.get("bedtime_start"),
             "sleep_need":    sleep_need_sec or None,
@@ -249,6 +280,15 @@ def parse_oura_data(raw: dict) -> tuple[dict, dict, dict, dict]:
         rhr_vals = [s["rhr"] for s in sessions if s["rhr"] is not None]
         min_rhr  = min(rhr_vals) if rhr_vals else None
 
+        # Weighted breathing rate (same approach as HRV — by session length).
+        # Skipped if no breath data on any session.
+        breath_pairs = [(s["breath"], s["total"]) for s in sessions if s.get("breath") is not None]
+        if breath_pairs:
+            bw_sum = sum(w for _, w in breath_pairs)
+            avg_breath = round(sum(b * w for b, w in breath_pairs) / bw_sum, 1) if bw_sum else None
+        else:
+            avg_breath = None
+
         # Best efficiency from the longest session
         longest = max(sessions, key=lambda s: s["total"])
 
@@ -258,10 +298,21 @@ def parse_oura_data(raw: dict) -> tuple[dict, dict, dict, dict]:
             "rem":           total_rem   or None,
             "hrv":           avg_hrv,
             "rhr":           min_rhr,
+            "breath":        avg_breath,
+            # SpO2 from the separate daily_spo2 endpoint, merged in by day.
+            # None when the ring model doesn't measure it.
+            "spo2":          spo2_by_day.get(day),
             "efficiency":    longest["efficiency"],
             "bedtime_start": longest["bedtime_start"],
             "sleep_need":    longest["sleep_need"],
         }
+
+    # Backfill SpO2-only days: if the ring captured SpO2 but the user didn't
+    # have a tracked sleep session that day (e.g. ring removed mid-night),
+    # still surface the SpO2 reading so the Doctor's Report doesn't drop it.
+    for day, val in spo2_by_day.items():
+        if day not in smm:
+            smm[day] = {"spo2": val}
 
     return rm, slm, am, smm
 

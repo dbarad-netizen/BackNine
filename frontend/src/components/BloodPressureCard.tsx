@@ -19,6 +19,7 @@
 
 import { useEffect, useState } from "react";
 import { api, type BPReading, type BPSummary, type BPTimeOfDay } from "@/lib/api";
+import DoctorReportModal from "./DoctorReportModal";
 
 const TIMES: { value: BPTimeOfDay; label: string }[] = [
   { value: "morning", label: "Morning" },
@@ -38,6 +39,7 @@ export default function BloodPressureCard() {
   const [saving, setSaving]     = useState(false);
   const [showAll, setShowAll]   = useState(false);
   const [error, setError]       = useState<string | null>(null);
+  const [showReport, setShowReport] = useState(false);
 
   // Draft for the inline form
   const [sys, setSys]   = useState<string>("");
@@ -125,14 +127,25 @@ export default function BloodPressureCard() {
           </p>
         </div>
         {!adding && (
-          <button
-            onClick={() => { resetForm(); setAdding(true); }}
-            className="text-[11px] font-semibold text-[#1B3829] border border-[#1B3829]/30 rounded-lg px-2.5 py-1 hover:bg-[#1B3829]/5 transition-colors"
-          >
-            + Add reading
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setShowReport(true)}
+              className="text-[11px] font-medium text-gray-600 hover:text-[#1B3829] underline-offset-2 hover:underline transition-colors"
+              title="Open the print-friendly clinical report"
+            >
+              Doctor&apos;s report
+            </button>
+            <button
+              onClick={() => { resetForm(); setAdding(true); }}
+              className="text-[11px] font-semibold text-[#1B3829] border border-[#1B3829]/30 rounded-lg px-2.5 py-1 hover:bg-[#1B3829]/5 transition-colors"
+            >
+              + Add reading
+            </button>
+          </div>
         )}
       </div>
+
+      <DoctorReportModal open={showReport} onClose={() => setShowReport(false)} />
 
       {/* Summary row — only if we have any readings */}
       {summary && summary.count > 0 && summary.latest && (

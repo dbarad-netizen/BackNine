@@ -21,8 +21,10 @@ import { scoreColor, fmtDate } from "@/lib/utils";
 import ScoreRing from "@/components/ScoreRing";
 import SupplementsCard from "@/components/SupplementsCard";
 import PeptidesCard from "@/components/PeptidesCard";
+import MedicationsCard from "@/components/MedicationsCard";
 import AppleHealthCard from "@/components/AppleHealthCard";
 import BloodPressureCard from "@/components/BloodPressureCard";
+import DoctorReportModal from "@/components/DoctorReportModal";
 import DayMealsDrawer from "@/components/DayMealsDrawer";
 import ManualLogCard from "@/components/ManualLogCard";
 import CoachReactionToast from "@/components/CoachReactionToast";
@@ -848,6 +850,7 @@ export default function DashboardPage() {
   const [showMealAdd, setShowMealAdd] = useState(false);
   const [showWorkoutAdd, setShowWorkoutAdd] = useState(false);
   const [showBodyWeight, setShowBodyWeight] = useState(false);
+  const [showDoctorReport, setShowDoctorReport] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   // When the user has an active goal, hoist the Goal card above Weekly Insight.
   // Seed from localStorage so returning users get the right order on first paint
@@ -2214,6 +2217,20 @@ export default function DashboardPage() {
             </div>
             )}
 
+            {/* ── Doctor's Report pill — opens the print-friendly clinical
+                view (BP + sleep + cardio + weight + medication stack).
+                Lives alongside the other quick-action pills so users find it
+                while they're already in their daily-check-in mindset. */}
+            <button
+              onClick={() => setShowDoctorReport(true)}
+              className="w-full py-3 rounded-2xl border border-[#1B3829]/25 bg-white text-sm font-semibold text-[#1B3829] hover:bg-[#1B3829]/5 transition-colors flex items-center justify-center gap-2 shadow-sm"
+              title="Print-friendly health summary for your doctor"
+            >
+              <span className="text-base leading-none">🩺</span>
+              Doctor&apos;s Report
+            </button>
+            <DoctorReportModal open={showDoctorReport} onClose={() => setShowDoctorReport(false)} />
+
             {/* ── Coach Al Goal & Weekly Insight ──
                 Stays ABOVE the explore fold because these are daily-relevant.
                 Goal card rises above the Weekly Insight when active so the
@@ -2443,6 +2460,15 @@ export default function DashboardPage() {
                   onSave={async (next) => {
                     const updated = await api.saveProfile({ ...(profile ?? {}), peptides: next });
                     setProfile(prev => ({ ...(prev ?? {}), ...updated, peptides: next }));
+                  }}
+                />
+
+                {/* ─ Medications (Rx items — surfaced in the Doctor's Report) ─ */}
+                <MedicationsCard
+                  medications={profile?.medications ?? []}
+                  onSave={async (next) => {
+                    const updated = await api.saveProfile({ ...(profile ?? {}), medications: next });
+                    setProfile(prev => ({ ...(prev ?? {}), ...updated, medications: next }));
                   }}
                 />
 
