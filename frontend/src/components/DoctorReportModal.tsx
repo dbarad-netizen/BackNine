@@ -123,7 +123,7 @@ export default function DoctorReportModal({ open, onClose }: Props) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/40 flex items-start justify-center p-2 sm:p-6 print:bg-white print:p-0 print:static print:inset-auto">
+    <div className="fixed inset-0 z-[9999] bg-black/40 flex items-start justify-center p-2 sm:p-6 print:bg-white print:p-0 print:static print:inset-auto">
       {/* Print-only CSS: when the user hits Print / save as PDF, hide
           everything in the page EXCEPT the report article inside this
           modal. The classic "print only this element" pattern using
@@ -185,16 +185,22 @@ export default function DoctorReportModal({ open, onClose }: Props) {
           </div>
         </div>
 
-        {/* Tab bar — hidden in print so only the active tab's content appears */}
-        <div className="flex gap-1 px-3 pt-2 border-b border-gray-200 bg-white print:hidden overflow-x-auto">
+        {/* Tab bar — hidden in print so only the active tab's content appears.
+            Styled as obvious pill-buttons because the previous subtle text-tab
+            treatment made users miss the navigation entirely (they mistook the
+            range-picker pills for the report selector).
+            sticky + relative z-index keeps the bar visible if the app's
+            top nav happens to compete for the top of the viewport. */}
+        <div className="sticky top-0 z-10 flex items-center gap-2 px-4 py-2.5 border-b border-gray-200 bg-gray-50 print:hidden overflow-x-auto">
+          <span className="text-[11px] uppercase tracking-wide font-semibold text-gray-600 whitespace-nowrap mr-1">Report</span>
           {TABS.map(t => (
             <button
               key={t.id}
               onClick={() => setActiveTab(t.id)}
-              className={`text-xs font-medium px-3 py-2 rounded-t-lg transition-colors whitespace-nowrap ${
+              className={`text-sm font-semibold px-3.5 py-2 rounded-full transition-colors whitespace-nowrap border ${
                 activeTab === t.id
-                  ? "bg-gray-50 text-[#1B3829] border-b-2 border-[#1B3829] -mb-px"
-                  : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                  ? "bg-[#1B3829] text-white border-[#1B3829] shadow-sm"
+                  : "bg-white text-[#1B3829] border-[#1B3829]/30 hover:bg-[#1B3829]/5 hover:border-[#1B3829]/60"
               }`}
             >
               {t.label}
