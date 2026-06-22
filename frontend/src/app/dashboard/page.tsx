@@ -850,6 +850,7 @@ export default function DashboardPage() {
   const [showMealAdd, setShowMealAdd] = useState(false);
   const [showWorkoutAdd, setShowWorkoutAdd] = useState(false);
   const [showBodyWeight, setShowBodyWeight] = useState(false);
+  const [showBP, setShowBP] = useState(false);
   const [showDoctorReport, setShowDoctorReport] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   // When the user has an active goal, hoist the Goal card above Weekly Insight.
@@ -1479,12 +1480,10 @@ export default function DashboardPage() {
               <AppleHealthCard data={data.apple_health} />
             )}
 
-            {/* ── Blood Pressure tracker ──
-                Cardiovascular anchor signal. Manual entry now (Withings/Omron
-                via Apple Health later). Lives high on the Scorecard because
-                BP is one of the things people actually need to share with
-                their doctor — the Doctor's Report PDF will pull from here. */}
-            <BloodPressureCard />
+            {/* BP card moved into a collapsible pill alongside Body & Weight
+                and Health Reports — see below. Was taking too much vertical
+                space at the top of the Scorecard given how rarely most users
+                add a reading. */}
 
             {/* Getting Started card — shown until a data source is connected.
                 Frames all three paths (Oura / Apple Health / manual) so a
@@ -2156,6 +2155,21 @@ export default function DashboardPage() {
               </div>
             )}
 
+            {/* ── Quick action: blood pressure (pill — collapses BP card) ──
+                Was a permanent card high on the Scorecard; now opt-in via this
+                pill so users who don't log BP daily don't see an empty card
+                taking up vertical real estate. */}
+            <button
+              onClick={() => setShowBP(v => !v)}
+              className="w-full py-3 rounded-2xl border border-[#1B3829]/25 bg-white text-sm font-semibold text-[#1B3829] hover:bg-[#1B3829]/5 transition-colors flex items-center justify-center gap-2 shadow-sm"
+            >
+              <span className="text-base leading-none">🩸</span>
+              {showBP ? "Hide blood pressure" : "Blood Pressure"}
+            </button>
+            {showBP && (
+              <BloodPressureCard />
+            )}
+
             {/* ── Quick action: body & weight (pill — matches the two above) ── */}
             <button
               onClick={() => setShowBodyWeight(v => !v)}
@@ -2217,17 +2231,17 @@ export default function DashboardPage() {
             </div>
             )}
 
-            {/* ── Doctor's Report pill — opens the print-friendly clinical
-                view (BP + sleep + cardio + weight + medication stack).
-                Lives alongside the other quick-action pills so users find it
-                while they're already in their daily-check-in mindset. */}
+            {/* ── Health Reports pill — opens the print-friendly clinical
+                view (BP + sleep + cardio + weight + medication stack). Named
+                generically because the report covers far more than just BP —
+                it's the doctor-handoff packet across every signal we track. */}
             <button
               onClick={() => setShowDoctorReport(true)}
               className="w-full py-3 rounded-2xl border border-[#1B3829]/25 bg-white text-sm font-semibold text-[#1B3829] hover:bg-[#1B3829]/5 transition-colors flex items-center justify-center gap-2 shadow-sm"
               title="Print-friendly health summary for your doctor"
             >
               <span className="text-base leading-none">🩺</span>
-              Doctor&apos;s Report
+              Health Reports
             </button>
             <DoctorReportModal open={showDoctorReport} onClose={() => setShowDoctorReport(false)} />
 
