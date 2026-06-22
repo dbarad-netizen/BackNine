@@ -426,7 +426,169 @@ export interface BPSummary {
   latest?:  { date: string; time: BPTimeOfDay; systolic: number; diastolic: number; pulse: number | null };
 }
 
-// ── Doctor's Report ────────────────────────────────────────────────────────
+// ── Cardiometabolic Report (cardiology / primary care handoff) ────────────
+export interface CardiometabolicReportPayload {
+  generated_at: string;
+  range:        { start: string; end: string; days: number };
+  patient: {
+    name:           string | null;
+    birthdate:      string | null;
+    age:            number | null;
+    biological_sex: "male" | "female" | null;
+    height_cm:      number | null;
+    vo2_max:        number | null;
+  };
+  blood_pressure: {
+    readings_count: number;
+    summary:        BPSummary;
+    readings:       BPReading[];
+  };
+  cardio_signals: {
+    rhr:     DoctorReportSeries;
+    hrv:     DoctorReportSeries;
+    avg_hr:  DoctorReportSeries;
+  };
+  weight: {
+    entries:   Array<{ date: string; weight_lbs: number | null; body_fat_pct: number | null; notes: string | null }>;
+    delta_lbs: number | null;
+    delta_bf:  number | null;
+  };
+}
+
+// ── Pre-Procedure Report (surgery / dental / endoscopy handoff) ───────────
+export interface PreProcedureItem {
+  name:   string;
+  dose?:  string | null;
+  timing?: string | null;
+  notes?: string | null;
+  class:  "Medication" | "Supplement" | "Peptide";
+  flag?:  { severity: "HIGH" | "NOTE"; category: string; note: string } | null;
+}
+
+export interface PreProcedureReportPayload {
+  generated_at: string;
+  patient: {
+    name:           string | null;
+    birthdate:      string | null;
+    age:            number | null;
+    biological_sex: "male" | "female" | null;
+    height_cm:      number | null;
+  };
+  items: {
+    medications: PreProcedureItem[];
+    supplements: PreProcedureItem[];
+    peptides:    PreProcedureItem[];
+  };
+  flagged: {
+    high_risk: PreProcedureItem[];
+    notes:     PreProcedureItem[];
+    total:     number;
+  };
+  totals: {
+    medications: number;
+    supplements: number;
+    peptides:    number;
+  };
+  disclaimer: string;
+}
+
+// ── Training & Recovery Report (trainer / PT / coach handoff) ─────────────
+export interface TrainingRecoveryReportPayload {
+  generated_at: string;
+  range:        { start: string; end: string; days: number };
+  patient: {
+    name:           string | null;
+    age:            number | null;
+    biological_sex: "male" | "female" | null;
+    height_cm:      number | null;
+    health_goals:   string[];
+  };
+  totals: {
+    sessions_total:        number;
+    strength_total:        number;
+    cardio_total:          number;
+    cardio_min_total:      number;
+    weeks:                 number;
+    avg_sessions_per_week: number;
+  };
+  weekly: Array<{
+    week:               string;
+    strength_sessions:  number;
+    cardio_sessions:    number;
+    cardio_min:         number;
+    total_sessions:     number;
+  }>;
+  recovery: {
+    readiness:        DoctorReportSeries;
+    hrv:              DoctorReportSeries;
+    sleep_efficiency: DoctorReportSeries;
+    sleep_hours:      DoctorReportSeries;
+  };
+  workouts: Array<{
+    date:         string | null;
+    type:         string | null;
+    duration_min: number | null;
+    distance_mi:  number | null;
+    intensity:    string | null;
+    notes:        string | null;
+    source:       string;
+  }>;
+}
+
+// ── Nutrition & Body Composition Report (dietitian / RDN handoff) ─────────
+export interface NutritionBodyCompReportPayload {
+  generated_at: string;
+  range:        { start: string; end: string; days: number };
+  patient: {
+    name:           string | null;
+    age:            number | null;
+    biological_sex: "male" | "female" | null;
+    height_cm:      number | null;
+    health_goals:   string[];
+  };
+  averages: {
+    calories:    number | null;
+    protein_g:   number | null;
+    carbs_g:     number | null;
+    fat_g:       number | null;
+    days_logged: number;
+  };
+  daily: Array<{
+    date:       string;
+    calories:   number;
+    protein_g:  number;
+    carbs_g:    number;
+    fat_g:      number;
+    meal_count: number;
+  }>;
+  trends: {
+    calories:   DoctorReportTrendPoint[];
+    protein:    DoctorReportTrendPoint[];
+    weight_lbs: DoctorReportTrendPoint[];
+    body_fat:   DoctorReportTrendPoint[];
+  };
+  weights: Array<{
+    date:         string | null;
+    weight_lbs:   number | null;
+    body_fat_pct: number | null;
+    lean_mass:    number | null;
+    fat_mass:     number | null;
+    notes:        string | null;
+  }>;
+  inbody: {
+    date:   string | null;
+    muscle: { trunk: number | null; right_arm: number | null; left_arm: number | null; right_leg: number | null; left_leg: number | null };
+    fat:    { trunk: number | null; right_arm: number | null; left_arm: number | null; right_leg: number | null; left_leg: number | null };
+    water:  { total: number | null; intracellular: number | null; extracellular: number | null };
+  } | null;
+  stack: {
+    medications: Medication[];
+    supplements: Supplement[];
+    peptides:    Peptide[];
+  };
+}
+
+// ── Doctor's Report (Overview / comprehensive) ────────────────────────────
 // The aggregated payload behind the print-friendly clinical report. Pure data —
 // the modal renders sections + a window.print() trigger; no scoring or
 // interpretation crosses this boundary.
@@ -464,9 +626,8 @@ export interface DoctorReportPayload {
   };
   /** Sleep Quality & Fragmentation — what Oura's public API actually
    *  exposes (their BDI is app-only). Per-night efficiency + awake minutes
-   *  + restless events + a Restful/Variable/Fragmented label, plus the
-   *  cardio context (breath, HR, SpO₂). Designed for sleep-apnea consult
-   *  prep. */
+   *  + restless events + a Normal/Borderline/Poor label, plus the cardio
+   *  context (breath, HR, SpO₂). Designed for sleep-apnea consult prep. */
   sleep_fragmentation: {
     nights: Array<{
       date:       string;
@@ -813,15 +974,35 @@ export const api = {
     return request(`/api/bp/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
 
-  // ── Doctor's Report ──────────────────────────────────────────────────────
-  /** Aggregate BP + sleep + cardio + weight + medication stack into the
-   *  print-ready clinical report payload. days defaults to 30; end defaults
-   *  to today (server-side). */
+  // ── Doctor's Report (Overview tab — comprehensive) ───────────────────
   doctorReport(opts: { days?: number; end?: string } = {}): Promise<DoctorReportPayload> {
     const days = opts.days ?? 30;
     const qs = new URLSearchParams({ days: String(days) });
     if (opts.end) qs.set("end", opts.end);
     return request(`/api/doctor-report?${qs.toString()}`);
+  },
+
+  // ── Focused reports (each is a separate Health Reports tab) ──────────
+  cardiometabolicReport(opts: { days?: number; end?: string } = {}): Promise<CardiometabolicReportPayload> {
+    const days = opts.days ?? 30;
+    const qs = new URLSearchParams({ days: String(days) });
+    if (opts.end) qs.set("end", opts.end);
+    return request(`/api/cardiometabolic-report?${qs.toString()}`);
+  },
+  preProcedureReport(): Promise<PreProcedureReportPayload> {
+    return request(`/api/pre-procedure-report`);
+  },
+  trainingRecoveryReport(opts: { days?: number; end?: string } = {}): Promise<TrainingRecoveryReportPayload> {
+    const days = opts.days ?? 30;
+    const qs = new URLSearchParams({ days: String(days) });
+    if (opts.end) qs.set("end", opts.end);
+    return request(`/api/training-recovery-report?${qs.toString()}`);
+  },
+  nutritionBodyCompReport(opts: { days?: number; end?: string } = {}): Promise<NutritionBodyCompReportPayload> {
+    const days = opts.days ?? 30;
+    const qs = new URLSearchParams({ days: String(days) });
+    if (opts.end) qs.set("end", opts.end);
+    return request(`/api/nutrition-body-comp-report?${qs.toString()}`);
   },
   logWeight(entry: Partial<WeightEntry> & { weight_lbs: number }): Promise<WeightEntry> {
     return request("/api/nutrition/weight", {

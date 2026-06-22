@@ -19,7 +19,27 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { api, type BPTimeOfDay, type DoctorReportPayload, type DoctorReportSeries } from "@/lib/api";
+import {
+  api,
+  type BPTimeOfDay,
+  type DoctorReportPayload,
+  type DoctorReportSeries,
+  type CardiometabolicReportPayload,
+  type PreProcedureReportPayload,
+  type PreProcedureItem,
+  type TrainingRecoveryReportPayload,
+  type NutritionBodyCompReportPayload,
+} from "@/lib/api";
+
+// ── Tab definitions ──────────────────────────────────────────────────────
+type TabId = "overview" | "cardio" | "preproc" | "training" | "nutrition";
+const TABS: { id: TabId; label: string }[] = [
+  { id: "overview",  label: "Overview" },
+  { id: "cardio",    label: "Cardiometabolic" },
+  { id: "preproc",   label: "Pre-Procedure" },
+  { id: "training",  label: "Training" },
+  { id: "nutrition", label: "Nutrition" },
+];
 
 interface Props {
   open:    boolean;
@@ -76,13 +96,16 @@ function SeriesStat({ label, series, digits = 0 }: { label: string; series: Doct
 }
 
 export default function DoctorReportModal({ open, onClose }: Props) {
-  const [days, setDays]       = useState<number>(30);
+  const [days, setDays]           = useState<number>(30);
+  const [activeTab, setActiveTab] = useState<TabId>("overview");
+
+  // Overview tab data lives at the modal level because the inline BP entry
+  // needs to refetch it. The other tabs each manage their own state inside
+  // their components to keep this file from ballooning further.
   const [data, setData]       = useState<DoctorReportPayload | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError]     = useState<string | null>(null);
 
-  // Loader extracted so the inline BP-entry form can refetch after saving
-  // a new reading, without having to close and reopen the modal.
   const loadReport = useCallback(() => {
     setLoading(true);
     setError(null);
@@ -92,11 +115,10 @@ export default function DoctorReportModal({ open, onClose }: Props) {
       .finally(() => { setLoading(false); });
   }, [days]);
 
-  // Refetch whenever the modal opens or the range changes.
   useEffect(() => {
-    if (!open) return;
+    if (!open || activeTab !== "overview") return;
     loadReport();
-  }, [open, loadReport]);
+  }, [open, activeTab, loadReport]);
 
   if (!open) return null;
 
@@ -128,27 +150,29 @@ export default function DoctorReportModal({ open, onClose }: Props) {
         {/* Controls — hidden in print */}
         <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-gray-200 print:hidden bg-gray-50">
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-semibold text-gray-900">Doctor&apos;s Report</p>
-            <div className="flex gap-1">
-              {RANGE_OPTIONS.map(o => (
-                <button
-                  key={o.value}
-                  onClick={() => setDays(o.value)}
-                  className={`text-[11px] px-2.5 py-1 rounded-lg font-medium transition-colors ${
-                    days === o.value
-                      ? "bg-[#1B3829] text-white"
-                      : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-100"
-                  }`}
-                >
-                  {o.label}
-                </button>
-              ))}
-            </div>
+            <p className="text-sm font-semibold text-gray-900">Health Reports</p>
+            {/* Pre-Procedure is a current-state snapshot — no date range applies */}
+            {activeTab !== "preproc" && (
+              <div className="flex gap-1">
+                {RANGE_OPTIONS.map(o => (
+                  <button
+                    key={o.value}
+                    onClick={() => setDays(o.value)}
+                    className={`text-[11px] px-2.5 py-1 rounded-lg font-medium transition-colors ${
+                      days === o.value
+                        ? "bg-[#1B3829] text-white"
+                        : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-100"
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => window.print()}
-              disabled={loading || !!error || !data}
               className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#1B3829] hover:bg-[#2D6A4F] text-white transition-colors disabled:opacity-40"
             >
               Print / save as PDF
@@ -161,17 +185,38 @@ export default function DoctorReportModal({ open, onClose }: Props) {
           </div>
         </div>
 
-        {/* Body */}
+        {/* Tab bar — hidden in print so only the active tab's content appears */}
+        <div className="flex gap-1 px-3 pt-2 border-b border-gray-200 bg-white print:hidden overflow-x-auto">
+          {TABS.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              className={`text-xs font-medium px-3 py-2 rounded-t-lg transition-colors whitespace-nowrap ${
+                activeTab === t.id
+                  ? "bg-gray-50 text-[#1B3829] border-b-2 border-[#1B3829] -mb-px"
+                  : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Body — only the active tab renders. Each tab uses the shared
+            print-target id `bn-doctor-report-print` so the print CSS works
+            uniformly across tabs. */}
         <div className="overflow-y-auto print:overflow-visible">
-          {loading && (
-            <div className="p-8 text-center text-sm text-gray-600">Building report…</div>
+          {activeTab === "overview" && (
+            <>
+              {loading && <div className="p-8 text-center text-sm text-gray-600">Building report…</div>}
+              {error   && <div className="p-8 text-center text-sm text-red-500">Couldn&apos;t load report: {error}</div>}
+              {!loading && !error && data && <ReportBody data={data} onBpSaved={loadReport} />}
+            </>
           )}
-          {error && (
-            <div className="p-8 text-center text-sm text-red-500">Couldn&apos;t load report: {error}</div>
-          )}
-          {!loading && !error && data && (
-            <ReportBody data={data} onBpSaved={loadReport} />
-          )}
+          {activeTab === "cardio"    && <CardiometabolicTab days={days} />}
+          {activeTab === "preproc"   && <PreProcedureTab />}
+          {activeTab === "training"  && <TrainingTab days={days} />}
+          {activeTab === "nutrition" && <NutritionTab days={days} />}
         </div>
       </div>
     </div>
@@ -778,6 +823,599 @@ function InlineBpEntry({ onSaved }: { onSaved: () => void }) {
   );
 }
 
+
+// ── Cardiometabolic tab ─────────────────────────────────────────────────
+function CardiometabolicTab({ days }: { days: number }) {
+  const [data, setData]       = useState<CardiometabolicReportPayload | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    return api.cardiometabolicReport({ days })
+      .then(r => setData(r))
+      .catch(e => setError(e instanceof Error ? e.message : "Couldn't load"))
+      .finally(() => setLoading(false));
+  }, [days]);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (loading) return <div className="p-8 text-center text-sm text-gray-600">Building cardiometabolic report…</div>;
+  if (error)   return <div className="p-8 text-center text-sm text-red-500">Couldn&apos;t load: {error}</div>;
+  if (!data)   return null;
+
+  const { patient, blood_pressure: bp, cardio_signals: cs, weight, range, generated_at } = data;
+  return (
+    <article id="bn-doctor-report-print" className="p-5 sm:p-8 text-sm text-gray-900 print:p-6">
+      <header className="mb-6 pb-4 border-b border-gray-200">
+        <h1 className="text-2xl font-bold text-gray-900 mb-1">Cardiometabolic Report</h1>
+        <p className="text-xs text-gray-600">
+          Reporting window: {fmtDate(range.start)} – {fmtDate(range.end)} · Generated {fmtDateTime(generated_at)}
+        </p>
+        <dl className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-x-4 gap-y-2 text-xs">
+          <div><dt className="text-gray-600 uppercase tracking-wide">Name</dt><dd className="font-semibold">{patient.name || "—"}</dd></div>
+          <div><dt className="text-gray-600 uppercase tracking-wide">DOB</dt><dd className="font-semibold">{fmtDate(patient.birthdate)}{patient.age !== null && <span className="text-gray-600 font-normal"> (age {patient.age})</span>}</dd></div>
+          <div><dt className="text-gray-600 uppercase tracking-wide">Sex</dt><dd className="font-semibold capitalize">{patient.biological_sex || "—"}</dd></div>
+          <div><dt className="text-gray-600 uppercase tracking-wide">Height</dt><dd className="font-semibold">{patient.height_cm ? `${patient.height_cm} cm` : "—"}</dd></div>
+          <div><dt className="text-gray-600 uppercase tracking-wide">VO₂ max</dt><dd className="font-semibold">{patient.vo2_max ?? "—"}</dd></div>
+        </dl>
+      </header>
+
+      {/* BP */}
+      <section className="mb-6 print:break-inside-avoid">
+        <div className="flex items-center justify-between mb-2 print:block">
+          <h2 className="text-base font-semibold text-gray-900">Blood Pressure</h2>
+          <InlineBpEntry onSaved={load} />
+        </div>
+        {bp.readings_count === 0 ? (
+          <p className="text-xs text-gray-600 italic">No readings in this window. Tap &quot;+ Add reading&quot; above to log one.</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              <div className="rounded-lg border border-gray-200 px-3 py-2.5 bg-white">
+                <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Average</p>
+                <p className="text-lg font-bold text-gray-900 leading-tight">{numOrDash(bp.summary.average?.systolic)}<span className="text-gray-600 font-normal">/</span>{numOrDash(bp.summary.average?.diastolic)}</p>
+                <p className="text-[10px] text-gray-600">{bp.summary.count} readings · last {bp.summary.days}d</p>
+              </div>
+              <div className="rounded-lg border border-gray-200 px-3 py-2.5 bg-white">
+                <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Morning</p>
+                <p className="text-lg font-bold text-gray-900 leading-tight">{numOrDash(bp.summary.morning?.systolic)}<span className="text-gray-600 font-normal">/</span>{numOrDash(bp.summary.morning?.diastolic)}</p>
+                <p className="text-[10px] text-gray-600">n = {bp.summary.morning?.n ?? 0}</p>
+              </div>
+              <div className="rounded-lg border border-gray-200 px-3 py-2.5 bg-white">
+                <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Evening</p>
+                <p className="text-lg font-bold text-gray-900 leading-tight">{numOrDash(bp.summary.evening?.systolic)}<span className="text-gray-600 font-normal">/</span>{numOrDash(bp.summary.evening?.diastolic)}</p>
+                <p className="text-[10px] text-gray-600">n = {bp.summary.evening?.n ?? 0}</p>
+              </div>
+            </div>
+            {bp.readings.length >= 2 && (
+              <div className="mb-3 border border-gray-200 rounded-lg p-2 bg-white">
+                <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold mb-1">Trend</p>
+                <TrendChart
+                  series={[
+                    { label: "Systolic",  color: "#dc2626", points: [...bp.readings].reverse().map(r => ({ date: r.date, value: r.systolic })) },
+                    { label: "Diastolic", color: "#2563eb", points: [...bp.readings].reverse().map(r => ({ date: r.date, value: r.diastolic })) },
+                  ]}
+                  references={[
+                    { value: 120, label: "120", color: "#94a3b8" },
+                    { value: 80,  label: "80",  color: "#94a3b8" },
+                  ]}
+                />
+              </div>
+            )}
+          </>
+        )}
+      </section>
+
+      {/* Cardio signals */}
+      <section className="mb-6 print:break-inside-avoid">
+        <h2 className="text-base font-semibold text-gray-900 mb-2">Resting HR &amp; HRV</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+          <div className="border border-gray-200 rounded-lg p-2 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold mb-1">Resting HR · avg {numOrDash(cs.rhr.average)} {cs.rhr.unit}</p>
+            <TrendChart
+              series={[{ label: "RHR", color: "#0891b2", points: cs.rhr.trend.map(p => ({ date: p.date, value: p.value })) }]}
+              references={[{ value: 60, label: "60 ideal", color: "#94a3b8" }]}
+            />
+          </div>
+          <div className="border border-gray-200 rounded-lg p-2 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold mb-1">HRV · avg {numOrDash(cs.hrv.average)} {cs.hrv.unit}</p>
+            <TrendChart
+              series={[{ label: "HRV", color: "#059669", points: cs.hrv.trend.map(p => ({ date: p.date, value: p.value })) }]}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* Weight + body fat */}
+      <section className="mb-6 print:break-inside-avoid">
+        <h2 className="text-base font-semibold text-gray-900 mb-2">Weight &amp; Body Fat</h2>
+        {weight.entries.length === 0 ? (
+          <p className="text-xs text-gray-600 italic">No weigh-ins in this window.</p>
+        ) : (
+          <>
+            <p className="text-xs text-gray-700 mb-2">
+              {weight.entries.length} entries
+              {weight.delta_lbs !== null && <span className="ml-2">· Net weight Δ: <span className="font-semibold">{weight.delta_lbs > 0 ? "+" : ""}{weight.delta_lbs} lbs</span></span>}
+              {weight.delta_bf  !== null && <span className="ml-2">· Body fat Δ: <span className="font-semibold">{weight.delta_bf  > 0 ? "+" : ""}{weight.delta_bf}%</span></span>}
+            </p>
+            {weight.entries.length >= 2 && (
+              <div className="border border-gray-200 rounded-lg p-2 bg-white">
+                <TrendChart
+                  series={[{ label: "Weight (lbs)", color: "#0891b2", points: weight.entries.filter(e => e.weight_lbs).map(e => ({ date: e.date, value: e.weight_lbs as number })) }]}
+                />
+              </div>
+            )}
+          </>
+        )}
+      </section>
+
+      <footer className="mt-6 pt-3 border-t border-gray-200 text-[10px] text-gray-600 leading-snug">
+        <p className="font-semibold text-gray-700 mb-1">For discussion with your physician.</p>
+        <p>Observational data from self-reported readings and wearable measurements. Not validated for clinical decision-making.</p>
+      </footer>
+    </article>
+  );
+}
+
+// ── Pre-Procedure tab ──────────────────────────────────────────────────
+function PreProcedureTab() {
+  const [data, setData]       = useState<PreProcedureReportPayload | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    api.preProcedureReport()
+      .then(setData)
+      .catch(e => setError(e instanceof Error ? e.message : "Couldn't load"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="p-8 text-center text-sm text-gray-600">Building pre-procedure report…</div>;
+  if (error)   return <div className="p-8 text-center text-sm text-red-500">Couldn&apos;t load: {error}</div>;
+  if (!data)   return null;
+
+  const { patient, flagged, totals, items, disclaimer, generated_at } = data;
+  const renderItem = (it: PreProcedureItem) => (
+    <li key={`${it.class}-${it.name}`} className={`rounded-lg border px-3 py-2 ${it.flag?.severity === "HIGH" ? "border-red-300 bg-red-50" : it.flag?.severity === "NOTE" ? "border-amber-300 bg-amber-50" : "border-gray-200 bg-white"}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-gray-900">
+            {it.name}
+            <span className="text-[10px] text-gray-600 font-normal ml-2 uppercase tracking-wide">{it.class}</span>
+          </p>
+          <p className="text-[11px] text-gray-600">
+            {[it.dose, it.timing].filter(Boolean).join(" · ") || "—"}
+          </p>
+          {it.notes && <p className="text-[11px] text-gray-600 italic mt-0.5">{it.notes}</p>}
+          {it.flag && (
+            <p className={`text-[11px] mt-1 leading-snug ${it.flag.severity === "HIGH" ? "text-red-700" : "text-amber-800"}`}>
+              <span className="font-semibold">{it.flag.severity === "HIGH" ? "⚠ HIGH PRIORITY: " : "Note: "}</span>
+              {it.flag.note}
+            </p>
+          )}
+        </div>
+      </div>
+    </li>
+  );
+
+  return (
+    <article id="bn-doctor-report-print" className="p-5 sm:p-8 text-sm text-gray-900 print:p-6">
+      <header className="mb-6 pb-4 border-b border-gray-200">
+        <h1 className="text-2xl font-bold text-gray-900 mb-1">Pre-Procedure Medication &amp; Supplement Reconciliation</h1>
+        <p className="text-xs text-gray-600">Generated {fmtDateTime(generated_at)} · Current stack snapshot</p>
+        <dl className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 text-xs">
+          <div><dt className="text-gray-600 uppercase tracking-wide">Name</dt><dd className="font-semibold">{patient.name || "—"}</dd></div>
+          <div><dt className="text-gray-600 uppercase tracking-wide">DOB</dt><dd className="font-semibold">{fmtDate(patient.birthdate)}{patient.age !== null && <span className="text-gray-600 font-normal"> (age {patient.age})</span>}</dd></div>
+          <div><dt className="text-gray-600 uppercase tracking-wide">Sex</dt><dd className="font-semibold capitalize">{patient.biological_sex || "—"}</dd></div>
+          <div><dt className="text-gray-600 uppercase tracking-wide">Total items</dt><dd className="font-semibold">{totals.medications + totals.supplements + totals.peptides}</dd></div>
+        </dl>
+      </header>
+
+      {/* High-priority flag panel at the top */}
+      {flagged.high_risk.length > 0 && (
+        <section className="mb-6 print:break-inside-avoid">
+          <h2 className="text-base font-semibold text-red-700 mb-2">⚠ High-Priority Items for the Care Team</h2>
+          <p className="text-[11px] text-gray-700 mb-2">
+            Items below may require pre-procedure hold or special anesthesia consideration. Coordinate timing with the prescribing physician.
+          </p>
+          <ul className="space-y-1.5">{flagged.high_risk.map(renderItem)}</ul>
+        </section>
+      )}
+
+      {flagged.notes.length > 0 && (
+        <section className="mb-6 print:break-inside-avoid">
+          <h2 className="text-base font-semibold text-amber-800 mb-2">Items Worth Disclosing</h2>
+          <ul className="space-y-1.5">{flagged.notes.map(renderItem)}</ul>
+        </section>
+      )}
+
+      {/* Full lists by class */}
+      <section className="mb-6 print:break-inside-avoid">
+        <h2 className="text-base font-semibold text-gray-900 mb-2">Complete Stack</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <p className="text-xs font-semibold text-gray-900 mb-1.5">Medications ({totals.medications})</p>
+            {items.medications.length === 0 ? <p className="text-[11px] text-gray-600 italic">None listed.</p> : <ul className="space-y-1.5">{items.medications.map(renderItem)}</ul>}
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-gray-900 mb-1.5">Supplements ({totals.supplements})</p>
+            {items.supplements.length === 0 ? <p className="text-[11px] text-gray-600 italic">None listed.</p> : <ul className="space-y-1.5">{items.supplements.map(renderItem)}</ul>}
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-gray-900 mb-1.5">Peptides ({totals.peptides})</p>
+            {items.peptides.length === 0 ? <p className="text-[11px] text-gray-600 italic">None listed.</p> : <ul className="space-y-1.5">{items.peptides.map(renderItem)}</ul>}
+          </div>
+        </div>
+      </section>
+
+      <footer className="mt-6 pt-3 border-t border-gray-200 text-[10px] text-gray-600 leading-snug">
+        <p className="font-semibold text-gray-700 mb-1">For discussion with your surgeon and anesthesiologist.</p>
+        <p>{disclaimer}</p>
+      </footer>
+    </article>
+  );
+}
+
+// ── Training & Recovery tab ─────────────────────────────────────────────
+function TrainingTab({ days }: { days: number }) {
+  const [data, setData]       = useState<TrainingRecoveryReportPayload | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    api.trainingRecoveryReport({ days })
+      .then(setData)
+      .catch(e => setError(e instanceof Error ? e.message : "Couldn't load"))
+      .finally(() => setLoading(false));
+  }, [days]);
+
+  if (loading) return <div className="p-8 text-center text-sm text-gray-600">Building training &amp; recovery report…</div>;
+  if (error)   return <div className="p-8 text-center text-sm text-red-500">Couldn&apos;t load: {error}</div>;
+  if (!data)   return null;
+
+  const { patient, totals, weekly, recovery, workouts, range, generated_at } = data;
+
+  return (
+    <article id="bn-doctor-report-print" className="p-5 sm:p-8 text-sm text-gray-900 print:p-6">
+      <header className="mb-6 pb-4 border-b border-gray-200">
+        <h1 className="text-2xl font-bold text-gray-900 mb-1">Training &amp; Recovery Report</h1>
+        <p className="text-xs text-gray-600">
+          Reporting window: {fmtDate(range.start)} – {fmtDate(range.end)} · Generated {fmtDateTime(generated_at)}
+        </p>
+        <dl className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 text-xs">
+          <div><dt className="text-gray-600 uppercase tracking-wide">Name</dt><dd className="font-semibold">{patient.name || "—"}</dd></div>
+          <div><dt className="text-gray-600 uppercase tracking-wide">Age</dt><dd className="font-semibold">{patient.age ?? "—"}</dd></div>
+          <div><dt className="text-gray-600 uppercase tracking-wide">Sex</dt><dd className="font-semibold capitalize">{patient.biological_sex || "—"}</dd></div>
+          <div className="col-span-2 sm:col-span-1"><dt className="text-gray-600 uppercase tracking-wide">Goals</dt><dd className="font-semibold truncate">{patient.health_goals.join(", ") || "—"}</dd></div>
+        </dl>
+      </header>
+
+      {/* Totals */}
+      <section className="mb-6 print:break-inside-avoid">
+        <h2 className="text-base font-semibold text-gray-900 mb-2">Training Volume</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
+          <div className="rounded-lg border border-gray-200 px-3 py-2.5 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Sessions</p>
+            <p className="text-lg font-bold text-gray-900 leading-tight">{totals.sessions_total}</p>
+            <p className="text-[10px] text-gray-600">total</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 px-3 py-2.5 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Strength</p>
+            <p className="text-lg font-bold text-gray-900 leading-tight">{totals.strength_total}</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 px-3 py-2.5 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Cardio</p>
+            <p className="text-lg font-bold text-gray-900 leading-tight">{totals.cardio_total}</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 px-3 py-2.5 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Cardio min</p>
+            <p className="text-lg font-bold text-gray-900 leading-tight">{totals.cardio_min_total}</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 px-3 py-2.5 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Avg / week</p>
+            <p className="text-lg font-bold text-gray-900 leading-tight">{totals.avg_sessions_per_week}</p>
+          </div>
+        </div>
+
+        {weekly.length > 0 && (
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="text-left text-[10px] uppercase tracking-wide text-gray-600 border-b border-gray-200">
+                <th className="py-1.5 pr-2 font-semibold">Week</th>
+                <th className="py-1.5 pr-2 font-semibold">Sessions</th>
+                <th className="py-1.5 pr-2 font-semibold">Strength</th>
+                <th className="py-1.5 pr-2 font-semibold">Cardio</th>
+                <th className="py-1.5 font-semibold">Cardio min</th>
+              </tr>
+            </thead>
+            <tbody>
+              {weekly.map(w => (
+                <tr key={w.week} className="border-b border-gray-100">
+                  <td className="py-1 pr-2 font-mono">{w.week}</td>
+                  <td className="py-1 pr-2 font-mono">{w.total_sessions}</td>
+                  <td className="py-1 pr-2 font-mono">{w.strength_sessions}</td>
+                  <td className="py-1 pr-2 font-mono">{w.cardio_sessions}</td>
+                  <td className="py-1 font-mono">{w.cardio_min}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      {/* Recovery */}
+      <section className="mb-6 print:break-inside-avoid">
+        <h2 className="text-base font-semibold text-gray-900 mb-2">Recovery Signals</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="border border-gray-200 rounded-lg p-2 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold mb-1">Readiness · avg {numOrDash(recovery.readiness.average)}</p>
+            <TrendChart
+              series={[{ label: "Readiness", color: "#059669", points: recovery.readiness.trend.map(p => ({ date: p.date, value: p.value })) }]}
+              references={[{ value: 70, label: "70 ok", color: "#94a3b8" }]}
+            />
+          </div>
+          <div className="border border-gray-200 rounded-lg p-2 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold mb-1">HRV · avg {numOrDash(recovery.hrv.average)} ms</p>
+            <TrendChart
+              series={[{ label: "HRV", color: "#0891b2", points: recovery.hrv.trend.map(p => ({ date: p.date, value: p.value })) }]}
+            />
+          </div>
+          <div className="border border-gray-200 rounded-lg p-2 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold mb-1">Sleep efficiency · avg {numOrDash(recovery.sleep_efficiency.average)}%</p>
+            <TrendChart
+              series={[{ label: "Efficiency", color: "#7c3aed", points: recovery.sleep_efficiency.trend.map(p => ({ date: p.date, value: p.value })) }]}
+              references={[{ value: 85, label: "85% normal", color: "#94a3b8" }]}
+              yMax={100}
+            />
+          </div>
+          <div className="border border-gray-200 rounded-lg p-2 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold mb-1">Sleep hours · avg {numOrDash(recovery.sleep_hours.average, 1)} hrs</p>
+            <TrendChart
+              series={[{ label: "Hours", color: "#d97706", points: recovery.sleep_hours.trend.map(p => ({ date: p.date, value: p.value })) }]}
+              references={[{ value: 7, label: "7 hrs", color: "#94a3b8" }]}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* Session log */}
+      {workouts.length > 0 && (
+        <section className="mb-6 print:break-inside-avoid">
+          <h2 className="text-base font-semibold text-gray-900 mb-2">Session Log</h2>
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="text-left text-[10px] uppercase tracking-wide text-gray-600 border-b border-gray-200">
+                <th className="py-1.5 pr-2 font-semibold">Date</th>
+                <th className="py-1.5 pr-2 font-semibold">Type</th>
+                <th className="py-1.5 pr-2 font-semibold">Duration</th>
+                <th className="py-1.5 pr-2 font-semibold">Distance</th>
+                <th className="py-1.5 pr-2 font-semibold">Source</th>
+                <th className="py-1.5 font-semibold">Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {workouts.map((w, i) => (
+                <tr key={`${w.date}-${i}`} className="border-b border-gray-100">
+                  <td className="py-1 pr-2">{w.date ? fmtDate(w.date) : "—"}</td>
+                  <td className="py-1 pr-2">{w.type || "—"}</td>
+                  <td className="py-1 pr-2 font-mono">{w.duration_min ? `${w.duration_min} min` : "—"}</td>
+                  <td className="py-1 pr-2 font-mono">{w.distance_mi ? `${w.distance_mi} mi` : "—"}</td>
+                  <td className="py-1 pr-2 text-gray-600 capitalize">{w.source}</td>
+                  <td className="py-1 text-gray-600 italic truncate max-w-[16rem]">{w.notes || ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      <footer className="mt-6 pt-3 border-t border-gray-200 text-[10px] text-gray-600 leading-snug">
+        <p className="font-semibold text-gray-700 mb-1">For your trainer, PT, or coach.</p>
+        <p>Self-reported and wearable data. Not medical advice.</p>
+      </footer>
+    </article>
+  );
+}
+
+// ── Nutrition & Body Composition tab ────────────────────────────────────
+function NutritionTab({ days }: { days: number }) {
+  const [data, setData]       = useState<NutritionBodyCompReportPayload | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    api.nutritionBodyCompReport({ days })
+      .then(setData)
+      .catch(e => setError(e instanceof Error ? e.message : "Couldn't load"))
+      .finally(() => setLoading(false));
+  }, [days]);
+
+  if (loading) return <div className="p-8 text-center text-sm text-gray-600">Building nutrition report…</div>;
+  if (error)   return <div className="p-8 text-center text-sm text-red-500">Couldn&apos;t load: {error}</div>;
+  if (!data)   return null;
+
+  const { patient, averages, daily, trends, weights, inbody, stack, range, generated_at } = data;
+
+  return (
+    <article id="bn-doctor-report-print" className="p-5 sm:p-8 text-sm text-gray-900 print:p-6">
+      <header className="mb-6 pb-4 border-b border-gray-200">
+        <h1 className="text-2xl font-bold text-gray-900 mb-1">Nutrition &amp; Body Composition Report</h1>
+        <p className="text-xs text-gray-600">
+          Reporting window: {fmtDate(range.start)} – {fmtDate(range.end)} · Generated {fmtDateTime(generated_at)}
+        </p>
+        <dl className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 text-xs">
+          <div><dt className="text-gray-600 uppercase tracking-wide">Name</dt><dd className="font-semibold">{patient.name || "—"}</dd></div>
+          <div><dt className="text-gray-600 uppercase tracking-wide">Age</dt><dd className="font-semibold">{patient.age ?? "—"}</dd></div>
+          <div><dt className="text-gray-600 uppercase tracking-wide">Sex</dt><dd className="font-semibold capitalize">{patient.biological_sex || "—"}</dd></div>
+          <div><dt className="text-gray-600 uppercase tracking-wide">Height</dt><dd className="font-semibold">{patient.height_cm ? `${patient.height_cm} cm` : "—"}</dd></div>
+        </dl>
+      </header>
+
+      <section className="mb-6 print:break-inside-avoid">
+        <h2 className="text-base font-semibold text-gray-900 mb-2">Daily Macro Averages</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
+          <div className="rounded-lg border border-gray-200 px-3 py-2.5 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Calories</p>
+            <p className="text-lg font-bold text-gray-900 leading-tight">{numOrDash(averages.calories)}</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 px-3 py-2.5 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Protein</p>
+            <p className="text-lg font-bold text-gray-900 leading-tight">{numOrDash(averages.protein_g)}<span className="text-[11px] text-gray-600 font-normal ml-1">g</span></p>
+          </div>
+          <div className="rounded-lg border border-gray-200 px-3 py-2.5 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Carbs</p>
+            <p className="text-lg font-bold text-gray-900 leading-tight">{numOrDash(averages.carbs_g)}<span className="text-[11px] text-gray-600 font-normal ml-1">g</span></p>
+          </div>
+          <div className="rounded-lg border border-gray-200 px-3 py-2.5 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Fat</p>
+            <p className="text-lg font-bold text-gray-900 leading-tight">{numOrDash(averages.fat_g)}<span className="text-[11px] text-gray-600 font-normal ml-1">g</span></p>
+          </div>
+          <div className="rounded-lg border border-gray-200 px-3 py-2.5 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Days logged</p>
+            <p className="text-lg font-bold text-gray-900 leading-tight">{averages.days_logged}</p>
+          </div>
+        </div>
+        {trends.calories.length >= 2 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="border border-gray-200 rounded-lg p-2 bg-white">
+              <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold mb-1">Calories trend</p>
+              <TrendChart series={[{ label: "Cal", color: "#dc2626", points: trends.calories }]} />
+            </div>
+            <div className="border border-gray-200 rounded-lg p-2 bg-white">
+              <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold mb-1">Protein trend (g)</p>
+              <TrendChart series={[{ label: "Protein", color: "#6366f1", points: trends.protein }]} />
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Weight trend + InBody */}
+      <section className="mb-6 print:break-inside-avoid">
+        <h2 className="text-base font-semibold text-gray-900 mb-2">Body Composition</h2>
+        {trends.weight_lbs.length >= 2 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+            <div className="border border-gray-200 rounded-lg p-2 bg-white">
+              <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold mb-1">Weight (lbs)</p>
+              <TrendChart series={[{ label: "Weight", color: "#0891b2", points: trends.weight_lbs }]} />
+            </div>
+            <div className="border border-gray-200 rounded-lg p-2 bg-white">
+              <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold mb-1">Body fat %</p>
+              <TrendChart series={[{ label: "BF%", color: "#d97706", points: trends.body_fat }]} />
+            </div>
+          </div>
+        )}
+
+        {inbody && (
+          <div className="border border-gray-200 rounded-lg p-3 bg-white mb-3">
+            <p className="text-[11px] text-gray-600 mb-2 uppercase tracking-wide font-semibold">Latest InBody · {fmtDate(inbody.date)}</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+              <div>
+                <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold mb-1">Muscle (lbs)</p>
+                <ul className="space-y-0.5">
+                  <li>Trunk: <span className="font-mono">{numOrDash(inbody.muscle.trunk, 1)}</span></li>
+                  <li>R arm: <span className="font-mono">{numOrDash(inbody.muscle.right_arm, 1)}</span> / L arm: <span className="font-mono">{numOrDash(inbody.muscle.left_arm, 1)}</span></li>
+                  <li>R leg: <span className="font-mono">{numOrDash(inbody.muscle.right_leg, 1)}</span> / L leg: <span className="font-mono">{numOrDash(inbody.muscle.left_leg, 1)}</span></li>
+                </ul>
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold mb-1">Fat (lbs)</p>
+                <ul className="space-y-0.5">
+                  <li>Trunk: <span className="font-mono">{numOrDash(inbody.fat.trunk, 1)}</span></li>
+                  <li>R arm: <span className="font-mono">{numOrDash(inbody.fat.right_arm, 1)}</span> / L arm: <span className="font-mono">{numOrDash(inbody.fat.left_arm, 1)}</span></li>
+                  <li>R leg: <span className="font-mono">{numOrDash(inbody.fat.right_leg, 1)}</span> / L leg: <span className="font-mono">{numOrDash(inbody.fat.left_leg, 1)}</span></li>
+                </ul>
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold mb-1">Body water (lbs)</p>
+                <ul className="space-y-0.5">
+                  <li>Total: <span className="font-mono">{numOrDash(inbody.water.total, 1)}</span></li>
+                  <li>Intracellular: <span className="font-mono">{numOrDash(inbody.water.intracellular, 1)}</span></li>
+                  <li>Extracellular: <span className="font-mono">{numOrDash(inbody.water.extracellular, 1)}</span></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {weights.length > 0 && (
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="text-left text-[10px] uppercase tracking-wide text-gray-600 border-b border-gray-200">
+                <th className="py-1.5 pr-2 font-semibold">Date</th>
+                <th className="py-1.5 pr-2 font-semibold">Weight</th>
+                <th className="py-1.5 pr-2 font-semibold">BF %</th>
+                <th className="py-1.5 pr-2 font-semibold">Lean</th>
+                <th className="py-1.5 font-semibold">Fat</th>
+              </tr>
+            </thead>
+            <tbody>
+              {weights.map((w, i) => (
+                <tr key={`${w.date}-${i}`} className="border-b border-gray-100">
+                  <td className="py-1 pr-2">{w.date ? fmtDate(w.date) : "—"}</td>
+                  <td className="py-1 pr-2 font-mono">{numOrDash(w.weight_lbs, 1)}</td>
+                  <td className="py-1 pr-2 font-mono">{numOrDash(w.body_fat_pct, 1)}</td>
+                  <td className="py-1 pr-2 font-mono">{numOrDash(w.lean_mass, 1)}</td>
+                  <td className="py-1 font-mono">{numOrDash(w.fat_mass, 1)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      {/* Daily macros table */}
+      {daily.length > 0 && (
+        <section className="mb-6 print:break-inside-avoid">
+          <h2 className="text-base font-semibold text-gray-900 mb-2">Daily Macro Detail</h2>
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="text-left text-[10px] uppercase tracking-wide text-gray-600 border-b border-gray-200">
+                <th className="py-1.5 pr-2 font-semibold">Date</th>
+                <th className="py-1.5 pr-2 font-semibold">Cal</th>
+                <th className="py-1.5 pr-2 font-semibold">Protein</th>
+                <th className="py-1.5 pr-2 font-semibold">Carbs</th>
+                <th className="py-1.5 pr-2 font-semibold">Fat</th>
+                <th className="py-1.5 font-semibold">Meals</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...daily].reverse().map(d => (
+                <tr key={d.date} className="border-b border-gray-100">
+                  <td className="py-1 pr-2">{fmtDate(d.date)}</td>
+                  <td className="py-1 pr-2 font-mono">{d.calories}</td>
+                  <td className="py-1 pr-2 font-mono">{d.protein_g}g</td>
+                  <td className="py-1 pr-2 font-mono">{d.carbs_g}g</td>
+                  <td className="py-1 pr-2 font-mono">{d.fat_g}g</td>
+                  <td className="py-1 font-mono">{d.meal_count}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      {/* Stack */}
+      <section className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4 print:break-inside-avoid">
+        <StackBlock title="Medications" items={stack.medications} empty="No medications listed." />
+        <StackBlock title="Supplements" items={stack.supplements} empty="No supplements listed." />
+        <StackBlock title="Peptides"    items={stack.peptides}    empty="No peptides listed." />
+      </section>
+
+      <footer className="mt-6 pt-3 border-t border-gray-200 text-[10px] text-gray-600 leading-snug">
+        <p className="font-semibold text-gray-700 mb-1">For your dietitian or RDN.</p>
+        <p>Self-reported nutrition and body composition data. Not medical advice.</p>
+      </footer>
+    </article>
+  );
+}
 
 function StackBlock({ title, items, empty }: { title: string; items: { name: string; dose?: string; timing?: string; notes?: string }[]; empty: string }) {
   return (

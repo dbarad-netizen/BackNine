@@ -27,6 +27,10 @@ from models import DashboardResponse, DailyMetrics, WearableConnection
 import nutrition as nutr
 import bp
 import doctor_report as dr
+import cardiometabolic_report as cardio_rep
+import pre_procedure_report as preproc_rep
+import training_recovery_report as train_rep
+import nutrition_body_comp_report as nutri_rep
 import training as trn
 import labs as lbs
 import challenges as chl
@@ -1909,6 +1913,57 @@ def get_doctor_report(request: Request, days: int = 30, end: str | None = None):
     except Exception:
         days_int = 30
     return dr.build_report(user_id, profile, days=days_int, end_iso=end)
+
+
+@app.get("/api/cardiometabolic-report")
+def get_cardiometabolic_report(request: Request, days: int = 30, end: str | None = None):
+    """Focused cardiometabolic snapshot: BP, RHR, HRV, weight, body fat,
+    VO2 max. For cardiology / primary care handoffs."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    profile = _get_profile(user_id) or {}
+    try:
+        days_int = max(1, min(int(days), 365))
+    except Exception:
+        days_int = 30
+    return cardio_rep.build_report(user_id, profile, days=days_int, end_iso=end)
+
+
+@app.get("/api/pre-procedure-report")
+def get_pre_procedure_report(request: Request):
+    """Pre-surgery / pre-procedure medication & supplement reconciliation.
+    No date range — reads the user's CURRENT stack and flags items affecting
+    bleeding, anesthesia, or interactions."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    profile = _get_profile(user_id) or {}
+    return preproc_rep.build_report(user_id, profile)
+
+
+@app.get("/api/training-recovery-report")
+def get_training_recovery_report(request: Request, days: int = 30, end: str | None = None):
+    """Training load + recovery handoff for trainers/PTs/coaches."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    profile = _get_profile(user_id) or {}
+    try:
+        days_int = max(1, min(int(days), 365))
+    except Exception:
+        days_int = 30
+    return train_rep.build_report(user_id, profile, days=days_int, end_iso=end)
+
+
+@app.get("/api/nutrition-body-comp-report")
+def get_nutrition_body_comp_report(request: Request, days: int = 30, end: str | None = None):
+    """Macros + weight + InBody body composition for dietitians/RDNs."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    profile = _get_profile(user_id) or {}
+    try:
+        days_int = max(1, min(int(days), 365))
+    except Exception:
+        days_int = 30
+    return nutri_rep.build_report(user_id, profile, days=days_int, end_iso=end)
 
 
 @app.post("/api/nutrition/weight")
