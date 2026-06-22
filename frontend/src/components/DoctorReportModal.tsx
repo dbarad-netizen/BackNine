@@ -18,8 +18,8 @@
  * → weight → medications → supplements → peptides → observational disclaimer.
  */
 
-import { useEffect, useState } from "react";
-import { api, type DoctorReportPayload, type DoctorReportSeries } from "@/lib/api";
+import { useCallback, useEffect, useState } from "react";
+import { api, type BPTimeOfDay, type DoctorReportPayload, type DoctorReportSeries } from "@/lib/api";
 
 interface Props {
   open:    boolean;
@@ -81,18 +81,22 @@ export default function DoctorReportModal({ open, onClose }: Props) {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError]     = useState<string | null>(null);
 
+  // Loader extracted so the inline BP-entry form can refetch after saving
+  // a new reading, without having to close and reopen the modal.
+  const loadReport = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    return api.doctorReport({ days })
+      .then(r => { setData(r); })
+      .catch(e => { setError(e instanceof Error ? e.message : "Couldn't load"); })
+      .finally(() => { setLoading(false); });
+  }, [days]);
+
   // Refetch whenever the modal opens or the range changes.
   useEffect(() => {
     if (!open) return;
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    api.doctorReport({ days })
-      .then(r => { if (!cancelled) setData(r); })
-      .catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : "Couldn't load"); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [open, days]);
+    loadReport();
+  }, [open, loadReport]);
 
   if (!open) return null;
 
@@ -166,7 +170,7 @@ export default function DoctorReportModal({ open, onClose }: Props) {
             <div className="p-8 text-center text-sm text-red-500">Couldn&apos;t load report: {error}</div>
           )}
           {!loading && !error && data && (
-            <ReportBody data={data} />
+            <ReportBody data={data} onBpSaved={loadReport} />
           )}
         </div>
       </div>
@@ -174,7 +178,7 @@ export default function DoctorReportModal({ open, onClose }: Props) {
   );
 }
 
-function ReportBody({ data }: { data: DoctorReportPayload }) {
+function ReportBody({ data, onBpSaved }: { data: DoctorReportPayload; onBpSaved: () => void }) {
   const { patient, blood_pressure: bp, sleep_cardio: sc, sleep_fragmentation: sf, apple_health: ah, weight, stack, range, generated_at } = data;
 
   // Are we Oura-blank? When the user has no Oura connection none of the
@@ -204,9 +208,12 @@ function ReportBody({ data }: { data: DoctorReportPayload }) {
 
       {/* ── Blood pressure ─────────────────────────────────────────────── */}
       <section className="mb-6 print:break-inside-avoid">
-        <h2 className="text-base font-semibold text-gray-900 mb-2">Blood Pressure</h2>
+        <div className="flex items-center justify-between mb-2 print:block">
+          <h2 className="text-base font-semibold text-gray-900">Blood Pressure</h2>
+          <InlineBpEntry onSaved={onBpSaved} />
+        </div>
         {bp.readings_count === 0 ? (
-          <p className="text-xs text-gray-600 italic">No readings in this window.</p>
+          <p className="text-xs text-gray-600 italic">No readings in this window. Tap &quot;+ Add reading&quot; above to log one.</p>
         ) : (
           <>
             <div className="grid grid-cols-3 gap-2 mb-3">
@@ -616,6 +623,158 @@ function TrendChart({
         </g>
       )}
     </svg>
+  );
+}
+
+
+// ── InlineBpEntry ─────────────────────────────────────────────────────────
+// Compact BP-entry form embedded in the report's Blood Pressure section so
+// users can log a fresh reading without closing the report. On save, calls
+// the parent's onSaved callback (which refetches the whole report payload)
+// so the new reading flows into the summary tiles + trend chart + table
+// instantly. `print:hidden` on both the button and the form keeps the
+// printed PDF clean — only the static report content prints.
+function InlineBpEntry({ onSaved }: { onSaved: () => void }) {
+  const TIMES: { value: BPTimeOfDay; label: string }[] = [
+    { value: "morning", label: "Morning" },
+    { value: "midday",  label: "Midday"  },
+    { value: "evening", label: "Evening" },
+    { value: "other",   label: "Other"   },
+  ];
+  const inp =
+    "w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-[#1B3829] focus:ring-1 focus:ring-[#1B3829]/20";
+
+  const [open, setOpen]   = useState(false);
+  const [sys, setSys]     = useState("");
+  const [dia, setDia]     = useState("");
+  const [pulse, setPulse] = useState("");
+  const [time, setTime]   = useState<BPTimeOfDay>("morning");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState<string | null>(null);
+
+  const reset = () => {
+    setSys(""); setDia(""); setPulse(""); setTime("morning"); setNotes(""); setError(null);
+  };
+
+  const close = () => {
+    setOpen(false);
+    reset();
+  };
+
+  const handleSubmit = async () => {
+    const sysN = parseInt(sys, 10);
+    const diaN = parseInt(dia, 10);
+    if (!sysN || !diaN) {
+      setError("Enter both systolic and diastolic");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await api.bpLog({
+        systolic:    sysN,
+        diastolic:   diaN,
+        pulse:       pulse ? parseInt(pulse, 10) : undefined,
+        time_of_day: time,
+        notes:       notes.trim() || undefined,
+      });
+      reset();
+      setOpen(false);
+      onSaved();   // refetch the report so the new reading shows up
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="text-[11px] font-semibold text-[#1B3829] border border-[#1B3829]/30 rounded-lg px-2.5 py-1 hover:bg-[#1B3829]/5 transition-colors print:hidden"
+      >
+        + Add reading
+      </button>
+    );
+  }
+
+  return (
+    <div className="w-full rounded-xl border border-[#1B3829]/40 bg-[#1B3829]/5 p-3 mb-3 space-y-2 print:hidden">
+      <div className="flex gap-2 items-end">
+        <div className="flex-1">
+          <p className="text-[10px] text-gray-600 mb-1 uppercase tracking-wide">Systolic</p>
+          <input
+            inputMode="numeric" type="number" min={50} max={300}
+            placeholder="120"
+            value={sys}
+            onChange={e => setSys(e.target.value)}
+            className={inp}
+          />
+        </div>
+        <div className="text-gray-600 font-bold text-xl pb-2">/</div>
+        <div className="flex-1">
+          <p className="text-[10px] text-gray-600 mb-1 uppercase tracking-wide">Diastolic</p>
+          <input
+            inputMode="numeric" type="number" min={30} max={200}
+            placeholder="80"
+            value={dia}
+            onChange={e => setDia(e.target.value)}
+            className={inp}
+          />
+        </div>
+        <div className="w-20">
+          <p className="text-[10px] text-gray-600 mb-1 uppercase tracking-wide">Pulse</p>
+          <input
+            inputMode="numeric" type="number" min={25} max={250}
+            placeholder="72"
+            value={pulse}
+            onChange={e => setPulse(e.target.value)}
+            className={inp}
+          />
+        </div>
+      </div>
+      <div className="flex gap-1.5">
+        {TIMES.map(t => (
+          <button
+            key={t.value}
+            onClick={() => setTime(t.value)}
+            className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              time === t.value
+                ? "bg-[#1B3829] text-white"
+                : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <input
+        placeholder="Notes (optional — meds, stress, before exercise)"
+        maxLength={500}
+        value={notes}
+        onChange={e => setNotes(e.target.value)}
+        className={inp}
+      />
+      {error && <p className="text-[11px] text-red-500">{error}</p>}
+      <div className="flex items-center gap-2 pt-1">
+        <button
+          onClick={handleSubmit}
+          disabled={saving || !sys.trim() || !dia.trim()}
+          className="px-3 py-1.5 rounded-lg bg-[#1B3829] hover:bg-[#2D6A4F] text-white text-xs font-semibold transition-colors disabled:opacity-40"
+        >
+          {saving ? "Saving…" : "Save reading"}
+        </button>
+        <button
+          onClick={close}
+          disabled={saving}
+          className="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-xs hover:bg-gray-50 transition-colors disabled:opacity-40"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
   );
 }
 
