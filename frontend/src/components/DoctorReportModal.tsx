@@ -82,6 +82,29 @@ const numOrDash = (v: number | null | undefined, digits = 0): string => {
   return digits ? v.toFixed(digits) : String(v);
 };
 
+// ── AI narrative block ──────────────────────────────────────────────────
+// Claude-generated 2-4 sentence intro that surfaces what stands out in the
+// report. Rendered immediately after the patient header on each tab.
+// Backed by `report_narrative.py` server-side; if generation failed (no
+// API key, transient error, etc.) the field is null and we render nothing
+// — the report still works fine without it.
+function AiNarrative({ text }: { text?: string | null }) {
+  if (!text) return null;
+  return (
+    <section className="mb-6 print:break-inside-avoid">
+      <div className="rounded-xl border border-[#1B3829]/20 bg-[#1B3829]/5 px-4 py-3">
+        <p className="text-[10px] uppercase tracking-wide font-semibold text-[#1B3829] mb-1.5">
+          What stands out
+        </p>
+        <p className="text-sm text-gray-800 leading-relaxed">{text}</p>
+        <p className="text-[10px] text-gray-600 italic mt-1.5">
+          AI-generated summary based on the data below. Observational only.
+        </p>
+      </div>
+    </section>
+  );
+}
+
 // ── Section helpers ─────────────────────────────────────────────────────────
 
 function SeriesStat({ label, series, digits = 0 }: { label: string; series: DoctorReportSeries; digits?: number }) {
@@ -262,6 +285,8 @@ function ReportBody({ data, onBpSaved }: { data: DoctorReportPayload; onBpSaved:
           <div><dt className="text-gray-600 uppercase tracking-wide">Height</dt><dd className="font-semibold">{patient.height_cm ? `${patient.height_cm} cm` : "—"}</dd></div>
         </dl>
       </header>
+
+      <AiNarrative text={data.ai_narrative} />
 
       {/* ── Blood pressure ─────────────────────────────────────────────── */}
       <section className="mb-6 print:break-inside-avoid">
@@ -1027,6 +1052,8 @@ function PreProcedureTab() {
         </dl>
       </header>
 
+      <AiNarrative text={data.ai_narrative} />
+
       {/* High-priority flag panel at the top */}
       {flagged.high_risk.length > 0 && (
         <section className="mb-6 print:break-inside-avoid">
@@ -1107,6 +1134,8 @@ function TrainingTab({ days }: { days: number }) {
           <div className="col-span-2 sm:col-span-1"><dt className="text-gray-600 uppercase tracking-wide">Goals</dt><dd className="font-semibold truncate">{patient.health_goals.join(", ") || "—"}</dd></div>
         </dl>
       </header>
+
+      <AiNarrative text={data.ai_narrative} />
 
       {/* Totals */}
       <section className="mb-6 print:break-inside-avoid">
@@ -1270,6 +1299,8 @@ function NutritionTab({ days }: { days: number }) {
           <div><dt className="text-gray-600 uppercase tracking-wide">Height</dt><dd className="font-semibold">{patient.height_cm ? `${patient.height_cm} cm` : "—"}</dd></div>
         </dl>
       </header>
+
+      <AiNarrative text={data.ai_narrative} />
 
       <section className="mb-6 print:break-inside-avoid">
         <h2 className="text-base font-semibold text-gray-900 mb-2">Daily Macro Averages</h2>
@@ -1478,6 +1509,8 @@ function GoalTab({ days }: { days: number }) {
           <div><dt className="text-gray-600 uppercase tracking-wide">Goal metric</dt><dd className="font-semibold">{g.metric}</dd></div>
         </dl>
       </header>
+
+      <AiNarrative text={data.ai_narrative} />
 
       {/* Goal header */}
       <section className="mb-6 print:break-inside-avoid">

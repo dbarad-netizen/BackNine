@@ -32,6 +32,7 @@ import pre_procedure_report as preproc_rep
 import training_recovery_report as train_rep
 import nutrition_body_comp_report as nutri_rep
 import goal_progress_report as goalprog_rep
+import report_narrative as narrate_mod
 import training as trn
 import labs as lbs
 import challenges as chl
@@ -1495,9 +1496,22 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
                 or _ah_sum.get("today", {}).get("vo2_max")
                 or oura_vo2_max)
 
+        # HRV / RHR walkback: when today's sleep hasn't been published by
+        # Oura yet (typical 4–8h lag after wake), `t_sm` contains SpO₂ but
+        # no hrv/rhr. Falling through to None would make the Longevity
+        # Score render "Connect Apple Health or Oura" hints for users who
+        # ARE connected — confusing. Walk back through cached nights to use
+        # the most recent value instead.
+        def _most_recent_smm(field: str):
+            for _d in sorted(smm, reverse=True):
+                _v = smm.get(_d, {}).get(field)
+                if _v is not None:
+                    return _v
+            return None
+
         _lon_metrics = {
-            "hrv":                 t_sm.get("hrv"),
-            "rhr":                 t_sm.get("rhr"),
+            "hrv":                 t_sm.get("hrv") if t_sm.get("hrv") is not None else _most_recent_smm("hrv"),
+            "rhr":                 t_sm.get("rhr") if t_sm.get("rhr") is not None else _most_recent_smm("rhr"),
             "vo2_max":             _vo2,
             "body_fat_percentage": _ah_body_fat,
             # True 7-day average of the most recent nights that have sleep data.
@@ -1913,7 +1927,9 @@ def get_doctor_report(request: Request, days: int = 30, end: str | None = None):
         days_int = max(1, min(int(days), 365))
     except Exception:
         days_int = 30
-    return dr.build_report(user_id, profile, days=days_int, end_iso=end)
+    payload = dr.build_report(user_id, profile, days=days_int, end_iso=end)
+    payload["ai_narrative"] = narrate_mod.narrate("sleep", payload, profile)
+    return payload
 
 
 @app.get("/api/cardiometabolic-report")
@@ -1927,7 +1943,9 @@ def get_cardiometabolic_report(request: Request, days: int = 30, end: str | None
         days_int = max(1, min(int(days), 365))
     except Exception:
         days_int = 30
-    return cardio_rep.build_report(user_id, profile, days=days_int, end_iso=end)
+    payload = cardio_rep.build_report(user_id, profile, days=days_int, end_iso=end)
+    payload["ai_narrative"] = narrate_mod.narrate("cardio", payload, profile)
+    return payload
 
 
 @app.get("/api/pre-procedure-report")
@@ -1938,7 +1956,9 @@ def get_pre_procedure_report(request: Request):
     session = _require_session(request)
     user_id = session["user_id"]
     profile = _get_profile(user_id) or {}
-    return preproc_rep.build_report(user_id, profile)
+    payload = preproc_rep.build_report(user_id, profile)
+    payload["ai_narrative"] = narrate_mod.narrate("preproc", payload, profile)
+    return payload
 
 
 @app.get("/api/training-recovery-report")
@@ -1951,7 +1971,9 @@ def get_training_recovery_report(request: Request, days: int = 30, end: str | No
         days_int = max(1, min(int(days), 365))
     except Exception:
         days_int = 30
-    return train_rep.build_report(user_id, profile, days=days_int, end_iso=end)
+    payload = train_rep.build_report(user_id, profile, days=days_int, end_iso=end)
+    payload["ai_narrative"] = narrate_mod.narrate("training", payload, profile)
+    return payload
 
 
 @app.get("/api/nutrition-body-comp-report")
@@ -1964,7 +1986,9 @@ def get_nutrition_body_comp_report(request: Request, days: int = 30, end: str | 
         days_int = max(1, min(int(days), 365))
     except Exception:
         days_int = 30
-    return nutri_rep.build_report(user_id, profile, days=days_int, end_iso=end)
+    payload = nutri_rep.build_report(user_id, profile, days=days_int, end_iso=end)
+    payload["ai_narrative"] = narrate_mod.narrate("nutrition", payload, profile)
+    return payload
 
 
 @app.get("/api/goal-progress-report")
@@ -1978,7 +2002,9 @@ def get_goal_progress_report(request: Request, days: int = 30, end: str | None =
         days_int = max(1, min(int(days), 365))
     except Exception:
         days_int = 30
-    return goalprog_rep.build_report(user_id, profile, days=days_int, end_iso=end)
+    payload = goalprog_rep.build_report(user_id, profile, days=days_int, end_iso=end)
+    payload["ai_narrative"] = narrate_mod.narrate("goal", payload, profile)
+    return payload
 
 
 @app.post("/api/nutrition/weight")

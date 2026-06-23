@@ -428,6 +428,7 @@ export interface BPSummary {
 
 // ── Cardiometabolic Report (cardiology / primary care handoff) ────────────
 export interface CardiometabolicReportPayload {
+  ai_narrative?: string | null;
   generated_at: string;
   range:        { start: string; end: string; days: number };
   patient: {
@@ -466,6 +467,7 @@ export interface PreProcedureItem {
 }
 
 export interface PreProcedureReportPayload {
+  ai_narrative?: string | null;
   generated_at: string;
   patient: {
     name:           string | null;
@@ -494,6 +496,7 @@ export interface PreProcedureReportPayload {
 
 // ── Training & Recovery Report (trainer / PT / coach handoff) ─────────────
 export interface TrainingRecoveryReportPayload {
+  ai_narrative?: string | null;
   generated_at: string;
   range:        { start: string; end: string; days: number };
   patient: {
@@ -537,6 +540,7 @@ export interface TrainingRecoveryReportPayload {
 
 // ── Nutrition & Body Composition Report (dietitian / RDN handoff) ─────────
 export interface NutritionBodyCompReportPayload {
+  ai_narrative?: string | null;
   generated_at: string;
   range:        { start: string; end: string; days: number };
   patient: {
@@ -598,6 +602,7 @@ export interface GoalProgressSupportingTile {
 
 export interface GoalProgressReportPayload {
   active:       boolean;
+  ai_narrative?: string | null;
   generated_at: string;
   range:        { start: string; end: string; days: number };
   patient: {
@@ -640,6 +645,7 @@ export interface DoctorReportSeries {
 }
 
 export interface DoctorReportPayload {
+  ai_narrative?: string | null;
   generated_at: string;          // ISO timestamp
   range:        { start: string; end: string; days: number };
   patient: {
