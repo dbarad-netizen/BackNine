@@ -29,6 +29,7 @@ import bp
 import oura_cache as oc
 import nutrition as nut
 import apple_health as ah
+import labs as lbs  # canonical labs source — same data the Metrics tab manages
 
 
 def _safe_int_avg(vals: list[int]) -> Optional[int]:
@@ -192,28 +193,71 @@ def _cardio_fitness(user_id: str, profile: dict) -> dict:
     }
 
 
-def _labs_section(profile: dict) -> list[dict]:
-    """Sanitized labs from the profile, sorted newest-first."""
-    raw = profile.get("labs") or []
-    if not isinstance(raw, list):
+def _labs_section(user_id: str) -> list[dict]:
+    """Pivot the latest panel entry from `labs` into the per-name shape the
+    Annual Physical UI renders. Each row becomes one lab line (name, value,
+    unit, reference range, date) so a PCP scans them like a lab report.
+
+    Reads from labs_db.get_entries() — the SAME source the user manages in
+    the Metrics tab. No duplicate data entry surface."""
+    try:
+        entries = lbs.get_entries(user_id) or []
+    except Exception:
         return []
-    cleaned: list[dict] = []
-    for it in raw:
-        if not isinstance(it, dict):
-            continue
-        name = (it.get("name") or "").strip()
-        if not name:
-            continue
-        cleaned.append({
-            "name":            name,
-            "value":           it.get("value"),
-            "unit":            it.get("unit"),
-            "date":            it.get("date"),
-            "reference_range": it.get("reference_range"),
-            "notes":           it.get("notes"),
+    if not entries:
+        return []
+
+    # Newest-first; the most recent panel is what the PCP wants to see.
+    entries_sorted = sorted(entries, key=lambda e: e.get("date") or "", reverse=True)
+    latest = entries_sorted[0]
+
+    # Build a flat list of {name, value, unit, reference_range, date} using
+    # the reference-range metadata baked into labs.py.
+    out: list[dict] = []
+    ref_ranges = getattr(lbs, "REFERENCE_RANGES", {}) or {}
+    lab_groups = getattr(lbs, "LAB_GROUPS",       {}) or {}
+
+    # Walk LAB_GROUPS in their canonical order so the rendered table reads
+    # logically (Metabolic, Lipids, Thyroid, …) rather than alphabetical.
+    def _emit(key: str):
+        v = latest.get(key)
+        if v is None:
+            return
+        meta = ref_ranges.get(key) or {}
+        unit = meta.get("unit") or ""
+        lo   = meta.get("low")
+        hi   = meta.get("high")
+        ref  = f"{lo}–{hi}" if lo is not None and hi is not None else None
+        out.append({
+            "name":            (meta.get("label") or key.replace("_", " ").title()),
+            "value":           v,
+            "unit":            unit or None,
+            "date":            latest.get("date"),
+            "reference_range": ref,
+            "notes":           None,
         })
-    cleaned.sort(key=lambda l: (l.get("date") or "0000-00-00", l.get("name") or ""), reverse=True)
-    return cleaned
+
+    if isinstance(lab_groups, dict) and lab_groups:
+        # LAB_GROUPS is { group_name: [key, key, ...] } OR similar shape.
+        for _group, keys in lab_groups.items():
+            if isinstance(keys, list):
+                for k in keys:
+                    _emit(k)
+    # Fallback: any keys in the entry that aren't metadata-known still appear,
+    # in case the user has fields outside the curated groups.
+    seen = {o["name"] for o in out}
+    for k, v in latest.items():
+        if k in {"id", "date", "logged_at", "user_id", "notes", "scored"}:
+            continue
+        if v is None:
+            continue
+        meta_label = (ref_ranges.get(k) or {}).get("label")
+        nm = meta_label or k.replace("_", " ").title()
+        if nm in seen:
+            continue
+        out.append({"name": nm, "value": v, "unit": None, "date": latest.get("date"), "reference_range": None, "notes": None})
+
+    return out
 
 
 def _stack(profile: dict) -> dict:
@@ -255,6 +299,6 @@ def build_report(user_id: str, profile: dict) -> dict:
         "activity":     _activity(user_id),
         "sleep":        _sleep_snapshot(user_id),
         "cardio_fit":   _cardio_fitness(user_id, profile),
-        "labs":         _labs_section(profile),
+        "labs":         _labs_section(user_id),
         "stack":        _stack(profile),
     }

@@ -85,6 +85,76 @@ const numOrDash = (v: number | null | undefined, digits = 0): string => {
   return digits ? v.toFixed(digits) : String(v);
 };
 
+// ── ShareReportButton ──────────────────────────────────────────────────
+// Generates a tokenized share URL the user can text/email to a doctor.
+// Doctor opens the URL in any browser and sees the report rendered — no
+// account needed. Default expiry is 30 days; revocable from Profile (later).
+function ShareReportButton({ reportType, days }: { reportType: TabId; days: number }) {
+  const [busy, setBusy]   = useState(false);
+  const [url,  setUrl]    = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const handleShare = async () => {
+    setBusy(true);
+    setError(null);
+    setCopied(false);
+    try {
+      const res = await api.createReportShare(reportType, { days });
+      setUrl(res.url);
+      // Best-effort: copy to clipboard immediately so the user can paste
+      // into their doctor's email / SMS without an extra step.
+      try {
+        await navigator.clipboard.writeText(res.url);
+        setCopied(true);
+      } catch { /* silent — they can still see + copy manually */ }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't create share link");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (url) {
+    return (
+      <div className="flex items-center gap-1.5 text-xs">
+        <input
+          readOnly
+          value={url}
+          onClick={(e) => (e.target as HTMLInputElement).select()}
+          className="font-mono text-[11px] px-2 py-1 border border-gray-300 rounded bg-white w-56 truncate"
+        />
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(url).then(() => setCopied(true)).catch(() => {});
+          }}
+          className="text-[11px] font-semibold px-2 py-1 rounded bg-emerald-100 text-emerald-800 border border-emerald-200"
+        >
+          {copied ? "✓ Copied" : "Copy"}
+        </button>
+        <button
+          onClick={() => { setUrl(null); setCopied(false); }}
+          className="text-gray-600 hover:text-gray-900 text-base leading-none px-1"
+          aria-label="Done"
+          title="Done"
+        >×</button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={handleShare}
+      disabled={busy}
+      className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-white border border-[#1B3829]/30 text-[#1B3829] hover:bg-[#1B3829]/5 transition-colors disabled:opacity-40"
+      title="Generate a link you can share with your doctor"
+    >
+      {busy ? "Creating…" : error ? "Try again" : "🔗 Share with doctor"}
+    </button>
+  );
+}
+
+
 // ── AI narrative block ──────────────────────────────────────────────────
 // Claude-generated 2-4 sentence intro that surfaces what stands out in the
 // report. Rendered immediately after the patient header on each tab.
@@ -203,6 +273,7 @@ export default function DoctorReportModal({ open, onClose }: Props) {
             )}
           </div>
           <div className="flex items-center gap-2">
+            <ShareReportButton reportType={activeTab} days={days} />
             <button
               onClick={() => window.print()}
               className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#1B3829] hover:bg-[#2D6A4F] text-white transition-colors disabled:opacity-40"

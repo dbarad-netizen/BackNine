@@ -1121,6 +1121,38 @@ export const api = {
   annualPhysicalReport(): Promise<AnnualPhysicalReportPayload> {
     return request(`/api/annual-physical-report`);
   },
+
+  // ── Longevity Score per-metric history (slot pop-outs) ───────────────
+  // ── Referral status ────────────────────────────────────────────────
+  referralStatus(): Promise<{
+    total_referrals: number;
+    months_earned:   number;
+    pending_months:  number;
+    applied_months:  number;
+    recent:          string[];
+  }> {
+    return request(`/api/referral/status`);
+  },
+
+  // ── Report sharing (tokenized links for doctor handoff) ─────────────
+  createReportShare(report_type: string, params?: Record<string, unknown>, ttl_days = 30):
+    Promise<{ url: string; token: string; expires_at: string }> {
+    return request(`/api/reports/share`, {
+      method: "POST",
+      body: JSON.stringify({ report_type, params: params ?? {}, ttl_days }),
+    });
+  },
+  // Note: the doctor-side view goes through /share/{token} on the frontend,
+  // which fetches /api/share/{token} server-side without auth.
+
+  longevityMetricHistory(metric: string, days = 90): Promise<{
+    metric:    string;
+    unit:      string;
+    threshold: number | null;
+    trend:     Array<{ date: string; value: number }>;
+  }> {
+    return request(`/api/longevity/metric-history?metric=${encodeURIComponent(metric)}&days=${days}`);
+  },
   logWeight(entry: Partial<WeightEntry> & { weight_lbs: number }): Promise<WeightEntry> {
     return request("/api/nutrition/weight", {
       method: "POST",

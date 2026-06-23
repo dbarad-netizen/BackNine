@@ -2008,6 +2008,312 @@ def get_goal_progress_report(request: Request, days: int = 30, end: str | None =
     return payload
 
 
+# ── Tokenized report share-links ─────────────────────────────────────────
+# The user generates a link from any Health Report modal; the link is
+# given to their doctor and renders the report in-browser without auth.
+# Tokens are 32-char random base64 URLs, default 30-day expiry.
+
+import secrets as _secrets
+
+
+def _report_share_url(token: str) -> str:
+    base = os.getenv("APP_BASE_URL", "https://back-nine-d28t.vercel.app")
+    return f"{base.rstrip('/')}/share/{token}"
+
+
+def _build_report_for_share(user_id: str, report_type: str, params: dict) -> dict:
+    """Build the payload for a shared report, given its type + params."""
+    profile = _get_profile(user_id) or {}
+    days = int(params.get("days") or 30) if params else 30
+    end  = params.get("end") if params else None
+    if report_type == "sleep":
+        return dr.build_report(user_id, profile, days=days, end_iso=end)
+    if report_type == "cardio":
+        return cardio_rep.build_report(user_id, profile, days=days, end_iso=end)
+    if report_type == "preproc":
+        return preproc_rep.build_report(user_id, profile)
+    if report_type == "training":
+        return train_rep.build_report(user_id, profile, days=days, end_iso=end)
+    if report_type == "nutrition":
+        return nutri_rep.build_report(user_id, profile, days=days, end_iso=end)
+    if report_type == "goal":
+        return goalprog_rep.build_report(user_id, profile, days=days, end_iso=end)
+    if report_type == "annual":
+        return annual_rep.build_report(user_id, profile)
+    raise HTTPException(status_code=400, detail=f"Unknown report_type: {report_type}")
+
+
+@app.post("/api/reports/share")
+async def create_report_share(request: Request):
+    """Generate a tokenized share link for one of the user's reports.
+
+    Body: { report_type, params?, ttl_days? }
+    Returns: { url, token, expires_at }
+    """
+    session = _require_session(request)
+    user_id = session["user_id"]
+    body = await request.json()
+    report_type = (body.get("report_type") or "").strip().lower()
+    valid_types = {"sleep", "cardio", "preproc", "training", "nutrition", "goal", "annual"}
+    if report_type not in valid_types:
+        raise HTTPException(status_code=400, detail=f"report_type must be one of {sorted(valid_types)}")
+    params = body.get("params") if isinstance(body.get("params"), dict) else {}
+    try:
+        ttl_days = max(1, min(int(body.get("ttl_days") or 30), 90))
+    except Exception:
+        ttl_days = 30
+
+    token = _secrets.token_urlsafe(24)
+    expires_at = (datetime.utcnow() + timedelta(days=ttl_days)).isoformat() + "Z"
+
+    sb = get_supabase()
+    try:
+        sb.table("report_shares").insert({
+            "user_id":     user_id,
+            "report_type": report_type,
+            "params_json": params,
+            "token":       token,
+            "expires_at":  expires_at,
+        }).execute()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Couldn't create share: {exc}")
+
+    return {
+        "url":        _report_share_url(token),
+        "token":      token,
+        "expires_at": expires_at,
+    }
+
+
+@app.get("/api/share/{token}")
+def view_report_share(token: str):
+    """Public endpoint — return the rendered report payload for a valid
+    share token. No auth (the token IS the auth). Records the view."""
+    sb = get_supabase()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+    try:
+        res = (sb.table("report_shares")
+                 .select("*")
+                 .eq("token", token)
+                 .is_("revoked_at", "null")
+                 .limit(1)
+                 .execute())
+        rows = res.data or []
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Share lookup failed: {exc}")
+    if not rows:
+        raise HTTPException(status_code=404, detail="Share link not found or revoked")
+    share = rows[0]
+
+    # Expiry check
+    expires_at_raw = (share.get("expires_at") or "").replace("Z", "+00:00")
+    try:
+        expires_at = datetime.fromisoformat(expires_at_raw)
+        if expires_at < datetime.now(expires_at.tzinfo):
+            raise HTTPException(status_code=410, detail="Share link expired")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+
+    user_id     = share["user_id"]
+    report_type = share["report_type"]
+    params      = share.get("params_json") or {}
+
+    payload = _build_report_for_share(user_id, report_type, params)
+    payload["ai_narrative"] = narrate_mod.narrate(report_type, payload, _get_profile(user_id))
+
+    # Record the view (best-effort).
+    try:
+        sb.table("report_shares").update({
+            "last_viewed_at": datetime.utcnow().isoformat() + "Z",
+            "view_count":     int(share.get("view_count") or 0) + 1,
+        }).eq("token", token).execute()
+    except Exception:
+        pass
+
+    return {
+        "report_type": report_type,
+        "shared_by":   _display_name_for(user_id),
+        "payload":     payload,
+    }
+
+
+@app.post("/api/reports/share/{token}/revoke")
+def revoke_report_share(token: str, request: Request):
+    """Revoke a share link the user previously created. Only the owner
+    of the share can revoke."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    sb = get_supabase()
+    try:
+        sb.table("report_shares").update({
+            "revoked_at": datetime.utcnow().isoformat() + "Z",
+        }).eq("token", token).eq("user_id", user_id).execute()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    return {"ok": True}
+
+
+# ── Referral credits ──────────────────────────────────────────────────
+# Reward mechanic: 1 free month per referred user who upgrades to paid.
+# Today the Stripe layer isn't built, so credits stay pending and the
+# Profile surfaces them as "you've referred N people · X free months
+# pending" — both as motivation AND as a "we'll credit you when paid
+# launches" commitment.
+
+def _credit_referral(referrer_id: str, referee_id: str, months: int = 1) -> None:
+    """Best-effort: write a pending referral credit. Called from the
+    referral-acceptance flow (now) and the Stripe webhook (later)."""
+    if not referrer_id or not referee_id or referrer_id == referee_id:
+        return
+    sb = get_supabase()
+    if not sb:
+        return
+    try:
+        sb.table("referral_credits").upsert({
+            "referrer_id":   referrer_id,
+            "referee_id":    referee_id,
+            "month_credits": int(months),
+            "status":        "pending",
+        }, on_conflict="referrer_id,referee_id").execute()
+    except Exception:
+        pass
+
+
+@app.get("/api/referral/status")
+def referral_status(request: Request):
+    """Profile-facing summary of the user's referral activity:
+    - total people referred (rows in referral_credits where referrer_id = me)
+    - total free months earned (sum of month_credits)
+    - status breakdown (pending / applied / expired)
+    Plus recent referee names for "you've helped X, Y, Z" copy."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    sb = get_supabase()
+    if not sb:
+        return {"total_referrals": 0, "months_earned": 0, "pending_months": 0, "applied_months": 0, "recent": []}
+
+    try:
+        res = (sb.table("referral_credits")
+                 .select("*")
+                 .eq("referrer_id", user_id)
+                 .order("created_at", desc=True)
+                 .execute())
+        rows = res.data or []
+    except Exception:
+        rows = []
+
+    total          = len(rows)
+    months_earned  = sum(int(r.get("month_credits") or 0) for r in rows)
+    pending_months = sum(int(r.get("month_credits") or 0) for r in rows if r.get("status") == "pending")
+    applied_months = sum(int(r.get("month_credits") or 0) for r in rows if r.get("status") == "applied")
+
+    recent_names = []
+    for r in rows[:5]:
+        nm = _display_name_for(r.get("referee_id") or "")
+        if nm:
+            recent_names.append(nm)
+
+    return {
+        "total_referrals":  total,
+        "months_earned":    months_earned,
+        "pending_months":   pending_months,
+        "applied_months":   applied_months,
+        "recent":           recent_names,
+    }
+
+
+@app.get("/api/longevity/metric-history")
+def get_longevity_metric_history(request: Request, metric: str, days: int = 90):
+    """Per-metric history for the Longevity Score slot pop-outs.
+
+    metric ∈ {hrv, rhr, sleep, steps, body_fat, vo2_max}.
+    Returns: { metric, unit, threshold, trend: [{date, value}] }
+    where `threshold` is a clinically relevant reference (e.g. 30ms HRV
+    for "low-normal") that the chart renders as a dashed reference line.
+    """
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        days_int = max(7, min(int(days), 365))
+    except Exception:
+        days_int = 90
+
+    metric = (metric or "").strip().lower()
+
+    try:
+        _, slm, am, smm = oc.get_days(user_id, days=days_int)
+    except Exception:
+        slm, am, smm = {}, {}, {}
+
+    def _series_from_smm(field: str) -> list[dict]:
+        out = []
+        for d in sorted(smm.keys()):
+            v = smm[d].get(field)
+            if v is not None:
+                out.append({"date": d, "value": v})
+        return out
+
+    if metric == "hrv":
+        return {"metric": "hrv", "unit": "ms", "threshold": 30, "trend": _series_from_smm("hrv")}
+    if metric == "rhr":
+        return {"metric": "rhr", "unit": "bpm", "threshold": 60, "trend": _series_from_smm("rhr")}
+    if metric == "sleep":
+        out = []
+        for d in sorted(smm.keys()):
+            total = smm[d].get("total")
+            if total:
+                out.append({"date": d, "value": round(total / 3600, 2)})
+        return {"metric": "sleep", "unit": "hrs", "threshold": 7, "trend": out}
+    if metric == "steps":
+        # Apple Health first (live), then Oura
+        from datetime import date as _d, timedelta as _td
+        out = []
+        cursor = _d.today() - _td(days=days_int - 1)
+        for i in range(days_int):
+            day = (cursor + _td(days=i)).isoformat()
+            v = None
+            try:
+                ah_day = ah.get_day(user_id, day)
+                if ah_day and ah_day.get("steps") is not None:
+                    v = ah_day["steps"]
+            except Exception:
+                pass
+            if v is None:
+                v = (am.get(day) or {}).get("steps")
+            if v is not None:
+                out.append({"date": day, "value": int(v)})
+        return {"metric": "steps", "unit": "steps/day", "threshold": 8000, "trend": out}
+    if metric == "body_fat":
+        out = []
+        try:
+            entries = nutr.get_weight_entries(user_id) or []
+        except Exception:
+            entries = []
+        from datetime import date as _d, timedelta as _td
+        cutoff = (_d.today() - _td(days=days_int - 1)).isoformat()
+        for e in sorted(entries, key=lambda r: r.get("date") or ""):
+            d = e.get("date")
+            bf = e.get("body_fat_pct")
+            if d and bf is not None and d >= cutoff:
+                out.append({"date": d, "value": bf})
+        # Threshold: 15% is the men's "excellent" cutoff in our Longevity model
+        return {"metric": "body_fat", "unit": "%", "threshold": 15, "trend": out}
+    if metric == "vo2_max":
+        prof = _get_profile(user_id) or {}
+        cur = prof.get("vo2_max")
+        # We don't keep per-day VO2 history yet; surface current value as a
+        # single point. Reference threshold matches the Longevity model.
+        from datetime import date as _d
+        trend = [{"date": _d.today().isoformat(), "value": cur}] if cur is not None else []
+        return {"metric": "vo2_max", "unit": "ml/kg/min", "threshold": 50, "trend": trend}
+
+    raise HTTPException(status_code=400, detail=f"Unknown metric: {metric}")
+
+
 @app.get("/api/annual-physical-report")
 def get_annual_physical_report(request: Request):
     """One-page dense snapshot for the annual PCP visit. Vitals, body comp,
@@ -2952,7 +3258,7 @@ async def save_profile(request: Request):
     session = _require_session(request)
     user_id = session["user_id"]
     body = await request.json()
-    allowed = {"name", "age", "biological_sex", "height_cm", "health_goals", "vo2_max", "birthdate", "supplements", "peptides", "medications", "labs"}
+    allowed = {"name", "age", "biological_sex", "height_cm", "health_goals", "vo2_max", "birthdate", "supplements", "peptides", "medications"}
     data = {k: v for k, v in body.items() if k in allowed}
     # Empty birthdate string clears it (Postgres date column rejects "").
     if "birthdate" in data and not data["birthdate"]:
@@ -2964,8 +3270,10 @@ async def save_profile(request: Request):
         data["peptides"] = _sanitize_peptides(data["peptides"])
     if "medications" in data:
         data["medications"] = _sanitize_medications(data["medications"])
-    if "labs" in data:
-        data["labs"] = _sanitize_labs(data["labs"])
+    # Note: labs are not on the profile anymore — they're managed via the
+    # /api/labs endpoints (Metrics tab) which write to a dedicated panel
+    # table. The user_profiles.labs jsonb column is left in place as a
+    # no-op for backwards compatibility.
     data["user_id"] = user_id
     try:
         db = get_supabase()
@@ -3713,7 +4021,14 @@ async def accept_friend_invite(request: Request):
     if not code:
         raise HTTPException(status_code=400, detail="code is required")
     try:
-        return frd.accept_any_code(code, user_id, _display_name_for(user_id))
+        result = frd.accept_any_code(code, user_id, _display_name_for(user_id))
+        # If the helper surfaced a referrer (the inviter who owns the code),
+        # credit them with a free month. Today the credit stays pending
+        # until Stripe lands and we apply discounts at billing time.
+        referrer_id = (result or {}).get("referrer_id") if isinstance(result, dict) else None
+        if referrer_id:
+            _credit_referral(referrer_id, user_id, months=1)
+        return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

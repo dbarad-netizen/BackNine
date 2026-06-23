@@ -22,7 +22,9 @@ import ScoreRing from "@/components/ScoreRing";
 import SupplementsCard from "@/components/SupplementsCard";
 import PeptidesCard from "@/components/PeptidesCard";
 import MedicationsCard from "@/components/MedicationsCard";
-import LabsCard from "@/components/LabsCard";
+// LabsCard removed — labs are managed in the Metrics tab (LabsTab) instead.
+// The Annual Physical report reads from that canonical source.
+import LongevityMetricModal from "@/components/LongevityMetricModal";
 import AppleHealthCard from "@/components/AppleHealthCard";
 import BloodPressureCard from "@/components/BloodPressureCard";
 import DoctorReportModal from "@/components/DoctorReportModal";
@@ -853,6 +855,9 @@ export default function DashboardPage() {
   const [showBodyWeight, setShowBodyWeight] = useState(false);
   const [showBP, setShowBP] = useState(false);
   const [showDoctorReport, setShowDoctorReport] = useState(false);
+  // Longevity Score slot pop-out — which metric is selected for the
+  // 90-day per-metric history modal.
+  const [lonMetricOpen, setLonMetricOpen] = useState<{ key: string; label: string } | null>(null);
   const [navOpen, setNavOpen] = useState(false);
   // When the user has an active goal, hoist the Goal card above Weekly Insight.
   // Seed from localStorage so returning users get the right order on first paint
@@ -1953,15 +1958,28 @@ export default function DashboardPage() {
                         const pct = Math.round((comp.points / comp.max) * 100);
                         const barColor = pct >= 80 ? "#22c55e" : pct >= 60 ? "#84cc16" : pct >= 40 ? "#f59e0b" : "#ef4444";
                         const isVo2 = comp.label === "VO2 Max";
+                        // Wire each slot to open the 90-day per-metric history
+                        // pop-out. The slot key matches the backend metric-history
+                        // endpoint (hrv, rhr, sleep, steps, body_fat, vo2_max).
+                        const slotKey = slot.key;
                         return (
-                          <div key={comp.label} className="space-y-1">
+                          <div
+                            key={comp.label}
+                            className="space-y-1 cursor-pointer hover:bg-gray-50 rounded p-1 -m-1 transition-colors"
+                            onClick={(e) => {
+                              // Don't open if user clicked the inline VO2 edit affordance
+                              if ((e.target as HTMLElement).tagName === "BUTTON") return;
+                              setLonMetricOpen({ key: slotKey, label: comp.label });
+                            }}
+                            title={`Tap for 90-day ${comp.label} history`}
+                          >
                             <div className="flex justify-between text-[10px]">
                               <span className="text-gray-600 truncate pr-1">{comp.label}</span>
                               <div className="flex items-center gap-1 shrink-0">
                                 <span className="text-gray-700 font-medium">{comp.points}/{comp.max}</span>
                                 {isVo2 && !vo2Editing && (
                                   <button
-                                    onClick={() => { setVo2Editing(true); setVo2Input(""); setVo2Saved(false); }}
+                                    onClick={(e) => { e.stopPropagation(); setVo2Editing(true); setVo2Input(""); setVo2Saved(false); }}
                                     className="text-[9px] text-blue-400 hover:text-blue-600 underline leading-none"
                                     title="Update VO2 Max"
                                   >edit</button>
@@ -2257,6 +2275,12 @@ export default function DashboardPage() {
               Health Reports
             </button>
             <DoctorReportModal open={showDoctorReport} onClose={() => setShowDoctorReport(false)} />
+            <LongevityMetricModal
+              open={lonMetricOpen !== null}
+              metricKey={lonMetricOpen?.key ?? ""}
+              metricLabel={lonMetricOpen?.label ?? ""}
+              onClose={() => setLonMetricOpen(null)}
+            />
 
             {/* ── Coach Al Goal & Weekly Insight ──
                 Stays ABOVE the explore fold because these are daily-relevant.
@@ -2499,14 +2523,9 @@ export default function DashboardPage() {
                   }}
                 />
 
-                {/* ─ Labs (recent blood work / panel values for the Annual Physical) ─ */}
-                <LabsCard
-                  labs={profile?.labs ?? []}
-                  onSave={async (next) => {
-                    const updated = await api.saveProfile({ ...(profile ?? {}), labs: next });
-                    setProfile(prev => ({ ...(prev ?? {}), ...updated, labs: next }));
-                  }}
-                />
+                {/* Labs live in the Metrics tab (Scorecard → 📊 Metrics → Labs)
+                    not here. The Annual Physical Snapshot reads from that
+                    canonical source. */}
 
                 {/* ─ Settings ─ */}
                 <div>
