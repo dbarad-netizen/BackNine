@@ -22,6 +22,7 @@ import ScoreRing from "@/components/ScoreRing";
 import SupplementsCard from "@/components/SupplementsCard";
 import PeptidesCard from "@/components/PeptidesCard";
 import MedicationsCard from "@/components/MedicationsCard";
+import LabsCard from "@/components/LabsCard";
 import AppleHealthCard from "@/components/AppleHealthCard";
 import BloodPressureCard from "@/components/BloodPressureCard";
 import DoctorReportModal from "@/components/DoctorReportModal";
@@ -2495,6 +2496,15 @@ export default function DashboardPage() {
                   onSave={async (next) => {
                     const updated = await api.saveProfile({ ...(profile ?? {}), medications: next });
                     setProfile(prev => ({ ...(prev ?? {}), ...updated, medications: next }));
+                  }}
+                />
+
+                {/* ─ Labs (recent blood work / panel values for the Annual Physical) ─ */}
+                <LabsCard
+                  labs={profile?.labs ?? []}
+                  onSave={async (next) => {
+                    const updated = await api.saveProfile({ ...(profile ?? {}), labs: next });
+                    setProfile(prev => ({ ...(prev ?? {}), ...updated, labs: next }));
                   }}
                 />
 

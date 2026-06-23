@@ -32,6 +32,7 @@ import pre_procedure_report as preproc_rep
 import training_recovery_report as train_rep
 import nutrition_body_comp_report as nutri_rep
 import goal_progress_report as goalprog_rep
+import annual_physical_report as annual_rep
 import report_narrative as narrate_mod
 import training as trn
 import labs as lbs
@@ -2007,6 +2008,19 @@ def get_goal_progress_report(request: Request, days: int = 30, end: str | None =
     return payload
 
 
+@app.get("/api/annual-physical-report")
+def get_annual_physical_report(request: Request):
+    """One-page dense snapshot for the annual PCP visit. Vitals, body comp,
+    activity, sleep, cardio fitness, labs, and the complete medication +
+    supplement + peptide stack — all in one printable view."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    profile = _get_profile(user_id) or {}
+    payload = annual_rep.build_report(user_id, profile)
+    payload["ai_narrative"] = narrate_mod.narrate("annual", payload, profile)
+    return payload
+
+
 @app.post("/api/nutrition/weight")
 async def log_weight(request: Request):
     session = _require_session(request)
@@ -2906,12 +2920,39 @@ _sanitize_peptides = _sanitize_supplements
 _sanitize_medications = _sanitize_supplements
 
 
+def _sanitize_labs(raw) -> list[dict]:
+    """Normalize the labs payload into a clean list of lab result entries.
+
+    Shape: {name, value, unit, date (YYYY-MM-DD), reference_range, notes}.
+    Stored as jsonb on user_profiles.labs. Value is kept as a string so we
+    can preserve "<0.1" style values from lab reports without coercion.
+    Drops items missing a name. Caps each field length defensively."""
+    if not isinstance(raw, list):
+        return []
+    out = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        name = (item.get("name") or "").strip()
+        if not name:
+            continue
+        out.append({
+            "name":            name[:80],
+            "value":           (str(item.get("value")) if item.get("value") not in (None, "") else "").strip()[:40] or None,
+            "unit":            (item.get("unit")            or "").strip()[:20] or None,
+            "date":            (item.get("date")            or "").strip()[:10] or None,
+            "reference_range": (item.get("reference_range") or "").strip()[:40] or None,
+            "notes":           (item.get("notes")           or "").strip()[:200] or None,
+        })
+    return out
+
+
 @app.post("/api/profile")
 async def save_profile(request: Request):
     session = _require_session(request)
     user_id = session["user_id"]
     body = await request.json()
-    allowed = {"name", "age", "biological_sex", "height_cm", "health_goals", "vo2_max", "birthdate", "supplements", "peptides", "medications"}
+    allowed = {"name", "age", "biological_sex", "height_cm", "health_goals", "vo2_max", "birthdate", "supplements", "peptides", "medications", "labs"}
     data = {k: v for k, v in body.items() if k in allowed}
     # Empty birthdate string clears it (Postgres date column rejects "").
     if "birthdate" in data and not data["birthdate"]:
@@ -2923,6 +2964,8 @@ async def save_profile(request: Request):
         data["peptides"] = _sanitize_peptides(data["peptides"])
     if "medications" in data:
         data["medications"] = _sanitize_medications(data["medications"])
+    if "labs" in data:
+        data["labs"] = _sanitize_labs(data["labs"])
     data["user_id"] = user_id
     try:
         db = get_supabase()

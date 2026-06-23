@@ -267,6 +267,18 @@ export type Peptide = Supplement;
  *  physician is scanning. */
 export type Medication = Supplement;
 
+/** Lab values — clinical lab panel results (PSA, lipid panel, A1c,
+ *  testosterone, TSH, etc.). Each entry preserves the original report
+ *  value as a string so "<0.1" style results don't lose precision. */
+export interface LabResult {
+  name:             string;     // e.g. "PSA", "LDL", "HbA1c", "Testosterone"
+  value?:           string;     // string-preserved value (e.g. "3.2", "<0.1")
+  unit?:            string;     // e.g. "ng/mL", "mg/dL", "%", "ng/dL"
+  date?:            string;     // ISO YYYY-MM-DD when drawn
+  reference_range?: string;     // e.g. "<4.0", "70-100", "Normal"
+  notes?:           string;
+}
+
 export interface UserProfile {
   name?:           string | null;
   age?:            number | null;     // derived from birthdate when set
@@ -277,6 +289,7 @@ export interface UserProfile {
   supplements?:    Supplement[];
   peptides?:       Peptide[];
   medications?:    Medication[];
+  labs?:           LabResult[];
 }
 
 export interface ChatMessage {
@@ -585,6 +598,54 @@ export interface NutritionBodyCompReportPayload {
     fat:    { trunk: number | null; right_arm: number | null; left_arm: number | null; right_leg: number | null; left_leg: number | null };
     water:  { total: number | null; intracellular: number | null; extracellular: number | null };
   } | null;
+  stack: {
+    medications: Medication[];
+    supplements: Supplement[];
+    peptides:    Peptide[];
+  };
+}
+
+// ── Annual Physical Snapshot ──────────────────────────────────────────────
+export interface AnnualPhysicalReportPayload {
+  ai_narrative?: string | null;
+  generated_at:  string;
+  patient: {
+    name:           string | null;
+    birthdate:      string | null;
+    age:            number | null;
+    biological_sex: "male" | "female" | null;
+    height_cm:      number | null;
+  };
+  vitals: {
+    bp:     BPSummary;
+    rhr:    { avg: number | null; n: number; unit: string };
+    hrv:    { avg: number | null; n: number; unit: string };
+    breath: { avg: number | null; n: number; unit: string };
+    spo2:   { avg: number | null; n: number; unit: string };
+  };
+  body_comp: {
+    latest_weight_lbs:   number | null;
+    latest_body_fat_pct: number | null;
+    latest_lean_mass:    number | null;
+    latest_date:         string | null;
+    delta_lbs_90d:       number | null;
+    delta_bf_pct_90d:    number | null;
+    bmi:                 number | null;
+  };
+  activity: {
+    avg_steps_30d: number | null;
+    source:        string;
+  };
+  sleep: {
+    avg_hours_30d:       number | null;
+    avg_efficiency_30d:  number | null;
+    avg_waso_min_30d:    number | null;
+    nights:              number;
+  };
+  cardio_fit: {
+    vo2_max: number | null;
+  };
+  labs: LabResult[];
   stack: {
     medications: Medication[];
     supplements: Supplement[];
@@ -1055,6 +1116,9 @@ export const api = {
     const qs = new URLSearchParams({ days: String(days) });
     if (opts.end) qs.set("end", opts.end);
     return request(`/api/goal-progress-report?${qs.toString()}`);
+  },
+  annualPhysicalReport(): Promise<AnnualPhysicalReportPayload> {
+    return request(`/api/annual-physical-report`);
   },
   logWeight(entry: Partial<WeightEntry> & { weight_lbs: number }): Promise<WeightEntry> {
     return request("/api/nutrition/weight", {

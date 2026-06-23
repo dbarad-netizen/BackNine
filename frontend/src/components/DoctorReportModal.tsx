@@ -30,14 +30,17 @@ import {
   type TrainingRecoveryReportPayload,
   type NutritionBodyCompReportPayload,
   type GoalProgressReportPayload,
+  type AnnualPhysicalReportPayload,
 } from "@/lib/api";
 
 // ── Tab definitions ──────────────────────────────────────────────────────
 // "Sleep" tab is the comprehensive Personal Health Report (renamed from
 // "Overview" — David's most-used view is the sleep section so the label
-// reflects that).
-type TabId = "overview" | "cardio" | "preproc" | "training" | "nutrition" | "goal";
+// reflects that). Annual Physical is the one-page summary for the PCP
+// visit and is the lightest report — sits early in the tab order.
+type TabId = "annual" | "overview" | "cardio" | "preproc" | "training" | "nutrition" | "goal";
 const TABS: { id: TabId; label: string }[] = [
+  { id: "annual",    label: "Annual Physical" },
   { id: "overview",  label: "Sleep" },
   { id: "cardio",    label: "Cardiometabolic" },
   { id: "preproc",   label: "Pre-Procedure" },
@@ -179,8 +182,9 @@ export default function DoctorReportModal({ open, onClose }: Props) {
         <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-gray-200 print:hidden bg-gray-50">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="text-sm font-semibold text-gray-900">Health Reports</p>
-            {/* Pre-Procedure is a current-state snapshot — no date range applies */}
-            {activeTab !== "preproc" && (
+            {/* Pre-Procedure and Annual Physical are current-state snapshots
+                — no date range applies to either */}
+            {activeTab !== "preproc" && activeTab !== "annual" && (
               <div className="flex gap-1">
                 {RANGE_OPTIONS.map(o => (
                   <button
@@ -247,6 +251,7 @@ export default function DoctorReportModal({ open, onClose }: Props) {
               {!loading && !error && data && <ReportBody data={data} onBpSaved={loadReport} />}
             </>
           )}
+          {activeTab === "annual"    && <AnnualTab />}
           {activeTab === "cardio"    && <CardiometabolicTab days={days} />}
           {activeTab === "preproc"   && <PreProcedureTab />}
           {activeTab === "training"  && <TrainingTab days={days} />}
@@ -1459,6 +1464,155 @@ function NutritionTab({ days }: { days: number }) {
     </article>
   );
 }
+
+// ── Annual Physical Snapshot tab ───────────────────────────────────────
+function AnnualTab() {
+  const [data, setData]       = useState<AnnualPhysicalReportPayload | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    api.annualPhysicalReport()
+      .then(setData)
+      .catch(e => setError(e instanceof Error ? e.message : "Couldn't load"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="p-8 text-center text-sm text-gray-600">Building annual physical snapshot…</div>;
+  if (error)   return <div className="p-8 text-center text-sm text-red-500">Couldn&apos;t load: {error}</div>;
+  if (!data)   return null;
+
+  const { patient, vitals, body_comp: bc, activity, sleep, cardio_fit: cf, labs, stack, generated_at } = data;
+  const bp = vitals.bp;
+
+  return (
+    <article id="bn-doctor-report-print" className="p-5 sm:p-8 text-sm text-gray-900 print:p-6">
+      <header className="mb-4 pb-3 border-b border-gray-200">
+        <h1 className="text-2xl font-bold text-gray-900 mb-1">Annual Physical Snapshot</h1>
+        <p className="text-xs text-gray-600">Generated {fmtDateTime(generated_at)} · Current state</p>
+        <dl className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-x-4 gap-y-2 text-xs">
+          <div><dt className="text-gray-600 uppercase tracking-wide">Name</dt><dd className="font-semibold">{patient.name || "—"}</dd></div>
+          <div><dt className="text-gray-600 uppercase tracking-wide">DOB</dt><dd className="font-semibold">{fmtDate(patient.birthdate)}{patient.age !== null && <span className="text-gray-600 font-normal"> (age {patient.age})</span>}</dd></div>
+          <div><dt className="text-gray-600 uppercase tracking-wide">Sex</dt><dd className="font-semibold capitalize">{patient.biological_sex || "—"}</dd></div>
+          <div><dt className="text-gray-600 uppercase tracking-wide">Height</dt><dd className="font-semibold">{patient.height_cm ? `${patient.height_cm} cm` : "—"}</dd></div>
+          <div><dt className="text-gray-600 uppercase tracking-wide">BMI</dt><dd className="font-semibold">{numOrDash(bc.bmi, 1)}</dd></div>
+        </dl>
+      </header>
+
+      <AiNarrative text={data.ai_narrative} />
+
+      {/* Vitals */}
+      <section className="mb-4 print:break-inside-avoid">
+        <h2 className="text-sm font-bold text-gray-900 mb-1.5 uppercase tracking-wide">Vitals (30-day averages)</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+          <div className="rounded-lg border border-gray-200 px-3 py-2 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Blood Pressure</p>
+            <p className="text-base font-bold text-gray-900 leading-tight">
+              {numOrDash(bp.average?.systolic)}<span className="text-gray-600 font-normal">/</span>{numOrDash(bp.average?.diastolic)}
+            </p>
+            <p className="text-[10px] text-gray-600">{bp.count} readings</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 px-3 py-2 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Resting HR</p>
+            <p className="text-base font-bold text-gray-900 leading-tight">{numOrDash(vitals.rhr.avg)}<span className="text-[11px] text-gray-600 font-normal ml-1">{vitals.rhr.unit}</span></p>
+          </div>
+          <div className="rounded-lg border border-gray-200 px-3 py-2 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">HRV</p>
+            <p className="text-base font-bold text-gray-900 leading-tight">{numOrDash(vitals.hrv.avg)}<span className="text-[11px] text-gray-600 font-normal ml-1">{vitals.hrv.unit}</span></p>
+          </div>
+          <div className="rounded-lg border border-gray-200 px-3 py-2 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Breath rate</p>
+            <p className="text-base font-bold text-gray-900 leading-tight">{numOrDash(vitals.breath.avg, 1)}<span className="text-[11px] text-gray-600 font-normal ml-1">br/min</span></p>
+          </div>
+          <div className="rounded-lg border border-gray-200 px-3 py-2 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">O₂ saturation</p>
+            <p className="text-base font-bold text-gray-900 leading-tight">{numOrDash(vitals.spo2.avg, 1)}<span className="text-[11px] text-gray-600 font-normal ml-1">{vitals.spo2.unit}</span></p>
+          </div>
+        </div>
+      </section>
+
+      {/* Body composition + Activity + Sleep + Cardio fitness — single dense row */}
+      <section className="mb-4 print:break-inside-avoid">
+        <h2 className="text-sm font-bold text-gray-900 mb-1.5 uppercase tracking-wide">Body, Activity, Sleep, Fitness</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="rounded-lg border border-gray-200 px-3 py-2 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Weight / Body Fat</p>
+            <p className="text-base font-bold text-gray-900 leading-tight">
+              {numOrDash(bc.latest_weight_lbs, 1)}<span className="text-[11px] text-gray-600 font-normal ml-1">lbs</span>
+              {bc.latest_body_fat_pct != null && <span className="text-[11px] text-gray-600 font-normal ml-2">· {bc.latest_body_fat_pct}% BF</span>}
+            </p>
+            <p className="text-[10px] text-gray-600">
+              {bc.delta_lbs_90d !== null && <span>Δ90d: {bc.delta_lbs_90d > 0 ? "+" : ""}{bc.delta_lbs_90d} lbs</span>}
+              {bc.delta_bf_pct_90d !== null && <span className="ml-2">· {bc.delta_bf_pct_90d > 0 ? "+" : ""}{bc.delta_bf_pct_90d}% BF</span>}
+            </p>
+          </div>
+          <div className="rounded-lg border border-gray-200 px-3 py-2 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Activity</p>
+            <p className="text-base font-bold text-gray-900 leading-tight">{numOrDash(activity.avg_steps_30d)}<span className="text-[11px] text-gray-600 font-normal ml-1">steps/day</span></p>
+            <p className="text-[10px] text-gray-600">30-day avg · src {activity.source}</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 px-3 py-2 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Sleep</p>
+            <p className="text-base font-bold text-gray-900 leading-tight">{numOrDash(sleep.avg_hours_30d, 1)}<span className="text-[11px] text-gray-600 font-normal ml-1">hrs</span></p>
+            <p className="text-[10px] text-gray-600">eff {numOrDash(sleep.avg_efficiency_30d)}% · WASO {numOrDash(sleep.avg_waso_min_30d, 1)} min</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 px-3 py-2 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">VO₂ max</p>
+            <p className="text-base font-bold text-gray-900 leading-tight">{numOrDash(cf.vo2_max, 1)}<span className="text-[11px] text-gray-600 font-normal ml-1">ml/kg/min</span></p>
+          </div>
+        </div>
+      </section>
+
+      {/* Labs */}
+      <section className="mb-4 print:break-inside-avoid">
+        <h2 className="text-sm font-bold text-gray-900 mb-1.5 uppercase tracking-wide">Recent Labs</h2>
+        {labs.length === 0 ? (
+          <p className="text-xs text-gray-600 italic">No labs entered yet. Add via the Labs card on the Nutrition tab.</p>
+        ) : (
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="text-left text-[10px] uppercase tracking-wide text-gray-600 border-b border-gray-200">
+                <th className="py-1.5 pr-2 font-semibold">Lab</th>
+                <th className="py-1.5 pr-2 font-semibold">Value</th>
+                <th className="py-1.5 pr-2 font-semibold">Unit</th>
+                <th className="py-1.5 pr-2 font-semibold">Reference</th>
+                <th className="py-1.5 pr-2 font-semibold">Date</th>
+                <th className="py-1.5 font-semibold">Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {labs.map((l, i) => (
+                <tr key={`${l.name}-${l.date ?? ""}-${i}`} className="border-b border-gray-100">
+                  <td className="py-1 pr-2 font-semibold">{l.name}</td>
+                  <td className="py-1 pr-2 font-mono">{l.value ?? "—"}</td>
+                  <td className="py-1 pr-2 text-gray-700">{l.unit ?? ""}</td>
+                  <td className="py-1 pr-2 text-gray-700">{l.reference_range ?? ""}</td>
+                  <td className="py-1 pr-2 text-gray-700">{l.date ? fmtDate(l.date) : ""}</td>
+                  <td className="py-1 text-gray-600 italic truncate max-w-[16rem]">{l.notes ?? ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      {/* Stack */}
+      <section className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-4 print:break-inside-avoid">
+        <StackBlock title={`Medications (${stack.medications.length})`} items={stack.medications} empty="No medications listed." />
+        <StackBlock title={`Supplements (${stack.supplements.length})`} items={stack.supplements} empty="No supplements listed." />
+        <StackBlock title={`Peptides (${stack.peptides.length})`}       items={stack.peptides}    empty="No peptides listed." />
+      </section>
+
+      <footer className="mt-4 pt-3 border-t border-gray-200 text-[10px] text-gray-600 leading-snug">
+        <p className="font-semibold text-gray-700 mb-1">For your annual physical visit.</p>
+        <p>Self-reported and wearable-derived data. Observational only — not a substitute for in-clinic assessment.</p>
+      </footer>
+    </article>
+  );
+}
+
 
 // ── Goal Progress tab ──────────────────────────────────────────────────
 function GoalTab({ days }: { days: number }) {

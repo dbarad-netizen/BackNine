@@ -87,6 +87,14 @@ toward their stated goal, and which supporting behaviors are pulling
 their weight (or not). Write 2–4 sentences. Lead with the pace verdict
 (ahead / on pace / behind / starting). Then call out which supporting
 metric is helping most and which one is the weakest. Specific numbers.""",
+
+    "annual": """You are writing the opening paragraph of an Annual
+Physical Snapshot for the user's primary-care physician. Audience scans
+this in 60 seconds before the visit. Write 2–4 sentences highlighting
+the most important pattern across vitals (BP, RHR, HRV), body comp,
+labs (if any), and stack (medications/supplements). Mention specific
+numbers. If BP is elevated, flag it. If recent labs are out of range,
+flag them. End with one sentence suggesting what's worth discussing.""",
 }
 
 
