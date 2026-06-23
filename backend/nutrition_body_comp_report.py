@@ -86,14 +86,16 @@ def _patient(profile: dict) -> dict:
 
 def _fetch_daily_totals(user_id: str, start: str, end: str) -> list[dict]:
     """Per-day rollup of meals → kcal/protein/carbs/fat. Reads from the
-    `meals` table; best-effort on schema mismatches."""
+    `nutrition_meals` table. The DB columns are `protein`, `carbs`, `fat`
+    (no `_g` suffix); we map them to the report's `_g` shape so the
+    frontend types stay clean."""
     sb = _sb()
     if not sb:
         return []
     try:
         res = (
-            sb.table("meals")
-            .select("date, calories, protein_g, carbs_g, fat_g")
+            sb.table("nutrition_meals")
+            .select("date, calories, protein, carbs, fat")
             .eq("user_id", user_id)
             .gte("date", start)
             .lte("date", end)
@@ -109,23 +111,23 @@ def _fetch_daily_totals(user_id: str, start: str, end: str) -> list[dict]:
         if not d:
             continue
         slot = by_day.setdefault(d, {"date": d, "calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "meal_count": 0})
-        slot["calories"]  += int(r.get("calories")  or 0)
-        slot["protein_g"] += int(r.get("protein_g") or 0)
-        slot["carbs_g"]   += int(r.get("carbs_g")   or 0)
-        slot["fat_g"]     += int(r.get("fat_g")     or 0)
+        slot["calories"]  += int(r.get("calories") or 0)
+        slot["protein_g"] += int(float(r.get("protein") or 0))
+        slot["carbs_g"]   += int(float(r.get("carbs")   or 0))
+        slot["fat_g"]     += int(float(r.get("fat")     or 0))
         slot["meal_count"] += 1
     return sorted(by_day.values(), key=lambda r: r["date"])
 
 
 def _fetch_weights(user_id: str, start: str, end: str) -> list[dict]:
-    """Weight entries in window with all InBody fields preserved (we'll use
-    the latest one for the segmental breakdown panel)."""
+    """Weight entries in window from nutrition_weight (table name confirmed
+    via schema introspection)."""
     sb = _sb()
     if not sb:
         return []
     try:
         res = (
-            sb.table("weight_log")
+            sb.table("nutrition_weight")
             .select("*")
             .eq("user_id", user_id)
             .gte("date", start)

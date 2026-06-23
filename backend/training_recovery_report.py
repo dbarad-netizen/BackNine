@@ -90,14 +90,19 @@ def _patient(profile: dict) -> dict:
 
 def _fetch_workouts(user_id: str, start: str, end: str) -> list[dict]:
     """Read training_workouts rows in window. Best-effort — empty list on any
-    error so the report still renders the other sections."""
+    error so the report still renders the other sections.
+
+    Schema notes: training_workouts uses `kind` ('strength' | 'cardio'),
+    `activity` (e.g. 'running'), `distance_meters` (not miles), `avg_hr`,
+    and `calories_kcal`. We normalize to the report's published shape
+    (distance_mi, etc.) so the frontend doesn't have to know."""
     sb = _sb()
     if not sb:
         return []
     try:
         res = (
             sb.table("training_workouts")
-            .select("id, date, type, duration_min, distance_mi, intensity, notes, exercises, source")
+            .select("id, date, type, kind, activity, duration_min, distance_meters, avg_hr, calories_kcal, total_volume_lbs, notes, source")
             .eq("user_id", user_id)
             .gte("date", start)
             .lte("date", end)
@@ -105,9 +110,30 @@ def _fetch_workouts(user_id: str, start: str, end: str) -> list[dict]:
             .limit(500)
             .execute()
         )
-        return res.data or []
+        rows = res.data or []
     except Exception:
         return []
+
+    # Normalize to the shape the report frontend expects.
+    out: list[dict] = []
+    for r in rows:
+        dist_m = r.get("distance_meters")
+        dist_mi = round(float(dist_m) / 1609.34, 2) if dist_m else None
+        out.append({
+            "id":           r.get("id"),
+            "date":         r.get("date"),
+            "type":         r.get("activity") or r.get("type"),  # prefer specific activity
+            "kind":         r.get("kind"),                       # strength | cardio
+            "duration_min": r.get("duration_min"),
+            "distance_mi":  dist_mi,
+            "intensity":    None,  # not in current schema; kept for API contract
+            "avg_hr":       r.get("avg_hr"),
+            "calories":     r.get("calories_kcal"),
+            "total_volume_lbs": r.get("total_volume_lbs"),
+            "notes":        r.get("notes"),
+            "source":       r.get("source"),
+        })
+    return out
 
 
 def _iso_week(date_iso: str) -> str:
@@ -120,27 +146,26 @@ def _iso_week(date_iso: str) -> str:
 
 
 def _weekly_volume(workouts: list[dict]) -> list[dict]:
-    """Bucket workouts by ISO week and count strength sessions + cardio min.
-
-    Heuristic: type containing 'cardio', 'run', 'cycle', 'walk', 'swim' is
-    cardio; everything else counts as a strength session. Pure best-effort —
-    coach can interpret.
-    """
+    """Bucket workouts by ISO week. Uses the explicit `kind` field first
+    (strength | cardio) and falls back to type-name keyword matching for
+    older rows that don't have kind populated."""
     weeks: dict[str, dict] = {}
-    cardio_kinds = ("cardio", "run", "cycle", "walk", "swim", "row", "elliptical")
+    cardio_kinds_str = ("cardio", "run", "cycle", "walk", "swim", "row", "elliptical")
     for w in workouts:
         wk = _iso_week(w.get("date", ""))
         if not wk:
             continue
         slot = weeks.setdefault(wk, {
-            "week":            wk,
+            "week":              wk,
             "strength_sessions": 0,
             "cardio_sessions":   0,
             "cardio_min":        0,
             "total_sessions":    0,
         })
-        t = (w.get("type") or "").lower()
-        if any(k in t for k in cardio_kinds):
+        kind = (w.get("kind") or "").lower()
+        t    = (w.get("type") or "").lower()
+        is_cardio = kind == "cardio" or any(k in t for k in cardio_kinds_str)
+        if is_cardio:
             slot["cardio_sessions"] += 1
             slot["cardio_min"]      += int(w.get("duration_min") or 0)
         else:
