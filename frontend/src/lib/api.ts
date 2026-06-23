@@ -1866,6 +1866,20 @@ export interface FriendHealthSnapshot {
     dose?:   string | null;
     timing?: string | null;
   }>;
+  // Active goal — surfaced so friends can see what each other is working
+  // toward and send cheers. Null when the user has no active goal.
+  active_goal?: {
+    id:           string;
+    title:        string | null;
+    metric:       string;
+    baseline:     number | null;
+    target:       number | null;
+    current:      number | null;
+    progress_pct: number | null;
+    deadline:     string | null;
+    started_on:   string | null;
+    pace?:        { status?: string; label?: string; detail?: string } | null;
+  } | null;
 }
 
 export interface FriendProfile extends FriendHealthSnapshot {

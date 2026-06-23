@@ -4112,6 +4112,31 @@ def _build_user_health_snapshot(user_id: str) -> dict:
     except Exception:
         supplements = []
 
+    # Active goal — surfaced in FriendDetailModal so friends can see what
+    # each other is working toward and send cheers. Strips fields a viewer
+    # doesn't need to see (plan internals, raw metric type if too detailed)
+    # — keeps the public face small: title / target / current / pace / %.
+    active_goal: Optional[dict] = None
+    try:
+        from datetime import date as _today_d
+        today_iso = _today_d.today().isoformat()
+        full_goal = gl.get_active_goal(user_id, today_iso)
+        if full_goal:
+            active_goal = {
+                "id":           full_goal.get("id"),
+                "title":        full_goal.get("title"),
+                "metric":       full_goal.get("metric"),
+                "baseline":     full_goal.get("baseline"),
+                "target":       full_goal.get("target"),
+                "current":      full_goal.get("current"),
+                "progress_pct": full_goal.get("progress_pct"),
+                "deadline":     full_goal.get("deadline"),
+                "started_on":   full_goal.get("started_on"),
+                "pace":         full_goal.get("pace"),
+            }
+    except Exception:
+        active_goal = None
+
     return {
         "series": {
             "steps": series_steps,
@@ -4123,6 +4148,7 @@ def _build_user_health_snapshot(user_id: str) -> dict:
         "recent_workouts": recent_workouts,
         "latest_weight":   latest_weight,
         "supplements":     supplements,
+        "active_goal":     active_goal,
     }
 
 
@@ -4157,6 +4183,7 @@ def friend_profile(friend_user_id: str, request: Request):
         "recent_workouts": friend_snap["recent_workouts"],
         "latest_weight":   friend_snap["latest_weight"],
         "supplements":     friend_snap["supplements"],
+        "active_goal":     friend_snap.get("active_goal"),
         "you": {
             "name":            _display_name_for(me),
             "level":           None,
@@ -4165,6 +4192,7 @@ def friend_profile(friend_user_id: str, request: Request):
             "recent_workouts": you_snap["recent_workouts"],
             "latest_weight":   you_snap["latest_weight"],
             "supplements":     you_snap["supplements"],
+            "active_goal":     you_snap.get("active_goal"),
         },
     }
 

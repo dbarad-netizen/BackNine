@@ -160,6 +160,13 @@ export default function FriendDetailModal({ friendUserId, friendName, onClose, o
   const [data, setData]       = useState<FriendProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
+  // Goal-cheer state: when the user clicks "Cheer this goal", flip cheered
+  // to true so the button reads "Cheered!" instead of allowing repeat sends.
+  // Backend already dedupes (one cheer per day per friend), but the visual
+  // confirmation matters.
+  const [cheering, setCheering] = useState(false);
+  const [cheered, setCheered]   = useState(false);
+  const [cheerErr, setCheerErr] = useState<string | null>(null);
 
   useEffect(() => {
     api.friends.profile(friendUserId)
@@ -167,6 +174,20 @@ export default function FriendDetailModal({ friendUserId, friendName, onClose, o
       .catch(e => setError(e instanceof Error ? e.message : "Couldn't load"))
       .finally(() => setLoading(false));
   }, [friendUserId]);
+
+  const handleCheer = async () => {
+    if (cheering || cheered) return;
+    setCheering(true);
+    setCheerErr(null);
+    try {
+      await api.friends.cheer(friendUserId, "cheer");
+      setCheered(true);
+    } catch (e) {
+      setCheerErr(e instanceof Error ? e.message : "Couldn't send cheer");
+    } finally {
+      setCheering(false);
+    }
+  };
 
   const dm = (seed?: string) => onOpenDm(friendUserId, data?.name || friendName, seed);
 
@@ -336,6 +357,89 @@ export default function FriendDetailModal({ friendUserId, friendName, onClose, o
                   </button>
                 </section>
               )}
+
+              {/* Active goal — render whenever the friend has one. The
+                  "Cheer this goal" button posts a pulse event the friend
+                  will see in their notification bell + Pulse feed. Strong
+                  accountability mechanic for the men-50+ persona where
+                  community is a key engagement loop. */}
+              {data.active_goal && (() => {
+                const fg = data.active_goal;
+                const yg = data.you?.active_goal;
+                const paceColor =
+                  fg.pace?.status === "ahead"    ? "bg-emerald-50 border-emerald-200 text-emerald-800" :
+                  fg.pace?.status === "on"       ? "bg-emerald-50 border-emerald-200 text-emerald-800" :
+                  fg.pace?.status === "behind"   ? "bg-amber-50  border-amber-200  text-amber-800"     :
+                                                    "bg-gray-50   border-gray-200   text-gray-700";
+                return (
+                  <section className="rounded-2xl border border-gray-200 bg-white p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm font-semibold text-gray-900">🎯 {friendName.split(" ")[0]}&apos;s Active Goal</p>
+                      <button
+                        onClick={handleCheer}
+                        disabled={cheering || cheered}
+                        className={`text-[11px] font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+                          cheered
+                            ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                            : "bg-[#1B3829] text-white hover:bg-[#2D6A4F] disabled:opacity-40"
+                        }`}
+                      >
+                        {cheered ? "✓ Cheered!" : cheering ? "Sending…" : "📣 Cheer this goal"}
+                      </button>
+                    </div>
+                    {cheerErr && <p className="text-[11px] text-red-500 mb-2">{cheerErr}</p>}
+
+                    <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 mb-2">
+                      <p className="text-sm font-semibold text-gray-900 mb-1">{fg.title || `${fg.metric} goal`}</p>
+                      <div className="grid grid-cols-3 gap-2 text-xs">
+                        <div>
+                          <p className="text-[10px] text-gray-600 uppercase tracking-wide">Baseline</p>
+                          <p className="font-bold text-gray-900">{fg.baseline ?? "—"}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-gray-600 uppercase tracking-wide">Current</p>
+                          <p className="font-bold text-gray-900">{fg.current ?? "—"}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-gray-600 uppercase tracking-wide">Target</p>
+                          <p className="font-bold text-gray-900">{fg.target ?? "—"}</p>
+                        </div>
+                      </div>
+                      {fg.progress_pct != null && (
+                        <div className="mt-2">
+                          <div className="h-1.5 rounded-full bg-gray-200 overflow-hidden">
+                            <div className="h-full rounded-full bg-[#1B3829] transition-all duration-500"
+                                 style={{ width: `${Math.min(100, Math.max(0, fg.progress_pct))}%` }} />
+                          </div>
+                          <p className="text-[10px] text-gray-600 mt-1">{fg.progress_pct}% complete</p>
+                        </div>
+                      )}
+                      {fg.pace?.label && (
+                        <div className={`mt-2 rounded-md border px-2.5 py-1.5 text-[11px] ${paceColor}`}>
+                          <span className="font-semibold">{fg.pace.label}</span>
+                          {fg.pace.detail && <span className="text-gray-700 ml-1">· {fg.pace.detail}</span>}
+                        </div>
+                      )}
+                    </div>
+
+                    {yg && (
+                      <div className="rounded-xl border border-gray-100 bg-white p-2.5">
+                        <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold mb-1">Your goal</p>
+                        <p className="text-xs font-semibold text-gray-900 truncate">{yg.title || `${yg.metric} goal`}</p>
+                        <p className="text-[11px] text-gray-600">
+                          {yg.current ?? "—"} → {yg.target ?? "—"}
+                          {yg.progress_pct != null && <span className="ml-1">· {yg.progress_pct}% complete</span>}
+                        </p>
+                      </div>
+                    )}
+                    {!yg && (
+                      <p className="text-[11px] text-gray-600 italic">
+                        You don&apos;t have an active goal yet. Set one on the Scorecard to compare progress.
+                      </p>
+                    )}
+                  </section>
+                );
+              })()}
 
               {/* Supplement stack — side-by-side, only render if either side
                   has anything. Highlight shared supplements (matched by lowercase
