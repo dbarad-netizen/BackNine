@@ -2167,7 +2167,19 @@ export default function DashboardPage() {
               {showBP ? "Hide blood pressure" : "Blood Pressure"}
             </button>
             {showBP && (
-              <BloodPressureCard />
+              <>
+                <BloodPressureCard />
+                {/* Explicit close — the pill above toggles too, but a second
+                    close affordance below the card makes it obvious how to
+                    collapse after you've finished entering / reviewing. */}
+                <button
+                  onClick={() => setShowBP(false)}
+                  className="w-full py-2 rounded-xl border border-gray-200 bg-white text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                  aria-label="Close blood pressure section"
+                >
+                  ✕ Close blood pressure
+                </button>
+              </>
             )}
 
             {/* ── Quick action: body & weight (pill — matches the two above) ── */}

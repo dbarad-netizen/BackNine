@@ -588,6 +588,46 @@ export interface NutritionBodyCompReportPayload {
   };
 }
 
+// ── Goal Progress Report ───────────────────────────────────────────────────
+export interface GoalProgressSupportingTile {
+  label: string;
+  value: number | null;
+  unit:  string;
+  hint?: string;
+}
+
+export interface GoalProgressReportPayload {
+  active:       boolean;
+  generated_at: string;
+  range:        { start: string; end: string; days: number };
+  patient: {
+    name:           string | null;
+    age:            number | null;
+    biological_sex: "male" | "female" | null;
+    height_cm:      number | null;
+    health_goals:   string[];
+  };
+  message?:        string;
+  // When active, the following are present:
+  goal?: {
+    id:              string;
+    metric:          string;
+    baseline:        number | null;
+    target:          number | null;
+    current:         number | null;
+    started_on:      string | null;
+    deadline:        string | null;
+    progress_pct:    number | null;
+    pace?:           { status: string; label: string; detail?: string } | null;
+    plan?:           unknown;
+    title?:          string | null;
+    duration_weeks?: number | null;
+    [key: string]:   unknown;
+  };
+  metric_history?: DoctorReportTrendPoint[];
+  supporting?:     GoalProgressSupportingTile[];
+}
+
 // ── Doctor's Report (Overview / comprehensive) ────────────────────────────
 // The aggregated payload behind the print-friendly clinical report. Pure data —
 // the modal renders sections + a window.print() trigger; no scoring or
@@ -1003,6 +1043,12 @@ export const api = {
     const qs = new URLSearchParams({ days: String(days) });
     if (opts.end) qs.set("end", opts.end);
     return request(`/api/nutrition-body-comp-report?${qs.toString()}`);
+  },
+  goalProgressReport(opts: { days?: number; end?: string } = {}): Promise<GoalProgressReportPayload> {
+    const days = opts.days ?? 30;
+    const qs = new URLSearchParams({ days: String(days) });
+    if (opts.end) qs.set("end", opts.end);
+    return request(`/api/goal-progress-report?${qs.toString()}`);
   },
   logWeight(entry: Partial<WeightEntry> & { weight_lbs: number }): Promise<WeightEntry> {
     return request("/api/nutrition/weight", {

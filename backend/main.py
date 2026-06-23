@@ -31,6 +31,7 @@ import cardiometabolic_report as cardio_rep
 import pre_procedure_report as preproc_rep
 import training_recovery_report as train_rep
 import nutrition_body_comp_report as nutri_rep
+import goal_progress_report as goalprog_rep
 import training as trn
 import labs as lbs
 import challenges as chl
@@ -1964,6 +1965,20 @@ def get_nutrition_body_comp_report(request: Request, days: int = 30, end: str | 
     except Exception:
         days_int = 30
     return nutri_rep.build_report(user_id, profile, days=days_int, end_iso=end)
+
+
+@app.get("/api/goal-progress-report")
+def get_goal_progress_report(request: Request, days: int = 30, end: str | None = None):
+    """User's active goal + metric trend + supporting metrics tuned to the
+    goal type (body comp / recovery / VO2 / generic)."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    profile = _get_profile(user_id) or {}
+    try:
+        days_int = max(1, min(int(days), 365))
+    except Exception:
+        days_int = 30
+    return goalprog_rep.build_report(user_id, profile, days=days_int, end_iso=end)
 
 
 @app.post("/api/nutrition/weight")

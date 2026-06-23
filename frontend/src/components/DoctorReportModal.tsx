@@ -29,16 +29,21 @@ import {
   type PreProcedureItem,
   type TrainingRecoveryReportPayload,
   type NutritionBodyCompReportPayload,
+  type GoalProgressReportPayload,
 } from "@/lib/api";
 
 // ── Tab definitions ──────────────────────────────────────────────────────
-type TabId = "overview" | "cardio" | "preproc" | "training" | "nutrition";
+// "Sleep" tab is the comprehensive Personal Health Report (renamed from
+// "Overview" — David's most-used view is the sleep section so the label
+// reflects that).
+type TabId = "overview" | "cardio" | "preproc" | "training" | "nutrition" | "goal";
 const TABS: { id: TabId; label: string }[] = [
-  { id: "overview",  label: "Overview" },
+  { id: "overview",  label: "Sleep" },
   { id: "cardio",    label: "Cardiometabolic" },
   { id: "preproc",   label: "Pre-Procedure" },
   { id: "training",  label: "Training" },
   { id: "nutrition", label: "Nutrition" },
+  { id: "goal",      label: "Goal Progress" },
 ];
 
 interface Props {
@@ -223,6 +228,7 @@ export default function DoctorReportModal({ open, onClose }: Props) {
           {activeTab === "preproc"   && <PreProcedureTab />}
           {activeTab === "training"  && <TrainingTab days={days} />}
           {activeTab === "nutrition" && <NutritionTab days={days} />}
+          {activeTab === "goal"      && <GoalTab days={days} />}
         </div>
       </div>
     </div>
@@ -1422,6 +1428,144 @@ function NutritionTab({ days }: { days: number }) {
     </article>
   );
 }
+
+// ── Goal Progress tab ──────────────────────────────────────────────────
+function GoalTab({ days }: { days: number }) {
+  const [data, setData]       = useState<GoalProgressReportPayload | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    api.goalProgressReport({ days })
+      .then(setData)
+      .catch(e => setError(e instanceof Error ? e.message : "Couldn't load"))
+      .finally(() => setLoading(false));
+  }, [days]);
+
+  if (loading) return <div className="p-8 text-center text-sm text-gray-600">Building goal progress report…</div>;
+  if (error)   return <div className="p-8 text-center text-sm text-red-500">Couldn&apos;t load: {error}</div>;
+  if (!data)   return null;
+
+  if (!data.active) {
+    return (
+      <article id="bn-doctor-report-print" className="p-5 sm:p-8 text-sm text-gray-900 print:p-6">
+        <header className="mb-6 pb-4 border-b border-gray-200">
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">Goal Progress Report</h1>
+          <p className="text-xs text-gray-600">Generated {fmtDateTime(data.generated_at)}</p>
+        </header>
+        <p className="text-sm text-gray-700">{data.message ?? "No active goal yet."}</p>
+      </article>
+    );
+  }
+
+  const { goal, metric_history, supporting, patient, range, generated_at } = data;
+  const g = goal!;
+  const pace = g.pace as { status?: string; label?: string; detail?: string } | undefined;
+
+  return (
+    <article id="bn-doctor-report-print" className="p-5 sm:p-8 text-sm text-gray-900 print:p-6">
+      <header className="mb-6 pb-4 border-b border-gray-200">
+        <h1 className="text-2xl font-bold text-gray-900 mb-1">Goal Progress Report</h1>
+        <p className="text-xs text-gray-600">
+          Reporting window: {fmtDate(range.start)} – {fmtDate(range.end)} · Generated {fmtDateTime(generated_at)}
+        </p>
+        <dl className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 text-xs">
+          <div><dt className="text-gray-600 uppercase tracking-wide">Name</dt><dd className="font-semibold">{patient.name || "—"}</dd></div>
+          <div><dt className="text-gray-600 uppercase tracking-wide">Age</dt><dd className="font-semibold">{patient.age ?? "—"}</dd></div>
+          <div><dt className="text-gray-600 uppercase tracking-wide">Sex</dt><dd className="font-semibold capitalize">{patient.biological_sex || "—"}</dd></div>
+          <div><dt className="text-gray-600 uppercase tracking-wide">Goal metric</dt><dd className="font-semibold">{g.metric}</dd></div>
+        </dl>
+      </header>
+
+      {/* Goal header */}
+      <section className="mb-6 print:break-inside-avoid">
+        <h2 className="text-base font-semibold text-gray-900 mb-2">{g.title || "Active Goal"}</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+          <div className="rounded-lg border border-gray-200 px-3 py-2.5 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Baseline</p>
+            <p className="text-lg font-bold text-gray-900 leading-tight">{numOrDash(g.baseline, 1)}</p>
+            <p className="text-[10px] text-gray-600">{g.started_on ? `since ${fmtDate(g.started_on)}` : ""}</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 px-3 py-2.5 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Current</p>
+            <p className="text-lg font-bold text-gray-900 leading-tight">{numOrDash(g.current, 1)}</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 px-3 py-2.5 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Target</p>
+            <p className="text-lg font-bold text-gray-900 leading-tight">{numOrDash(g.target, 1)}</p>
+            <p className="text-[10px] text-gray-600">{g.deadline ? `by ${fmtDate(g.deadline)}` : ""}</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 px-3 py-2.5 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Progress</p>
+            <p className="text-lg font-bold text-gray-900 leading-tight">{numOrDash(g.progress_pct)}<span className="text-[11px] text-gray-600 font-normal ml-1">%</span></p>
+          </div>
+        </div>
+        {pace?.label && (
+          <div className={`rounded-lg p-3 text-xs ${
+            pace.status === "ahead"    ? "bg-emerald-50 border border-emerald-200 text-emerald-800" :
+            pace.status === "on"       ? "bg-emerald-50 border border-emerald-200 text-emerald-800" :
+            pace.status === "behind"   ? "bg-amber-50  border border-amber-200  text-amber-800"     :
+            pace.status === "starting" ? "bg-gray-50   border border-gray-200   text-gray-700"      :
+                                          "bg-gray-50  border border-gray-200   text-gray-700"
+          }`}>
+            <p className="font-semibold">{pace.label}</p>
+            {pace.detail && <p className="mt-0.5">{pace.detail}</p>}
+          </div>
+        )}
+      </section>
+
+      {/* Primary metric trend */}
+      {metric_history && metric_history.length >= 2 && (
+        <section className="mb-6 print:break-inside-avoid">
+          <h2 className="text-base font-semibold text-gray-900 mb-2">Primary Metric Trend</h2>
+          <div className="border border-gray-200 rounded-lg p-2 bg-white">
+            <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold mb-1">
+              {g.metric} · target {numOrDash(g.target, 1)}
+            </p>
+            <TrendChart
+              series={[{ label: g.metric, color: "#1B3829", points: metric_history }]}
+              references={
+                g.target != null
+                  ? [{ value: g.target as number, label: "target", color: "#94a3b8" }]
+                  : undefined
+              }
+            />
+          </div>
+        </section>
+      )}
+
+      {/* Supporting metrics */}
+      {supporting && supporting.length > 0 && (
+        <section className="mb-6 print:break-inside-avoid">
+          <h2 className="text-base font-semibold text-gray-900 mb-2">Supporting Metrics</h2>
+          <p className="text-[11px] text-gray-600 mb-2 leading-snug">
+            The behaviors and signals that move (or fail to move) this goal&apos;s metric. Tuned to the goal type.
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {supporting.map((t, i) => (
+              <div key={`${t.label}-${i}`} className="rounded-lg border border-gray-200 px-3 py-2.5 bg-white">
+                <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">{t.label}</p>
+                <p className="text-lg font-bold text-gray-900 leading-tight">
+                  {numOrDash(t.value, t.value !== null && !Number.isInteger(t.value) ? 1 : 0)}
+                  {t.unit && <span className="text-[11px] text-gray-600 font-normal ml-1">{t.unit}</span>}
+                </p>
+                {t.hint && <p className="text-[10px] text-gray-600 leading-snug mt-0.5">{t.hint}</p>}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <footer className="mt-6 pt-3 border-t border-gray-200 text-[10px] text-gray-600 leading-snug">
+        <p className="font-semibold text-gray-700 mb-1">For your coach, trainer, or self-review.</p>
+        <p>Observational data. Supporting-metric tiles describe associations, not causation.</p>
+      </footer>
+    </article>
+  );
+}
+
 
 function StackBlock({ title, items, empty }: { title: string; items: { name: string; dose?: string; timing?: string; notes?: string }[]; empty: string }) {
   return (
