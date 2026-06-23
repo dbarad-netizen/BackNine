@@ -284,6 +284,7 @@ export interface UserProfile {
   age?:            number | null;     // derived from birthdate when set
   birthdate?:      string | null;     // ISO YYYY-MM-DD
   biological_sex?: "male" | "female" | null;
+  height_cm?:      number | null;     // entered as ft/in in UI, stored as cm
   health_goals?:   string[];
   vo2_max?:        number | null;
   supplements?:    Supplement[];

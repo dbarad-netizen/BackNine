@@ -36,21 +36,38 @@ export default function ProfileModal({ onClose, initialTab = "profile" }: Props)
   const [tab, setTab] = useState<Tab>(initialTab);
 
   // ── Profile state ──
-  const [profile,  setProfile]  = useState<UserProfile>({ name: null, age: null, birthdate: null, biological_sex: null, health_goals: [] });
+  const [profile,  setProfile]  = useState<UserProfile>({ name: null, age: null, birthdate: null, biological_sex: null, height_cm: null, health_goals: [] });
   const [loading,  setLoading]  = useState(true);
   const [saving,   setSaving]   = useState(false);
   const [saved,    setSaved]    = useState(false);
   const [error,    setError]    = useState<string | null>(null);
 
+  // Height inputs — we store cm in the DB but US users think in ft/in.
+  // These two strings are the source of truth while the modal is open; on
+  // save we convert ft+in → cm and stuff into profile.height_cm.
+  const [heightFt, setHeightFt] = useState<string>("");
+  const [heightIn, setHeightIn] = useState<string>("");
+
   useEffect(() => {
     api.getProfile()
-      .then(p => setProfile({
-        name:           p.name ?? null,
-        age:            p.age ?? null,
-        birthdate:      p.birthdate ?? null,
-        biological_sex: p.biological_sex ?? null,
-        health_goals:   p.health_goals ?? [],
-      }))
+      .then(p => {
+        setProfile({
+          name:           p.name ?? null,
+          age:            p.age ?? null,
+          birthdate:      p.birthdate ?? null,
+          biological_sex: p.biological_sex ?? null,
+          height_cm:      p.height_cm ?? null,
+          health_goals:   p.health_goals ?? [],
+        });
+        // Convert existing cm value to ft/in for the form.
+        if (p.height_cm != null) {
+          const totalIn = p.height_cm / 2.54;
+          const ft = Math.floor(totalIn / 12);
+          const inches = Math.round(totalIn - ft * 12);
+          setHeightFt(String(ft));
+          setHeightIn(String(inches));
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -68,8 +85,20 @@ export default function ProfileModal({ onClose, initialTab = "profile" }: Props)
   const handleSave = async () => {
     setSaving(true);
     setError(null);
+    // Resolve height: ft + in → cm. Treat empty strings as "no value".
+    let height_cm: number | null = profile.height_cm ?? null;
+    const ftN = parseInt(heightFt, 10);
+    const inN = parseInt(heightIn, 10);
+    if (!isNaN(ftN) || !isNaN(inN)) {
+      const totalIn = (isNaN(ftN) ? 0 : ftN) * 12 + (isNaN(inN) ? 0 : inN);
+      height_cm = totalIn > 0 ? Math.round(totalIn * 2.54) : null;
+    } else if (heightFt === "" && heightIn === "") {
+      // Both cleared — explicitly null out so the DB drops the value.
+      height_cm = null;
+    }
+    const payload = { ...profile, height_cm };
     try {
-      await api.saveProfile(profile);
+      await api.saveProfile(payload);
       setSaved(true);
       setTimeout(() => { setSaved(false); onClose(); }, 800);
     } catch (e) {
@@ -194,6 +223,46 @@ export default function ProfileModal({ onClose, initialTab = "profile" }: Props)
                   ))}
                 </div>
                 <p className="text-[10px] text-gray-600 mt-1">Used for body fat and VO2 max reference ranges.</p>
+              </div>
+
+              {/* Height — entered as ft + in for US users, stored as cm
+                  on the DB. Feeds BMI calculation in the Annual Physical
+                  report and the patient header on every Health Report. */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-widest mb-1.5">Height</label>
+                <div className="flex gap-2 items-center">
+                  <div className="flex-1">
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={3}
+                      max={8}
+                      placeholder="5"
+                      className={inp}
+                      value={heightFt}
+                      onChange={e => setHeightFt(e.target.value)}
+                    />
+                  </div>
+                  <span className="text-xs text-gray-600 font-medium">ft</span>
+                  <div className="flex-1">
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={11}
+                      placeholder="10"
+                      className={inp}
+                      value={heightIn}
+                      onChange={e => setHeightIn(e.target.value)}
+                    />
+                  </div>
+                  <span className="text-xs text-gray-600 font-medium">in</span>
+                </div>
+                {profile.height_cm != null && (
+                  <p className="text-[10px] text-gray-600 mt-1">
+                    Stored as {profile.height_cm} cm · used for BMI on your Annual Physical report.
+                  </p>
+                )}
               </div>
 
               {/* Health goals */}
