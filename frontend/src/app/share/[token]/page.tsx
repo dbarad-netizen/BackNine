@@ -130,9 +130,17 @@ export default function SharedReportPage() {
               {(patient.biological_sex as string) && (
                 <div><dt className="text-gray-600 uppercase tracking-wide">Sex</dt><dd className="font-semibold capitalize">{String(patient.biological_sex)}</dd></div>
               )}
-              {patient.height_cm != null && (
-                <div><dt className="text-gray-600 uppercase tracking-wide">Height</dt><dd className="font-semibold">{String(patient.height_cm)} cm</dd></div>
-              )}
+              {patient.height_cm != null && (() => {
+                // US-friendly height: stored as cm, displayed as ft/in.
+                const cm = Number(patient.height_cm);
+                const totalIn = cm / 2.54;
+                const ft = Math.floor(totalIn / 12);
+                const inches = Math.round(totalIn - ft * 12);
+                const display = inches === 12 ? `${ft + 1}' 0"` : `${ft}' ${inches}"`;
+                return (
+                  <div><dt className="text-gray-600 uppercase tracking-wide">Height</dt><dd className="font-semibold">{display}</dd></div>
+                );
+              })()}
             </dl>
           )}
         </header>

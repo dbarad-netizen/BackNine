@@ -85,6 +85,18 @@ const numOrDash = (v: number | null | undefined, digits = 0): string => {
   return digits ? v.toFixed(digits) : String(v);
 };
 
+// US-friendly height display. Stored as cm on the backend; converted to
+// ft/in here because the target persona thinks in imperial.
+const fmtHeight = (cm: number | null | undefined): string => {
+  if (cm == null || cm <= 0) return "—";
+  const totalIn = cm / 2.54;
+  const ft = Math.floor(totalIn / 12);
+  const inches = Math.round(totalIn - ft * 12);
+  // Handle the edge case where rounding pushes us to 12 inches.
+  if (inches === 12) return `${ft + 1}' 0"`;
+  return `${ft}' ${inches}"`;
+};
+
 // ── ShareReportButton ──────────────────────────────────────────────────
 // Generates a tokenized share URL the user can text/email to a doctor.
 // Doctor opens the URL in any browser and sees the report rendered — no
@@ -358,7 +370,7 @@ function ReportBody({ data, onBpSaved }: { data: DoctorReportPayload; onBpSaved:
           <div><dt className="text-gray-600 uppercase tracking-wide">Name</dt><dd className="font-semibold">{patient.name || "—"}</dd></div>
           <div><dt className="text-gray-600 uppercase tracking-wide">DOB</dt><dd className="font-semibold">{fmtDate(patient.birthdate)}{patient.age !== null && <span className="text-gray-600 font-normal"> (age {patient.age})</span>}</dd></div>
           <div><dt className="text-gray-600 uppercase tracking-wide">Sex</dt><dd className="font-semibold capitalize">{patient.biological_sex || "—"}</dd></div>
-          <div><dt className="text-gray-600 uppercase tracking-wide">Height</dt><dd className="font-semibold">{patient.height_cm ? `${patient.height_cm} cm` : "—"}</dd></div>
+          <div><dt className="text-gray-600 uppercase tracking-wide">Height</dt><dd className="font-semibold">{fmtHeight(patient.height_cm)}</dd></div>
         </dl>
       </header>
 
@@ -970,7 +982,7 @@ function CardiometabolicTab({ days }: { days: number }) {
           <div><dt className="text-gray-600 uppercase tracking-wide">Name</dt><dd className="font-semibold">{patient.name || "—"}</dd></div>
           <div><dt className="text-gray-600 uppercase tracking-wide">DOB</dt><dd className="font-semibold">{fmtDate(patient.birthdate)}{patient.age !== null && <span className="text-gray-600 font-normal"> (age {patient.age})</span>}</dd></div>
           <div><dt className="text-gray-600 uppercase tracking-wide">Sex</dt><dd className="font-semibold capitalize">{patient.biological_sex || "—"}</dd></div>
-          <div><dt className="text-gray-600 uppercase tracking-wide">Height</dt><dd className="font-semibold">{patient.height_cm ? `${patient.height_cm} cm` : "—"}</dd></div>
+          <div><dt className="text-gray-600 uppercase tracking-wide">Height</dt><dd className="font-semibold">{fmtHeight(patient.height_cm)}</dd></div>
           <div><dt className="text-gray-600 uppercase tracking-wide">VO₂ max</dt><dd className="font-semibold">{patient.vo2_max ?? "—"}</dd></div>
         </dl>
       </header>
@@ -1372,7 +1384,7 @@ function NutritionTab({ days }: { days: number }) {
           <div><dt className="text-gray-600 uppercase tracking-wide">Name</dt><dd className="font-semibold">{patient.name || "—"}</dd></div>
           <div><dt className="text-gray-600 uppercase tracking-wide">Age</dt><dd className="font-semibold">{patient.age ?? "—"}</dd></div>
           <div><dt className="text-gray-600 uppercase tracking-wide">Sex</dt><dd className="font-semibold capitalize">{patient.biological_sex || "—"}</dd></div>
-          <div><dt className="text-gray-600 uppercase tracking-wide">Height</dt><dd className="font-semibold">{patient.height_cm ? `${patient.height_cm} cm` : "—"}</dd></div>
+          <div><dt className="text-gray-600 uppercase tracking-wide">Height</dt><dd className="font-semibold">{fmtHeight(patient.height_cm)}</dd></div>
         </dl>
       </header>
 
@@ -1567,7 +1579,7 @@ function AnnualTab() {
           <div><dt className="text-gray-600 uppercase tracking-wide">Name</dt><dd className="font-semibold">{patient.name || "—"}</dd></div>
           <div><dt className="text-gray-600 uppercase tracking-wide">DOB</dt><dd className="font-semibold">{fmtDate(patient.birthdate)}{patient.age !== null && <span className="text-gray-600 font-normal"> (age {patient.age})</span>}</dd></div>
           <div><dt className="text-gray-600 uppercase tracking-wide">Sex</dt><dd className="font-semibold capitalize">{patient.biological_sex || "—"}</dd></div>
-          <div><dt className="text-gray-600 uppercase tracking-wide">Height</dt><dd className="font-semibold">{patient.height_cm ? `${patient.height_cm} cm` : "—"}</dd></div>
+          <div><dt className="text-gray-600 uppercase tracking-wide">Height</dt><dd className="font-semibold">{fmtHeight(patient.height_cm)}</dd></div>
           <div><dt className="text-gray-600 uppercase tracking-wide">BMI</dt><dd className="font-semibold">{numOrDash(bc.bmi, 1)}</dd></div>
         </dl>
       </header>
