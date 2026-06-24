@@ -41,6 +41,7 @@ import stack as stk
 import today_workout as tw
 import training as trn
 import exercise_progression as exprog
+import training_load as tload
 import labs as lbs
 import challenges as chl
 import apple_health as ah
@@ -2639,6 +2640,17 @@ def get_exercise_history(request: Request, name: str):
     the lifetime PR and current consecutive-week streak for this lift."""
     session = _require_session(request)
     return exprog.exercise_history(session["user_id"], name)
+
+
+@app.get("/api/training/load")
+def get_training_load(request: Request):
+    """Combined payload powering the new Training tab cards:
+      • weekly_volume — 12 ISO weeks for the sparkline
+      • deload_recommendation — rules-driven 'consider a deload' prompt
+      • muscle_balance — 7d muscle-group coverage + imbalance note
+    Single endpoint to keep the Training tab to one extra request."""
+    session = _require_session(request)
+    return tload.build_payload(session["user_id"])
 
 
 @app.post("/api/training/workouts")

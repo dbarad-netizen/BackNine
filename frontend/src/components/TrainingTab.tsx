@@ -3,7 +3,6 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import {
   api,
-  type TrainingRecommendation,
   type WeeklyPlan,
   type WeeklySession,
   type Workout,
@@ -20,6 +19,7 @@ import SystemTemplatesBrowser from "@/components/SystemTemplatesBrowser";
 import TodayWorkoutCard from "@/components/TodayWorkoutCard";
 import LifetimePrsCard from "@/components/LifetimePrsCard";
 import ExerciseHistoryModal from "@/components/ExerciseHistoryModal";
+import TrainingLoadCards from "@/components/TrainingLoadCards";
 
 const TYPE_ICON: Record<string, string>  = { lifting: "🏋️", stretching: "🧘", mobility: "🔄", cardio: "🏃" };
 const TYPE_LABEL: Record<string, string> = { lifting: "Lifting", stretching: "Stretch", mobility: "Mobility", cardio: "Cardio" };
@@ -88,41 +88,6 @@ function ProgressionBadge({ p }: { p?: ExerciseProgression }) {
     >
       {p.label}
     </span>
-  );
-}
-
-// ── Daily recommendation card ─────────────────────────────────────────────────
-function RecCard({ rec }: { rec: TrainingRecommendation }) {
-  return (
-    <div className="rounded-2xl border bg-white p-5" style={{ borderColor: rec.color + "66" }}>
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <p className="text-xs text-gray-600 uppercase tracking-widest mb-1">Today&apos;s Training</p>
-          <p className="text-gray-900 font-semibold text-lg">{rec.title}</p>
-        </div>
-        <span className="text-xs font-semibold px-2.5 py-1 rounded-full shrink-0 ml-2"
-          style={{ backgroundColor: rec.color + "22", color: rec.color }}>
-          {rec.label}
-        </span>
-      </div>
-      <p className="text-sm text-gray-600 leading-relaxed mb-3">{rec.detail}</p>
-      {rec.modifiers.length > 0 && (
-        <div className="space-y-1 mb-3">
-          {rec.modifiers.map((m, i) => (
-            <p key={i} className="text-xs text-amber-600 flex gap-1.5">
-              <span>⚠</span><span>{m}</span>
-            </p>
-          ))}
-        </div>
-      )}
-      <div className="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2">
-        <p className="text-xs text-gray-600 mb-0.5">Suggestion</p>
-        <p className="text-sm text-gray-800">{rec.suggestion}</p>
-      </div>
-      {rec.consecutive_days > 0 && (
-        <p className="text-xs text-gray-600 mt-2">{rec.consecutive_days} consecutive training day{rec.consecutive_days > 1 ? "s" : ""}</p>
-      )}
-    </div>
   );
 }
 
@@ -1063,7 +1028,6 @@ export default function TrainingTab({
   autoOpenLogger?: boolean;
   onLoggerOpened?: () => void;
 } = {}) {
-  const [rec,          setRec]          = useState<TrainingRecommendation | null>(null);
   const [weeklyPlan,   setWeeklyPlan]   = useState<WeeklyPlan | null>(null);
   const [workouts,     setWorkouts]     = useState<Workout[]>([]);
   const [stretchR,     setStretchR]     = useState<StretchRoutine | null>(null);
@@ -1086,12 +1050,12 @@ export default function TrainingTab({
   }, [autoOpenLogger, onLoggerOpened]);
 
   useEffect(() => {
+    // RecCard removed — Today's Workout now subsumes that role. Only the
+    // weekly plan + workout history need fetching at mount.
     Promise.all([
-      api.trainingRecommendation(),
       api.weeklyPlan(),
       api.workouts(30),
-    ]).then(([r, p, w]) => {
-      setRec(r);
+    ]).then(([p, w]) => {
       setWeeklyPlan(p);
       setWorkouts(w.workouts);
     }).catch(console.error)
@@ -1101,8 +1065,6 @@ export default function TrainingTab({
   const handleWorkoutSaved = (w: Workout) => {
     setWorkouts(prev => [w, ...prev]);
     setShowLogger(false);
-    // Refresh recommendation since training load changed
-    api.trainingRecommendation().then(setRec).catch(() => {});
   };
 
   const handleDeleteWorkout = async (id: string) => {
@@ -1114,8 +1076,6 @@ export default function TrainingTab({
 
   const handleUpdatedWorkout = (updated: Workout) => {
     setWorkouts(prev => prev.map(w => w.id === updated.id ? updated : w));
-    // Training load may have shifted (duration delta), refresh recommendation.
-    api.trainingRecommendation().then(setRec).catch(() => {});
   };
 
   const handleStretch = async (muscleGroups: string[]) => {
@@ -1164,8 +1124,12 @@ export default function TrainingTab({
         }}
       />
 
-      {/* Daily recommendation */}
-      {rec && <RecCard rec={rec} />}
+      {/* Training load cluster: deload prompt (only if triggered), weekly
+          volume sparkline, muscle-group balance heatmap. Lives right after
+          Today's Workout so the deload nudge — if it fires — sits adjacent
+          to the prescription and informs the user's decision to do today's
+          session at full intensity or back off. */}
+      <TrainingLoadCards />
 
       {/* Weekly plan */}
       {weeklyPlan && <WeeklyPlanView plan={weeklyPlan} />}

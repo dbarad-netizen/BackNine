@@ -910,6 +910,41 @@ export interface ExerciseHistory {
   current_streak_weeks: number;
 }
 
+/** One ISO-week bucket in the training-load sparkline. */
+export interface WeeklyLoadBucket {
+  week:               string;   // short label like "Jun 17"
+  strength_sessions:  number;
+  cardio_sessions:    number;
+  cardio_min:         number;
+  volume_lbs:         number;
+  is_current:         boolean;
+}
+
+/** Soft 'consider a deload' nudge. `triggered=true` means show the prompt. */
+export interface DeloadRecommendation {
+  triggered:          boolean;
+  reason:             string | null;
+  volume_change_pct:  number | null;
+  hrv_change_pct:     number | null;
+  recent_sessions:    number;
+  suggestion:         string | null;
+}
+
+/** Last-7-day muscle-group coverage heatmap data. */
+export interface MuscleBalance {
+  window_days:               number;
+  groups:                    { name: string; session_days: number }[];
+  imbalance_note:            string | null;
+  total_strength_sessions:   number;
+}
+
+/** Combined `/api/training/load` payload — powers three Training-tab cards. */
+export interface TrainingLoadPayload {
+  weekly_volume:           WeeklyLoadBucket[];
+  deload_recommendation:   DeloadRecommendation;
+  muscle_balance:          MuscleBalance;
+}
+
 export interface Workout {
   id:                string;
   date:              string;
@@ -1413,6 +1448,9 @@ export const api = {
   },
   exerciseHistory(name: string): Promise<ExerciseHistory> {
     return request(`/api/training/exercise-history?name=${encodeURIComponent(name)}`);
+  },
+  trainingLoad(): Promise<TrainingLoadPayload> {
+    return request("/api/training/load");
   },
   logWorkout(w: Omit<Workout, "id" | "logged_at" | "muscle_groups" | "total_volume_lbs">): Promise<Workout> {
     return request("/api/training/workouts", { method: "POST", body: JSON.stringify(w) });
