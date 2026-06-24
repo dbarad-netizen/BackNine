@@ -1579,13 +1579,11 @@ export default function DashboardPage() {
             )}
 
             {/* ── Coach Al's Morning Briefing ── */}
+            {/* Unified Coach Al card: today's briefing (dark hero) + this
+                week's pattern insight (light section, embedded). The
+                DailyInsightCard now renders inside MorningBriefing — see
+                the merge note in MorningBriefing.tsx. */}
             <MorningBriefing onOpenChat={() => openChatRef.current?.()} />
-
-            {/* Daily Insight Card — Phase 1 of the Insight pillar.
-                Claude reads 14d cross-domain data and surfaces ONE pattern
-                + ONE action. Renders nothing if backend has no insight
-                (no API key, sparse data) — keeps the Scorecard clean. */}
-            <DailyInsightCard />
 
             {/* Symptom Card — Phase 2 of the Insight pillar.
                 Quick tag-based "how do you feel today?" log + correlation

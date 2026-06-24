@@ -36,7 +36,14 @@ const CONFIDENCE_LABEL: Record<DailyInsight["confidence"], string> = {
   low:    "Early signal",
 };
 
-export default function DailyInsightCard() {
+interface Props {
+  /** When true, render as an inline section without the outer rounded-card
+   *  chrome — used when the insight is embedded INSIDE another card (the
+   *  unified Coach Al briefing on the Scorecard). */
+  embedded?: boolean;
+}
+
+export default function DailyInsightCard({ embedded = false }: Props = {}) {
   const [insight, setInsight] = useState<DailyInsight | null>(null);
   const [loading, setLoading] = useState(true);
   const [feedbackBusy, setFeedbackBusy] = useState(false);
@@ -69,6 +76,16 @@ export default function DailyInsightCard() {
   // Dismissed: collapse to a quiet pill so the user can re-expand if they
   // want to see today's insight again (rare but harmless).
   if (insight.feedback === "dismissed") {
+    if (embedded) {
+      return (
+        <button
+          onClick={() => setInsight({ ...insight, feedback: null })}
+          className="w-full py-2 text-[11px] text-gray-600 hover:text-gray-900 transition-colors"
+        >
+          💡 Today&apos;s insight is hidden — tap to view
+        </button>
+      );
+    }
     return (
       <button
         onClick={() => setInsight({ ...insight, feedback: null })}
@@ -82,14 +99,22 @@ export default function DailyInsightCard() {
   const badge = CATEGORY_BADGE[insight.category] ?? CATEGORY_BADGE.general;
   const fb    = insight.feedback;
 
+  // Embedded mode = sits inside another card (the unified briefing). Drop
+  // the outer rounded-card chrome and use a tighter section style.
+  const wrapperClass = embedded
+    ? "pt-4 mt-4 border-t border-gray-200"
+    : "rounded-2xl border border-[#1B3829]/30 bg-gradient-to-br from-[#1B3829]/5 to-white p-4 shadow-sm";
+
   return (
-    <section className="rounded-2xl border border-[#1B3829]/30 bg-gradient-to-br from-[#1B3829]/5 to-white p-4 shadow-sm">
+    <section className={wrapperClass}>
       <div className="flex items-start gap-3 mb-2">
         <div className={`shrink-0 rounded-lg px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${badge.bg} ${badge.fg}`}>
           <span className="mr-1">{badge.emoji}</span>{badge.label}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] uppercase tracking-wide font-semibold text-[#1B3829]">Coach Al · today&apos;s insight</p>
+          <p className="text-[10px] uppercase tracking-wide font-semibold text-[#1B3829]">
+            {embedded ? "Pattern of the week" : "Coach Al · today's insight"}
+          </p>
           <h3 className="text-base font-bold text-gray-900 leading-tight mt-0.5">{insight.headline}</h3>
         </div>
         <button
