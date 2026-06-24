@@ -76,9 +76,13 @@ export default function SymptomCard() {
         }
       }).catch(() => {}),
       // Load today's mood from the checkins endpoint (same source the
-      // briefing was using before the unification).
+      // briefing was using before the unification). Endpoint returns
+      // {today, yesterday} — read mood from today's row, not the root.
+      // That mismatch is why the saved mood wasn't sticking after page
+      // refresh — local state would clear and the (wrong) root-level
+      // `mood` read returned undefined every time.
       api.getCheckinToday().then(r => {
-        const m = (r as { mood?: Mood | null }).mood ?? null;
+        const m = r.today?.mood ?? null;
         if (m) setTodayMood(m);
       }).catch(() => {}),
     ]).finally(() => setLoading(false));
