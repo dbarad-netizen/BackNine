@@ -16,6 +16,7 @@ import {
 } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import SystemTemplatesBrowser from "@/components/SystemTemplatesBrowser";
+import TodayWorkoutCard from "@/components/TodayWorkoutCard";
 
 const TYPE_ICON: Record<string, string>  = { lifting: "🏋️", stretching: "🧘", mobility: "🔄", cardio: "🏃" };
 const TYPE_LABEL: Record<string, string> = { lifting: "Lifting", stretching: "Stretch", mobility: "Mobility", cardio: "Cardio" };
@@ -181,10 +182,15 @@ function SetStepper({
 
 // ── Workout logger ────────────────────────────────────────────────────────────
 export function WorkoutLogger({
-  onSaved, recentWorkouts,
+  onSaved, recentWorkouts, seed, onSeedConsumed,
 }: {
   onSaved: (w: Workout) => void;
   recentWorkouts: Workout[];
+  /** Optional pre-fill from Today's Workout prescription or system template. */
+  seed?: { name: string; exercises: { name: string }[] } | null;
+  /** Called after the seed is loaded so the parent can clear its state and
+   *  avoid re-seeding on every render. */
+  onSeedConsumed?: () => void;
 }) {
   const [workoutType, setWorkoutType] = useState<"lifting" | "stretching" | "mobility" | "cardio">("lifting");
   const [exercises, setExercises]     = useState<WorkoutExercise[]>([]);
@@ -211,6 +217,17 @@ export function WorkoutLogger({
 
   useEffect(() => {
     api.trainingTemplates().then(r => setTemplates(r.templates)).catch(() => {});
+  }, []);
+
+  // Consume the optional `seed` from Today's Workout prescription. Pre-fills
+  // the exercise list with just names (no sets/reps) so the user can add
+  // their actual numbers as they lift. Runs once on mount when seed exists.
+  useEffect(() => {
+    if (seed && seed.exercises.length > 0) {
+      setExercises(seed.exercises.map(ex => ({ name: ex.name })));
+      onSeedConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Map exercise name -> last logged set, so adding an exercise pre-fills the
@@ -990,6 +1007,10 @@ export default function TrainingTab({
   const [showLogger,   setShowLogger]   = useState(autoOpenLogger);
   const [showSettings, setShowSettings] = useState(false);
   const [loading,      setLoading]      = useState(true);
+  // Seed for the WorkoutLogger when "Start session" is tapped on the
+  // Today's Workout card — pre-fills the exercise list so the user just
+  // adds sets/reps as they lift.
+  const [loggerSeed,   setLoggerSeed]   = useState<{ name: string; exercises: { name: string }[] } | null>(null);
 
   // Quick-log from the Scorecard opens the logger straight away.
   useEffect(() => {
@@ -1062,6 +1083,22 @@ export default function TrainingTab({
       {/* Stretch routine — shown at top when active */}
       {stretchR && <StretchRoutineView routine={stretchR} onClose={() => setStretchR(null)} />}
 
+      {/* Today's Workout — Claude-prescribed daily session.
+          Answers "what should I do today?" — the gap David flagged. Lives
+          ABOVE the older RecCard / WeeklyPlanView (still kept as context
+          for now; can be removed once the new card proves itself). */}
+      <TodayWorkoutCard
+        onStartSession={(name, exercises) => {
+          // Seed the logger with the prescribed exercises and open it.
+          setLoggerSeed({ name, exercises: exercises.map(e => ({ name: e.name })) });
+          setShowLogger(true);
+          // Scroll the logger into view since it lives further down the page.
+          setTimeout(() => {
+            document.getElementById("workout-logger-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }, 100);
+        }}
+      />
+
       {/* Daily recommendation */}
       {rec && <RecCard rec={rec} />}
 
@@ -1078,7 +1115,15 @@ export default function TrainingTab({
         {showLogger ? "▲ Cancel" : "＋ Log a workout"}
       </button>
 
-      {showLogger && <WorkoutLogger onSaved={handleWorkoutSaved} recentWorkouts={workouts} />}
+      <div id="workout-logger-anchor" />
+      {showLogger && (
+        <WorkoutLogger
+          onSaved={handleWorkoutSaved}
+          recentWorkouts={workouts}
+          seed={loggerSeed}
+          onSeedConsumed={() => setLoggerSeed(null)}
+        />
+      )}
 
       {/* Recent workouts */}
       <RecentWorkouts

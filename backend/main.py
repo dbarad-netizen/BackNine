@@ -38,6 +38,7 @@ import system_templates as sys_tmpl
 import daily_insight as di
 import symptoms as sym
 import stack as stk
+import today_workout as tw
 import training as trn
 import labs as lbs
 import challenges as chl
@@ -2057,6 +2058,58 @@ async def record_insight_feedback(request: Request):
         raise HTTPException(status_code=400, detail="feedback must be one of: up, down, dismissed")
     ok = di.record_feedback(user_id, date_iso, feedback)
     return {"ok": ok}
+
+
+# ── Today's Workout (Claude-prescribed daily session) ──────────────────
+
+@app.get("/api/training/today")
+def get_today_workout(request: Request):
+    """Today's prescribed session. Generated on first call of day; cached
+    after. Falls back to a deterministic template suggestion if Claude
+    isn't available."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    profile = _get_profile(user_id) or {}
+    today   = _user_local_today_iso(request)
+    return tw.get_or_generate(user_id, profile, today)
+
+
+@app.post("/api/training/today/status")
+async def set_today_workout_status(request: Request):
+    """Mark today's workout as started / completed / skipped."""
+    session = _require_session(request)
+    body    = await request.json()
+    today   = _user_local_today_iso(request)
+    status  = (body.get("status") or "").strip().lower()
+    ok = tw.update_status(session["user_id"], today, status)
+    if not ok:
+        raise HTTPException(status_code=400, detail="status must be one of: started, completed, skipped")
+    return {"ok": True, "status": status}
+
+
+@app.post("/api/training/today/feedback")
+async def set_today_workout_feedback(request: Request):
+    """User says today's prescription was 👍 or 👎 — biases future
+    generations (later)."""
+    session = _require_session(request)
+    body    = await request.json()
+    today   = _user_local_today_iso(request)
+    feedback = (body.get("feedback") or "").strip().lower()
+    ok = tw.record_feedback(session["user_id"], today, feedback)
+    if not ok:
+        raise HTTPException(status_code=400, detail="feedback must be 'up' or 'down'")
+    return {"ok": True}
+
+
+@app.post("/api/training/today/regenerate")
+def regenerate_today_workout(request: Request):
+    """User asked for a different suggestion. Throws away today's cached
+    row and runs the generator again."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    profile = _get_profile(user_id) or {}
+    today   = _user_local_today_iso(request)
+    return tw.regenerate(user_id, profile, today)
 
 
 # ── Stack Efficacy (Insight Phase 4) ────────────────────────────────────

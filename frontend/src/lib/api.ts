@@ -934,6 +934,31 @@ export interface TrainingSettings {
   units:         string;
 }
 
+// ── Today's Workout ──────────────────────────────────────────────────
+export interface TodayWorkoutExercise {
+  name:          string;
+  sets?:         number | null;
+  reps?:         string | null;
+  notes?:        string | null;
+  duration_sec?: number | null;
+}
+export interface TodayWorkout {
+  id?:            string;
+  user_id?:       string;
+  date:           string;
+  session_name:   string | null;
+  session_type:   "strength" | "cardio" | "mobility" | "rest" | null;
+  intensity:      "easy" | "moderate" | "heavy" | "rest" | null;
+  duration_min:   number | null;
+  exercises:      TodayWorkoutExercise[];
+  rationale:      string | null;
+  source:         "claude" | "template_fallback" | "rest_recommendation" | null;
+  status:         "pending" | "started" | "completed" | "skipped";
+  status_at?:     string | null;
+  feedback?:      "up" | "down" | null;
+  generated_at?:  string;
+}
+
 // ── Stack Efficacy (Insight Phase 4) ──────────────────────────────────
 export interface StackEfficacyDelta {
   metric:         string;
@@ -1220,6 +1245,26 @@ export const api = {
   },
 
   // ── Longevity Score per-metric history (slot pop-outs) ───────────────
+  // ── Today's Workout (Claude-prescribed daily session) ──────────────
+  todayWorkout(): Promise<TodayWorkout> {
+    return request(`/api/training/today`);
+  },
+  todayWorkoutStatus(status: "started" | "completed" | "skipped"): Promise<{ ok: boolean }> {
+    return request(`/api/training/today/status`, {
+      method: "POST",
+      body: JSON.stringify({ status }),
+    });
+  },
+  todayWorkoutFeedback(feedback: "up" | "down"): Promise<{ ok: boolean }> {
+    return request(`/api/training/today/feedback`, {
+      method: "POST",
+      body: JSON.stringify({ feedback }),
+    });
+  },
+  todayWorkoutRegenerate(): Promise<TodayWorkout> {
+    return request(`/api/training/today/regenerate`, { method: "POST" });
+  },
+
   // ── Stack Efficacy (Insight Phase 4) ────────────────────────────────
   stackEfficacy(): Promise<{ items: StackEfficacyItem[] }> {
     return request(`/api/stack/efficacy`);
