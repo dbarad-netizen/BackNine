@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import SystemTemplatesBrowser from "@/components/SystemTemplatesBrowser";
 import TodayWorkoutCard from "@/components/TodayWorkoutCard";
+import LifetimePrsCard from "@/components/LifetimePrsCard";
 
 const TYPE_ICON: Record<string, string>  = { lifting: "🏋️", stretching: "🧘", mobility: "🔄", cardio: "🏃" };
 const TYPE_LABEL: Record<string, string> = { lifting: "Lifting", stretching: "Stretch", mobility: "Mobility", cardio: "Cardio" };
@@ -1165,6 +1166,13 @@ export default function TrainingTab({
           onSeedConsumed={() => setLoggerSeed(null)}
         />
       )}
+
+      {/* Lifetime PRs — sits just above Recent Workouts so the user sees
+          their best lifts ("here's what you're proud of") right before the
+          history list ("here's what you did"). Renders nothing for users
+          with no lifting history yet, so the Training tab still feels
+          clean during onboarding. */}
+      <LifetimePrsCard />
 
       {/* Recent workouts */}
       <RecentWorkouts
