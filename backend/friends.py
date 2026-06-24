@@ -1213,6 +1213,20 @@ def _summarize_event(row: dict) -> str:
         if n:
             return f"{name} hit a {int(n)}-day {kind}"
         return f"{name} extended a streak"
+    if et == "weekly_recap":
+        # Shared end-of-week recap. We try to give the most flattering
+        # one-liner with whatever numbers are present — the full snapshot
+        # lives in payload for richer rendering in the PulseFeed UI.
+        if p.get("highlight"):
+            return f"{name}'s week: {p['highlight']}"
+        bits = []
+        if p.get("workouts"):     bits.append(f"{p['workouts']} sessions")
+        if p.get("pr_count"):     bits.append(f"{p['pr_count']} PR{'s' if p['pr_count'] != 1 else ''}")
+        if p.get("sleep_streak") and p["sleep_streak"] >= 3:
+            bits.append(f"{p['sleep_streak']}-night sleep streak")
+        if bits:
+            return f"{name}'s week — " + ", ".join(bits)
+        return f"{name} shared their weekly recap"
 
     # ── Auto-generated milestone events ──
     if et == "great_sleep":

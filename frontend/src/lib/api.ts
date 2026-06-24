@@ -982,6 +982,45 @@ export interface LastNightSummary {
   hrv:         number | null;
 }
 
+// ── Weekly Recap (community pillar) ──────────────────────────────────────
+
+export interface WeeklyRecapTraining {
+  workouts:            number;
+  strength_sessions:   number;
+  cardio_sessions:     number;
+  lifting_volume_lbs:  number;
+  cardio_min:          number;
+  prs:                 string[];
+  pr_count:            number;
+  top_lift:            { name: string; e1rm_lbs: number } | null;
+}
+
+export interface WeeklyRecapNutrition {
+  days_logged:     number;
+  protein_days:    number;
+  avg_protein:     number | null;
+  target_protein:  number | null;
+}
+
+export interface WeeklyRecapSleep {
+  avg_hours:      number | null;
+  streak_nights:  number;
+  debt_hours:     number | null;
+  nights_logged:  number;
+}
+
+export interface WeeklyRecap {
+  week_start:        string;
+  week_end:          string;
+  is_current_week:   boolean;
+  training:          WeeklyRecapTraining;
+  nutrition:         WeeklyRecapNutrition;
+  sleep:             WeeklyRecapSleep;
+  headline:          string;
+  highlight:         string | null;
+  has_content:       boolean;
+}
+
 /** `/api/sleep/tonight` payload. */
 export interface TonightSleepPayload {
   date:                 string;
@@ -1509,6 +1548,15 @@ export const api = {
   },
   tonightSleep(): Promise<TonightSleepPayload> {
     return request("/api/sleep/tonight");
+  },
+  weeklyRecap(week?: string): Promise<WeeklyRecap> {
+    return request(`/api/community/weekly-recap${week ? `?week=${week}` : ""}`);
+  },
+  shareWeeklyRecap(week?: string): Promise<{ event: { id?: string } | null; recap: WeeklyRecap }> {
+    return request("/api/community/weekly-recap/share", {
+      method: "POST",
+      body:   JSON.stringify(week ? { week } : {}),
+    });
   },
   logWorkout(w: Omit<Workout, "id" | "logged_at" | "muscle_groups" | "total_volume_lbs">): Promise<Workout> {
     return request("/api/training/workouts", { method: "POST", body: JSON.stringify(w) });

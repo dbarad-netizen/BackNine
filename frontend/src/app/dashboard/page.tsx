@@ -46,6 +46,7 @@ import CoachAlAvatar from "@/components/CoachAlAvatar";
 import MorningBriefing from "@/components/MorningBriefing";
 import TonightSleepCard from "@/components/TonightSleepCard";
 import NutritionCoachCard from "@/components/NutritionCoachCard";
+import WeeklyRecapCard from "@/components/WeeklyRecapCard";
 import DailyInsightCard from "@/components/DailyInsightCard";
 import SymptomCard from "@/components/SymptomCard";
 import WeeklyInsight from "@/components/WeeklyInsight";
@@ -1593,6 +1594,12 @@ export default function DashboardPage() {
                 window earlier if tomorrow's training is heavy. Renders
                 nothing when Oura history is too sparse. */}
             <TonightSleepCard onAsk={(seed) => openChatRef.current?.(seed)} />
+
+            {/* Weekly Recap — end-of-week celebration card. Only visible
+                Sat-Tue of the current ISO week (the celebration window).
+                One tap shares into the PulseFeed, seeding the community
+                pillar with content from every active user weekly. */}
+            <WeeklyRecapCard onAsk={(seed) => openChatRef.current?.(seed)} />
 
             {/* Symptom Card — Phase 2 of the Insight pillar.
                 Quick tag-based "how do you feel today?" log + correlation

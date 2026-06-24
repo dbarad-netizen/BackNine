@@ -44,6 +44,7 @@ import exercise_progression as exprog
 import training_load as tload
 import nutrition_today_extras as nut_extras
 import tonight_sleep as ts
+import weekly_recap as wrecap
 import labs as lbs
 import challenges as chl
 import apple_health as ah
@@ -2673,6 +2674,44 @@ def get_nutrition_today_coach(request: Request, local_now: Optional[str] = None)
         "fat":      sum(m["fat"]      for m in meals),
     }
     return nut_extras.build_payload(uid, today, consumed, settings, local_now)
+
+
+@app.get("/api/community/weekly-recap")
+def get_weekly_recap(request: Request, week: Optional[str] = None):
+    """Weekly recap aggregator — last 7-day numbers across Training, Nutrition,
+    and Sleep plus a Coach Al voice headline. Optional ?week=YYYY-MM-DD
+    selects a specific ISO-week anchor (any date inside that Mon-Sun)."""
+    session = _require_session(request)
+    return wrecap.build_payload(session["user_id"], week)
+
+
+@app.post("/api/community/weekly-recap/share")
+async def share_weekly_recap(request: Request):
+    """Post the user's weekly recap into the friend PulseFeed. Body may carry
+    an optional `week` anchor; defaults to the current week. Returns the
+    inserted activity_event row (or null if no friends yet — share is still
+    self-visible on the feed)."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    week = (body.get("week") or "").strip() or None
+    recap = wrecap.build_payload(user_id, week)
+    if not recap.get("has_content"):
+        raise HTTPException(status_code=400, detail="Nothing to share yet — log a workout, meal, or sleep night this week first.")
+
+    profile = _get_profile(user_id) or {}
+    user_name = (profile.get("name") or "").strip() or "Friend"
+
+    event = frd.record_event(
+        user_id=user_id,
+        event_type="weekly_recap",
+        payload=wrecap.build_share_payload(recap),
+        user_name=user_name,
+    )
+    return {"event": event, "recap": recap}
 
 
 @app.get("/api/sleep/tonight")

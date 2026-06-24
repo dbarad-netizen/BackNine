@@ -55,6 +55,7 @@ function eventEmoji(t: string): string {
     case "hrv_rebound":         return "📈";
     case "personal_best_sleep": return "🏅";
     case "prediction_streak":   return "🔥";
+    case "weekly_recap":        return "📣";
     default:                    return "✨";
   }
 }
@@ -69,6 +70,7 @@ const MILESTONE_TYPES = new Set([
   "prediction_streak",
   "streak_milestone",
   "challenge_completed",
+  "weekly_recap",
 ]);
 
 // Build the array of stat pills shown under the summary. Each pill is a tiny
@@ -119,6 +121,20 @@ function statPills(eventType: string, payload: Record<string, unknown>): { label
     case "challenge_completed": {
       const name = typeof get("challenge_name") === "string" ? (get("challenge_name") as string) : null;
       return name ? [{ label: "Challenge", value: name }] : [];
+    }
+    case "weekly_recap": {
+      const pills: { label: string; value: string }[] = [];
+      const workouts = num("workouts");
+      const prs      = num("pr_count");
+      const sleep    = num("avg_sleep");
+      const streak   = num("sleep_streak");
+      const proteinDays = num("protein_days");
+      if (workouts) pills.push({ label: "Sessions",   value: String(workouts) });
+      if (prs)      pills.push({ label: "PRs",        value: String(prs) });
+      if (proteinDays) pills.push({ label: "Protein days", value: String(proteinDays) });
+      if (sleep)    pills.push({ label: "Sleep avg",  value: `${sleep}h` });
+      if (streak && streak >= 3) pills.push({ label: "Sleep streak", value: `${streak}n` });
+      return pills.slice(0, 4);
     }
     default: return [];
   }
