@@ -44,6 +44,8 @@ import ChatWidget from "@/components/ChatWidget";
 import ProfileModal from "@/components/ProfileModal";
 import CoachAlAvatar from "@/components/CoachAlAvatar";
 import MorningBriefing from "@/components/MorningBriefing";
+import TonightSleepCard from "@/components/TonightSleepCard";
+import NutritionCoachCard from "@/components/NutritionCoachCard";
 import DailyInsightCard from "@/components/DailyInsightCard";
 import SymptomCard from "@/components/SymptomCard";
 import WeeklyInsight from "@/components/WeeklyInsight";
@@ -1585,6 +1587,13 @@ export default function DashboardPage() {
                 the merge note in MorningBriefing.tsx. */}
             <MorningBriefing onOpenChat={() => openChatRef.current?.()} />
 
+            {/* Tonight's Sleep prescription — forward-looking companion to
+                the Morning Briefing's backward-looking recap. Recommends a
+                bedtime window, surfaces sleep debt + streak, and shifts the
+                window earlier if tomorrow's training is heavy. Renders
+                nothing when Oura history is too sparse. */}
+            <TonightSleepCard />
+
             {/* Symptom Card — Phase 2 of the Insight pillar.
                 Quick tag-based "how do you feel today?" log + correlation
                 analysis. Surfaces "On low-energy days, sleep averaged
@@ -2340,6 +2349,11 @@ export default function DashboardPage() {
                 <div className="h-8 w-8 rounded-full border-2 border-[#1B3829] border-t-transparent animate-spin" />
               </div>
             )}
+
+            {/* Today's Plate — Coach Al voice card at the top. Mirrors the
+                Today's Workout pattern: pace check, protein streak, concrete
+                next-meal suggestion. Renders nothing when targets unset. */}
+            {!nutLoading && <NutritionCoachCard />}
 
             {!nutLoading && nutToday && (
               <>

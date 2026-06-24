@@ -945,6 +945,55 @@ export interface TrainingLoadPayload {
   muscle_balance:          MuscleBalance;
 }
 
+/** Pace status from the Nutrition Coach card. */
+export interface NutritionPace {
+  kind:    "on_pace" | "behind_protein" | "behind_calories" | "over_calories"
+         | "early" | "late_settled" | "no_targets";
+  message: string;
+}
+
+/** `/api/nutrition/today-coach` — Today's Plate / pace / streak payload. */
+export interface NutritionCoachPayload {
+  date:                 string;
+  pace:                 NutritionPace;
+  streak_days:          number;
+  streak_threshold_pct: number;
+  day_progress_pct:     number;
+  targets:              { calories: number; protein: number; carbs: number; fat: number };
+  consumed:             { calories: number; protein: number; carbs: number; fat: number };
+  remaining:            { calories: number; protein: number };
+  next_meal_hint:       string | null;
+}
+
+/** Bedtime recommendation block — null when Oura history is sparse. */
+export interface BedtimeRecommendation {
+  wind_down_start:        string;
+  lights_out:             string;
+  target_wake:            string;
+  target_hours:           number;
+  earlier_for_training:   boolean;
+}
+
+/** Last night's quick recap as shown in the Tonight's Sleep card. */
+export interface LastNightSummary {
+  date:        string;
+  hours:       number;
+  efficiency:  number | null;
+  hrv:         number | null;
+}
+
+/** `/api/sleep/tonight` payload. */
+export interface TonightSleepPayload {
+  date:                 string;
+  target_hours:         number;
+  bedtime:              BedtimeRecommendation | null;
+  streak_nights:        number;
+  sleep_debt_hours:     number | null;
+  last_night:           LastNightSummary | null;
+  tomorrow_intensity:   "heavy" | "moderate" | "easy" | "rest" | null;
+  coach_note:           string;
+}
+
 export interface Workout {
   id:                string;
   date:              string;
@@ -1451,6 +1500,15 @@ export const api = {
   },
   trainingLoad(): Promise<TrainingLoadPayload> {
     return request("/api/training/load");
+  },
+  nutritionTodayCoach(): Promise<NutritionCoachPayload> {
+    // Pass the client's local ISO timestamp so the server's "early / late /
+    // on-pace" math uses the user's actual hour-of-day, not the Render UTC.
+    const localNow = new Date().toISOString();
+    return request(`/api/nutrition/today-coach?local_now=${encodeURIComponent(localNow)}`);
+  },
+  tonightSleep(): Promise<TonightSleepPayload> {
+    return request("/api/sleep/tonight");
   },
   logWorkout(w: Omit<Workout, "id" | "logged_at" | "muscle_groups" | "total_volume_lbs">): Promise<Workout> {
     return request("/api/training/workouts", { method: "POST", body: JSON.stringify(w) });

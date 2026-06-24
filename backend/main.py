@@ -42,6 +42,8 @@ import today_workout as tw
 import training as trn
 import exercise_progression as exprog
 import training_load as tload
+import nutrition_today_extras as nut_extras
+import tonight_sleep as ts
 import labs as lbs
 import challenges as chl
 import apple_health as ah
@@ -2651,6 +2653,36 @@ def get_training_load(request: Request):
     Single endpoint to keep the Training tab to one extra request."""
     session = _require_session(request)
     return tload.build_payload(session["user_id"])
+
+
+@app.get("/api/nutrition/today-coach")
+def get_nutrition_today_coach(request: Request, local_now: Optional[str] = None):
+    """Powers the new NutritionCoachCard at the top of the Nutrition tab —
+    pace check, protein streak, next-meal hint. Re-uses the same data the
+    /api/nutrition/today endpoint pulls (consumed totals + settings) and
+    pivots into the coach voice."""
+    session = _require_session(request)
+    uid     = session["user_id"]
+    today   = _user_local_today_iso(request)
+    meals   = nutr.get_meals(today, uid)
+    settings = nutr.get_settings(uid)
+    consumed = {
+        "calories": sum(m["calories"] for m in meals),
+        "protein":  sum(m["protein"]  for m in meals),
+        "carbs":    sum(m["carbs"]    for m in meals),
+        "fat":      sum(m["fat"]      for m in meals),
+    }
+    return nut_extras.build_payload(uid, today, consumed, settings, local_now)
+
+
+@app.get("/api/sleep/tonight")
+def get_tonight_sleep(request: Request):
+    """Tonight's Sleep prescription — recommended bedtime/lights-out window,
+    sleep debt, streak, last-night recap, and Coach Al's voice note. Lives
+    at the top of the Scorecard (Sleep view)."""
+    session = _require_session(request)
+    today   = _user_local_today_iso(request)
+    return ts.build_payload(session["user_id"], today)
 
 
 @app.post("/api/training/workouts")
