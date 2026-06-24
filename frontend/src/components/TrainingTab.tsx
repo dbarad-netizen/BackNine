@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/Button";
 import SystemTemplatesBrowser from "@/components/SystemTemplatesBrowser";
 import TodayWorkoutCard from "@/components/TodayWorkoutCard";
 import LifetimePrsCard from "@/components/LifetimePrsCard";
+import ExerciseHistoryModal from "@/components/ExerciseHistoryModal";
 
 const TYPE_ICON: Record<string, string>  = { lifting: "🏋️", stretching: "🧘", mobility: "🔄", cardio: "🏃" };
 const TYPE_LABEL: Record<string, string> = { lifting: "Lifting", stretching: "Stretch", mobility: "Mobility", cardio: "Cardio" };
@@ -753,11 +754,16 @@ function RecentWorkouts({
   onDelete,
   onUpdated,
   onStretch,
+  onOpenHistory,
 }: {
   workouts: Workout[];
   onDelete: (id: string) => void;
   onUpdated: (w: Workout) => void;
   onStretch: (muscleGroups: string[]) => void;
+  /** Tap an exercise name → open the history modal for that exercise.
+   *  Only meaningful for lifting rows; we still pass it through for
+   *  consistency. */
+  onOpenHistory: (exerciseName: string) => void;
 }) {
   if (workouts.length === 0) {
     return (
@@ -855,14 +861,29 @@ function RecentWorkouts({
                     // Each exercise on its own line so the progression badge
                     // has room. Comma-joining read fine before but hid every
                     // bit of session-over-session detail behind a wall of
-                    // names — the badge is the whole point here.
+                    // names — the badge is the whole point here. Names are
+                    // tappable on lifting rows to open the per-exercise
+                    // history modal (chart + every prior session).
                     <ul className="text-sm text-gray-700 space-y-0.5">
-                      {w.exercises.map((e, i) => (
-                        <li key={`${e.name}-${i}`} className="flex items-center gap-1.5 flex-wrap">
-                          <span className="capitalize">{e.name}</span>
-                          <ProgressionBadge p={e.progression} />
-                        </li>
-                      ))}
+                      {w.exercises.map((e, i) => {
+                        const tappable = w.kind === "strength" && !!e.sets?.length;
+                        return (
+                          <li key={`${e.name}-${i}`} className="flex items-center gap-1.5 flex-wrap">
+                            {tappable ? (
+                              <button
+                                onClick={() => onOpenHistory(e.name)}
+                                className="capitalize text-left hover:text-[#1B3829] hover:underline transition-colors"
+                                title="See history for this lift"
+                              >
+                                {e.name}
+                              </button>
+                            ) : (
+                              <span className="capitalize">{e.name}</span>
+                            )}
+                            <ProgressionBadge p={e.progression} />
+                          </li>
+                        );
+                      })}
                     </ul>
                   ) : (
                     <p className="text-sm text-gray-700">
@@ -1053,6 +1074,8 @@ export default function TrainingTab({
   // Today's Workout card — pre-fills the exercise list so the user just
   // adds sets/reps as they lift.
   const [loggerSeed,   setLoggerSeed]   = useState<{ name: string; exercises: { name: string }[] } | null>(null);
+  // Exercise name currently being inspected in the history modal. Null = closed.
+  const [historyName,  setHistoryName]  = useState<string | null>(null);
 
   // Quick-log from the Scorecard opens the logger straight away.
   useEffect(() => {
@@ -1180,6 +1203,15 @@ export default function TrainingTab({
         onDelete={handleDeleteWorkout}
         onUpdated={handleUpdatedWorkout}
         onStretch={handleStretch}
+        onOpenHistory={setHistoryName}
+      />
+
+      {/* Per-exercise history modal — controlled by RecentWorkouts taps.
+          Rendered at the tab root so it overlays cleanly without inheriting
+          any scroll context from the list. */}
+      <ExerciseHistoryModal
+        exerciseName={historyName}
+        onClose={() => setHistoryName(null)}
       />
 
       {/* Settings */}

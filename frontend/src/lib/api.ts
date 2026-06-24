@@ -892,6 +892,24 @@ export interface LifetimePr {
   date:            string;
 }
 
+/** One session in an exercise's history timeline. */
+export interface ExerciseHistorySession {
+  date:           string;
+  top_weight_lbs: number;
+  top_reps:       number;
+  e1rm_lbs:       number;
+  volume_lbs:     number;
+}
+
+/** Response shape of `/api/training/exercise-history?name=...`. */
+export interface ExerciseHistory {
+  exercise:             string;
+  display:              string;
+  sessions:             ExerciseHistorySession[];
+  pr:                   LifetimePr | null;
+  current_streak_weeks: number;
+}
+
 export interface Workout {
   id:                string;
   date:              string;
@@ -1392,6 +1410,9 @@ export const api = {
   },
   lifetimePrs(limit = 10): Promise<{ prs: LifetimePr[] }> {
     return request(`/api/training/lifetime-prs?limit=${limit}`);
+  },
+  exerciseHistory(name: string): Promise<ExerciseHistory> {
+    return request(`/api/training/exercise-history?name=${encodeURIComponent(name)}`);
   },
   logWorkout(w: Omit<Workout, "id" | "logged_at" | "muscle_groups" | "total_volume_lbs">): Promise<Workout> {
     return request("/api/training/workouts", { method: "POST", body: JSON.stringify(w) });

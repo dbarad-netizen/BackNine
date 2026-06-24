@@ -2632,6 +2632,15 @@ def get_lifetime_prs(request: Request, limit: int = 10):
     return {"prs": exprog.compute_lifetime_prs(session["user_id"], limit=limit)}
 
 
+@app.get("/api/training/exercise-history")
+def get_exercise_history(request: Request, name: str):
+    """Full per-session history for one exercise — powers the tap-through
+    history modal on Recent Workouts. Returns chronological sessions plus
+    the lifetime PR and current consecutive-week streak for this lift."""
+    session = _require_session(request)
+    return exprog.exercise_history(session["user_id"], name)
+
+
 @app.post("/api/training/workouts")
 async def log_workout(request: Request):
     session = _require_session(request)

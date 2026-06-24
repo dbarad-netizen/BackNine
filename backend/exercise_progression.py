@@ -269,6 +269,93 @@ def annotate_workouts(user_id: str, workouts: list[dict]) -> list[dict]:
 
 # ── summary endpoint helpers ────────────────────────────────────────────────
 
+def exercise_history(user_id: str, exercise_name: str) -> dict:
+    """Full session-by-session history for one exercise. Used by the tap-to-
+    open history modal on Recent Workouts.
+
+    Returns:
+        {
+          "exercise":   <normalized name>,
+          "display":    <best original casing seen>,
+          "sessions":   [{date, top_weight_lbs, top_reps, e1rm_lbs, volume_lbs}],
+          "pr": { e1rm_lbs, top_weight_lbs, top_reps, date } | None,
+          "current_streak_weeks": <int — consecutive ISO weeks with ≥1 session>,
+        }
+    Sessions are oldest → newest so the frontend can chart a left-to-right
+    trend line without extra sorting.
+    """
+    if not user_id or not exercise_name:
+        return {"exercise": "", "display": "", "sessions": [], "pr": None, "current_streak_weeks": 0}
+
+    key = _ex_key(exercise_name)
+    history = _fetch_history(user_id)
+    timeline = _build_timeline(history)
+    entries = timeline.get(key) or []
+
+    # Resolve the prettiest display name we've ever seen for this exercise
+    # (the user types "Bench Press" and "bench press" and we want the cap'd
+    # version in the modal header).
+    display = exercise_name
+    for row in history:
+        for ex in row.get("exercises") or []:
+            if not isinstance(ex, dict):
+                continue
+            nm = (ex.get("name") or "").strip()
+            if _ex_key(nm) == key and nm and any(c.isupper() for c in nm):
+                display = nm
+                break
+
+    sessions = [
+        {
+            "date":            e["workout_date"],
+            "top_weight_lbs":  round(e["top_weight"]),
+            "top_reps":        e["top_reps"],
+            "e1rm_lbs":        round(e["e1rm"]),
+            "volume_lbs":      round(e["volume"]),
+        }
+        for e in entries
+    ]
+
+    pr = None
+    if entries:
+        best = max(entries, key=lambda e: e["e1rm"])
+        pr = {
+            "e1rm_lbs":       round(best["e1rm"]),
+            "top_weight_lbs": round(best["top_weight"]),
+            "top_reps":       best["top_reps"],
+            "date":           best["workout_date"],
+        }
+
+    # Consecutive-week streak: walk back from the most recent session's ISO
+    # week and count how many uninterrupted weeks the user has logged this
+    # specific exercise. Helpful "you've benched 6 weeks in a row" framing.
+    streak = 0
+    if entries:
+        weeks = {datetime.strptime(e["workout_date"], "%Y-%m-%d").date().isocalendar()[:2]
+                 for e in entries}
+        last = datetime.strptime(entries[-1]["workout_date"], "%Y-%m-%d").date()
+        ly, lw, _ = last.isocalendar()
+        # Walk backward one ISO week at a time.
+        cur = (ly, lw)
+        while cur in weeks:
+            streak += 1
+            # Subtract a week — use 7 days before the Monday of cur week.
+            from datetime import date as _d
+            # Find Monday of (ly, lw)
+            jan4 = _d(cur[0], 1, 4)
+            week_start = jan4 + timedelta(days=-jan4.isoweekday() + 1 + (cur[1] - 1) * 7)
+            prev = week_start - timedelta(days=7)
+            cur = prev.isocalendar()[:2]
+
+    return {
+        "exercise":              key,
+        "display":               display,
+        "sessions":              sessions,
+        "pr":                    pr,
+        "current_streak_weeks":  streak,
+    }
+
+
 def compute_lifetime_prs(user_id: str, limit: int = 10) -> list[dict]:
     """Return the user's current lifetime PR per exercise, sorted by recency
     of the PR. Used by a future 'Your PRs' panel — surfaced now so the
