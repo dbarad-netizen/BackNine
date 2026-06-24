@@ -133,9 +133,14 @@ export default function SymptomCard() {
     <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between mb-2">
         <div>
-          <p className="text-sm font-semibold text-gray-900">How do you feel today?</p>
+          <p className="text-sm font-semibold text-gray-900">🩺 Anything off today?</p>
           <p className="text-[11px] text-gray-600 mt-0.5">
-            Quick tap if anything&apos;s off. Log {symptomDays60 < 3 ? `${symptomDays60}/3` : ""} symptom days to unlock correlations.
+            Mood lives in the morning briefing — this card is for specific
+            physical symptoms. Tag anything off; once you have 3+ symptom
+            days, Coach Al shows you what they correlate with.
+            {symptomDays60 > 0 && symptomDays60 < 3 && (
+              <span className="ml-1 font-medium text-[#1B3829]">{symptomDays60}/3 logged</span>
+            )}
           </p>
         </div>
         {today && saved && (
