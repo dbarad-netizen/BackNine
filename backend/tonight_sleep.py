@@ -175,37 +175,44 @@ def _sleep_streak(smm: dict, today: _date) -> int:
 
 
 def _sleep_debt(smm: dict, target_hours: float, today: _date) -> Optional[float]:
-    """Sum of (per-night target - actual) over the last 7 nights.
+    """Cumulative sleep deficit (need − actual) over the last 7 nights,
+    netting surplus nights against deficit nights, then floored at zero.
 
-    Critical: Oura calculates the user's sleep need DYNAMICALLY per night
-    (age, recent recovery, training load) and we cache it as `sleep_need`
-    in seconds. When that value is present we use it instead of the user's
-    static target_hours — this is what makes the BackNine number match
-    what the Oura app shows. Static fallback is only used when Oura hasn't
-    reported a per-night need (rare; happens on partial-night data).
+    Critical to match the Oura app's number:
+      1. Oura calculates the user's sleep need DYNAMICALLY per night (age,
+         recent recovery, training load) and we cache it as `sleep_need`
+         in seconds. When present we use it instead of the user's static
+         target — that's the methodology Oura uses internally.
+      2. A night ABOVE the need REDUCES the running debt (you bank sleep
+         credit). v1 of this function used `max(0, gap)` per night, which
+         threw away surplus and made our number ~2-3× higher than Oura's
+         for users who had even one or two long nights in the window.
+         The fix is to sum signed gaps and floor the TOTAL at zero.
+      3. A single huge surplus night can't drag the running debt below
+         zero permanently (also matches Oura — banked sleep doesn't make
+         you a credit holder).
 
     Returns total debt in hours (one decimal). None if fewer than 4
     nights of data (avoids alarming the user from a 1-2 night sample)."""
-    debts: list[float] = []
+    gaps: list[float] = []   # SIGNED — positive = deficit, negative = surplus
     for offset in range(1, DEBT_WINDOW_NIGHTS + 1):
         d = (today - timedelta(days=offset)).isoformat()
         row = smm.get(d)
         if not row or row.get("total") is None:
             continue
         actual_sec = row.get("total") or 0
-        # Prefer Oura's personalized need; fall back to user's static
-        # target only when Oura didn't report one for this night.
-        need_sec = row.get("sleep_need")
+        need_sec   = row.get("sleep_need")
         if need_sec and need_sec > 0:
             target_sec = float(need_sec)
         else:
             target_sec = target_hours * 3600.0
-        gap_sec = target_sec - actual_sec
-        # Don't bank positive credits — sleeping 9h doesn't erase prior debt.
-        debts.append(max(0.0, gap_sec))
-    if len(debts) < 4:
+        gaps.append(target_sec - actual_sec)   # keep the sign
+
+    if len(gaps) < 4:
         return None
-    total_hours = sum(debts) / 3600.0
+
+    total_sec = max(0.0, sum(gaps))           # floor TOTAL, not each night
+    total_hours = total_sec / 3600.0
     return min(DEBT_SANITY_MAX_HOURS, round(total_hours, 1))
 
 
