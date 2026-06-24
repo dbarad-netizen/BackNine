@@ -40,6 +40,7 @@ import symptoms as sym
 import stack as stk
 import today_workout as tw
 import training as trn
+import exercise_progression as exprog
 import labs as lbs
 import challenges as chl
 import apple_health as ah
@@ -2614,7 +2615,21 @@ def search_exercises(request: Request, q: str = ""):
 @app.get("/api/training/workouts")
 def get_workouts(request: Request, days: int = 30):
     session = _require_session(request)
-    return {"workouts": trn.get_workouts(session["user_id"], days)}
+    user_id = session["user_id"]
+    workouts = trn.get_workouts(user_id, days)
+    # Annotate every lifting exercise with a PR / progression badge. Pure
+    # enrichment — non-lifting exercises pass through untouched and the
+    # function is no-op-safe if Supabase / history is unavailable.
+    workouts = exprog.annotate_workouts(user_id, workouts)
+    return {"workouts": workouts}
+
+
+@app.get("/api/training/lifetime-prs")
+def get_lifetime_prs(request: Request, limit: int = 10):
+    """User's current lifetime PR per exercise (recency-sorted). Surfaced for a
+    future 'Your PRs' panel; endpoint shipped now so the data is in place."""
+    session = _require_session(request)
+    return {"prs": exprog.compute_lifetime_prs(session["user_id"], limit=limit)}
 
 
 @app.post("/api/training/workouts")

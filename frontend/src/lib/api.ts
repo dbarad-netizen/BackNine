@@ -859,10 +859,37 @@ export interface ParsedWorkout {
   notes:        string;
 }
 
+/** PR / progression badge for a single lifting exercise within a workout.
+ *  Computed server-side against the user's 365d history (Epley e1RM). */
+export interface ExerciseProgression {
+  /** pr = new lifetime e1RM, up/down = vs. last session, same = within noise
+   *  band, new = first time logging this lift. */
+  kind:       "pr" | "up" | "down" | "same" | "new";
+  /** Pre-formatted label (e.g. "🏆 PR", "▲ +5 lb"). Null when the badge
+   *  should be hidden (kind="same"). */
+  label:      string | null;
+  /** Signed delta vs. comparison point in pounds of e1RM. Absent for "new". */
+  delta_lbs?: number;
+}
+
 export interface WorkoutExercise {
   name:         string;
   sets?:        WorkoutSet[];   // lifting
   duration_sec?: number;        // stretching
+  /** Server-computed PR / trend badge — only present on lifting rows that
+   *  had at least one valid set. */
+  progression?: ExerciseProgression;
+  /** Server-computed estimated 1RM (Epley) for this session of the lift. */
+  e1rm_lbs?:    number;
+}
+
+/** Lifetime PR snapshot per exercise — `/api/training/lifetime-prs` payload. */
+export interface LifetimePr {
+  exercise:        string;
+  e1rm_lbs:        number;
+  top_weight_lbs:  number;
+  top_reps:        number;
+  date:            string;
 }
 
 export interface Workout {
@@ -1362,6 +1389,9 @@ export const api = {
   },
   workouts(days?: number): Promise<{ workouts: Workout[] }> {
     return request(`/api/training/workouts${days ? `?days=${days}` : ""}`);
+  },
+  lifetimePrs(limit = 10): Promise<{ prs: LifetimePr[] }> {
+    return request(`/api/training/lifetime-prs?limit=${limit}`);
   },
   logWorkout(w: Omit<Workout, "id" | "logged_at" | "muscle_groups" | "total_volume_lbs">): Promise<Workout> {
     return request("/api/training/workouts", { method: "POST", body: JSON.stringify(w) });

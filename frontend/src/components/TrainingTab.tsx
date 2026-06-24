@@ -11,6 +11,7 @@ import {
   type WorkoutSet,
   type WorkoutTemplate,
   type ExerciseInfo,
+  type ExerciseProgression,
   type StretchRoutine,
   type TrainingSettings,
 } from "@/lib/api";
@@ -56,6 +57,37 @@ const TYPE_BADGE: Record<string, string> = {
   mobility:   "bg-amber-50 text-amber-700",
   cardio:     "bg-rose-50 text-rose-700",
 };
+
+// ── Progression badge ─────────────────────────────────────────────────────────
+// Tiny pill rendered next to a lifting exercise name on the recent-workouts
+// list. Server computes the e1RM delta vs. the user's history; we just paint
+// it. Visually loud for a PR (gold), quiet for ▲/▼, hidden for "same".
+const PROGRESSION_STYLE: Record<ExerciseProgression["kind"], string> = {
+  pr:   "bg-amber-100 text-amber-800 border border-amber-200",
+  up:   "bg-emerald-50 text-emerald-700 border border-emerald-100",
+  down: "bg-rose-50 text-rose-700 border border-rose-100",
+  same: "",
+  new:  "bg-sky-50 text-sky-700 border border-sky-100",
+};
+function ProgressionBadge({ p }: { p?: ExerciseProgression }) {
+  if (!p || !p.label) return null;
+  const cls = PROGRESSION_STYLE[p.kind] || "";
+  if (!cls) return null;
+  const title =
+    p.kind === "pr"   ? `Lifetime best estimated 1RM${p.delta_lbs ? ` (+${p.delta_lbs} lb vs. prior best)` : ""}`
+    : p.kind === "up"   ? `Estimated 1RM up ${p.delta_lbs} lb vs. last session`
+    : p.kind === "down" ? `Estimated 1RM down ${Math.abs(p.delta_lbs || 0)} lb vs. last session`
+    : p.kind === "new"  ? `First time logging this lift`
+    : "";
+  return (
+    <span
+      className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap ${cls}`}
+      title={title}
+    >
+      {p.label}
+    </span>
+  );
+}
 
 // ── Daily recommendation card ─────────────────────────────────────────────────
 function RecCard({ rec }: { rec: TrainingRecommendation }) {
@@ -819,9 +851,18 @@ function RecentWorkouts({
                     <span className="text-xs text-gray-600">{w.date}</span>
                   </div>
                   {w.exercises.length > 0 ? (
-                    <p className="text-sm text-gray-700 capitalize">
-                      {w.exercises.map(e => e.name).join(", ")}
-                    </p>
+                    // Each exercise on its own line so the progression badge
+                    // has room. Comma-joining read fine before but hid every
+                    // bit of session-over-session detail behind a wall of
+                    // names — the badge is the whole point here.
+                    <ul className="text-sm text-gray-700 space-y-0.5">
+                      {w.exercises.map((e, i) => (
+                        <li key={`${e.name}-${i}`} className="flex items-center gap-1.5 flex-wrap">
+                          <span className="capitalize">{e.name}</span>
+                          <ProgressionBadge p={e.progression} />
+                        </li>
+                      ))}
+                    </ul>
                   ) : (
                     <p className="text-sm text-gray-700">
                       {w.notes?.trim() || "Quick session"}
