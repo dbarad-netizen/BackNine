@@ -1255,6 +1255,11 @@ export const api = {
       body: JSON.stringify({ date, feedback }),
     });
   },
+  insightList(opts: { days?: number; category?: string } = {}): Promise<{ insights: DailyInsight[] }> {
+    const qs = new URLSearchParams({ days: String(opts.days ?? 90) });
+    if (opts.category) qs.set("category", opts.category);
+    return request(`/api/insight/list?${qs.toString()}`);
+  },
 
   // ── System-curated workout templates (browse library) ──────────────
   systemTemplates(): Promise<{ templates: SystemWorkoutTemplate[] }> {

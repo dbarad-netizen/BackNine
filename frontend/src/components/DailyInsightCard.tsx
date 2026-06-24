@@ -18,6 +18,7 @@
  */
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { api, type DailyInsight } from "@/lib/api";
 
 const CATEGORY_BADGE: Record<DailyInsight["category"], { label: string; emoji: string; bg: string; fg: string }> = {
@@ -138,10 +139,18 @@ export default function DailyInsightCard() {
           👎 No
         </button>
         {fb && (
-          <span className="ml-auto text-[10px] text-gray-600 italic">
+          <span className="ml-2 text-[10px] text-gray-600 italic">
             Thanks — future insights will tune to your taste.
           </span>
         )}
+        {/* Always-visible link to the Insights Feed — accumulating history
+            of every insight Coach Al has surfaced for the user. */}
+        <Link
+          href="/insights"
+          className="ml-auto text-[11px] font-semibold text-[#1B3829] hover:underline"
+        >
+          View all insights →
+        </Link>
       </div>
     </section>
   );

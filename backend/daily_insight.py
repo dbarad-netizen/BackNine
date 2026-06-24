@@ -421,6 +421,28 @@ def get_or_generate(user_id: str, profile: dict, today_iso: str) -> Optional[dic
     return row
 
 
+def list_recent(user_id: str, days: int = 90, category: Optional[str] = None) -> list[dict]:
+    """Return past daily insights for the user (newest first), optionally
+    filtered by category. Used by the Insights Feed page."""
+    sb = _sb()
+    if not sb:
+        return []
+    cutoff = (_date.today() - timedelta(days=days)).isoformat()
+    try:
+        q = (sb.table("daily_insights")
+               .select("*")
+               .eq("user_id", user_id)
+               .gte("date", cutoff)
+               .order("date", desc=True)
+               .limit(180))
+        if category:
+            q = q.eq("category", category)
+        res = q.execute()
+        return res.data or []
+    except Exception:
+        return []
+
+
 def record_feedback(user_id: str, date_iso: str, feedback: str) -> bool:
     """User flagged the insight as 👍 / 👎 / dismissed. Persisted so future
     generations can bias toward what this user finds useful."""

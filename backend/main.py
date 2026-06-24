@@ -2031,6 +2031,19 @@ def get_daily_insight(request: Request):
     return {"insight": insight}
 
 
+@app.get("/api/insight/list")
+def list_insights(request: Request, days: int = 90, category: Optional[str] = None):
+    """All past daily insights for the user (newest first), optionally
+    filtered by category. Drives the Insights Feed page."""
+    session = _require_session(request)
+    try:
+        days_int = max(7, min(int(days), 365))
+    except Exception:
+        days_int = 90
+    cat = (category or "").strip().lower() or None
+    return {"insights": di.list_recent(session["user_id"], days=days_int, category=cat)}
+
+
 @app.post("/api/insight/daily/feedback")
 async def record_insight_feedback(request: Request):
     """Persist the user's 👍 / 👎 / dismiss reaction to today's insight.
