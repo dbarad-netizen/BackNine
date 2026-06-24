@@ -16,7 +16,19 @@
  */
 
 import { useEffect, useState } from "react";
-import { api, type SymptomLog, type SymptomCorrelation } from "@/lib/api";
+import { api, type Mood, type SymptomLog, type SymptomCorrelation } from "@/lib/api";
+
+// Mood emoji row — moved out of MorningBriefing into this unified card so
+// users have ONE place to do the daily check-in. Mood = emotional pulse;
+// the symptom tags below = physical issues. Both write to their own
+// backend tables (daily_checkins / symptom_logs) — UI consolidates.
+const MOODS: { value: Mood; emoji: string; label: string }[] = [
+  { value: "great", emoji: "😊", label: "Great" },
+  { value: "good",  emoji: "🙂", label: "Good"  },
+  { value: "okay",  emoji: "😐", label: "Okay"  },
+  { value: "tired", emoji: "😴", label: "Tired" },
+  { value: "off",   emoji: "😣", label: "Off"   },
+];
 
 interface CatalogItem { id: string; label: string; emoji: string; }
 
@@ -31,6 +43,11 @@ export default function SymptomCard() {
   const [today, setToday]       = useState<SymptomLog | null>(null);
   const [logs, setLogs]         = useState<SymptomLog[]>([]);
   const [loading, setLoading]   = useState(true);
+
+  // Mood half of the unified Daily Check-in
+  const [todayMood, setTodayMood]   = useState<Mood | null>(null);
+  const [moodSaving, setMoodSaving] = useState(false);
+  const [moodSaved, setMoodSaved]   = useState(false);
 
   const [picked, setPicked]     = useState<Set<string>>(new Set());
   const [severity, setSeverity] = useState<"mild" | "moderate" | "severe" | "">("");
@@ -58,8 +75,30 @@ export default function SymptomCard() {
           setNotes(t.notes ?? "");
         }
       }).catch(() => {}),
+      // Load today's mood from the checkins endpoint (same source the
+      // briefing was using before the unification).
+      api.getCheckinToday().then(r => {
+        const m = (r as { mood?: Mood | null }).mood ?? null;
+        if (m) setTodayMood(m);
+      }).catch(() => {}),
     ]).finally(() => setLoading(false));
   }, [todayIso]);
+
+  const handleMoodTap = async (mood: Mood) => {
+    if (moodSaving) return;
+    setMoodSaving(true);
+    setMoodSaved(false);
+    const previous = todayMood;
+    setTodayMood(mood);  // optimistic
+    try {
+      await api.postCheckin(mood);
+      setMoodSaved(true);
+    } catch {
+      setTodayMood(previous);  // revert on failure
+    } finally {
+      setMoodSaving(false);
+    }
+  };
 
   const togglePick = (id: string) => {
     setPicked(prev => {
@@ -133,20 +172,53 @@ export default function SymptomCard() {
     <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between mb-2">
         <div>
-          <p className="text-sm font-semibold text-gray-900">🩺 Anything off today?</p>
+          <p className="text-sm font-semibold text-gray-900">📋 Daily Check-in</p>
           <p className="text-[11px] text-gray-600 mt-0.5">
-            Mood lives in the morning briefing — this card is for specific
-            physical symptoms. Tag anything off; once you have 3+ symptom
-            days, Coach Al shows you what they correlate with.
-            {symptomDays60 > 0 && symptomDays60 < 3 && (
-              <span className="ml-1 font-medium text-[#1B3829]">{symptomDays60}/3 logged</span>
-            )}
+            Tap your mood. Add any symptoms below if something feels off.
           </p>
         </div>
-        {today && saved && (
+        {(moodSaved || (today && saved)) && (
           <span className="text-[11px] font-semibold text-emerald-700">✓ Saved</span>
         )}
       </div>
+
+      {/* Mood pulse — moved from MorningBriefing. One tap, emotional pulse. */}
+      <div className="mb-3 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5">
+        <p className="text-[10px] uppercase tracking-wide font-semibold text-gray-600 mb-1.5">
+          {todayMood ? "How you're feeling today" : "How are you feeling today?"}
+        </p>
+        <div className="flex gap-1.5">
+          {MOODS.map(m => {
+            const selected = todayMood === m.value;
+            return (
+              <button
+                key={m.value}
+                onClick={() => handleMoodTap(m.value)}
+                disabled={moodSaving}
+                className={`flex-1 rounded-lg py-2 transition-all flex flex-col items-center gap-0.5 disabled:opacity-60 ${
+                  selected
+                    ? "bg-[#1B3829] text-white ring-2 ring-[#1B3829]/40 shadow scale-105"
+                    : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 active:scale-95"
+                }`}
+                title={m.label}
+              >
+                <span className="text-base leading-none">{m.emoji}</span>
+                <span className={`text-[9px] font-semibold uppercase tracking-wide ${selected ? "text-white" : "text-gray-600"}`}>
+                  {m.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Anything off? — physical symptom tags */}
+      <p className="text-[10px] uppercase tracking-wide font-semibold text-gray-600 mb-1.5">
+        Anything off? <span className="font-normal lowercase text-gray-600 normal-case">(skip if feeling fine)</span>
+        {symptomDays60 > 0 && symptomDays60 < 3 && (
+          <span className="ml-1 font-medium text-[#1B3829] normal-case lowercase"> · {symptomDays60}/3 logged to unlock correlations</span>
+        )}
+      </p>
 
       {/* Tag picker — toggleable chips */}
       <div className="flex flex-wrap gap-1.5 mb-2">

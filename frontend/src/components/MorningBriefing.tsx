@@ -273,47 +273,10 @@ export default function MorningBriefing({ onOpenChat }: Props) {
             )}
           </div>
 
-          {/* Daily check-in — always visible. Selected emoji stays highlighted
-              with a strong contrast pill so the tap registers clearly.
-              Tapping a different one updates the selection in place. */}
-          <div className="mb-3 rounded-xl bg-white/10 border border-white/15 px-3 py-2.5">
-            <p className="text-[11px] text-white/70 mb-1.5">
-              {moodLogged ? "How you're feeling today" : "How are you feeling this morning?"}
-            </p>
-            <div className="flex gap-1.5">
-              {MOODS.map(m => {
-                const selected = todayMood === m.value;
-                return (
-                  <button
-                    key={m.value}
-                    onClick={() => handleMoodTap(m.value)}
-                    disabled={savingMood}
-                    className={`flex-1 rounded-lg py-2 transition-all flex flex-col items-center gap-0.5 disabled:opacity-60 ${
-                      selected
-                        ? "bg-white text-[#1B3829] ring-2 ring-white shadow-lg scale-105"
-                        : "bg-white/5 hover:bg-white/15 active:scale-95"
-                    }`}
-                    title={m.label}
-                  >
-                    <span className="text-lg leading-none">{m.emoji}</span>
-                    <span className={`text-[9px] font-semibold uppercase tracking-wide ${
-                      selected ? "text-[#1B3829]" : "text-white/70"
-                    }`}>
-                      {m.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            {/* Save status — small confirmation/error line below the row */}
-            <p className="text-[10px] text-white/60 mt-1.5 min-h-[1em]">
-              {savingMood && "Saving…"}
-              {!savingMood && saveStatus === "saved" && "✓ Saved · Coach Al will use this in tomorrow's note"}
-              {!savingMood && saveStatus === "error" && (
-                <span className="text-red-200">Couldn&apos;t save — tap again to retry</span>
-              )}
-            </p>
-          </div>
+          {/* Mood check-in moved to the unified Daily Check-in card below
+              the briefing — see DailyCheckinCard / SymptomCard. We still
+              load today's mood here so the briefing's narrative + collapse
+              behavior remain mood-aware. */}
 
           {pending ? (
             <div className="rounded-xl bg-white/10 border border-white/15 px-3 py-3">
