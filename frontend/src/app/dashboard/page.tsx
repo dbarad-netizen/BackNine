@@ -22,6 +22,7 @@ import ScoreRing from "@/components/ScoreRing";
 import SupplementsCard from "@/components/SupplementsCard";
 import PeptidesCard from "@/components/PeptidesCard";
 import MedicationsCard from "@/components/MedicationsCard";
+import StackEfficacyCard from "@/components/StackEfficacyCard";
 // LabsCard removed — labs are managed in the Metrics tab (LabsTab) instead.
 // The Annual Physical report reads from that canonical source.
 import LongevityMetricModal from "@/components/LongevityMetricModal";
@@ -2540,6 +2541,12 @@ export default function DashboardPage() {
                 {/* Labs live in the Metrics tab (Scorecard → 📊 Metrics → Labs)
                     not here. The Annual Physical Snapshot reads from that
                     canonical source. */}
+
+                {/* Stack Efficacy — Phase 4 of the Insight pillar. For every
+                    active supplement/peptide/medication with 14+ days of
+                    post-start data, shows before-vs-after deltas across
+                    sleep, HRV, RHR, etc. Renders nothing if no items yet. */}
+                <StackEfficacyCard />
 
                 {/* ─ Settings ─ */}
                 <div>

@@ -37,6 +37,7 @@ import report_narrative as narrate_mod
 import system_templates as sys_tmpl
 import daily_insight as di
 import symptoms as sym
+import stack as stk
 import training as trn
 import labs as lbs
 import challenges as chl
@@ -2045,6 +2046,28 @@ async def record_insight_feedback(request: Request):
     return {"ok": ok}
 
 
+# ── Stack Efficacy (Insight Phase 4) ────────────────────────────────────
+# For each currently-active supplement / peptide / medication with at
+# least 14 days of post-start data, compares before-vs-after metric
+# averages (sleep, HRV, RHR, etc.) so the user can see whether their
+# experiments are actually doing something. Pure observational.
+
+@app.get("/api/stack/efficacy")
+def get_stack_efficacy(request: Request):
+    """Return per-item before/after metric deltas for active stack items.
+    On first call we backfill events from the current profile snapshot
+    so the analysis can start running. Best-effort throughout — errors
+    surface as empty lists, never crash the request."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    profile = _get_profile(user_id) or {}
+    try:
+        stk.backfill_from_current_stack(user_id, profile)
+    except Exception:
+        pass
+    return stk.compute_efficacy(user_id)
+
+
 # ── Symptom journal + correlation (Insight Phase 2) ─────────────────────
 # User logs "how do you feel today?" with tags + optional severity.
 # Once 5+ symptom days exist in the window, /correlation runs a delta
@@ -3397,11 +3420,26 @@ async def save_profile(request: Request):
     # table. The user_profiles.labs jsonb column is left in place as a
     # no-op for backwards compatibility.
     data["user_id"] = user_id
+
+    # Snapshot the existing stack BEFORE the upsert so the stack-events
+    # diff (Insight Phase 4) can detect adds/removes/dose-changes. We
+    # read from _get_profile rather than re-querying because that helper
+    # is already in this request's hot path.
+    prior_profile = _get_profile(user_id) or {}
+
     try:
         db = get_supabase()
         db.table("user_profiles").upsert(data, on_conflict="user_id").execute()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+    # Diff the stack lists and record any add/remove/dose-change events
+    # into stack_events. Powers the Stack Efficacy view. Best-effort —
+    # failures here never block the profile save.
+    try:
+        stk.record_diff(user_id, prior_profile, data)
+    except Exception:
+        pass
 
     # If the display name was provided, fan it out to the denormalized name
     # columns on friendships and activity_events so existing data reflects

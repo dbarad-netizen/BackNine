@@ -934,6 +934,32 @@ export interface TrainingSettings {
   units:         string;
 }
 
+// ── Stack Efficacy (Insight Phase 4) ──────────────────────────────────
+export interface StackEfficacyDelta {
+  metric:         string;
+  label:          string;
+  unit:           string;
+  direction:      "higher_better" | "lower_better" | "neutral";
+  before_avg:     number;
+  after_avg:      number;
+  delta:          number;
+  abs_delta_pct:  number;
+  helpful:        boolean | null;
+}
+export interface StackEfficacyItem {
+  item_name:        string;
+  display_name:     string;
+  class:            "supplement" | "peptide" | "medication";
+  dose?:            string | null;
+  timing?:          string | null;
+  started_on:       string;
+  days_since_start: number;
+  before_window:    { start: string; end: string } | null;
+  after_window:     { start: string; end: string } | null;
+  deltas:           StackEfficacyDelta[];
+  note?:            string | null;
+}
+
 // ── Symptom journal + correlation (Insight Phase 2) ──────────────────────
 export interface SymptomLog {
   id?:         string;
@@ -1194,6 +1220,11 @@ export const api = {
   },
 
   // ── Longevity Score per-metric history (slot pop-outs) ───────────────
+  // ── Stack Efficacy (Insight Phase 4) ────────────────────────────────
+  stackEfficacy(): Promise<{ items: StackEfficacyItem[] }> {
+    return request(`/api/stack/efficacy`);
+  },
+
   // ── Symptom journal + correlation (Insight Phase 2) ────────────────
   symptomsCatalog(): Promise<{ catalog: Array<{ id: string; label: string; emoji: string }> }> {
     return request(`/api/symptoms/catalog`);
