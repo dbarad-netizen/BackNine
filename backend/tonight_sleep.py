@@ -8,8 +8,10 @@ the morning briefing doesn't: *what should I do tonight?*
 Output:
   • recommended_bedtime / lights_out_window — when to start winding down
   • target_sleep_hours — pulled from user's sleep_target or default 8h
-  • sleep_debt_hours — sum of (target - actual) over the last 7 nights,
-    capped so a single rough week doesn't say "you owe 14 hours"
+  • sleep_debt_hours — sum of (Oura's per-night sleep_need - actual)
+    over the last 7 nights. Uses Oura's personalized need (which the ring
+    calculates dynamically per user/night) so the number matches what the
+    Oura app reports, instead of computing against a static 8h target.
   • streak_nights — consecutive nights of ≥7h AND ≥85% efficiency
   • last_night_summary — quick recap line
   • coach_note — one-line voice from Coach Al that ties the data together
@@ -46,7 +48,11 @@ STREAK_LOOKBACK_NIGHTS       = 30
 STREAK_HIT_HOURS             = 7.0
 STREAK_HIT_EFFICIENCY        = 85   # percent
 DEBT_WINDOW_NIGHTS           = 7
-DEBT_CAP_HOURS               = 10.0
+# Sanity ceiling only — used to be 10h which created a confusing situation
+# where the card said "10.0h" for any debt ≥ 10. Real Oura debts can easily
+# exceed 8-10h during a bad week (e.g. 6h short × 7 nights = 42h on paper).
+# 20h is high enough that real users never hit it.
+DEBT_SANITY_MAX_HOURS        = 20.0
 HEAVY_TRAINING_EARLIER_MIN   = 30
 
 
@@ -169,21 +175,38 @@ def _sleep_streak(smm: dict, today: _date) -> int:
 
 
 def _sleep_debt(smm: dict, target_hours: float, today: _date) -> Optional[float]:
-    """Sum of (target - actual) over the last 7 nights. Capped at
-    DEBT_CAP_HOURS. None if fewer than 4 nights of data."""
+    """Sum of (per-night target - actual) over the last 7 nights.
+
+    Critical: Oura calculates the user's sleep need DYNAMICALLY per night
+    (age, recent recovery, training load) and we cache it as `sleep_need`
+    in seconds. When that value is present we use it instead of the user's
+    static target_hours — this is what makes the BackNine number match
+    what the Oura app shows. Static fallback is only used when Oura hasn't
+    reported a per-night need (rare; happens on partial-night data).
+
+    Returns total debt in hours (one decimal). None if fewer than 4
+    nights of data (avoids alarming the user from a 1-2 night sample)."""
     debts: list[float] = []
     for offset in range(1, DEBT_WINDOW_NIGHTS + 1):
         d = (today - timedelta(days=offset)).isoformat()
         row = smm.get(d)
         if not row or row.get("total") is None:
             continue
-        actual_h = (row.get("total") or 0) / 3600.0
-        gap = target_hours - actual_h
-        # Don't bank positive credits — sleeping 9h doesn't erase debt.
-        debts.append(max(0.0, gap))
+        actual_sec = row.get("total") or 0
+        # Prefer Oura's personalized need; fall back to user's static
+        # target only when Oura didn't report one for this night.
+        need_sec = row.get("sleep_need")
+        if need_sec and need_sec > 0:
+            target_sec = float(need_sec)
+        else:
+            target_sec = target_hours * 3600.0
+        gap_sec = target_sec - actual_sec
+        # Don't bank positive credits — sleeping 9h doesn't erase prior debt.
+        debts.append(max(0.0, gap_sec))
     if len(debts) < 4:
         return None
-    return min(DEBT_CAP_HOURS, round(sum(debts), 1))
+    total_hours = sum(debts) / 3600.0
+    return min(DEBT_SANITY_MAX_HOURS, round(total_hours, 1))
 
 
 def _last_night_summary(smm: dict, today: _date) -> Optional[dict]:
@@ -210,7 +233,12 @@ def _coach_note(
     """One-line summary tying the data into a recommendation. Rules-based —
     we're not paying for an LLM call on every Scorecard load."""
     if debt is not None and debt >= 4.0:
-        return f"You're carrying {debt:.1f} hours of sleep debt — go to bed early tonight, not just on target."
+        # Format as Xh Ym to match the Oura app's debt readout — keeps
+        # the briefing and the ring on the same page.
+        total_min = int(round(debt * 60))
+        h, m = divmod(total_min, 60)
+        debt_str = f"{h}h {m}m" if m else f"{h}h"
+        return f"You're carrying {debt_str} of sleep debt — go to bed early tonight, not just on target."
     if tomorrow_intensity == "heavy":
         return "Heavy training tomorrow — protect tonight's full 8 hours. Lights out earlier than usual."
     if streak >= 7:
@@ -218,7 +246,10 @@ def _coach_note(
     if streak >= 3:
         return f"{streak} solid nights in a row. Hold the same lights-out time tonight."
     if debt is not None and debt >= 2.0:
-        return f"{debt:.1f}h light over the last week — tonight's a bank-it night."
+        total_min = int(round(debt * 60))
+        h, m = divmod(total_min, 60)
+        debt_str = f"{h}h {m}m" if m else f"{h}h"
+        return f"{debt_str} light over the last week — tonight's a bank-it night."
     return f"Aim for {target_hours:.0f}h tonight. Consistency beats catch-up."
 
 

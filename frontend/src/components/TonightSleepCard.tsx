@@ -45,6 +45,18 @@ export default function TonightSleepCard({ onAsk }: Props = {}) {
     !!data.bedtime || data.streak_nights > 0 || data.sleep_debt_hours !== null || !!data.last_night;
   if (!hasContent) return null;
 
+  // Format debt as "Xh Ym" to match the Oura app's display. A user seeing
+  // "4h 10m" here and "4h 10min" in the ring app shouldn't have to do
+  // conversion math to know they agree.
+  const fmtDebt = (hours: number): string => {
+    const totalMin = Math.round(hours * 60);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin - h * 60;
+    if (h === 0) return `${m}m`;
+    if (m === 0) return `${h}h`;
+    return `${h}h ${m}m`;
+  };
+
   return (
     <section className="rounded-2xl bg-gradient-to-br from-[#0f172a] to-[#1e3a5f] p-4 shadow-sm">
       {/* Header */}
@@ -98,12 +110,12 @@ export default function TonightSleepCard({ onAsk }: Props = {}) {
 
       {/* Context chips: debt + last night */}
       <div className="flex flex-wrap gap-1.5 mb-3">
-        {data.sleep_debt_hours !== null && data.sleep_debt_hours > 0.5 && (
+        {data.sleep_debt_hours !== null && data.sleep_debt_hours > 0.1 && (
           <span
             className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-rose-100 text-rose-800 border border-rose-200"
-            title="Sum of (target − actual) over the last 7 nights"
+            title="Sum of (Oura's personal sleep need − actual) over the last 7 nights — should match your Oura app"
           >
-            💤 {data.sleep_debt_hours.toFixed(1)}h sleep debt
+            💤 {fmtDebt(data.sleep_debt_hours)} sleep debt
           </span>
         )}
         {data.sleep_debt_hours !== null && data.sleep_debt_hours <= 0.5 && (
