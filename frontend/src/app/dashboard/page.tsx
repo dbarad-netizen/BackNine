@@ -43,6 +43,7 @@ import ChatWidget from "@/components/ChatWidget";
 import ProfileModal from "@/components/ProfileModal";
 import CoachAlAvatar from "@/components/CoachAlAvatar";
 import MorningBriefing from "@/components/MorningBriefing";
+import DailyInsightCard from "@/components/DailyInsightCard";
 import WeeklyInsight from "@/components/WeeklyInsight";
 import GoalCard from "@/components/GoalCard";
 import GearPicks from "@/components/GearPicks";
@@ -1577,6 +1578,12 @@ export default function DashboardPage() {
 
             {/* ── Coach Al's Morning Briefing ── */}
             <MorningBriefing onOpenChat={() => openChatRef.current?.()} />
+
+            {/* Daily Insight Card — Phase 1 of the Insight pillar.
+                Claude reads 14d cross-domain data and surfaces ONE pattern
+                + ONE action. Renders nothing if backend has no insight
+                (no API key, sparse data) — keeps the Scorecard clean. */}
+            <DailyInsightCard />
 
             {/* ── Daily Greeting + Score Snapshot ── */}
             {(() => {

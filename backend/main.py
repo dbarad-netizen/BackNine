@@ -34,6 +34,8 @@ import nutrition_body_comp_report as nutri_rep
 import goal_progress_report as goalprog_rep
 import annual_physical_report as annual_rep
 import report_narrative as narrate_mod
+import system_templates as sys_tmpl
+import daily_insight as di
 import training as trn
 import labs as lbs
 import challenges as chl
@@ -2008,6 +2010,40 @@ def get_goal_progress_report(request: Request, days: int = 30, end: str | None =
     return payload
 
 
+# ── Daily Insight (Phase 1 of the Insight pillar) ───────────────────────
+# Once a day, Claude reads 14 days of cross-domain data and surfaces ONE
+# pattern + ONE action. Cached per (user, date). Rendered as a card at
+# the top of the Scorecard.
+
+@app.get("/api/insight/daily")
+def get_daily_insight(request: Request):
+    """Today's Daily Insight. Generates on first call of the day; returns
+    cached row on subsequent calls. Best-effort — returns {insight: null}
+    if generation isn't possible (no API key, sparse data, etc.) so the
+    frontend can render cleanly without the card."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    profile = _get_profile(user_id) or {}
+    today   = _user_local_today_iso(request)
+    insight = di.get_or_generate(user_id, profile, today)
+    return {"insight": insight}
+
+
+@app.post("/api/insight/daily/feedback")
+async def record_insight_feedback(request: Request):
+    """Persist the user's 👍 / 👎 / dismiss reaction to today's insight.
+    Future generations use this to bias category selection."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    body = await request.json()
+    date_iso = (body.get("date") or _user_local_today_iso(request)).strip()
+    feedback = (body.get("feedback") or "").strip().lower()
+    if feedback not in {"up", "down", "dismissed"}:
+        raise HTTPException(status_code=400, detail="feedback must be one of: up, down, dismissed")
+    ok = di.record_feedback(user_id, date_iso, feedback)
+    return {"ok": ok}
+
+
 # ── Tokenized report share-links ─────────────────────────────────────────
 # The user generates a link from any Health Report modal; the link is
 # given to their doctor and renders the report in-browser without auth.
@@ -2489,6 +2525,27 @@ async def edit_workout(workout_id: str, request: Request):
 def list_training_templates(request: Request):
     session = _require_session(request)
     return {"templates": trn.get_templates(session["user_id"])}
+
+
+@app.get("/api/training/system-templates")
+def list_system_templates(request: Request):
+    """Curated workout program library — PPL, 5/3/1, Tactical Barbell, etc.
+    Skewed toward strength-and-sustainability for men 50+. Static data;
+    no DB read. The user browses these and starts a session from the
+    detail view; that creates a workout with the exercises prefilled."""
+    _require_session(request)
+    return {"templates": sys_tmpl.list_system_templates()}
+
+
+@app.get("/api/training/system-templates/{template_id}")
+def get_system_template(template_id: str, request: Request):
+    """Fetch a single curated template (sessions + exercises) for the
+    Start-a-Session flow."""
+    _require_session(request)
+    t = sys_tmpl.get_system_template(template_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return t
 
 
 @app.post("/api/training/parse-workout")

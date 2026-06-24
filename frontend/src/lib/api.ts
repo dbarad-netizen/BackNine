@@ -934,6 +934,43 @@ export interface TrainingSettings {
   units:         string;
 }
 
+// ── Daily Insight ────────────────────────────────────────────────────────
+// Claude reads 14d cross-domain data and writes ONE pattern + ONE action.
+// Rendered as a card at the top of the Scorecard.
+export interface DailyInsight {
+  id?:         string;
+  user_id?:    string;
+  date:        string;     // YYYY-MM-DD
+  headline:    string;     // 4–8 word eyebrow
+  pattern:     string;     // 1–2 sentences w/ numbers
+  action:      string;     // 1 sentence — one thing to try this week
+  evidence?:   string;     // short numeric summary
+  confidence:  "low" | "medium" | "high";
+  category:    "sleep" | "training" | "nutrition" | "cardio" | "recovery" | "general";
+  feedback?:   "up" | "down" | "dismissed" | null;
+  feedback_at?: string | null;
+  generated_at?: string;
+}
+
+// ── System workout templates ─────────────────────────────────────────────
+// Curated strength + hybrid programs the user can browse from the
+// Training tab. Static catalog server-side; the user clicks "Start" on a
+// session and it becomes the seed for a new logged workout.
+export interface SystemTemplateSession {
+  name:      string;
+  exercises: string[];
+}
+export interface SystemWorkoutTemplate {
+  id:            string;
+  name:          string;
+  level:         string;          // "Beginner" | "Intermediate" | ...
+  days_per_week: number;
+  tag:           string;          // "Strength" | "Hypertrophy" | "Balanced" | ...
+  summary:       string;
+  why_for_50?:   string;          // why this works for 50+ adults
+  sessions:      SystemTemplateSession[];
+}
+
 // ── Labs types ─────────────────────────────────────────────────────────────────
 
 export interface LabEntry {
@@ -1123,6 +1160,25 @@ export const api = {
   },
 
   // ── Longevity Score per-metric history (slot pop-outs) ───────────────
+  // ── Daily Insight (Phase 1 of the Insight pillar) ──────────────────
+  dailyInsight(): Promise<{ insight: DailyInsight | null }> {
+    return request(`/api/insight/daily`);
+  },
+  dailyInsightFeedback(date: string, feedback: "up" | "down" | "dismissed"): Promise<{ ok: boolean }> {
+    return request(`/api/insight/daily/feedback`, {
+      method: "POST",
+      body: JSON.stringify({ date, feedback }),
+    });
+  },
+
+  // ── System-curated workout templates (browse library) ──────────────
+  systemTemplates(): Promise<{ templates: SystemWorkoutTemplate[] }> {
+    return request(`/api/training/system-templates`);
+  },
+  systemTemplate(id: string): Promise<SystemWorkoutTemplate> {
+    return request(`/api/training/system-templates/${encodeURIComponent(id)}`);
+  },
+
   // ── Referral status ────────────────────────────────────────────────
   referralStatus(): Promise<{
     total_referrals: number;
