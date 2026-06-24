@@ -36,6 +36,7 @@ import annual_physical_report as annual_rep
 import report_narrative as narrate_mod
 import system_templates as sys_tmpl
 import daily_insight as di
+import symptoms as sym
 import training as trn
 import labs as lbs
 import challenges as chl
@@ -2042,6 +2043,70 @@ async def record_insight_feedback(request: Request):
         raise HTTPException(status_code=400, detail="feedback must be one of: up, down, dismissed")
     ok = di.record_feedback(user_id, date_iso, feedback)
     return {"ok": ok}
+
+
+# ── Symptom journal + correlation (Insight Phase 2) ─────────────────────
+# User logs "how do you feel today?" with tags + optional severity.
+# Once 5+ symptom days exist in the window, /correlation runs a delta
+# analysis comparing per-metric averages on symptom-positive vs
+# symptom-free days and Claude narrates the top patterns.
+
+@app.get("/api/symptoms/catalog")
+def symptoms_catalog(request: Request):
+    """Curated symptom tag list for the UI picker. Static catalog."""
+    _require_session(request)
+    return {"catalog": sym.SYMPTOM_CATALOG}
+
+
+@app.get("/api/symptoms")
+def list_symptom_logs(request: Request, days: int = 90):
+    """Return the user's symptom-log rows over the window (newest first)."""
+    session = _require_session(request)
+    try:
+        days_int = max(7, min(int(days), 365))
+    except Exception:
+        days_int = 90
+    return {"logs": sym.list_logs(session["user_id"], days=days_int)}
+
+
+@app.post("/api/symptoms")
+async def log_symptoms(request: Request):
+    """Insert or update today's symptom log. Body:
+    { date?, symptoms: [id, ...], severity?: 'mild'|'moderate'|'severe', notes? }
+    date defaults to user's local today."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    body    = await request.json()
+    date_iso = (body.get("date") or _user_local_today_iso(request)).strip()
+    symptoms = body.get("symptoms") or []
+    if not isinstance(symptoms, list):
+        raise HTTPException(status_code=400, detail="symptoms must be a list of ids")
+    severity = body.get("severity")
+    notes    = body.get("notes")
+    row = sym.upsert_log(user_id, date_iso, symptoms, severity=severity, notes=notes)
+    return row or {}
+
+
+@app.delete("/api/symptoms/{date_iso}")
+def delete_symptom_log(date_iso: str, request: Request):
+    session = _require_session(request)
+    ok = sym.delete_log(session["user_id"], date_iso)
+    if not ok:
+        raise HTTPException(status_code=404, detail="No log found for that date")
+    return {"status": "deleted"}
+
+
+@app.get("/api/symptoms/correlation")
+def symptom_correlation(request: Request, days: int = 30, symptom: Optional[str] = None):
+    """Per-metric average comparison: symptom-positive vs symptom-free
+    days in the window. If symptom is provided, restricts to that
+    specific symptom; otherwise any symptom day counts."""
+    session = _require_session(request)
+    try:
+        days_int = max(14, min(int(days), 180))
+    except Exception:
+        days_int = 30
+    return sym.correlate(session["user_id"], days=days_int, symptom_id=symptom)
 
 
 # ── Tokenized report share-links ─────────────────────────────────────────

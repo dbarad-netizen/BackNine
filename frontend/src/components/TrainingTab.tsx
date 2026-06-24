@@ -15,6 +15,7 @@ import {
   type TrainingSettings,
 } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
+import SystemTemplatesBrowser from "@/components/SystemTemplatesBrowser";
 
 const TYPE_ICON: Record<string, string>  = { lifting: "🏋️", stretching: "🧘", mobility: "🔄", cardio: "🏃" };
 const TYPE_LABEL: Record<string, string> = { lifting: "Lifting", stretching: "Stretch", mobility: "Mobility", cardio: "Cardio" };
@@ -515,6 +516,17 @@ export function WorkoutLogger({
           className="w-full py-2 rounded-lg border border-[#1B3829]/30 bg-[#1B3829]/5 text-xs font-semibold text-[#1B3829] hover:bg-[#1B3829]/10 transition-colors">
           ↻ Repeat last {TYPE_LABEL[workoutType]} workout · {lastWorkoutOfType.date}
         </button>
+      )}
+
+      {/* Curated program library — strength-and-longevity skewed for the
+          men-50+ persona. Each session "Start" button seeds the workout
+          below with that session's exercises (no sets/reps; user fills). */}
+      {workoutType !== "cardio" && (
+        <SystemTemplatesBrowser
+          onStartSession={(_name, exerciseNames) => {
+            loadExercises(exerciseNames.map(n => ({ name: n })));
+          }}
+        />
       )}
 
       {/* Saved routines — one tap to start from a template */}

@@ -934,6 +934,40 @@ export interface TrainingSettings {
   units:         string;
 }
 
+// ── Symptom journal + correlation (Insight Phase 2) ──────────────────────
+export interface SymptomLog {
+  id?:         string;
+  user_id?:    string;
+  date:        string;          // YYYY-MM-DD
+  symptoms:    string[];        // ids from SYMPTOM_CATALOG
+  severity?:   "mild" | "moderate" | "severe" | null;
+  notes?:      string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface SymptomCorrelationDelta {
+  metric:               string;
+  label:                string;
+  unit:                 string;
+  direction:            "higher_better" | "lower_better" | "neutral";
+  symptom_avg:          number;
+  symptom_free_avg:     number;
+  delta:                number;
+  abs_delta_pct:        number;
+  worse_on_symptom:     boolean | null;
+}
+
+export interface SymptomCorrelation {
+  symptom:                  string | null;
+  symptom_label:            string;
+  symptom_day_count:        number;
+  symptom_free_day_count:   number;
+  deltas:                   SymptomCorrelationDelta[];
+  narrative:                string | null;
+  insufficient_data?:       boolean;
+}
+
 // ── Daily Insight ────────────────────────────────────────────────────────
 // Claude reads 14d cross-domain data and writes ONE pattern + ONE action.
 // Rendered as a card at the top of the Scorecard.
@@ -1160,6 +1194,26 @@ export const api = {
   },
 
   // ── Longevity Score per-metric history (slot pop-outs) ───────────────
+  // ── Symptom journal + correlation (Insight Phase 2) ────────────────
+  symptomsCatalog(): Promise<{ catalog: Array<{ id: string; label: string; emoji: string }> }> {
+    return request(`/api/symptoms/catalog`);
+  },
+  symptomsList(days = 90): Promise<{ logs: SymptomLog[] }> {
+    return request(`/api/symptoms?days=${days}`);
+  },
+  symptomsLog(entry: { date?: string; symptoms: string[]; severity?: "mild" | "moderate" | "severe"; notes?: string }): Promise<SymptomLog> {
+    return request(`/api/symptoms`, { method: "POST", body: JSON.stringify(entry) });
+  },
+  symptomsDelete(date: string): Promise<{ status: string }> {
+    return request(`/api/symptoms/${encodeURIComponent(date)}`, { method: "DELETE" });
+  },
+  symptomsCorrelation(opts: { days?: number; symptom?: string } = {}): Promise<SymptomCorrelation> {
+    const days = opts.days ?? 30;
+    const qs = new URLSearchParams({ days: String(days) });
+    if (opts.symptom) qs.set("symptom", opts.symptom);
+    return request(`/api/symptoms/correlation?${qs.toString()}`);
+  },
+
   // ── Daily Insight (Phase 1 of the Insight pillar) ──────────────────
   dailyInsight(): Promise<{ insight: DailyInsight | null }> {
     return request(`/api/insight/daily`);

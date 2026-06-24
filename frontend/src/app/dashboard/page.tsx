@@ -44,6 +44,7 @@ import ProfileModal from "@/components/ProfileModal";
 import CoachAlAvatar from "@/components/CoachAlAvatar";
 import MorningBriefing from "@/components/MorningBriefing";
 import DailyInsightCard from "@/components/DailyInsightCard";
+import SymptomCard from "@/components/SymptomCard";
 import WeeklyInsight from "@/components/WeeklyInsight";
 import GoalCard from "@/components/GoalCard";
 import GearPicks from "@/components/GearPicks";
@@ -1584,6 +1585,12 @@ export default function DashboardPage() {
                 + ONE action. Renders nothing if backend has no insight
                 (no API key, sparse data) — keeps the Scorecard clean. */}
             <DailyInsightCard />
+
+            {/* Symptom Card — Phase 2 of the Insight pillar.
+                Quick tag-based "how do you feel today?" log + correlation
+                analysis. Surfaces "On low-energy days, sleep averaged
+                5.8h vs 7.1h" once 3+ symptom days exist. */}
+            <SymptomCard />
 
             {/* ── Daily Greeting + Score Snapshot ── */}
             {(() => {
