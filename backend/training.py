@@ -413,9 +413,41 @@ def add_workout(
     # Compute totals for lifting sessions
     total_volume = 0
     muscle_groups: List[str] = []
+    # Lenient catalog lookup so "Bench Press" / "BENCH PRESS" / "barbell
+    # bench press   " all resolve to the same entry. Falls back to a
+    # substring match against catalog keys (so "incline db press" maps to
+    # "incline dumbbell press" → upper_chest credit, which the heatmap
+    # then buckets into chest). This was a major source of "I logged it
+    # but the muscle balance card didn't notice" bug reports.
+    def _lookup(raw_name: str) -> dict:
+        key = (raw_name or "").strip().lower()
+        if not key:
+            return {}
+        if key in EXERCISES:
+            return EXERCISES[key]
+        # Substring match — pick the catalog entry that shares the most
+        # tokens with the user-supplied name. Cheap heuristic: prefer the
+        # entry where the user's name fully contains the catalog key, then
+        # the entry that contains the user's name. Common rewrites we want
+        # to catch: "Bench Press" → "barbell bench press" (close); "DB
+        # bench" → "dumbbell bench press" (after `db`→`dumbbell` swap).
+        normalized = key.replace(" db ", " dumbbell ").replace(" bb ", " barbell ")
+        if normalized != key and normalized in EXERCISES:
+            return EXERCISES[normalized]
+        for catalog_key in EXERCISES:
+            if catalog_key in normalized or normalized in catalog_key:
+                return EXERCISES[catalog_key]
+        return {}
+
     for ex in exercises:
-        info = EXERCISES.get(ex["name"], {})
+        info = _lookup(ex.get("name", ""))
         for mg in info.get("primary", []):
+            if mg not in muscle_groups:
+                muscle_groups.append(mg)
+        # Secondary groups also count toward coverage — a row that hits
+        # the hamstrings primarily still trains the lower back. This used
+        # to be ignored entirely.
+        for mg in info.get("secondary", []):
             if mg not in muscle_groups:
                 muscle_groups.append(mg)
         if workout_type == "lifting":
@@ -423,6 +455,24 @@ def add_workout(
                 w = s.get("weight_lbs", 0) or 0
                 r = s.get("reps", 0) or 0
                 total_volume += w * r
+
+    # Last-resort inference from the notes/type/exercise-name text — keeps
+    # quick freeform sessions ("upper body lifting") from getting zero
+    # muscle credit. We import lazily to avoid a cycle (training_load
+    # imports oura which imports nothing from training).
+    if workout_type != "cardio" and not muscle_groups:
+        try:
+            import training_load as _tload
+            text_bits = [notes or "", workout_type or ""] + [str(e.get("name") or "") for e in exercises]
+            inferred = _tload._infer_buckets_from_text(" ".join(text_bits))
+            # Convert display buckets back to the raw labels expected on the
+            # column (use the bucket name itself — they're all valid keys in
+            # MUSCLE_BUCKETS).
+            for b in inferred:
+                if b not in muscle_groups:
+                    muscle_groups.append(b)
+        except Exception:
+            pass
 
     is_cardio = workout_type == "cardio"
     entry: dict = {

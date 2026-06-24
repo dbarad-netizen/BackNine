@@ -170,6 +170,16 @@ function MuscleBalanceHeatmap({ balance }: { balance: MuscleBalance }) {
           <p className="text-[11px] text-amber-900 leading-snug">{balance.imbalance_note}</p>
         </div>
       )}
+
+      {/* Transparency footer — explains the credit logic so users who log
+          a quick "upper body lifting" freeform session can see that the
+          card is reading their notes too, not just the structured
+          exercise list. Hidden when every bucket already has coverage. */}
+      {balance.groups.some(g => g.session_days === 0) && (
+        <p className="text-[10px] text-gray-500 italic mt-2">
+          Credit comes from logged exercises + workout notes/type. Naming a session &ldquo;upper body&rdquo; or &ldquo;leg day&rdquo; counts those groups even without itemized exercises.
+        </p>
+      )}
     </section>
   );
 }

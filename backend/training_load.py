@@ -225,30 +225,130 @@ def _deload_recommendation(weekly: list[dict], smm: dict) -> dict:
 
 # Canonical muscle group buckets so we don't render a chaotic 30-group list.
 # Maps incoming raw labels (from EXERCISES.primary) to display buckets.
+#
+# IMPORTANT: every distinct label that the EXERCISES catalog in training.py
+# can emit MUST appear here, otherwise that exercise silently produces no
+# muscle-group credit. This was the original bug — labels like front_delts,
+# side_delts, rear_delts, upper_chest, brachialis, etc. existed in the
+# catalog but never mapped into a display bucket, so OHPs, lateral raises,
+# rear delt flies, and incline presses all looked invisible to the heatmap.
 MUSCLE_BUCKETS: dict[str, str] = {
-    "chest":         "chest",
-    "pectorals":     "chest",
-    "shoulders":     "shoulders",
-    "deltoids":      "shoulders",
-    "back":          "back",
-    "lats":          "back",
-    "traps":         "back",
-    "rhomboids":     "back",
-    "biceps":        "arms",
-    "triceps":       "arms",
-    "forearms":      "arms",
-    "abs":           "core",
-    "obliques":      "core",
-    "core":          "core",
-    "lower_back":    "core",
-    "quads":         "legs",
-    "hamstrings":    "legs",
-    "glutes":        "legs",
-    "calves":        "legs",
-    "adductors":     "legs",
-    "hip_flexors":   "legs",
+    # ── chest ──
+    "chest":             "chest",
+    "pectorals":         "chest",
+    "pecs":              "chest",
+    "upper_chest":       "chest",
+    "lower_chest":       "chest",
+    # ── back ──
+    "back":              "back",
+    "lats":              "back",
+    "traps":             "back",
+    "rhomboids":         "back",
+    "upper_back":        "back",
+    "mid_back":          "back",
+    # ── shoulders ──
+    "shoulders":         "shoulders",
+    "deltoids":          "shoulders",
+    "delts":             "shoulders",
+    "front_delts":       "shoulders",
+    "side_delts":        "shoulders",
+    "rear_delts":        "shoulders",
+    "external_rotators": "shoulders",
+    "rotator_cuff":      "shoulders",
+    # ── arms ──
+    "biceps":            "arms",
+    "triceps":           "arms",
+    "forearms":          "arms",
+    "brachialis":        "arms",
+    "brachioradialis":   "arms",
+    # ── core ──
+    "abs":               "core",
+    "obliques":          "core",
+    "core":              "core",
+    "lower_back":        "core",   # contested — bucket as "core" since it's posterior chain stabilizer
+    "transverse_abdominis": "core",
+    # ── legs ──
+    "quads":             "legs",
+    "quadriceps":        "legs",
+    "hamstrings":        "legs",
+    "glutes":            "legs",
+    "calves":            "legs",
+    "adductors":         "legs",
+    "abductors":         "legs",
+    "hip_flexors":       "legs",
+    "hips":              "legs",
 }
 DISPLAY_GROUPS = ["chest", "back", "legs", "shoulders", "arms", "core"]
+
+# Keyword → muscle-bucket map used to infer credit from a workout's notes,
+# activity, type, or exercise name when the structured muscle_groups column
+# is empty. Lets "upper body lifting", "push day", "bench press", etc. all
+# light up the heatmap even when nothing matched the EXERCISES catalog.
+# Match is substring-based so "incline bench" picks up via "bench".
+NOTE_KEYWORD_TO_BUCKET: list[tuple[str, str]] = [
+    # Chest cues
+    ("chest", "chest"), ("pec", "chest"), ("bench", "chest"), ("push up", "chest"),
+    ("pushup", "chest"), ("fly", "chest"), ("dip", "chest"),
+    # Back cues
+    ("back", "back"), ("lat ", "back"), ("lats", "back"), ("row", "back"),
+    ("pull-up", "back"), ("pullup", "back"), ("pull up", "back"),
+    ("chin-up", "back"), ("chinup", "back"), ("chin up", "back"),
+    ("pulldown", "back"), ("deadlift", "back"), ("shrug", "back"),
+    # Shoulders cues
+    ("shoulder", "shoulders"), ("delt", "shoulders"), ("ohp", "shoulders"),
+    ("overhead press", "shoulders"), ("military press", "shoulders"),
+    ("lateral raise", "shoulders"), ("face pull", "shoulders"),
+    ("upright row", "shoulders"),
+    # Arms cues
+    ("arm", "arms"), ("curl", "arms"), ("tricep", "arms"), ("bicep", "arms"),
+    ("pushdown", "arms"), ("hammer", "arms"), ("kickback", "arms"),
+    # Core cues
+    ("core", "core"), ("abs ", "core"), ("ab ", "core"), ("crunch", "core"),
+    ("plank", "core"), ("sit-up", "core"), ("situp", "core"),
+    ("leg raise", "core"), ("rollout", "core"), ("hollow", "core"),
+    # Legs cues
+    ("leg", "legs"), ("squat", "legs"), ("lunge", "legs"), ("glute", "legs"),
+    ("quad", "legs"), ("hamstring", "legs"), ("calf", "legs"), ("calves", "legs"),
+    ("hip thrust", "legs"), ("hip ", "legs"), ("step up", "legs"),
+    ("split squat", "legs"), ("rdl", "legs"),
+]
+# Composite cues that map to multiple buckets at once. Picked up first so
+# the per-bucket loop doesn't double-credit (we apply them as a set union).
+COMPOSITE_NOTE_KEYWORDS: list[tuple[str, list[str]]] = [
+    ("upper body",  ["chest", "back", "shoulders", "arms"]),
+    ("upper-body",  ["chest", "back", "shoulders", "arms"]),
+    ("lower body",  ["legs", "core"]),
+    ("lower-body",  ["legs", "core"]),
+    ("full body",   ["chest", "back", "shoulders", "arms", "legs", "core"]),
+    ("full-body",   ["chest", "back", "shoulders", "arms", "legs", "core"]),
+    ("total body",  ["chest", "back", "shoulders", "arms", "legs", "core"]),
+    ("push day",    ["chest", "shoulders", "arms"]),
+    ("push ",       ["chest", "shoulders", "arms"]),
+    ("pull day",    ["back", "arms"]),
+    ("leg day",     ["legs"]),
+    ("ppl",         ["chest", "back", "legs", "shoulders", "arms"]),
+    ("crossfit",    ["chest", "back", "shoulders", "arms", "legs", "core"]),
+    ("hiit",        ["legs", "core", "shoulders"]),
+]
+
+
+def _infer_buckets_from_text(text: str) -> set[str]:
+    """Scan free text (workout notes, type label, activity, exercise name
+    list) for muscle-group cues. Used as a fallback so freeform sessions
+    like 'upper body lifting' or 'push day' still credit the heatmap."""
+    if not text:
+        return set()
+    t = text.lower()
+    hit: set[str] = set()
+    # Composite cues first ("upper body" implies four buckets at once).
+    for kw, buckets in COMPOSITE_NOTE_KEYWORDS:
+        if kw in t:
+            hit.update(buckets)
+    # Single-bucket keywords.
+    for kw, bucket in NOTE_KEYWORD_TO_BUCKET:
+        if kw in t:
+            hit.add(bucket)
+    return hit
 
 
 def _muscle_balance_7d(workouts: list[dict]) -> dict:
@@ -277,6 +377,28 @@ def _muscle_balance_7d(workouts: list[dict]) -> dict:
             mapped = MUSCLE_BUCKETS.get(key)
             if mapped:
                 bucketed.add(mapped)
+
+        # Fallback / augmentation pass: scan the workout's notes, type
+        # label, and any exercise names for keyword cues. This fixes two
+        # gaps:
+        #   1) Quick freeform sessions ("upper body lifting" with no
+        #      itemized exercises) had empty muscle_groups and never
+        #      credited the heatmap at all.
+        #   2) Stored muscle_groups may include labels (front_delts,
+        #      brachialis, etc.) that we now bucket — but it also lets
+        #      old rows logged before this fix get retroactive credit
+        #      based on their notes and exercise names.
+        text_bits: list[str] = []
+        if w.get("notes"):    text_bits.append(str(w["notes"]))
+        if w.get("type"):     text_bits.append(str(w["type"]))
+        if w.get("activity"): text_bits.append(str(w["activity"]))
+        for ex in (w.get("exercises") or []):
+            if isinstance(ex, dict) and ex.get("name"):
+                text_bits.append(str(ex["name"]))
+        inferred = _infer_buckets_from_text(" ".join(text_bits))
+        if inferred:
+            bucketed.update(inferred)
+
         slot = sessions_by_day.setdefault(d.isoformat(), set())
         slot.update(bucketed)
 
