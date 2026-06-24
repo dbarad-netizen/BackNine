@@ -45,6 +45,8 @@ import training_load as tload
 import nutrition_today_extras as nut_extras
 import tonight_sleep as ts
 import weekly_recap as wrecap
+import friends_glance as fr_glance
+import coach_al_group_voice as cag
 import labs as lbs
 import challenges as chl
 import apple_health as ah
@@ -2705,12 +2707,18 @@ async def share_weekly_recap(request: Request):
     profile = _get_profile(user_id) or {}
     user_name = (profile.get("name") or "").strip() or "Friend"
 
+    share_payload = wrecap.build_share_payload(recap)
     event = frd.record_event(
         user_id=user_id,
         event_type="weekly_recap",
-        payload=wrecap.build_share_payload(recap),
+        payload=share_payload,
         user_name=user_name,
     )
+    # Also announce into the user's groups so the chat surfaces the share.
+    try:
+        cag.announce_weekly_recap_shared(user_id, share_payload)
+    except Exception:
+        pass
     return {"event": event, "recap": recap}
 
 
@@ -2755,6 +2763,32 @@ async def log_workout(request: Request):
             },
             user_name=_display_name_for(user_id),
         )
+    except Exception:
+        pass
+
+    # PR detection → Coach Al announces into group chats. We annotate this
+    # one workout against the user's full history; any exercise tagged
+    # `pr` triggers a group-chat post (deduped per (user, lift, date) so
+    # logging twice doesn't double-post).
+    try:
+        annotated = exprog.annotate_workouts(user_id, [entry])
+        for ex in (annotated[0].get("exercises") if annotated else []) or []:
+            if not isinstance(ex, dict):
+                continue
+            prog = ex.get("progression") or {}
+            if prog.get("kind") != "pr":
+                continue
+            sets = ex.get("sets") or []
+            if not sets:
+                continue
+            best = max(sets, key=lambda s: float(s.get("weight_lbs") or 0))
+            cag.announce_pr(
+                member_user_id = user_id,
+                exercise_name  = ex.get("name") or "lift",
+                e1rm_lbs       = int(ex.get("e1rm_lbs") or 0),
+                top_weight_lbs = int(best.get("weight_lbs") or 0),
+                top_reps       = int(best.get("reps") or 0),
+            )
     except Exception:
         pass
     return entry
@@ -4560,6 +4594,81 @@ async def set_group_goal(group_id: str, request: Request):
         raise HTTPException(status_code=403, detail="Not a member of this group")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/groups/{group_id}/weekly-recap")
+def get_group_weekly_recap(group_id: str, request: Request, week: Optional[str] = None):
+    """Aggregated weekly recap across all members of the group.
+    Returns totals, leaderboard, top performers, and a one-line group
+    voice headline. Membership-checked."""
+    session = _require_session(request)
+    # We rely on Supabase membership in groups.py; the recap aggregator
+    # also returns empty for unknown groups so no info leaks.
+    try:
+        # Membership check via groups.get_standings — raises PermissionError
+        # if the caller isn't a member.
+        grp.get_standings(session["user_id"], group_id, _et_today())
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Not a member of this group")
+    except Exception:
+        # If standings blows up for unrelated reasons, fall through; the
+        # recap aggregator handles missing data gracefully.
+        pass
+    return wrecap.build_group_payload(group_id, week)
+
+
+@app.get("/api/groups/{group_id}/challenges")
+def list_group_challenges_route(group_id: str, request: Request):
+    """All challenges scoped to this group (visibility='group'). Membership-checked."""
+    session = _require_session(request)
+    try:
+        grp.get_standings(session["user_id"], group_id, _et_today())
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Not a member of this group")
+    except Exception:
+        pass
+    return {"challenges": chl.list_group_challenges(group_id, session["user_id"])}
+
+
+@app.post("/api/groups/{group_id}/challenges")
+async def create_group_challenge_route(group_id: str, request: Request):
+    """Spin up a group-scoped challenge. Only group members can create.
+    Body: { name, type, target, duration_days, custom_unit? }."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        grp.get_standings(user_id, group_id, _et_today())
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Not a member of this group")
+    except Exception:
+        pass
+    body = await request.json()
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Challenge name is required")
+    profile = _get_profile(user_id) or {}
+    display_name = (profile.get("name") or "").strip() or "Friend"
+    try:
+        return chl.create_challenge(
+            name           = name,
+            challenge_type = body.get("type") or "custom",
+            target         = float(body.get("target") or 0),
+            duration_days  = int(body.get("duration_days") or 7),
+            creator_name   = display_name,
+            user_id        = user_id,
+            custom_unit    = body.get("custom_unit"),
+            group_id       = group_id,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/community/friends-glance")
+def get_friends_glance(request: Request):
+    """Friend pulse strip — each friend's this-week activity rolled up.
+    Powers the horizontal scroll card at the top of the PulseFeed."""
+    session = _require_session(request)
+    return fr_glance.build_payload(session["user_id"])
 
 
 # ── Goals (Coach Al program) ──────────────────────────────────────────────────

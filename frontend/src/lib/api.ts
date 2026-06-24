@@ -1021,6 +1021,62 @@ export interface WeeklyRecap {
   has_content:       boolean;
 }
 
+// ── Friend pulse strip ───────────────────────────────────────────────────
+
+export interface FriendGlance {
+  user_id:      string;
+  name:         string;
+  has_activity: boolean;
+  workouts:     number;
+  pr_count:     number;
+  sleep_streak: number;
+  protein_days: number;
+  highlight:    string | null;
+  headline:     string | null;
+}
+
+export interface FriendsGlancePayload {
+  friends:            FriendGlance[];
+  viewer_has_friends: boolean;
+}
+
+// ── Group weekly recap ──────────────────────────────────────────────────
+
+export interface GroupRecapTotals {
+  workouts:           number;
+  strength_sessions:  number;
+  cardio_sessions:    number;
+  lifting_volume_lbs: number;
+  cardio_min:         number;
+  pr_count:           number;
+  nights_logged:      number;
+  protein_days:       number;
+  active_members:     number;
+}
+
+export interface GroupRecapMember {
+  user_id:      string;
+  name:         string;
+  workouts:     number;
+  pr_count:     number;
+  sleep_streak: number;
+  protein_days: number;
+  highlight:    string | null;
+}
+
+export interface GroupRecap {
+  week_start:      string | null;
+  week_end:        string | null;
+  totals:          GroupRecapTotals;
+  leaderboard:     GroupRecapMember[];
+  top_performers: {
+    sessions:     { user_id: string; name: string | null; value: number } | null;
+    pr:           { user_id: string; name: string | null; exercise: string | null; e1rm_lbs: number } | null;
+    sleep_streak: { user_id: string; name: string | null; value: number } | null;
+  };
+  headline:        string;
+}
+
 /** `/api/sleep/tonight` payload. */
 export interface TonightSleepPayload {
   date:                 string;
@@ -1878,6 +1934,31 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ goal }),
       });
+    },
+    weeklyRecap(group_id: string, week?: string): Promise<GroupRecap> {
+      return request(`/api/groups/${encodeURIComponent(group_id)}/weekly-recap${week ? `?week=${week}` : ""}`);
+    },
+    challenges(group_id: string): Promise<{ challenges: Challenge[] }> {
+      return request(`/api/groups/${encodeURIComponent(group_id)}/challenges`);
+    },
+    createChallenge(group_id: string, body: {
+      name: string;
+      type: "steps" | "calories" | "protein" | "custom";
+      target: number;
+      duration_days: number;
+      custom_unit?: string;
+    }): Promise<Challenge> {
+      return request(`/api/groups/${encodeURIComponent(group_id)}/challenges`, {
+        method: "POST",
+        body:   JSON.stringify(body),
+      });
+    },
+  },
+
+  // ── Community ─────────────────────────────────────────────────────────────
+  community: {
+    friendsGlance(): Promise<FriendsGlancePayload> {
+      return request("/api/community/friends-glance");
     },
   },
 

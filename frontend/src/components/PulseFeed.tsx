@@ -21,6 +21,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type FriendActivityEvent, type ReactionSummary, type EventComment, type Friend } from "@/lib/api";
+import FriendsGlanceCard from "@/components/FriendsGlanceCard";
 
 const REACTIONS = ["🔥", "💪", "👀"] as const;
 
@@ -359,6 +360,12 @@ export default function PulseFeed({ onInviteFriend }: Props) {
   // ── Normal feed ──
   return (
     <section>
+      {/* Friends-at-a-glance — horizontal scroll strip of friend pulse chips.
+          Each chip pulls the same numbers a friend's weekly recap would, so
+          the strip and the event timeline below agree on the same week. */}
+      <div className="mb-3">
+        <FriendsGlanceCard />
+      </div>
       <div className="flex items-center justify-between mb-2 gap-2">
         <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-600 truncate">
           Activity

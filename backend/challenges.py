@@ -78,7 +78,11 @@ def create_challenge(
     creator_name: str,
     user_id: Optional[str] = None,
     custom_unit: Optional[str] = None,
+    group_id: Optional[str] = None,
 ) -> dict:
+    """Create a challenge. When `group_id` is provided, the challenge is
+    scoped to that group — only members of the group can see/join it via
+    list_group_challenges; the public discovery endpoints hide it."""
     user_id = user_id or get_local_user_id()
     today      = _today()
     start_date = today.isoformat()
@@ -89,14 +93,17 @@ def create_challenge(
     metric    = custom_unit if (challenge_type == "custom" and custom_unit) else type_info["unit"]
 
     sb = _sb()
-    # Insert challenge
-    sb.table("challenges").insert({
+    row: dict = {
         "id": cid, "name": name, "type": challenge_type,
         "metric": metric, "target": target,
         "duration_days": duration_days,
         "start_date": start_date, "end_date": end_date,
         "creator_id": user_id, "creator_name": creator_name,
-    }).execute()
+        "visibility": "group" if group_id else "public",
+    }
+    if group_id:
+        row["group_id"] = group_id
+    sb.table("challenges").insert(row).execute()
 
     # Auto-join creator
     sb.table("challenge_participants").insert({
@@ -104,6 +111,32 @@ def create_challenge(
     }).execute()
 
     return get_challenge(cid, user_id)
+
+
+def list_group_challenges(group_id: str, user_id: Optional[str] = None) -> List[dict]:
+    """All challenges scoped to a given group, newest start first. Caller
+    must already be a member of the group (route handler enforces)."""
+    if not group_id:
+        return []
+    sb = _sb()
+    try:
+        res = (
+            sb.table("challenges")
+            .select("id")
+            .eq("group_id", group_id)
+            .order("start_date", desc=True)
+            .execute()
+        )
+        ids = [r["id"] for r in (res.data or [])]
+    except Exception:
+        return []
+    out: list[dict] = []
+    for cid in ids:
+        try:
+            out.append(get_challenge(cid, user_id or get_local_user_id()))
+        except Exception:
+            continue
+    return out
 
 
 def join_challenge(challenge_id: str, display_name: str, user_id: Optional[str] = None) -> dict:

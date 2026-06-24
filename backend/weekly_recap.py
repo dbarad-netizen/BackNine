@@ -317,6 +317,124 @@ def build_payload(user_id: str, anchor_iso: Optional[str] = None) -> dict:
     }
 
 
+# ── group recap aggregator ────────────────────────────────────────────────
+
+def build_group_payload(group_id: str, anchor_iso: Optional[str] = None) -> dict:
+    """Aggregate each group member's weekly recap into a single group view.
+
+    Sections produced:
+      • totals     — sum of sessions, lifting volume, cardio minutes, PRs
+                     across all members
+      • leaderboard — per-member capsule: workouts, prs, sleep streak, badge
+      • top_perf   — best single performer per pillar (most sessions, biggest
+                     lift PR, best sleep streak)
+      • headline   — one short Coach Al voice line for the group
+    """
+    sb = _sb()
+    if not sb or not group_id:
+        return {"week_start": None, "week_end": None, "members": []}
+
+    try:
+        mres = sb.table("group_members").select("user_id").eq("group_id", group_id).execute()
+        ids = [r["user_id"] for r in (mres.data or []) if r.get("user_id")]
+    except Exception:
+        ids = []
+    if not ids:
+        return {"week_start": None, "week_end": None, "members": [], "totals": {}, "leaderboard": [], "headline": "No members yet."}
+
+    # Resolve display names once.
+    names: dict[str, str] = {}
+    try:
+        n_res = sb.table("user_profiles").select("user_id, name").in_("user_id", ids).execute()
+        names = {r["user_id"]: ((r.get("name") or "").strip() or "Friend") for r in (n_res.data or [])}
+    except Exception:
+        names = {uid: "Friend" for uid in ids}
+
+    monday, sunday = _week_bounds(anchor_iso)
+
+    members: list[dict] = []
+    totals = {"workouts": 0, "strength_sessions": 0, "cardio_sessions": 0,
+              "lifting_volume_lbs": 0, "cardio_min": 0, "pr_count": 0,
+              "nights_logged": 0, "protein_days": 0, "active_members": 0}
+    top_session_count = (None, 0)        # (user_id, count)
+    top_pr            = (None, None, 0)  # (user_id, lift_name, e1rm)
+    top_sleep_streak  = (None, 0)        # (user_id, streak)
+
+    for uid in ids:
+        try:
+            recap = build_payload(uid, anchor_iso)
+        except Exception:
+            recap = None
+        if not recap:
+            continue
+        t = recap.get("training")  or {}
+        n = recap.get("nutrition") or {}
+        s = recap.get("sleep")     or {}
+
+        # Roll up totals
+        totals["workouts"]            += int(t.get("workouts") or 0)
+        totals["strength_sessions"]   += int(t.get("strength_sessions") or 0)
+        totals["cardio_sessions"]     += int(t.get("cardio_sessions") or 0)
+        totals["lifting_volume_lbs"]  += int(t.get("lifting_volume_lbs") or 0)
+        totals["cardio_min"]          += int(t.get("cardio_min") or 0)
+        totals["pr_count"]            += int(t.get("pr_count") or 0)
+        totals["nights_logged"]       += int(s.get("nights_logged") or 0)
+        totals["protein_days"]        += int(n.get("protein_days") or 0)
+        if recap.get("has_content"):
+            totals["active_members"]  += 1
+
+        # Top-performers
+        sess = int(t.get("workouts") or 0)
+        if sess > top_session_count[1]:
+            top_session_count = (uid, sess)
+        top_lift = t.get("top_lift") or {}
+        if top_lift.get("e1rm_lbs") and top_lift["e1rm_lbs"] > (top_pr[2] or 0):
+            top_pr = (uid, top_lift.get("name"), top_lift["e1rm_lbs"])
+        streak = int(s.get("streak_nights") or 0)
+        if streak > top_sleep_streak[1]:
+            top_sleep_streak = (uid, streak)
+
+        members.append({
+            "user_id":      uid,
+            "name":         names.get(uid, "Friend"),
+            "workouts":     int(t.get("workouts") or 0),
+            "pr_count":     int(t.get("pr_count") or 0),
+            "sleep_streak": int(s.get("streak_nights") or 0),
+            "protein_days": int(n.get("protein_days") or 0),
+            "highlight":    recap.get("highlight"),
+        })
+
+    # Sort members for the leaderboard view
+    members.sort(key=lambda m: (-m["pr_count"], -m["workouts"], -m["sleep_streak"], m["name"].lower()))
+
+    top_perf = {
+        "sessions":     {"user_id": top_session_count[0], "name": names.get(top_session_count[0] or "", None), "value": top_session_count[1]} if top_session_count[0] else None,
+        "pr":           {"user_id": top_pr[0], "name": names.get(top_pr[0] or "", None), "exercise": top_pr[1], "e1rm_lbs": top_pr[2]} if top_pr[0] else None,
+        "sleep_streak": {"user_id": top_sleep_streak[0], "name": names.get(top_sleep_streak[0] or "", None), "value": top_sleep_streak[1]} if top_sleep_streak[0] else None,
+    }
+
+    # Headline — group voice
+    bits: list[str] = []
+    if totals["active_members"]:
+        bits.append(f"{totals['active_members']}/{len(ids)} members logged something")
+    if totals["pr_count"]:
+        bits.append(f"{totals['pr_count']} PR{'s' if totals['pr_count'] != 1 else ''} across the crew")
+    if totals["workouts"]:
+        bits.append(f"{totals['workouts']} total sessions")
+    if top_pr[0] and top_pr[2]:
+        bits.append(f"top lift: {names.get(top_pr[0], 'Someone')} on {top_pr[1]} ({top_pr[2]} lb e1RM)")
+    headline = " · ".join(bits) if bits else "Quiet week for the crew — somebody open the next chapter."
+
+    return {
+        "week_start":  monday.isoformat(),
+        "week_end":    sunday.isoformat(),
+        "totals":      totals,
+        "leaderboard": members,
+        "top_performers": top_perf,
+        "headline":    headline,
+    }
+
+
 # ── share into PulseFeed ──────────────────────────────────────────────────
 
 def build_share_payload(recap: dict) -> dict:
