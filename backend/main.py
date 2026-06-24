@@ -3827,6 +3827,47 @@ async def health_chat(request: Request):
 
     profile = _get_profile(user_id)
 
+    # ── Coach Al's three on-screen cards (Today's Workout / Today's Plate /
+    # Tonight's Sleep) — so when the user asks "should I lift today?" or
+    # "why am I going to bed at 10?", Coach Al sees the same numbers the
+    # user is staring at on the card. Each is best-effort; missing sections
+    # just don't render in the system prompt.
+    try:
+        health_context["todays_workout"] = tw.get_or_generate(user_id, profile or {}, today_local)
+    except Exception:
+        health_context["todays_workout"] = None
+
+    try:
+        # Reuse the consumed totals + settings already pulled by the snapshot
+        # call above so we don't double-query nutrition_meals just for the
+        # pace check. Fall back to fetching fresh if the snapshot path failed.
+        _settings = nutr.get_settings(user_id)
+        _meals_today = nutr.get_meals(today_local, user_id)
+        _consumed = {
+            "calories": sum(m["calories"] for m in _meals_today),
+            "protein":  sum(m["protein"]  for m in _meals_today),
+            "carbs":    sum(m["carbs"]    for m in _meals_today),
+            "fat":      sum(m["fat"]      for m in _meals_today),
+        }
+        health_context["todays_plate"] = nut_extras.build_payload(
+            user_id, today_local, _consumed, _settings, body.get("local_now"),
+        )
+    except Exception:
+        health_context["todays_plate"] = None
+
+    try:
+        health_context["tonights_sleep"] = ts.build_payload(user_id, today_local)
+    except Exception:
+        health_context["tonights_sleep"] = None
+
+    # Recent training load (weekly volume sparkline + deload flag + muscle
+    # balance gaps) — gives Coach Al one-step access to recovery context
+    # when the user asks "am I overdoing it?" or "what should I lift?".
+    try:
+        health_context["training_load"] = tload.build_payload(user_id)
+    except Exception:
+        health_context["training_load"] = None
+
     try:
         reply = ch.chat(message, health_context, profile, history)
     except RuntimeError as e:

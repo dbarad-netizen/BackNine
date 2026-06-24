@@ -25,6 +25,11 @@ interface Props {
   /** Called when the user taps "Start session". Receives the prescribed
    *  exercises so the parent (TrainingTab) can seed its logger. */
   onStartSession: (sessionName: string, exercises: TodayWorkoutExercise[]) => void;
+  /** Optional — when provided, an "Ask Coach Al" link appears below the
+   *  prescription and opens the chat drawer pre-seeded with a contextual
+   *  question. Lets the user drill into "why this workout" without
+   *  leaving the Training tab. */
+  onAsk?: (seed: string) => void;
 }
 
 const TYPE_BADGE: Record<NonNullable<TodayWorkout["session_type"]>, { label: string; emoji: string; bg: string; fg: string }> = {
@@ -41,7 +46,7 @@ const INTENSITY_DOT: Record<NonNullable<TodayWorkout["intensity"]>, string> = {
   rest:     "bg-gray-400",
 };
 
-export default function TodayWorkoutCard({ onStartSession }: Props) {
+export default function TodayWorkoutCard({ onStartSession, onAsk }: Props) {
   const [data, setData]     = useState<TodayWorkout | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy]     = useState(false);
@@ -198,6 +203,23 @@ export default function TodayWorkoutCard({ onStartSession }: Props) {
               Skip today
             </button>
           </>
+        )}
+
+        {/* Ask Coach Al — contextual handoff into chat. Always offered (even
+            mid-session) so the user can clarify form, sub an exercise, etc. */}
+        {onAsk && (
+          <button
+            onClick={() => {
+              const seed = data.session_name
+                ? `Tell me more about today's workout (${data.session_name}). Why this today?`
+                : "Talk me through today's workout.";
+              onAsk(seed);
+            }}
+            disabled={busy}
+            className="text-xs font-medium text-[#1B3829] hover:underline transition-colors disabled:opacity-40 ml-auto sm:ml-0"
+          >
+            💬 Ask Coach Al
+          </button>
         )}
 
         {/* Feedback chips */}

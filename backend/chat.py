@@ -287,6 +287,131 @@ def _build_system_prompt(health_context: dict, profile: dict) -> str:
             "weight is in pounds, VO2 max in ml/kg/min, etc."
         )
 
+    # ── COACH AL'S THREE ON-SCREEN CARDS ──
+    # These are EXACTLY what the user sees on the Scorecard / Nutrition /
+    # Training tabs right now. When the user asks "should I do this workout"
+    # or "is this bedtime right for me", Coach Al should cite the same
+    # numbers the card is showing — never contradict the card.
+
+    tw = health_context.get("todays_workout")
+    if tw and isinstance(tw, dict) and (tw.get("session_name") or tw.get("session_type")):
+        prompt_parts.append("\n=== TODAY'S WORKOUT (what's on the Training tab right now) ===")
+        if tw.get("session_name"):
+            prompt_parts.append(f"  • Session: {tw['session_name']}")
+        if tw.get("session_type"):
+            prompt_parts.append(f"  • Type: {tw['session_type']}")
+        if tw.get("intensity"):
+            prompt_parts.append(f"  • Intensity: {tw['intensity']}")
+        if tw.get("duration_min"):
+            prompt_parts.append(f"  • Duration: {tw['duration_min']} min")
+        exs = tw.get("exercises") or []
+        if exs:
+            ex_lines = []
+            for ex in exs[:8]:
+                if not isinstance(ex, dict): continue
+                nm = ex.get("name") or ""
+                if not nm: continue
+                bits = [nm]
+                if ex.get("sets") and ex.get("reps"):
+                    bits.append(f"{ex['sets']}×{ex['reps']}")
+                elif ex.get("duration_sec"):
+                    bits.append(f"{round(ex['duration_sec']/60)} min")
+                ex_lines.append(" — ".join(bits))
+            if ex_lines:
+                prompt_parts.append(f"  • Exercises: {'; '.join(ex_lines)}")
+        if tw.get("rationale"):
+            prompt_parts.append(f"  • Why this today: {tw['rationale']}")
+        if tw.get("status") and tw["status"] != "pending":
+            prompt_parts.append(f"  • Current status: {tw['status']}")
+
+    tp = health_context.get("todays_plate")
+    if tp and isinstance(tp, dict):
+        prompt_parts.append("\n=== TODAY'S PLATE (Nutrition Coach card state right now) ===")
+        pace = (tp.get("pace") or {}).get("message")
+        if pace:
+            prompt_parts.append(f"  • Pace: {pace}")
+        c = tp.get("consumed") or {}
+        t = tp.get("targets")  or {}
+        if c.get("calories") is not None and t.get("calories"):
+            prompt_parts.append(f"  • Calories so far: {c['calories']} / {t['calories']}")
+        if c.get("protein") is not None and t.get("protein"):
+            prompt_parts.append(f"  • Protein so far:  {c['protein']}g / {t['protein']}g")
+        if tp.get("day_progress_pct") is not None:
+            prompt_parts.append(f"  • Day progress: {tp['day_progress_pct']}% of awake window elapsed")
+        if tp.get("streak_days"):
+            prompt_parts.append(
+                f"  • Protein streak: {tp['streak_days']} day(s) hitting ≥{tp.get('streak_threshold_pct', 80)}% of target"
+            )
+        if tp.get("next_meal_hint"):
+            prompt_parts.append(f"  • Coach Al's suggested next plate: {tp['next_meal_hint']}")
+
+    night = health_context.get("tonights_sleep")
+    if night and isinstance(night, dict):
+        prompt_parts.append("\n=== TONIGHT'S SLEEP (Scorecard prescription right now) ===")
+        if night.get("target_hours"):
+            prompt_parts.append(f"  • Target: {night['target_hours']}h tonight")
+        bedtime = night.get("bedtime") or {}
+        if bedtime.get("lights_out"):
+            prompt_parts.append(
+                f"  • Recommended window: wind down {bedtime.get('wind_down_start')} → "
+                f"lights out {bedtime.get('lights_out')} → wake {bedtime.get('target_wake')}"
+            )
+            if bedtime.get("earlier_for_training"):
+                prompt_parts.append("  • Window shifted 30 min earlier — heavy training is on the books for tomorrow.")
+        if night.get("streak_nights"):
+            prompt_parts.append(
+                f"  • Sleep streak: {night['streak_nights']} consecutive nights ≥7h and ≥85% efficiency"
+            )
+        if night.get("sleep_debt_hours") is not None:
+            debt = night["sleep_debt_hours"]
+            if debt > 0.5:
+                prompt_parts.append(f"  • Sleep debt: {debt}h built up over the last 7 nights")
+            else:
+                prompt_parts.append("  • Sleep debt: cleared — last 7 nights are on target")
+        ln = night.get("last_night") or {}
+        if ln.get("hours"):
+            line = f"  • Last night: {ln['hours']}h"
+            if ln.get("efficiency"): line += f", {ln['efficiency']}% efficiency"
+            prompt_parts.append(line)
+        if night.get("coach_note"):
+            prompt_parts.append(f"  • The note shown on the card: {night['coach_note']}")
+
+    load = health_context.get("training_load")
+    if load and isinstance(load, dict):
+        deload = load.get("deload_recommendation") or {}
+        balance = load.get("muscle_balance") or {}
+        weekly = load.get("weekly_volume") or []
+        # Only surface this section if there's anything material to say —
+        # an empty Training tab shouldn't bloat the system prompt.
+        if deload.get("triggered") or balance.get("imbalance_note") or weekly:
+            prompt_parts.append("\n=== RECENT TRAINING LOAD ===")
+            if weekly:
+                cur = weekly[-1] if isinstance(weekly[-1], dict) else {}
+                prompt_parts.append(
+                    f"  • This week so far: {cur.get('strength_sessions', 0)} strength, "
+                    f"{cur.get('cardio_sessions', 0)} cardio ({cur.get('cardio_min', 0)} min), "
+                    f"{cur.get('volume_lbs', 0):,} lb total volume"
+                )
+            if deload.get("triggered"):
+                reason = deload.get("reason") or ""
+                prompt_parts.append(f"  • ⚠ Deload recommendation TRIGGERED: {reason}")
+                if deload.get("suggestion"):
+                    prompt_parts.append(f"    Suggested action: {deload['suggestion']}")
+            elif deload.get("volume_change_pct") is not None:
+                prompt_parts.append(
+                    f"  • Volume change vs prior 4 weeks: {deload['volume_change_pct']:+.0f}%"
+                )
+            if balance.get("imbalance_note"):
+                prompt_parts.append(f"  • Muscle balance gap: {balance['imbalance_note']}")
+            elif balance.get("groups"):
+                groups_str = ", ".join(
+                    f"{g['name']} {g['session_days']}d"
+                    for g in balance["groups"]
+                    if g.get("session_days", 0) > 0
+                )
+                if groups_str:
+                    prompt_parts.append(f"  • Muscle groups trained this week: {groups_str}")
+
     # Guidelines
     prompt_parts.append(
         "\n=== COACHING GUIDELINES ===\n"
@@ -299,6 +424,14 @@ def _build_system_prompt(health_context: dict, profile: dict) -> str:
         "• Supplements: when the user asks about THEIR stack (timing, dosing, interactions), speak to it by name. "
         "Do NOT recommend new supplements they aren't already taking based on metrics — that's medical territory. "
         "If they ask 'should I take X?', describe what the evidence says and suggest they discuss it with their doctor.\n"
+        "• CONSISTENCY WITH ON-SCREEN CARDS: when the user asks about today's workout, today's "
+        "macros/meals, or tonight's sleep, ANCHOR your answer to the matching card section above "
+        "(TODAY'S WORKOUT / TODAY'S PLATE / TONIGHT'S SLEEP). Do not invent a different "
+        "recommendation than what the card shows; explain or refine the card's recommendation. "
+        "If the card recommends a 9:30pm lights-out and the user asks 'when should I go to bed?', "
+        "say 9:30pm and explain why, don't pick a different time.\n"
+        "• If the deload flag is TRIGGERED above, treat it as the dominant signal — don't tell the "
+        "user to push harder this week even if they ask for a heavy program.\n"
         "• You are Coach Al — bring energy and genuine care to every response."
     )
 

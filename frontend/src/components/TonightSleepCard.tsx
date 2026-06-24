@@ -20,7 +20,14 @@
 import { useEffect, useState } from "react";
 import { api, type TonightSleepPayload } from "@/lib/api";
 
-export default function TonightSleepCard() {
+interface Props {
+  /** Optional — when provided, an "Ask Coach Al" link appears in the
+   *  card footer and opens the chat drawer pre-seeded with a contextual
+   *  question about tonight's bedtime, sleep debt, or the streak. */
+  onAsk?: (seed: string) => void;
+}
+
+export default function TonightSleepCard({ onAsk }: Props = {}) {
   const [data,    setData]    = useState<TonightSleepPayload | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -117,10 +124,36 @@ export default function TonightSleepCard() {
         )}
       </div>
 
-      {/* Coach voice note */}
-      <p className="text-sm text-white leading-snug italic">
-        &ldquo;{data.coach_note}&rdquo;
-      </p>
+      {/* Coach voice note + Ask Coach Al handoff */}
+      <div className="flex items-end justify-between gap-2">
+        <p className="text-sm text-white leading-snug italic flex-1">
+          &ldquo;{data.coach_note}&rdquo;
+        </p>
+        {onAsk && (
+          <button
+            onClick={() => {
+              // Seed the chat with whichever angle is most useful: heavy
+              // debt → debt question, training tomorrow → why earlier,
+              // streak → keep it going, otherwise just open with the
+              // bedtime question.
+              let seed = "What should tonight's sleep look like for me?";
+              if (data.sleep_debt_hours !== null && data.sleep_debt_hours >= 3) {
+                seed = `I'm carrying ${data.sleep_debt_hours.toFixed(1)}h of sleep debt — how do I climb out?`;
+              } else if (data.bedtime?.earlier_for_training) {
+                seed = "Why is tonight's lights-out earlier than usual?";
+              } else if (data.streak_nights >= 3) {
+                seed = `I'm on a ${data.streak_nights}-night sleep streak — anything I should change tonight?`;
+              } else if (data.bedtime?.lights_out) {
+                seed = `Why ${data.bedtime.lights_out} as tonight's lights-out?`;
+              }
+              onAsk(seed);
+            }}
+            className="shrink-0 text-[11px] font-semibold text-indigo-200 hover:text-white hover:underline transition-colors whitespace-nowrap"
+          >
+            💬 Ask Coach Al
+          </button>
+        )}
+      </div>
     </section>
   );
 }

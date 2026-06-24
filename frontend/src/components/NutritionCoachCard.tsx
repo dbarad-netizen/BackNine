@@ -26,7 +26,14 @@ const PACE_STYLE: Record<NutritionCoachPayload["pace"]["kind"], { emoji: string;
   no_targets:       { emoji: "⚙",  tone: "bg-gray-100 text-gray-700 border-gray-200"     },
 };
 
-export default function NutritionCoachCard() {
+interface Props {
+  /** Optional — when provided, an "Ask Coach Al" link appears in the card
+   *  footer and opens the chat drawer pre-seeded with a contextual prompt
+   *  about today's macros, pace, or what to eat next. */
+  onAsk?: (seed: string) => void;
+}
+
+export default function NutritionCoachCard({ onAsk }: Props = {}) {
   const [data,    setData]    = useState<NutritionCoachPayload | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -119,9 +126,34 @@ export default function NutritionCoachCard() {
         </div>
       )}
 
-      <p className="text-[10px] text-emerald-100/70 italic">
-        Day progress: {data.day_progress_pct}% · protein at {proteinPct}%, calories at {caloriesPct}%
-      </p>
+      <div className="flex items-center justify-between gap-2 mt-1">
+        <p className="text-[10px] text-emerald-100/70 italic">
+          Day progress: {data.day_progress_pct}% · protein at {proteinPct}%, calories at {caloriesPct}%
+        </p>
+        {onAsk && (
+          <button
+            onClick={() => {
+              // Tailor the seed to whatever Coach Al just flagged. The chat
+              // backend already has the same NutritionCoachPayload in
+              // context, so the question just has to point Claude at it.
+              const seedByKind: Record<string, string> = {
+                behind_protein:  "I'm behind on protein for today — what should I eat?",
+                over_calories:   "I've gone over my calorie budget — what now?",
+                behind_calories: "I've eaten lighter than usual today — is that fine?",
+                on_pace:         "Am I on track for my macro targets today?",
+                early:           "What should breakfast look like to hit my targets today?",
+                late_settled:    "Wrap up my day — anything I should add or skip?",
+                no_targets:      "Help me set my daily macro targets.",
+              };
+              const seed = seedByKind[data.pace.kind] ?? "Walk me through where I am on macros today.";
+              onAsk(seed);
+            }}
+            className="shrink-0 text-[11px] font-semibold text-emerald-100 hover:text-white hover:underline transition-colors"
+          >
+            💬 Ask Coach Al
+          </button>
+        )}
+      </div>
     </section>
   );
 }

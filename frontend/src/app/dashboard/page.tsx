@@ -1592,7 +1592,7 @@ export default function DashboardPage() {
                 bedtime window, surfaces sleep debt + streak, and shifts the
                 window earlier if tomorrow's training is heavy. Renders
                 nothing when Oura history is too sparse. */}
-            <TonightSleepCard />
+            <TonightSleepCard onAsk={(seed) => openChatRef.current?.(seed)} />
 
             {/* Symptom Card — Phase 2 of the Insight pillar.
                 Quick tag-based "how do you feel today?" log + correlation
@@ -2353,7 +2353,7 @@ export default function DashboardPage() {
             {/* Today's Plate — Coach Al voice card at the top. Mirrors the
                 Today's Workout pattern: pace check, protein streak, concrete
                 next-meal suggestion. Renders nothing when targets unset. */}
-            {!nutLoading && <NutritionCoachCard />}
+            {!nutLoading && <NutritionCoachCard onAsk={(seed) => openChatRef.current?.(seed)} />}
 
             {!nutLoading && nutToday && (
               <>
@@ -2652,7 +2652,11 @@ export default function DashboardPage() {
                 {training_load.zone === "unknown"   && "Need more activity data for a full analysis. Keep wearing your ring."}
               </p>
             </section>
-            <TrainingTab autoOpenLogger={autoLogWorkout} onLoggerOpened={() => setAutoLogWorkout(false)} />
+            <TrainingTab
+              autoOpenLogger={autoLogWorkout}
+              onLoggerOpened={() => setAutoLogWorkout(false)}
+              onAskCoach={(seed) => openChatRef.current?.(seed)}
+            />
 
             {/* ── Picked For You — gear in Training is the most natural
                 commercial fit (shoes, mats, recovery tools, supplements). */}

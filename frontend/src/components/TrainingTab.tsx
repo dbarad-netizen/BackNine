@@ -1024,9 +1024,14 @@ function TrainingSettingsPanel({ settings, onSave }: { settings: TrainingSetting
 export default function TrainingTab({
   autoOpenLogger = false,
   onLoggerOpened,
+  onAskCoach,
 }: {
   autoOpenLogger?: boolean;
   onLoggerOpened?: () => void;
+  /** Optional — when provided, the Today's Workout card surfaces an
+   *  "Ask Coach Al" link that opens the chat drawer pre-seeded with a
+   *  contextual prompt about today's session. */
+  onAskCoach?: (seed: string) => void;
 } = {}) {
   const [weeklyPlan,   setWeeklyPlan]   = useState<WeeklyPlan | null>(null);
   const [workouts,     setWorkouts]     = useState<Workout[]>([]);
@@ -1122,6 +1127,7 @@ export default function TrainingTab({
             document.getElementById("workout-logger-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" });
           }, 100);
         }}
+        onAsk={onAskCoach}
       />
 
       {/* Training load cluster: deload prompt (only if triggered), weekly

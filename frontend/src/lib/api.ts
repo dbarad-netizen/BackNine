@@ -1741,10 +1741,17 @@ export const api = {
 
   // ── AI Chat ───────────────────────────────────────────────────────────────
   chat(message: string, history: ChatMessage[]): Promise<{ reply: string }> {
-    // Send the device-local date so today's macros anchor to the user's day.
+    // Send the device-local date so today's macros anchor to the user's day,
+    // and the device-local current ISO so the nutrition pace-check on the
+    // backend can use the user's actual hour-of-day (not Render UTC).
     return request("/api/chat", {
       method: "POST",
-      body: JSON.stringify({ message, history, date: localToday() }),
+      body: JSON.stringify({
+        message,
+        history,
+        date:      localToday(),
+        local_now: new Date().toISOString(),
+      }),
     });
   },
   chatHistory(limit = 50): Promise<{ messages: ChatMessage[] }> {
