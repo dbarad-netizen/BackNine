@@ -47,11 +47,20 @@ WIND_DOWN_BUFFER_MIN         = 30   # extra time before lights-out to actually f
 STREAK_LOOKBACK_NIGHTS       = 30
 STREAK_HIT_HOURS             = 7.0
 STREAK_HIT_EFFICIENCY        = 85   # percent
-DEBT_WINDOW_NIGHTS           = 7
-# Sanity ceiling only — used to be 10h which created a confusing situation
-# where the card said "10.0h" for any debt ≥ 10. Real Oura debts can easily
-# exceed 8-10h during a bad week (e.g. 6h short × 7 nights = 42h on paper).
-# 20h is high enough that real users never hit it.
+
+# Window length for the rolling debt. Oura uses 14 days with heavy recency
+# decay — a 5-night unweighted window approximates that decay reasonably
+# well without requiring us to maintain a separate weighting curve.
+DEBT_WINDOW_NIGHTS           = 5
+
+# Per-night caps so a single extreme night doesn't dominate the rolling sum.
+# Oura applies similar caps internally: one disaster night doesn't add 6h
+# of debt, and one 12h catch-up sleep doesn't bank 4h of credit. Without
+# these caps our number consistently overshoots Oura's app by 2-3x for
+# users with even one or two outlier nights.
+PER_NIGHT_DEFICIT_CAP_HOURS  = 3.0
+PER_NIGHT_SURPLUS_CAP_HOURS  = 1.5
+
 DEBT_SANITY_MAX_HOURS        = 20.0
 HEAVY_TRAINING_EARLIER_MIN   = 30
 
@@ -174,27 +183,12 @@ def _sleep_streak(smm: dict, today: _date) -> int:
     return streak
 
 
-def _sleep_debt(smm: dict, target_hours: float, today: _date) -> Optional[float]:
-    """Cumulative sleep deficit (need − actual) over the last 7 nights,
-    netting surplus nights against deficit nights, then floored at zero.
-
-    Critical to match the Oura app's number:
-      1. Oura calculates the user's sleep need DYNAMICALLY per night (age,
-         recent recovery, training load) and we cache it as `sleep_need`
-         in seconds. When present we use it instead of the user's static
-         target — that's the methodology Oura uses internally.
-      2. A night ABOVE the need REDUCES the running debt (you bank sleep
-         credit). v1 of this function used `max(0, gap)` per night, which
-         threw away surplus and made our number ~2-3× higher than Oura's
-         for users who had even one or two long nights in the window.
-         The fix is to sum signed gaps and floor the TOTAL at zero.
-      3. A single huge surplus night can't drag the running debt below
-         zero permanently (also matches Oura — banked sleep doesn't make
-         you a credit holder).
-
-    Returns total debt in hours (one decimal). None if fewer than 4
-    nights of data (avoids alarming the user from a 1-2 night sample)."""
-    gaps: list[float] = []   # SIGNED — positive = deficit, negative = surplus
+def _per_night_gaps(smm: dict, target_hours: float, today: _date) -> list[dict]:
+    """Build the per-night gap breakdown used by both _sleep_debt and the
+    debug endpoint. Each entry: {date, actual_h, need_h, raw_gap_h,
+    capped_gap_h, source}. `source` records whether we used Oura's
+    per-night need or the static fallback — useful for debugging."""
+    out: list[dict] = []
     for offset in range(1, DEBT_WINDOW_NIGHTS + 1):
         d = (today - timedelta(days=offset)).isoformat()
         row = smm.get(d)
@@ -204,16 +198,78 @@ def _sleep_debt(smm: dict, target_hours: float, today: _date) -> Optional[float]
         need_sec   = row.get("sleep_need")
         if need_sec and need_sec > 0:
             target_sec = float(need_sec)
+            source = "oura"
         else:
             target_sec = target_hours * 3600.0
-        gaps.append(target_sec - actual_sec)   # keep the sign
+            source = "static"
+        raw_gap_sec = target_sec - actual_sec
+        # Per-night cap: deficit ≤ 3h, surplus ≤ 1.5h (asymmetric on
+        # purpose — banking sleep credit is harder than losing it).
+        if raw_gap_sec > 0:
+            capped_gap_sec = min(raw_gap_sec, PER_NIGHT_DEFICIT_CAP_HOURS * 3600)
+        else:
+            capped_gap_sec = max(raw_gap_sec, -PER_NIGHT_SURPLUS_CAP_HOURS * 3600)
+        out.append({
+            "date":          d,
+            "actual_h":      round(actual_sec / 3600.0, 2),
+            "need_h":        round(target_sec / 3600.0, 2),
+            "raw_gap_h":     round(raw_gap_sec / 3600.0, 2),
+            "capped_gap_h":  round(capped_gap_sec / 3600.0, 2),
+            "source":        source,
+        })
+    return out
 
-    if len(gaps) < 4:
+
+def _sleep_debt(smm: dict, target_hours: float, today: _date) -> Optional[float]:
+    """Estimated sleep debt over the last 5 nights, in hours.
+
+    Methodology (designed to approximate Oura's app number, NOT to be
+    the source of truth — Oura's exact algorithm uses 14-day recency
+    decay weighting that we don't replicate):
+      1. Per-night need from Oura's personalized `sleep_need` value when
+         available; static target as fallback.
+      2. Per-night gap = need − actual.
+      3. Per-night caps: deficit capped at +3h, surplus at −1.5h. This
+         prevents one disaster night or one giant catch-up from dominating.
+      4. Sum capped gaps, floor total at 0 (no negative debt).
+      5. Sanity ceiling at 20h.
+
+    Returns None when fewer than 3 nights of data are available."""
+    gaps = _per_night_gaps(smm, target_hours, today)
+    if len(gaps) < 3:
         return None
+    total_h = max(0.0, sum(g["capped_gap_h"] for g in gaps))
+    return min(DEBT_SANITY_MAX_HOURS, round(total_h, 1))
 
-    total_sec = max(0.0, sum(gaps))           # floor TOTAL, not each night
-    total_hours = total_sec / 3600.0
-    return min(DEBT_SANITY_MAX_HOURS, round(total_hours, 1))
+
+def debug_breakdown(user_id: str, today_iso: Optional[str] = None) -> dict:
+    """Returns the full sleep-debt calculation breakdown for one user.
+    Used by /api/sleep/debt-debug to verify what our calculation is seeing
+    vs. what the Oura app shows. Safe to expose — only returns the
+    requesting user's own data."""
+    try:
+        today = _date.fromisoformat(today_iso) if today_iso else _date.today()
+    except Exception:
+        today = _date.today()
+    target_hours = _get_sleep_target_hours(user_id)
+    smm: dict = {}
+    try:
+        _, _, _, smm = oc.get_days(user_id, days=14)
+    except Exception:
+        smm = {}
+    nights = _per_night_gaps(smm, target_hours, today)
+    debt = _sleep_debt(smm, target_hours, today)
+    return {
+        "today":              today.isoformat(),
+        "window_nights":      DEBT_WINDOW_NIGHTS,
+        "static_target_h":    target_hours,
+        "per_night_caps_h":   {"deficit": PER_NIGHT_DEFICIT_CAP_HOURS, "surplus": PER_NIGHT_SURPLUS_CAP_HOURS},
+        "nights":             nights,
+        "raw_sum_h":          round(sum(g["raw_gap_h"] for g in nights), 2),
+        "capped_sum_h":       round(sum(g["capped_gap_h"] for g in nights), 2),
+        "reported_debt_h":    debt,
+        "note":               "Our debt is an estimate. Oura's app uses a 14-day recency-weighted formula we don't fully replicate — treat the Oura number as authoritative.",
+    }
 
 
 def _last_night_summary(smm: dict, today: _date) -> Optional[dict]:

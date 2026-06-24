@@ -113,9 +113,9 @@ export default function TonightSleepCard({ onAsk }: Props = {}) {
         {data.sleep_debt_hours !== null && data.sleep_debt_hours > 0.1 && (
           <span
             className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-rose-100 text-rose-800 border border-rose-200"
-            title="Sum of (Oura's personal sleep need − actual) over the last 7 nights — should match your Oura app"
+            title="Our 5-night estimate using Oura's per-night sleep need with per-night caps. Oura's app uses a 14-day recency-weighted formula and is the canonical number — treat ours as a directional cue."
           >
-            💤 {fmtDebt(data.sleep_debt_hours)} sleep debt
+            💤 ~{fmtDebt(data.sleep_debt_hours)} debt est.
           </span>
         )}
         {data.sleep_debt_hours !== null && data.sleep_debt_hours <= 0.5 && (

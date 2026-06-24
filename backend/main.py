@@ -2732,6 +2732,18 @@ def get_tonight_sleep(request: Request):
     return ts.build_payload(session["user_id"], today)
 
 
+@app.get("/api/sleep/debt-debug")
+def get_sleep_debt_debug(request: Request):
+    """Returns the full per-night breakdown of how our sleep debt was
+    calculated — what need we used per night, what actual sleep we read,
+    raw gap, capped gap, and final total. Used when our number disagrees
+    with the Oura app so the user can see exactly what's driving the
+    discrepancy. Returns only the requesting user's own data."""
+    session = _require_session(request)
+    today   = _user_local_today_iso(request)
+    return ts.debug_breakdown(session["user_id"], today)
+
+
 @app.post("/api/training/workouts")
 async def log_workout(request: Request):
     session = _require_session(request)
