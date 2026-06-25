@@ -30,6 +30,7 @@ interface Props {
 export default function TonightSleepCard({ onAsk }: Props = {}) {
   const [data,    setData]    = useState<TonightSleepPayload | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     api.tonightSleep()
@@ -37,6 +38,16 @@ export default function TonightSleepCard({ onAsk }: Props = {}) {
       .catch(() => setData(null))
       .finally(() => setLoading(false));
   }, []);
+
+  const handleRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      const fresh = await api.tonightSleep({ refresh: true });
+      setData(fresh);
+    } catch { /* silent */ }
+    finally { setRefreshing(false); }
+  };
 
   if (loading || !data) return null;
   // If neither bedtime, streak, debt, nor last-night data exist, the card
@@ -71,14 +82,29 @@ export default function TonightSleepCard({ onAsk }: Props = {}) {
               : <>Aim for {data.target_hours.toFixed(0)}h tonight</>}
           </h3>
         </div>
-        {data.streak_nights > 1 && (
-          <span
-            className="shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-200/90 text-amber-900"
-            title={`${data.streak_nights} consecutive nights ≥ 7h and ≥85% efficiency`}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {data.streak_nights > 1 && (
+            <span
+              className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-200/90 text-amber-900"
+              title={`${data.streak_nights} consecutive nights ≥ 7h and ≥85% efficiency`}
+            >
+              🔥 {data.streak_nights} night streak
+            </span>
+          )}
+          {/* Manual refresh — pulls fresh data from Oura's API right now.
+              Important on mornings when you've synced the ring twice (5am
+              wake → back to bed → 9am wake): the second session may not
+              appear in our 30-min cache window otherwise. */}
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="text-indigo-200 hover:text-white text-xs px-1 py-0.5 transition-colors disabled:opacity-50"
+            aria-label="Refresh sleep data from Oura"
+            title="Pull fresh data from Oura (useful after a split-sleep night)"
           >
-            🔥 {data.streak_nights} night streak
-          </span>
-        )}
+            {refreshing ? "⟳" : "↻"}
+          </button>
+        </div>
       </div>
 
       {/* Bedtime window */}

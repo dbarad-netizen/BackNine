@@ -2723,13 +2723,41 @@ async def share_weekly_recap(request: Request):
 
 
 @app.get("/api/sleep/tonight")
-def get_tonight_sleep(request: Request):
+async def get_tonight_sleep(request: Request, refresh: bool = False):
     """Tonight's Sleep prescription — recommended bedtime/lights-out window,
     sleep debt, streak, last-night recap, and Coach Al's voice note. Lives
-    at the top of the Scorecard (Sleep view)."""
+    at the top of the Scorecard (Sleep view).
+
+    Cache strategy is more aggressive here than the dashboard endpoint
+    because sleep is uniquely time-sensitive on mornings: when a user
+    syncs the ring twice in one night (5am wake → back to bed → 9am
+    wake), Oura's API has both sessions by mid-morning but our normal
+    2h cache TTL would still serve the first-sync data, undercounting
+    the user's total sleep AND inflating debt. Here we refresh whenever
+    the cache for today is older than 30 minutes, or whenever the
+    caller passes ?refresh=1 (manual refresh button on the card).
+    """
     session = _require_session(request)
+    user_id = session["user_id"]
     today   = _user_local_today_iso(request)
-    return ts.build_payload(session["user_id"], today)
+
+    # Try to refresh first — best-effort, never block the response if Oura
+    # is misbehaving. The card always renders from cache after.
+    if refresh or not oc.is_fresh(user_id, max_age_hours=0.5):
+        try:
+            access_token, _ = await _ensure_valid_token(session)
+            if access_token:
+                raw = await fetch_all(access_token, days=14)
+                rm, slm, am, smm = parse_oura_data(raw)
+                if rm or slm or am or smm:
+                    try:
+                        oc.store_days(user_id, rm, slm, am, smm)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    return ts.build_payload(user_id, today)
 
 
 @app.get("/api/sleep/debt-debug")

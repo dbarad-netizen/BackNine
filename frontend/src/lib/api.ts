@@ -1602,8 +1602,8 @@ export const api = {
     const localNow = new Date().toISOString();
     return request(`/api/nutrition/today-coach?local_now=${encodeURIComponent(localNow)}`);
   },
-  tonightSleep(): Promise<TonightSleepPayload> {
-    return request("/api/sleep/tonight");
+  tonightSleep(opts: { refresh?: boolean } = {}): Promise<TonightSleepPayload> {
+    return request(`/api/sleep/tonight${opts.refresh ? "?refresh=1" : ""}`);
   },
   weeklyRecap(week?: string): Promise<WeeklyRecap> {
     return request(`/api/community/weekly-recap${week ? `?week=${week}` : ""}`);
