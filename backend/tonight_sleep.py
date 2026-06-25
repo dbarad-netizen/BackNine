@@ -64,6 +64,12 @@ PER_NIGHT_SURPLUS_CAP_HOURS  = 1.5
 DEBT_SANITY_MAX_HOURS        = 20.0
 HEAVY_TRAINING_EARLIER_MIN   = 30
 
+# Version marker — bumped every time we make a meaningful change to the
+# sleep parsing or debt math. Surfaced in the API payload so the user (and
+# we) can see at a glance what's actually live on Render. If the card
+# shows v3 but you expect v5, the deploy hasn't landed yet.
+SLEEP_LOGIC_VERSION          = "v5-late-nap-included"
+
 
 def _sb() -> Optional[Client]:
     url = os.getenv("SUPABASE_URL")
@@ -283,6 +289,7 @@ def debug_breakdown(user_id: str, today_iso: Optional[str] = None) -> dict:
     debt = _sleep_debt(smm, target_hours, today)
     return {
         "today":              today.isoformat(),
+        "version":            SLEEP_LOGIC_VERSION,
         "window_nights":      DEBT_WINDOW_NIGHTS,
         "static_target_h":    target_hours,
         "per_night_caps_h":   {"deficit": PER_NIGHT_DEFICIT_CAP_HOURS, "surplus": PER_NIGHT_SURPLUS_CAP_HOURS},

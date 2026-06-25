@@ -2772,6 +2772,79 @@ def get_sleep_debt_debug(request: Request):
     return ts.debug_breakdown(session["user_id"], today)
 
 
+@app.post("/api/sleep/target")
+async def set_sleep_target(request: Request):
+    """Set the user's personal sleep target hours on their profile.
+    Used as the per-night need when Oura's API doesn't return sleep_need.
+    Body: { hours: number } — accepts 4.0–12.0."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    body = await request.json()
+    try:
+        hours = float(body.get("hours"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="hours must be a number (e.g. 6.82)")
+    if not (4.0 <= hours <= 12.0):
+        raise HTTPException(status_code=400, detail="hours must be between 4 and 12")
+    db = get_supabase()
+    if not db:
+        raise HTTPException(status_code=503, detail="storage unavailable")
+    try:
+        # Upsert on user_id so this works whether or not the profile row exists.
+        existing = db.table("user_profiles").select("user_id").eq("user_id", user_id).execute()
+        if existing.data:
+            db.table("user_profiles").update({"sleep_target_hours": hours}).eq("user_id", user_id).execute()
+        else:
+            db.table("user_profiles").insert({"user_id": user_id, "sleep_target_hours": hours}).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"ok": True, "sleep_target_hours": hours}
+
+
+@app.get("/api/sleep/oura-raw-debug")
+async def get_oura_raw_debug(request: Request):
+    """Live pull from Oura's sleep endpoint, returning the raw session
+    records for the last 3 days. Lets us diagnose split-sleep / sleep_need
+    / type-classification issues without guessing: if Oura's API isn't
+    returning a late_nap or a sleep_need field, no parser tweak fixes that.
+
+    Trims each record to just the fields we care about so the response
+    stays small and readable in the debug modal."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        access_token, _ = await _ensure_valid_token(session)
+        if not access_token:
+            return {"error": "No Oura token — connect Oura first."}
+        raw = await fetch_all(access_token, days=3)
+    except Exception as e:
+        return {"error": f"Live Oura fetch failed: {e}"}
+
+    sleep_recs = (raw or {}).get("sleepDetail", {}).get("data", []) or []
+    trimmed = []
+    for rec in sleep_recs[-12:]:  # last ~12 records max — covers 3 nights even with splits
+        trimmed.append({
+            "day":                   rec.get("day"),
+            "type":                  rec.get("type"),
+            "total_sleep_duration":  rec.get("total_sleep_duration"),
+            "total_sleep_h":         round((rec.get("total_sleep_duration") or 0) / 3600, 2) if rec.get("total_sleep_duration") else None,
+            "bedtime_start":         rec.get("bedtime_start"),
+            "bedtime_end":           rec.get("bedtime_end"),
+            "efficiency":            rec.get("efficiency"),
+            "sleep_need_raw":        rec.get("sleep_need"),
+            "deep_sleep_duration":   rec.get("deep_sleep_duration"),
+            "rem_sleep_duration":    rec.get("rem_sleep_duration"),
+            "awake_time":            rec.get("awake_time"),
+        })
+    return {
+        "user_id":        user_id,
+        "parser_version": ts.SLEEP_LOGIC_VERSION,
+        "session_count":  len(sleep_recs),
+        "sessions":       trimmed,
+        "note":           "Live pull from Oura. If a date here has multiple type entries (e.g. long_sleep + late_nap) but our cache shows only one combined total, the parser ran with old code — confirm parser_version matches latest deploy.",
+    }
+
+
 @app.post("/api/training/workouts")
 async def log_workout(request: Request):
     session = _require_session(request)

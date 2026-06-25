@@ -1099,6 +1099,7 @@ export interface SleepDebtNight {
 /** `/api/sleep/debt-debug` payload — what's actually in the cache + math. */
 export interface SleepDebtDebug {
   today:             string;
+  version?:          string;
   window_nights:     number;
   static_target_h:   number;
   per_night_caps_h:  { deficit: number; surplus: number };
@@ -1107,6 +1108,30 @@ export interface SleepDebtDebug {
   capped_sum_h:      number;
   reported_debt_h:   number | null;
   note:              string;
+}
+
+/** Raw Oura session record returned by /api/sleep/oura-raw-debug. */
+export interface OuraRawSession {
+  day:                  string | null;
+  type:                 string | null;
+  total_sleep_duration: number | null;
+  total_sleep_h:        number | null;
+  bedtime_start:        string | null;
+  bedtime_end:          string | null;
+  efficiency:           number | null;
+  sleep_need_raw:       unknown;
+  deep_sleep_duration:  number | null;
+  rem_sleep_duration:   number | null;
+  awake_time:           number | null;
+}
+
+export interface OuraRawDebug {
+  user_id?:        string;
+  parser_version?: string;
+  session_count?:  number;
+  sessions?:       OuraRawSession[];
+  note?:           string;
+  error?:          string;
 }
 
 /** `/api/sleep/tonight` payload. */
@@ -1639,6 +1664,15 @@ export const api = {
   },
   sleepDebtDebug(): Promise<SleepDebtDebug> {
     return request("/api/sleep/debt-debug");
+  },
+  ouraRawDebug(): Promise<OuraRawDebug> {
+    return request("/api/sleep/oura-raw-debug");
+  },
+  setSleepTarget(hours: number): Promise<{ ok: boolean; sleep_target_hours: number }> {
+    return request("/api/sleep/target", {
+      method: "POST",
+      body:   JSON.stringify({ hours }),
+    });
   },
   weeklyRecap(week?: string): Promise<WeeklyRecap> {
     return request(`/api/community/weekly-recap${week ? `?week=${week}` : ""}`);

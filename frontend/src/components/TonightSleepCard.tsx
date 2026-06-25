@@ -18,7 +18,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { api, type TonightSleepPayload, type SleepDebtDebug } from "@/lib/api";
+import { api, type TonightSleepPayload, type SleepDebtDebug, type OuraRawDebug } from "@/lib/api";
 
 interface Props {
   /** Optional — when provided, an "Ask Coach Al" link appears in the
@@ -36,6 +36,15 @@ export default function TonightSleepCard({ onAsk }: Props = {}) {
   const [debugOpen, setDebugOpen] = useState(false);
   const [debug,     setDebug]     = useState<SleepDebtDebug | null>(null);
   const [debugLoading, setDebugLoading] = useState(false);
+  // Raw Oura API pull — separate from our cache so we can verify what
+  // Oura is actually sending us (was: late_nap missing? sleep_need
+  // missing?).
+  const [ouraRaw,        setOuraRaw]        = useState<OuraRawDebug | null>(null);
+  const [ouraRawLoading, setOuraRawLoading] = useState(false);
+  // Sleep target editing
+  const [sleepTargetInput, setSleepTargetInput] = useState("");
+  const [savingTarget,     setSavingTarget]     = useState(false);
+  const [savedTarget,      setSavedTarget]      = useState(false);
 
   useEffect(() => {
     api.tonightSleep()
@@ -67,6 +76,33 @@ export default function TonightSleepCard({ onAsk }: Props = {}) {
       setDebug(await api.sleepDebtDebug());
     } catch { /* silent */ }
     finally { setDebugLoading(false); }
+  };
+
+  const loadOuraRaw = async () => {
+    setOuraRawLoading(true);
+    try {
+      setOuraRaw(await api.ouraRawDebug());
+    } catch (e) {
+      setOuraRaw({ error: e instanceof Error ? e.message : "Couldn't reach Oura" });
+    }
+    finally { setOuraRawLoading(false); }
+  };
+
+  const saveSleepTarget = async () => {
+    const hrs = parseFloat(sleepTargetInput);
+    if (!Number.isFinite(hrs) || hrs < 4 || hrs > 12) return;
+    setSavingTarget(true); setSavedTarget(false);
+    try {
+      await api.setSleepTarget(hrs);
+      setSavedTarget(true);
+      // Force a debt recompute by refreshing the breakdown.
+      const fresh = await api.sleepDebtDebug();
+      setDebug(fresh);
+      // And refresh the card itself so the displayed debt updates.
+      const card = await api.tonightSleep();
+      setData(card);
+    } catch { /* silent */ }
+    finally { setSavingTarget(false); }
   };
 
   // Format helpers for the debug rows
@@ -256,6 +292,39 @@ export default function TonightSleepCard({ onAsk }: Props = {}) {
               )}
               {!debugLoading && debug && (
                 <>
+                  {/* Parser version banner — verifies which deploy is live */}
+                  <div className="rounded-lg border border-[#1B3829]/30 bg-[#1B3829]/5 px-3 py-1.5 text-[11px] text-[#1B3829] font-mono">
+                    parser: <span className="font-semibold">{debug.version || "(unknown — old deploy)"}</span>
+                  </div>
+
+                  {/* Personal sleep need setter — overrides the static 8h
+                      target until Oura's per-night sleep_need is in our
+                      cache. Set this to whatever your Oura app shows as
+                      your nightly need (e.g. 6.82 for 6h 49m). */}
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 space-y-1">
+                    <p className="text-[11px] font-semibold text-amber-900">⚡ Set your personal sleep need</p>
+                    <p className="text-[10px] text-amber-900 leading-snug">
+                      Right now we&apos;re using {debug.static_target_h}h as your target on every night Oura doesn&apos;t send per-night need. Override here with what your Oura app says (e.g. 6.82 for 6h 49m).
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number" step="0.01" min={4} max={12}
+                        placeholder={`current: ${debug.static_target_h}`}
+                        value={sleepTargetInput}
+                        onChange={e => setSleepTargetInput(e.target.value)}
+                        className="w-24 rounded border border-amber-300 bg-white px-2 py-1 text-sm text-gray-900 focus:outline-none focus:border-amber-500"
+                      />
+                      <span className="text-[10px] text-amber-900">hours / night</span>
+                      <button
+                        onClick={saveSleepTarget}
+                        disabled={savingTarget || !sleepTargetInput.trim()}
+                        className="ml-auto text-xs font-semibold px-2.5 py-1 rounded bg-[#1B3829] hover:bg-[#2D6A4F] text-white disabled:opacity-40"
+                      >
+                        {savingTarget ? "…" : savedTarget ? "✓ Saved" : "Save"}
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-800 space-y-0.5">
                     <p><span className="font-semibold">Reported debt:</span> {debug.reported_debt_h ?? "—"} h</p>
                     <p><span className="font-semibold">Capped sum:</span> {debug.capped_sum_h} h · <span className="font-semibold">Raw sum:</span> {debug.raw_sum_h} h</p>
@@ -301,6 +370,56 @@ export default function TonightSleepCard({ onAsk }: Props = {}) {
                     {" "}to what your Oura app shows for the same date. If our number is lower, our cache is missing a session (likely a
                     late_nap that hadn&apos;t synced when we last pulled). Tap the ↻ on the card to force a fresh pull, then reopen this.
                   </p>
+
+                  {/* Live Oura raw dump — bypasses our cache entirely.
+                      Shows exactly what Oura is sending us. If there's no
+                      late_nap or no sleep_need here, no parser tweak fixes
+                      it — the data isn't being sent by Oura. */}
+                  <div className="pt-3 border-t border-gray-200">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[11px] uppercase tracking-wide font-semibold text-gray-700">Raw from Oura&apos;s API</p>
+                      <button
+                        onClick={loadOuraRaw}
+                        disabled={ouraRawLoading}
+                        className="text-xs font-medium text-[#1B3829] hover:underline disabled:opacity-50"
+                      >
+                        {ouraRawLoading ? "Loading…" : ouraRaw ? "↻ Re-pull" : "Pull live from Oura"}
+                      </button>
+                    </div>
+
+                    {ouraRaw?.error && (
+                      <p className="text-[11px] text-rose-700 mt-1">{ouraRaw.error}</p>
+                    )}
+
+                    {ouraRaw && !ouraRaw.error && (
+                      <div className="mt-2 space-y-1.5">
+                        <p className="text-[10px] text-gray-600 font-mono">
+                          server parser_version: <span className="font-semibold">{ouraRaw.parser_version || "?"}</span> · {ouraRaw.session_count ?? 0} total sleep records in last 3 days
+                        </p>
+                        {(ouraRaw.sessions || []).length === 0 && (
+                          <p className="text-[11px] text-gray-600 italic">Oura returned no sleep records for the last 3 days.</p>
+                        )}
+                        {(ouraRaw.sessions || []).map((s, i) => (
+                          <div key={i} className="rounded border border-gray-200 bg-gray-50 px-2 py-1.5 text-[11px] font-mono">
+                            <p>
+                              <span className="font-semibold">{s.day}</span> · type=<span className="font-semibold">{s.type}</span> · total=<span className={`font-semibold ${s.type === "late_nap" ? "text-amber-700" : ""}`}>{s.total_sleep_h ?? "?"}h</span> · eff={s.efficiency ?? "?"}%
+                            </p>
+                            <p className="text-gray-600">
+                              bed: {s.bedtime_start?.slice(11, 16) || "?"} → {s.bedtime_end?.slice(11, 16) || "?"}
+                            </p>
+                            <p className="text-gray-600">
+                              sleep_need_raw: <span className={typeof s.sleep_need_raw === "object" && s.sleep_need_raw !== null ? "text-emerald-700 font-semibold" : "text-rose-700"}>
+                                {s.sleep_need_raw === null || s.sleep_need_raw === undefined
+                                  ? "MISSING"
+                                  : JSON.stringify(s.sleep_need_raw)}
+                              </span>
+                            </p>
+                          </div>
+                        ))}
+                        <p className="text-[10px] text-gray-600 italic mt-1">{ouraRaw.note}</p>
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
             </div>
