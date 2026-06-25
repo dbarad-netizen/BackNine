@@ -48,10 +48,13 @@ STREAK_LOOKBACK_NIGHTS       = 30
 STREAK_HIT_HOURS             = 7.0
 STREAK_HIT_EFFICIENCY        = 85   # percent
 
-# Window length for the rolling debt. Oura uses 14 days with heavy recency
-# decay — a 5-night unweighted window approximates that decay reasonably
-# well without requiring us to maintain a separate weighting curve.
-DEBT_WINDOW_NIGHTS           = 5
+# Window length for the rolling debt. Matches Oura's published 14-day
+# window. Per-night caps below keep this from running away on a bad week,
+# and the surplus offset means a great catch-up night can still reduce
+# the running balance. v5 used 5 nights, which under-counted relative to
+# Oura's app for users with sustained-but-small deficits (gap accumulated
+# across the missing 9 nights).
+DEBT_WINDOW_NIGHTS           = 14
 
 # Per-night caps so a single extreme night doesn't dominate the rolling sum.
 # Oura applies similar caps internally: one disaster night doesn't add 6h
@@ -67,8 +70,8 @@ HEAVY_TRAINING_EARLIER_MIN   = 30
 # Version marker — bumped every time we make a meaningful change to the
 # sleep parsing or debt math. Surfaced in the API payload so the user (and
 # we) can see at a glance what's actually live on Render. If the card
-# shows v3 but you expect v5, the deploy hasn't landed yet.
-SLEEP_LOGIC_VERSION          = "v5-late-nap-included"
+# shows v5 but you expect v6, the deploy hasn't landed yet.
+SLEEP_LOGIC_VERSION          = "v6-14-night-window"
 
 
 def _sb() -> Optional[Client]:
@@ -227,7 +230,7 @@ def _per_night_gaps(smm: dict, target_hours: float, today: _date) -> list[dict]:
 
 
 def _sleep_debt(smm: dict, target_hours: float, today: _date) -> Optional[float]:
-    """Estimated sleep debt over the last 5 nights, in hours.
+    """Estimated sleep debt over the last 14 nights, in hours.
 
     Methodology (designed to approximate Oura's app number, NOT to be
     the source of truth — Oura's exact algorithm uses 14-day recency
@@ -240,9 +243,10 @@ def _sleep_debt(smm: dict, target_hours: float, today: _date) -> Optional[float]
       4. Sum capped gaps, floor total at 0 (no negative debt).
       5. Sanity ceiling at 20h.
 
-    Returns None when fewer than 3 nights of data are available."""
+    Returns None when fewer than 5 nights of data are available
+    (avoids surfacing a misleading number from a near-empty window)."""
     gaps = _per_night_gaps(smm, target_hours, today)
-    if len(gaps) < 3:
+    if len(gaps) < 5:
         return None
     total_h = max(0.0, sum(g["capped_gap_h"] for g in gaps))
     return min(DEBT_SANITY_MAX_HOURS, round(total_h, 1))
