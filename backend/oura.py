@@ -233,13 +233,24 @@ def parse_oura_data(raw: dict) -> tuple[dict, dict, dict, dict]:
             "active_cal": rec.get("active_calories"),
         }
 
-    # Sleep model (detail — SUM all qualifying sessions per day, skip naps/rest)
-    # Oura can split one night into multiple records (ring removed, two sleep periods, etc.)
-    # Keeping only the longest session underreports total sleep time.
+    # Sleep model (detail — SUM all qualifying sessions per day)
+    # Oura splits one night into multiple records whenever the user wakes,
+    # syncs the ring, then goes back to sleep. Each piece has a `type`:
+    #   • long_sleep — primary night session (always counted)
+    #   • late_nap   — back-to-sleep within a few hours of waking from the
+    #                  main session. Oura's APP counts this toward your
+    #                  nightly total and your sleep need fulfillment. We
+    #                  MUST also include it or split-sleep users see
+    #                  undercounted totals and inflated debt — that was
+    #                  exactly the bug where Oura showed 6h 54m and we
+    #                  showed only 5.6h for the same night.
+    #   • nap        — intentional daytime nap, NOT part of last night
+    #   • rest       — quiet rest period (meditation, reading), not sleep
+    #   • deleted    — user deleted this record manually
     _smm_raw: dict = {}  # day → list of qualifying session dicts
     for rec in raw.get("sleepDetail", {}).get("data", []):
-        # Exclude known non-main-sleep types
-        if rec.get("type") in ("rest", "late_nap", "deleted"): continue
+        # Only exclude truly non-night types. `late_nap` is now included.
+        if rec.get("type") in ("rest", "nap", "deleted"): continue
         total = rec.get("total_sleep_duration") or 0
         if total < 300: continue   # ignore sessions under 5 minutes (true rest blips)
         day = rec.get("day", "")

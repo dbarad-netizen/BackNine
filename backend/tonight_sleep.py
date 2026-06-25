@@ -246,7 +246,12 @@ def debug_breakdown(user_id: str, today_iso: Optional[str] = None) -> dict:
     """Returns the full sleep-debt calculation breakdown for one user.
     Used by /api/sleep/debt-debug to verify what our calculation is seeing
     vs. what the Oura app shows. Safe to expose — only returns the
-    requesting user's own data."""
+    requesting user's own data.
+
+    Includes the raw cached row for each night so we can spot when a
+    split-sleep session is missing (cache total looks low relative to
+    Oura's app) or when sleep_need is absent (forcing the static target
+    fallback)."""
     try:
         today = _date.fromisoformat(today_iso) if today_iso else _date.today()
     except Exception:
@@ -258,6 +263,23 @@ def debug_breakdown(user_id: str, today_iso: Optional[str] = None) -> dict:
     except Exception:
         smm = {}
     nights = _per_night_gaps(smm, target_hours, today)
+
+    # Augment each night with the raw cached row (efficiency, hrv, etc.)
+    # so a user comparing the debug payload to the Oura app can see why
+    # the totals might differ — e.g. a missing late_nap session would
+    # show up as our total being lower than Oura's.
+    for n in nights:
+        raw = smm.get(n["date"]) or {}
+        n["raw_cache"] = {
+            "total_sec":      raw.get("total"),
+            "sleep_need_sec": raw.get("sleep_need"),
+            "efficiency":     raw.get("efficiency"),
+            "deep_sec":       raw.get("deep"),
+            "rem_sec":        raw.get("rem"),
+            "awake_sec":      raw.get("awake"),
+            "bedtime_start":  raw.get("bedtime_start"),
+        }
+
     debt = _sleep_debt(smm, target_hours, today)
     return {
         "today":              today.isoformat(),
