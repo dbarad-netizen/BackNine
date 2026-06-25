@@ -18,7 +18,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { api, type TonightSleepPayload } from "@/lib/api";
+import { api, type TonightSleepPayload, type SleepDebtDebug } from "@/lib/api";
 
 interface Props {
   /** Optional — when provided, an "Ask Coach Al" link appears in the
@@ -31,6 +31,11 @@ export default function TonightSleepCard({ onAsk }: Props = {}) {
   const [data,    setData]    = useState<TonightSleepPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  // Debug viewer state — shown when the user taps the small "Debug" link.
+  // Lets us inspect what's actually in our cache vs. what Oura's app shows.
+  const [debugOpen, setDebugOpen] = useState(false);
+  const [debug,     setDebug]     = useState<SleepDebtDebug | null>(null);
+  const [debugLoading, setDebugLoading] = useState(false);
 
   useEffect(() => {
     api.tonightSleep()
@@ -45,9 +50,28 @@ export default function TonightSleepCard({ onAsk }: Props = {}) {
     try {
       const fresh = await api.tonightSleep({ refresh: true });
       setData(fresh);
+      // If the debug viewer is open, re-fetch its breakdown too so it
+      // reflects the freshly-pulled values.
+      if (debugOpen) {
+        try { setDebug(await api.sleepDebtDebug()); } catch {}
+      }
     } catch { /* silent */ }
     finally { setRefreshing(false); }
   };
+
+  const openDebug = async () => {
+    setDebugOpen(true);
+    if (debug) return;
+    setDebugLoading(true);
+    try {
+      setDebug(await api.sleepDebtDebug());
+    } catch { /* silent */ }
+    finally { setDebugLoading(false); }
+  };
+
+  // Format helpers for the debug rows
+  const secToHrs = (s: number | null | undefined): string =>
+    s == null ? "—" : (s / 3600).toFixed(2) + "h";
 
   if (loading || !data) return null;
   // If neither bedtime, streak, debt, nor last-night data exist, the card
@@ -167,6 +191,13 @@ export default function TonightSleepCard({ onAsk }: Props = {}) {
         <p className="text-sm text-white leading-snug italic flex-1">
           &ldquo;{data.coach_note}&rdquo;
         </p>
+        <button
+          onClick={openDebug}
+          className="shrink-0 text-[10px] text-indigo-300 hover:text-white underline self-end"
+          title="See exactly what's in our cache vs. what Oura shows"
+        >
+          debug
+        </button>
         {onAsk && (
           <button
             onClick={() => {
@@ -192,6 +223,115 @@ export default function TonightSleepCard({ onAsk }: Props = {}) {
           </button>
         )}
       </div>
+
+      {/* ── Debug viewer modal ──────────────────────────────────────────
+          Triggered by the small "debug" link. Shows the per-night cache
+          values + math so the user can compare against the Oura app and
+          tell us exactly where any remaining drift is coming from. */}
+      {debugOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => setDebugOpen(false)}
+        >
+          <div
+            className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-xl max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-4 py-3 border-b border-gray-200 flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-wide font-semibold text-[#1B3829]">Sleep debt · debug</p>
+                <h2 className="text-base font-bold text-gray-900 leading-tight">What our cache sees vs. your Oura app</h2>
+              </div>
+              <button
+                onClick={() => setDebugOpen(false)}
+                className="shrink-0 text-gray-500 hover:text-gray-900 text-2xl leading-none px-1"
+                aria-label="Close"
+              >×</button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+              {debugLoading && (
+                <div className="flex items-center justify-center py-8">
+                  <div className="h-6 w-6 rounded-full border-2 border-[#1B3829] border-t-transparent animate-spin" />
+                </div>
+              )}
+              {!debugLoading && debug && (
+                <>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-800 space-y-0.5">
+                    <p><span className="font-semibold">Reported debt:</span> {debug.reported_debt_h ?? "—"} h</p>
+                    <p><span className="font-semibold">Capped sum:</span> {debug.capped_sum_h} h · <span className="font-semibold">Raw sum:</span> {debug.raw_sum_h} h</p>
+                    <p><span className="font-semibold">Window:</span> last {debug.window_nights} nights · <span className="font-semibold">Caps:</span> deficit {debug.per_night_caps_h.deficit}h, surplus {debug.per_night_caps_h.surplus}h/night</p>
+                    <p><span className="font-semibold">Static target:</span> {debug.static_target_h}h (used when Oura&apos;s sleep_need is missing)</p>
+                  </div>
+
+                  <p className="text-[11px] uppercase tracking-wide font-semibold text-gray-700">Per-night cache</p>
+                  <div className="space-y-2">
+                    {debug.nights.length === 0 && (
+                      <p className="text-xs text-gray-600 italic">No cached nights in the window. Tap the ↻ refresh on the card to pull fresh data from Oura.</p>
+                    )}
+                    {debug.nights.map(n => (
+                      <div key={n.date} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs">
+                        <div className="flex items-baseline justify-between gap-2 mb-1">
+                          <p className="font-semibold text-gray-900">{n.date}</p>
+                          <p className={`font-mono ${n.raw_gap_h > 0 ? "text-rose-700" : n.raw_gap_h < 0 ? "text-emerald-700" : "text-gray-600"}`}>
+                            gap: {n.raw_gap_h > 0 ? "+" : ""}{n.raw_gap_h.toFixed(2)}h
+                            {n.raw_gap_h !== n.capped_gap_h && <> → capped {n.capped_gap_h > 0 ? "+" : ""}{n.capped_gap_h.toFixed(2)}h</>}
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-gray-700">
+                          <p>Actual: <span className="font-mono text-gray-900">{n.actual_h.toFixed(2)}h</span></p>
+                          <p>Need:   <span className="font-mono text-gray-900">{n.need_h.toFixed(2)}h ({n.source})</span></p>
+                          {n.raw_cache && (
+                            <>
+                              {n.raw_cache.efficiency != null && <p>Eff: <span className="font-mono">{n.raw_cache.efficiency}%</span></p>}
+                              {n.raw_cache.deep_sec != null && <p>Deep: <span className="font-mono">{secToHrs(n.raw_cache.deep_sec)}</span></p>}
+                              {n.raw_cache.rem_sec != null && <p>REM: <span className="font-mono">{secToHrs(n.raw_cache.rem_sec)}</span></p>}
+                              {n.raw_cache.awake_sec != null && <p>Awake: <span className="font-mono">{secToHrs(n.raw_cache.awake_sec)}</span></p>}
+                            </>
+                          )}
+                        </div>
+                        {n.raw_cache?.bedtime_start && (
+                          <p className="text-[10px] text-gray-500 mt-1 font-mono">bedtime_start: {n.raw_cache.bedtime_start}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-gray-600 italic">{debug.note}</p>
+                  <p className="text-[10px] text-gray-700 leading-snug">
+                    <span className="font-semibold">How to use this:</span> Compare each night&apos;s <span className="font-mono">Actual</span>
+                    {" "}to what your Oura app shows for the same date. If our number is lower, our cache is missing a session (likely a
+                    late_nap that hadn&apos;t synced when we last pulled). Tap the ↻ on the card to force a fresh pull, then reopen this.
+                  </p>
+                </>
+              )}
+            </div>
+            <div className="px-4 py-2 border-t border-gray-200 flex items-center justify-between gap-2">
+              <button
+                onClick={async () => {
+                  setDebugLoading(true);
+                  try { setDebug(await api.sleepDebtDebug()); } catch {}
+                  finally { setDebugLoading(false); }
+                }}
+                disabled={debugLoading}
+                className="text-xs font-medium text-[#1B3829] hover:underline disabled:opacity-50"
+              >
+                {debugLoading ? "Reloading…" : "↻ Reload breakdown"}
+              </button>
+              <button
+                onClick={async () => {
+                  await handleRefresh();
+                  setDebugLoading(true);
+                  try { setDebug(await api.sleepDebtDebug()); } catch {}
+                  finally { setDebugLoading(false); }
+                }}
+                disabled={refreshing || debugLoading}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#1B3829] hover:bg-[#2D6A4F] text-white disabled:opacity-50"
+              >
+                {refreshing ? "Pulling Oura…" : "↻ Force pull from Oura"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

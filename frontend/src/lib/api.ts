@@ -1077,6 +1077,38 @@ export interface GroupRecap {
   headline:        string;
 }
 
+/** One night's row in the sleep-debt debug breakdown. */
+export interface SleepDebtNight {
+  date:          string;
+  actual_h:      number;
+  need_h:        number;
+  raw_gap_h:     number;
+  capped_gap_h:  number;
+  source:        "oura" | "static";
+  raw_cache?:    {
+    total_sec:      number | null;
+    sleep_need_sec: number | null;
+    efficiency:     number | null;
+    deep_sec:       number | null;
+    rem_sec:        number | null;
+    awake_sec:      number | null;
+    bedtime_start:  string | null;
+  };
+}
+
+/** `/api/sleep/debt-debug` payload — what's actually in the cache + math. */
+export interface SleepDebtDebug {
+  today:             string;
+  window_nights:     number;
+  static_target_h:   number;
+  per_night_caps_h:  { deficit: number; surplus: number };
+  nights:            SleepDebtNight[];
+  raw_sum_h:         number;
+  capped_sum_h:      number;
+  reported_debt_h:   number | null;
+  note:              string;
+}
+
 /** `/api/sleep/tonight` payload. */
 export interface TonightSleepPayload {
   date:                 string;
@@ -1604,6 +1636,9 @@ export const api = {
   },
   tonightSleep(opts: { refresh?: boolean } = {}): Promise<TonightSleepPayload> {
     return request(`/api/sleep/tonight${opts.refresh ? "?refresh=1" : ""}`);
+  },
+  sleepDebtDebug(): Promise<SleepDebtDebug> {
+    return request("/api/sleep/debt-debug");
   },
   weeklyRecap(week?: string): Promise<WeeklyRecap> {
     return request(`/api/community/weekly-recap${week ? `?week=${week}` : ""}`);
