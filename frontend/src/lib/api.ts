@@ -1486,10 +1486,14 @@ export const api = {
   },
 
   // ── Doctor's Report (Overview tab — comprehensive) ───────────────────
-  doctorReport(opts: { days?: number; end?: string } = {}): Promise<DoctorReportPayload> {
+  doctorReport(opts: { days?: number; end?: string; refresh?: boolean } = {}): Promise<DoctorReportPayload> {
     const days = opts.days ?? 30;
     const qs = new URLSearchParams({ days: String(days) });
-    if (opts.end) qs.set("end", opts.end);
+    // Default to the device's local today so the server's UTC clock doesn't
+    // miss/over-include the wrong night for users west of GMT. Caller can
+    // override with an explicit end date.
+    qs.set("end", opts.end || localToday());
+    if (opts.refresh) qs.set("refresh", "1");
     return request(`/api/doctor-report?${qs.toString()}`);
   },
 

@@ -1925,13 +1925,16 @@ def delete_bp(reading_id: str, request: Request):
 
 
 @app.get("/api/doctor-report")
-def get_doctor_report(request: Request, days: int = 30, end: str | None = None):
+async def get_doctor_report(request: Request, days: int = 30, end: str | None = None, refresh: bool = False):
     """Aggregate BP + sleep + cardio + weight + medication stack into the
     Doctor's Report payload. Observational only — the frontend renders a
     print-friendly view the user can save as PDF and bring to their physician.
 
-    days defaults to 30 (the doctor-friendly window). end defaults to today.
-    Both are bounded server-side to defend against silly inputs.
+    days defaults to 30 (the doctor-friendly window). end defaults to the
+    user's LOCAL today (was server UTC date — that caused the window to
+    miss/include the wrong night for users west of GMT). The Oura cache
+    is refreshed inline if it's older than 30 minutes so the report
+    always reflects the latest sleep session, including last night.
     """
     session = _require_session(request)
     user_id = session["user_id"]
@@ -1940,6 +1943,30 @@ def get_doctor_report(request: Request, days: int = 30, end: str | None = None):
         days_int = max(1, min(int(days), 365))
     except Exception:
         days_int = 30
+
+    # Default the end date to the user's local today (sent by the client),
+    # not the server's UTC. Falls back to ET if absent.
+    if not end or not _valid_ymd(end):
+        end = _user_local_today_iso(request)
+
+    # Freshness pass — same pattern as /api/sleep/tonight. Without this,
+    # the report can show 2-day-old data if the cache wasn't refreshed
+    # since last night's Oura sync. Caller can also pass ?refresh=1 to
+    # force a re-pull regardless of cache age.
+    if refresh or not oc.is_fresh(user_id, max_age_hours=0.5):
+        try:
+            access_token, _ = await _ensure_valid_token(session)
+            if access_token:
+                raw = await fetch_all(access_token, days=max(14, days_int))
+                rm, slm, am, smm = parse_oura_data(raw)
+                if rm or slm or am or smm:
+                    try:
+                        oc.store_days(user_id, rm, slm, am, smm)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
     payload = dr.build_report(user_id, profile, days=days_int, end_iso=end)
     payload["ai_narrative"] = narrate_mod.narrate("sleep", payload, profile)
     return payload
