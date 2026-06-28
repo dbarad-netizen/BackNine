@@ -1134,12 +1134,29 @@ export interface OuraRawDebug {
   error?:          string;
 }
 
+/** Qualitative sleep balance indicator — sourced from Oura's
+ *  contributors.sleep_balance score. Replaces the old hours-of-debt
+ *  number that couldn't be made to agree with the Oura app. */
+export interface SleepBalance {
+  key:     "well_rested" | "running_flat" | "running_on_fumes" | "sleep_deficit" | "unknown";
+  label:   string;
+  tone:    "good" | "ok" | "warn" | "alert" | "neutral";
+  summary: string;
+}
+
 /** `/api/sleep/tonight` payload. */
 export interface TonightSleepPayload {
   date:                 string;
   target_hours:         number;
   bedtime:              BedtimeRecommendation | null;
   streak_nights:        number;
+  /** Qualitative balance indicator — the new way to communicate sleep
+   *  pressure. Replaces sleep_debt_hours. */
+  balance:              SleepBalance | null;
+  /** Raw Oura sleep_balance score (0-100) backing `balance`. Surfaced
+   *  for power users / debug viewers only. */
+  balance_score:        number | null;
+  /** Deprecated — kept for backward compat; always null on v9+. */
   sleep_debt_hours:     number | null;
   last_night:           LastNightSummary | null;
   tomorrow_intensity:   "heavy" | "moderate" | "easy" | "rest" | null;

@@ -362,12 +362,12 @@ def _build_system_prompt(health_context: dict, profile: dict) -> str:
             prompt_parts.append(
                 f"  • Sleep streak: {night['streak_nights']} consecutive nights ≥7h and ≥85% efficiency"
             )
-        if night.get("sleep_debt_hours") is not None:
-            debt = night["sleep_debt_hours"]
-            if debt > 0.5:
-                prompt_parts.append(f"  • Sleep debt: {debt}h built up over the last 7 nights")
-            else:
-                prompt_parts.append("  • Sleep debt: cleared — last 7 nights are on target")
+        bal = night.get("balance") or {}
+        if bal.get("label"):
+            score_part = f" (Oura sleep_balance score: {night['balance_score']}/100)" if night.get("balance_score") is not None else ""
+            prompt_parts.append(f"  • Sleep balance: {bal['label']}{score_part}")
+            if bal.get("summary"):
+                prompt_parts.append(f"    Coach Al's read: {bal['summary']}")
         ln = night.get("last_night") or {}
         if ln.get("hours"):
             line = f"  • Last night: {ln['hours']}h"

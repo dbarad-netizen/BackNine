@@ -56,13 +56,14 @@ STREAK_HIT_EFFICIENCY        = 85   # percent
 # across the missing 9 nights).
 DEBT_WINDOW_NIGHTS           = 14
 
-# Per-night caps so a single extreme night doesn't dominate the rolling sum.
-# Oura applies similar caps internally: one disaster night doesn't add 6h
-# of debt, and one 12h catch-up sleep doesn't bank 4h of credit. Without
-# these caps our number consistently overshoots Oura's app by 2-3x for
-# users with even one or two outlier nights.
+# Per-night caps so a single extreme night doesn't dominate the rolling sum,
+# but generous enough that a real catch-up night counts. v7 had an asymmetric
+# 3h deficit / 1.5h surplus cap that systematically undercount credit from
+# recovery nights — leaving users at ~3h debt even when Oura showed near
+# zero after a great night. Symmetric 3h caps both directions matches Oura's
+# behavior more closely.
 PER_NIGHT_DEFICIT_CAP_HOURS  = 3.0
-PER_NIGHT_SURPLUS_CAP_HOURS  = 1.5
+PER_NIGHT_SURPLUS_CAP_HOURS  = 3.0
 
 DEBT_SANITY_MAX_HOURS        = 20.0
 HEAVY_TRAINING_EARLIER_MIN   = 30
@@ -95,7 +96,34 @@ def _recency_weight(offset_nights: int) -> float:
 # sleep parsing or debt math. Surfaced in the API payload so the user (and
 # we) can see at a glance what's actually live on Render. If the card
 # shows v6 but you expect v7, the deploy hasn't landed yet.
-SLEEP_LOGIC_VERSION          = "v7-recency-decay"
+SLEEP_LOGIC_VERSION          = "v9-balance-indicator"
+
+# ── Oura sleep_balance → qualitative bucket ────────────────────────────
+# Oura's contributors.sleep_balance is a 0-100 score reflecting rolling
+# sleep balance (their app's "sleep debt" indicator under the hood). We
+# translate it to a 4-bucket label so the user gets coaching, not a
+# pseudo-precise hours number that fights Oura's authoritative readout.
+#
+# Thresholds tuned from Oura's documented scoring ranges:
+#   85+  → well-rested
+#   70-84 → running flat (on target, no buffer)
+#   55-69 → running on fumes
+#   <55  → sleep deficit (intervene now)
+def _balance_bucket(score: Optional[int]) -> dict:
+    if score is None:
+        return {"key": "unknown", "label": "No recent data", "tone": "neutral",
+                "summary": "Wear your ring for a few nights so we can see your balance."}
+    if score >= 85:
+        return {"key": "well_rested", "label": "Well-rested", "tone": "good",
+                "summary": "Sleep balance is solid this week. Keep your usual rhythm."}
+    if score >= 70:
+        return {"key": "running_flat", "label": "Running flat", "tone": "ok",
+                "summary": "You're on need but with no buffer. Tonight's a good night to bank a little extra."}
+    if score >= 55:
+        return {"key": "running_on_fumes", "label": "Running on fumes", "tone": "warn",
+                "summary": "Sleep balance has slipped. An early lights-out tonight pays off tomorrow."}
+    return {"key": "sleep_deficit", "label": "Sleep deficit", "tone": "alert",
+            "summary": "You're carrying real sleep deficit. Prioritize an early, protected night."}
 
 
 def _sb() -> Optional[Client]:
@@ -352,6 +380,33 @@ def _last_night_summary(smm: dict, today: _date) -> Optional[dict]:
     }
 
 
+def _balance_coach_note(
+    balance:            dict,
+    streak:             int,
+    tomorrow_intensity: Optional[str],
+    target_hours:       float,
+) -> str:
+    """One-line Coach Al voice based on the Oura balance bucket. Replaces
+    the hours-of-debt note that fought Oura's app readout. We anchor on
+    the balance bucket and color with streak / training context."""
+    key = balance.get("key") or "unknown"
+    summary = balance.get("summary") or ""
+
+    if key == "sleep_deficit":
+        return summary
+    if tomorrow_intensity == "heavy" and key in ("running_on_fumes", "running_flat"):
+        return f"{summary} Heavy training tomorrow makes tonight extra important."
+    if key == "well_rested" and streak >= 5:
+        return f"🔥 {streak}-night streak holding strong. Lock in the same lights-out time tonight."
+    if key == "well_rested":
+        return summary
+    if key == "running_on_fumes":
+        return summary
+    if key == "running_flat":
+        return summary
+    return f"Aim for {target_hours:.0f}h tonight. Consistency beats catch-up."
+
+
 def _coach_note(
     target_hours:    float,
     debt:            Optional[float],
@@ -394,10 +449,27 @@ def build_payload(user_id: str, today_iso: Optional[str] = None) -> dict:
     target_hours = _get_sleep_target_hours(user_id)
 
     smm: dict = {}
+    slm: dict = {}
     try:
-        _, _, _, smm = oc.get_days(user_id, days=30)
+        _, slm, _, smm = oc.get_days(user_id, days=30)
     except Exception:
         smm = {}
+        slm = {}
+
+    # Most recent sleep_balance contributor score (0-100) from Oura's
+    # daily_sleep endpoint — bucketed into a qualitative indicator.
+    # Walks back up to 7 days in case the latest night hasn't synced yet.
+    latest_balance: Optional[int] = None
+    for offset in range(0, 7):
+        d = (today - timedelta(days=offset)).isoformat()
+        row = slm.get(d) or {}
+        if row.get("sleep_balance") is not None:
+            try:
+                latest_balance = int(row["sleep_balance"])
+                break
+            except (TypeError, ValueError):
+                continue
+    balance = _balance_bucket(latest_balance)
 
     median_wake = _median_wake_hour(smm)
     bedtime: Optional[dict] = None
@@ -422,21 +494,26 @@ def build_payload(user_id: str, today_iso: Optional[str] = None) -> dict:
         }
 
     streak       = _sleep_streak(smm, today) if smm else 0
-    debt         = _sleep_debt(smm, target_hours, today) if smm else None
     last_night   = _last_night_summary(smm, today) if smm else None
     # Tomorrow intensity peeked inside the bedtime calc; re-fetch for the
     # coach_note in case we didn't compute a bedtime (sparse Oura history).
     tomorrow_iso = (today + timedelta(days=1)).isoformat()
     intensity    = _check_tomorrow_workout_intensity(user_id, tomorrow_iso)
-    note         = _coach_note(target_hours, debt, streak, intensity)
+    note         = _balance_coach_note(balance, streak, intensity, target_hours)
 
     return {
-        "date":              today.isoformat(),
-        "target_hours":      target_hours,
-        "bedtime":           bedtime,
-        "streak_nights":     streak,
-        "sleep_debt_hours":  debt,
-        "last_night":        last_night,
+        "date":               today.isoformat(),
+        "target_hours":       target_hours,
+        "bedtime":            bedtime,
+        "streak_nights":      streak,
+        # New: directional indicator sourced from Oura's own sleep_balance
+        # contributor (0-100). Replaces the old sleep_debt_hours number
+        # that fought Oura's app readout no matter how we tuned it.
+        "balance":            balance,            # {key, label, tone, summary}
+        "balance_score":      latest_balance,     # raw 0-100 for power users
+        # Deprecated — kept null so old clients don't 500 if they expect it.
+        "sleep_debt_hours":   None,
+        "last_night":         last_night,
         "tomorrow_intensity": intensity,
-        "coach_note":        note,
+        "coach_note":         note,
     }

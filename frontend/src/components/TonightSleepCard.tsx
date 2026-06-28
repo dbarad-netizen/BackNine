@@ -113,19 +113,28 @@ export default function TonightSleepCard({ onAsk }: Props = {}) {
   // If neither bedtime, streak, debt, nor last-night data exist, the card
   // would say nothing useful — skip it entirely.
   const hasContent =
-    !!data.bedtime || data.streak_nights > 0 || data.sleep_debt_hours !== null || !!data.last_night;
+    !!data.bedtime || data.streak_nights > 0 || !!data.balance || !!data.last_night;
   if (!hasContent) return null;
 
-  // Format debt as "Xh Ym" to match the Oura app's display. A user seeing
-  // "4h 10m" here and "4h 10min" in the ring app shouldn't have to do
-  // conversion math to know they agree.
-  const fmtDebt = (hours: number): string => {
-    const totalMin = Math.round(hours * 60);
-    const h = Math.floor(totalMin / 60);
-    const m = totalMin - h * 60;
-    if (h === 0) return `${m}m`;
-    if (m === 0) return `${h}h`;
-    return `${h}h ${m}m`;
+  // Tailwind tone palette for the balance pill — keeps the visual loud
+  // when the user is in deficit, quiet when well-rested.
+  const balanceClass = (tone: string | undefined): string => {
+    switch (tone) {
+      case "good":    return "bg-emerald-100 text-emerald-800 border border-emerald-200";
+      case "ok":      return "bg-indigo-100 text-indigo-800 border border-indigo-200";
+      case "warn":    return "bg-amber-100 text-amber-900 border border-amber-300";
+      case "alert":   return "bg-rose-100 text-rose-800 border border-rose-300";
+      default:        return "bg-gray-100 text-gray-700 border border-gray-200";
+    }
+  };
+  const balanceEmoji = (key: string | undefined): string => {
+    switch (key) {
+      case "well_rested":     return "✅";
+      case "running_flat":    return "🟦";
+      case "running_on_fumes":return "⚠️";
+      case "sleep_deficit":   return "🛑";
+      default:                return "💤";
+    }
   };
 
   return (
@@ -196,17 +205,16 @@ export default function TonightSleepCard({ onAsk }: Props = {}) {
 
       {/* Context chips: debt + last night */}
       <div className="flex flex-wrap gap-1.5 mb-3">
-        {data.sleep_debt_hours !== null && data.sleep_debt_hours > 0.1 && (
+        {data.balance && data.balance.key !== "unknown" && (
           <span
-            className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-rose-100 text-rose-800 border border-rose-200"
-            title="Our 5-night estimate using Oura's per-night sleep need with per-night caps. Oura's app uses a 14-day recency-weighted formula and is the canonical number — treat ours as a directional cue."
+            className={`text-[11px] font-semibold px-2 py-1 rounded-lg ${balanceClass(data.balance.tone)}`}
+            title={
+              data.balance_score != null
+                ? `Oura sleep balance score: ${data.balance_score}/100. ${data.balance.summary}`
+                : data.balance.summary
+            }
           >
-            💤 ~{fmtDebt(data.sleep_debt_hours)} debt est.
-          </span>
-        )}
-        {data.sleep_debt_hours !== null && data.sleep_debt_hours <= 0.5 && (
-          <span className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-200">
-            ✓ Debt-free week
+            {balanceEmoji(data.balance.key)} {data.balance.label}
           </span>
         )}
         {data.last_night && (
@@ -237,13 +245,14 @@ export default function TonightSleepCard({ onAsk }: Props = {}) {
         {onAsk && (
           <button
             onClick={() => {
-              // Seed the chat with whichever angle is most useful: heavy
-              // debt → debt question, training tomorrow → why earlier,
+              // Seed the chat with whichever angle is most useful: deficit
+              // → recovery question, training tomorrow → why earlier,
               // streak → keep it going, otherwise just open with the
               // bedtime question.
               let seed = "What should tonight's sleep look like for me?";
-              if (data.sleep_debt_hours !== null && data.sleep_debt_hours >= 3) {
-                seed = `I'm carrying ${data.sleep_debt_hours.toFixed(1)}h of sleep debt — how do I climb out?`;
+              const bk = data.balance?.key;
+              if (bk === "sleep_deficit" || bk === "running_on_fumes") {
+                seed = `My sleep balance is "${data.balance?.label}". How do I recover this week?`;
               } else if (data.bedtime?.earlier_for_training) {
                 seed = "Why is tonight's lights-out earlier than usual?";
               } else if (data.streak_nights >= 3) {

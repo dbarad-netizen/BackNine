@@ -219,8 +219,16 @@ def parse_oura_data(raw: dict) -> tuple[dict, dict, dict, dict]:
         if not day: continue
         contrib = rec.get("contributors", {})
         slm[day] = {
-            "score":      rec.get("score"),
-            "efficiency": contrib.get("efficiency"),
+            "score":         rec.get("score"),
+            "efficiency":    contrib.get("efficiency"),
+            # Oura's rolling-window sleep balance contributor (0-100).
+            # Higher = better sleep balance / less debt. This is the
+            # authoritative Oura signal we now surface as a directional
+            # indicator on the Tonight's Sleep card, replacing our
+            # competing hours-of-debt calculation that never quite
+            # matched Oura's app.
+            "sleep_balance": contrib.get("sleep_balance"),
+            "total_sleep":   contrib.get("total_sleep"),
         }
 
     # Activity
