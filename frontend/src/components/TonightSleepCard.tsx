@@ -112,8 +112,16 @@ export default function TonightSleepCard({ onAsk }: Props = {}) {
   if (loading || !data) return null;
   // If neither bedtime, streak, debt, nor last-night data exist, the card
   // would say nothing useful — skip it entirely.
-  const hasContent =
-    !!data.bedtime || data.streak_nights > 0 || !!data.balance || !!data.last_night;
+  // Stricter render gate: only show the card when it actually adds value.
+  // The bar: a real bedtime recommendation, a meaningful balance signal,
+  // OR a multi-night streak worth celebrating. last_night was just a raw
+  // duplicate of Oura's number and no longer factors. balance "unknown"
+  // means Oura didn't return a sleep_balance score — don't show the card
+  // just to render the generic 'aim for Xh' fallback.
+  const hasBedtime  = !!data.bedtime;
+  const hasBalance  = !!data.balance && data.balance.key !== "unknown";
+  const hasStreak   = data.streak_nights >= 2;
+  const hasContent  = hasBedtime || hasBalance || hasStreak;
   if (!hasContent) return null;
 
   // Tailwind tone palette for the balance pill — keeps the visual loud
