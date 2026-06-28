@@ -145,9 +145,10 @@ export default function WeeklyRecapCard({ weekAnchor, onAsk }: Props = {}) {
             {s.avg_hours ? <>{s.avg_hours.toFixed(1)}<span className="text-[10px] font-normal text-gray-600 ml-1">h avg</span></> : "—"}
           </p>
           <p className="text-[11px] text-gray-600 mt-0.5">
-            {s.streak_nights > 0 ? <>🔥 {s.streak_nights} good nights</>
-              : s.debt_hours != null && s.debt_hours > 0
-                ? <>{s.debt_hours.toFixed(1)}h debt</>
+            {s.streak_nights > 0
+              ? <>🔥 {s.streak_nights} good nights</>
+              : s.nights_logged > 0
+                ? <>{s.nights_logged} nights logged</>
                 : "—"}
           </p>
         </div>

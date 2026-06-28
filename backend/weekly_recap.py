@@ -9,7 +9,7 @@ app every day still see their week.
 Sections produced:
   • training   — workouts, lifting volume, PRs hit, top movement
   • nutrition  — days logged, protein streak inside the week, avg protein
-  • sleep      — avg hours, streak nights, debt vs target
+  • sleep      — avg hours, streak nights (debt removed — see _sleep_section)
   • headline   — one short Coach Al voice line ("Six workouts. Two PRs. A 7h
                  average week of sleep. Nice work this week.")
   • highlight  — the single most impressive moment ("first 195lb bench")
@@ -182,6 +182,14 @@ def _nutrition_section(user_id: str, monday: _date, sunday: _date) -> dict:
 # ── sleep section ──────────────────────────────────────────────────────────
 
 def _sleep_section(user_id: str, monday: _date, sunday: _date, target_hours: float) -> dict:
+    """Per the 'don't compete with Oura' principle, we no longer compute
+    sleep debt here. Avg hours + streak count are unambiguous; debt was
+    a flawed flat sum that didn't agree with Oura's app and added drama
+    rather than value to the recap.
+
+    target_hours is kept in the signature for backward compat / future
+    use but is no longer referenced."""
+    _ = target_hours  # intentionally unused
     try:
         _, _, _, smm = oc.get_days(user_id, days=30)
     except Exception:
@@ -192,7 +200,6 @@ def _sleep_section(user_id: str, monday: _date, sunday: _date, target_hours: flo
 
     hours: list[float] = []
     nights_streak = 0
-    debt = 0.0
     for offset in range(7):
         d = (monday + timedelta(days=offset)).isoformat()
         row = smm.get(d) or {}
@@ -204,12 +211,13 @@ def _sleep_section(user_id: str, monday: _date, sunday: _date, target_hours: flo
         eff = row.get("efficiency") or 0
         if h >= SLEEP_STREAK_HOURS and eff >= SLEEP_STREAK_EFF:
             nights_streak += 1
-        if h < target_hours:
-            debt += target_hours - h
     return {
         "avg_hours":      round(sum(hours) / len(hours), 1) if hours else None,
         "streak_nights":  nights_streak,
-        "debt_hours":     round(debt, 1) if hours else None,
+        # `debt_hours` permanently null going forward — kept in the response
+        # shape only so older frontends don't 500. New frontends should not
+        # render it.
+        "debt_hours":     None,
         "nights_logged":  len(hours),
     }
 
