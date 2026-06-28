@@ -110,6 +110,56 @@ async def fetch_sessions(access_token: str, days: int = 30) -> list[dict]:
         return []
 
 
+async def fetch_enhanced_tags(access_token: str, days: int = 30) -> list[dict]:
+    """Fetch the user's Oura enhanced_tag entries for the past N days.
+
+    These are the user's contextual lifestyle tags: sauna, ice bath,
+    meditation, alcohol, caffeine, late meal, stressful day, travel,
+    sleep medication, intimacy, period, etc. Each entry:
+      {id, tag_type_code, start_time, end_time, start_day, end_day, comment}
+
+    Best-effort: returns [] on any failure. Oura's tag endpoint is
+    relatively stable but newer than the other endpoints, so we don't
+    want a flaky tag service to break the dashboard.
+    """
+    end   = datetime.now().strftime("%Y-%m-%d")
+    start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    headers = {"Authorization": f"Bearer {access_token}"}
+    url = f"{OURA_API_BASE}/enhanced_tag?start_date={start}&end_date={end}"
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.get(url, headers=headers)
+            r.raise_for_status()
+            return (r.json() or {}).get("data", []) or []
+    except Exception:
+        return []
+
+
+async def fetch_naps(access_token: str, days: int = 30) -> list[dict]:
+    """Pull just nap-type sleep records (excluded from nightly sleep
+    aggregation). These get surfaced as separate activity entries — a
+    20-minute nap is wellness data even if it's not 'last night.'
+
+    Each entry: {id, type, day, total_sleep_duration, bedtime_start,
+    bedtime_end, efficiency}. Best-effort."""
+    end   = datetime.now().strftime("%Y-%m-%d")
+    start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    headers = {"Authorization": f"Bearer {access_token}"}
+    url = f"{OURA_API_BASE}/sleep?start_date={start}&end_date={end}"
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.get(url, headers=headers)
+            r.raise_for_status()
+            rows = (r.json() or {}).get("data", []) or []
+    except Exception:
+        return []
+    # Filter to just nap-type entries with non-trivial duration (≥5 min)
+    return [
+        rec for rec in rows
+        if rec.get("type") == "nap" and (rec.get("total_sleep_duration") or 0) >= 300
+    ]
+
+
 async def fetch_all(access_token: str, days: int = 120) -> dict:
     """
     Fetch all Oura data endpoints for the past N days.

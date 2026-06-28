@@ -51,6 +51,7 @@ import MorningBriefing from "@/components/MorningBriefing";
 // import TonightSleepCard from "@/components/TonightSleepCard";
 import NutritionCoachCard from "@/components/NutritionCoachCard";
 import WeeklyRecapCard from "@/components/WeeklyRecapCard";
+import TodaysTagsCard from "@/components/TodaysTagsCard";
 import DailyInsightCard from "@/components/DailyInsightCard";
 import SymptomCard from "@/components/SymptomCard";
 import WeeklyInsight from "@/components/WeeklyInsight";
@@ -1598,6 +1599,12 @@ export default function DashboardPage() {
                 where it duplicated Oura's own readout or rendered as a
                 generic 'aim for Xh' — neither of which earned its space
                 on the Scorecard. Reintroduce if we find a sharper hook. */}
+
+            {/* Today's Oura tags — sauna, ice bath, alcohol, caffeine,
+                etc. Pulled from Oura's enhanced_tag endpoint. Renders
+                nothing when no tags exist for today; minimal noise when
+                they do. */}
+            <TodaysTagsCard />
 
 
             {/* Weekly Recap — end-of-week celebration card. Only visible

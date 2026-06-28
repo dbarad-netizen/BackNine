@@ -57,6 +57,7 @@ function eventEmoji(t: string): string {
     case "personal_best_sleep": return "🏅";
     case "prediction_streak":   return "🔥";
     case "weekly_recap":        return "📣";
+    case "tag_logged":          return "🏷️";
     default:                    return "✨";
   }
 }
@@ -72,6 +73,7 @@ const MILESTONE_TYPES = new Set([
   "streak_milestone",
   "challenge_completed",
   "weekly_recap",
+  "tag_logged",
 ]);
 
 // Build the array of stat pills shown under the summary. Each pill is a tiny
@@ -136,6 +138,11 @@ function statPills(eventType: string, payload: Record<string, unknown>): { label
       if (sleep)    pills.push({ label: "Sleep avg",  value: `${sleep}h` });
       if (streak && streak >= 3) pills.push({ label: "Sleep streak", value: `${streak}n` });
       return pills.slice(0, 4);
+    }
+    case "tag_logged": {
+      const label = typeof get("tag_label") === "string" ? (get("tag_label") as string) : null;
+      const emoji = typeof get("tag_emoji") === "string" ? (get("tag_emoji") as string) : "🏷️";
+      return label ? [{ label: "Tag", value: `${emoji} ${label}` }] : [];
     }
     default: return [];
   }

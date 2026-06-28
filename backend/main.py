@@ -21,7 +21,7 @@ from jose import jwt, jwk, JWTError
 import httpx
 import time as _time
 
-from oura import build_auth_url, exchange_code, refresh_token as oura_refresh, fetch_all, fetch_workouts as oura_fetch_workouts, fetch_sessions as oura_fetch_sessions, parse_oura_data, parse_oura_vo2_max, fetch_personal_info
+from oura import build_auth_url, exchange_code, refresh_token as oura_refresh, fetch_all, fetch_workouts as oura_fetch_workouts, fetch_sessions as oura_fetch_sessions, fetch_enhanced_tags as oura_fetch_tags, fetch_naps as oura_fetch_naps, parse_oura_data, parse_oura_vo2_max, fetch_personal_info
 from coaching import generate_coaching, coach_overall, coach_sleep, coach_activity
 from models import DashboardResponse, DailyMetrics, WearableConnection
 import nutrition as nutr
@@ -45,6 +45,7 @@ import training_load as tload
 import nutrition_today_extras as nut_extras
 import tonight_sleep as ts
 import weekly_recap as wrecap
+import oura_tags as otags
 import friends_glance as fr_glance
 import coach_al_group_voice as cag
 import labs as lbs
@@ -1071,6 +1072,59 @@ def _empty_dashboard_payload(session: dict) -> dict:
     }
 
 
+def _diff_new_safe_tags(user_id: str, raw_tags: list[dict]) -> list[dict]:
+    """Return only the SAFE-allowed tags from `raw_tags` that aren't yet
+    stored in oura_tags for this user. Lets us emit one friend_event
+    per genuinely-new tag instead of spamming on every cache refresh."""
+    safe_in_batch = [t for t in (raw_tags or [])
+                     if t.get("tag_type_code") in otags.SAFE_TAGS and t.get("id")]
+    if not safe_in_batch:
+        return []
+    try:
+        sb = get_supabase()
+        if not sb:
+            return []
+        existing = (
+            sb.table("oura_tags")
+              .select("external_id")
+              .eq("user_id", user_id)
+              .in_("external_id", [t["id"] for t in safe_in_batch])
+              .execute()
+        )
+        already = {r["external_id"] for r in (existing.data or [])}
+        return [t for t in safe_in_batch if t["id"] not in already]
+    except Exception:
+        return []
+
+
+def _emit_tag_friend_events(user_id: str, new_safe_tags: list[dict]) -> None:
+    """Post each genuinely-new SAFE tag into the PulseFeed as a
+    friend_event. Private tags (alcohol, intimacy, medication, period,
+    pain) never reach this function — the SAFE_TAGS allow-list in
+    oura_tags.py is the privacy gate. Best-effort; never blocks anything."""
+    if not new_safe_tags:
+        return
+    profile  = _get_profile(user_id) or {}
+    name     = (profile.get("name") or "").strip() or "Friend"
+    for t in new_safe_tags:
+        try:
+            info = otags.describe(t.get("tag_type_code") or "")
+            frd.record_event(
+                user_id    = user_id,
+                event_type = "tag_logged",
+                payload    = {
+                    "tag_code":  t.get("tag_type_code"),
+                    "tag_label": info.get("label"),
+                    "tag_emoji": info.get("emoji"),
+                    "day":       t.get("start_day"),
+                    "comment":   (t.get("comment") or "")[:140],
+                },
+                user_name  = name,
+            )
+        except Exception:
+            continue
+
+
 async def _refresh_oura_cache_bg(user_id: str, access_token: str, days: int) -> None:
     """Background-task: refresh Oura day summaries + import workouts.
 
@@ -1091,8 +1145,33 @@ async def _refresh_oura_cache_bg(user_id: str, access_token: str, days: int) -> 
         try:
             _ow = await oura_fetch_workouts(access_token, days=30)
             _os = await oura_fetch_sessions(access_token, days=30)
-            if _ow or _os:
-                trn.import_oura_events(user_id, _ow, _os)
+            _on = await oura_fetch_naps(access_token, days=30)
+            # Normalize naps (from sleep endpoint) into the session shape
+            # import_oura_events expects: bedtime_start/end → start/end_datetime.
+            # Naps then flow through the same import path as sessions and
+            # become training_workouts rows with kind='session' and 🛌 emoji.
+            _on_norm = [{
+                "id":             f"nap_{n.get('id')}",
+                "type":           "nap",
+                "day":            n.get("day"),
+                "start_datetime": n.get("bedtime_start"),
+                "end_datetime":   n.get("bedtime_end"),
+            } for n in (_on or []) if n.get("id") and n.get("day")]
+            if _ow or _os or _on_norm:
+                trn.import_oura_events(user_id, _ow, (_os or []) + _on_norm)
+        except Exception:
+            pass
+        try:
+            _ot = await oura_fetch_tags(access_token, days=60)
+            if _ot:
+                # Identify newly-stored SAFE tags so we can emit one
+                # friend_event per. We diff against existing external_ids
+                # before the upsert to avoid spamming the feed on every
+                # cache refresh.
+                _new_safe_tags = _diff_new_safe_tags(user_id, _ot)
+                otags.store_tags(user_id, _ot)
+                if _new_safe_tags:
+                    _emit_tag_friend_events(user_id, _new_safe_tags)
         except Exception:
             pass
     except Exception:
@@ -1244,8 +1323,25 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
             try:
                 _ow = await oura_fetch_workouts(access_token, days=30)
                 _os = await oura_fetch_sessions(access_token, days=30)
-                if _ow or _os:
-                    trn.import_oura_events(user_id, _ow, _os)
+                _on = await oura_fetch_naps(access_token, days=30)
+                _on_norm = [{
+                    "id":             f"nap_{n.get('id')}",
+                    "type":           "nap",
+                    "day":            n.get("day"),
+                    "start_datetime": n.get("bedtime_start"),
+                    "end_datetime":   n.get("bedtime_end"),
+                } for n in (_on or []) if n.get("id") and n.get("day")]
+                if _ow or _os or _on_norm:
+                    trn.import_oura_events(user_id, _ow, (_os or []) + _on_norm)
+            except Exception:
+                pass
+            try:
+                _ot = await oura_fetch_tags(access_token, days=60)
+                if _ot:
+                    _new_safe_tags = _diff_new_safe_tags(user_id, _ot)
+                    otags.store_tags(user_id, _ot)
+                    if _new_safe_tags:
+                        _emit_tag_friend_events(user_id, _new_safe_tags)
             except Exception:
                 pass
         except Exception as exc:
@@ -4081,6 +4177,18 @@ async def health_chat(request: Request):
     except Exception:
         health_context["training_load"] = None
 
+    # Today's Oura lifestyle tags (sauna, alcohol, caffeine, etc.) +
+    # tag correlations so Coach Al can connect dots like
+    # "your last 3 alcohol nights all had sleep efficiency under 75%".
+    try:
+        health_context["oura_tags_today"] = otags.today_tags(user_id, today_local)
+    except Exception:
+        health_context["oura_tags_today"] = []
+    try:
+        health_context["oura_tag_correlations"] = otags.correlate_tags(user_id, days=60)
+    except Exception:
+        health_context["oura_tag_correlations"] = None
+
     try:
         reply = ch.chat(message, health_context, profile, history)
     except RuntimeError as e:
@@ -4809,6 +4917,32 @@ def get_friends_glance(request: Request):
     Powers the horizontal scroll card at the top of the PulseFeed."""
     session = _require_session(request)
     return fr_glance.build_payload(session["user_id"])
+
+
+# ── Oura tags (sauna, alcohol, caffeine, etc.) ───────────────────────────────
+
+@app.get("/api/oura/tags")
+def list_oura_tags(request: Request, days: int = 30, today: Optional[str] = None):
+    """User's Oura enhanced_tag entries from the last N days, decorated
+    with friendly display info. Also returns just today's tags as a
+    convenience for the Scorecard pill row."""
+    session = _require_session(request)
+    uid     = session["user_id"]
+    today_iso = today if (today and _valid_ymd(today)) else _user_local_today_iso(request)
+    return {
+        "tags":   otags.list_tags(uid, days=days),
+        "today":  otags.today_tags(uid, today_iso),
+    }
+
+
+@app.get("/api/insights/tag-correlations")
+def get_tag_correlations(request: Request, days: int = 60):
+    """For each Oura tag the user has logged at least 3 times, return
+    observational deltas between tag-positive and tag-negative days
+    across sleep duration, sleep efficiency, HRV, RHR, readiness. Powers
+    the Lifestyle Correlations card on the Insights page."""
+    session = _require_session(request)
+    return otags.correlate_tags(session["user_id"], days=days)
 
 
 # ── Goals (Coach Al program) ──────────────────────────────────────────────────

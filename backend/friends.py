@@ -1213,6 +1213,10 @@ def _summarize_event(row: dict) -> str:
         if n:
             return f"{name} hit a {int(n)}-day {kind}"
         return f"{name} extended a streak"
+    if et == "tag_logged":
+        emoji = p.get("tag_emoji") or "🏷️"
+        label = p.get("tag_label") or "a wellness tag"
+        return f"{name} logged {emoji} {label}"
     if et == "weekly_recap":
         # Shared end-of-week recap. We try to give the most flattering
         # one-liner with whatever numbers are present — the full snapshot

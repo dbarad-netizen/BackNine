@@ -16,6 +16,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { api, type DailyInsight } from "@/lib/api";
+import LifestyleCorrelationsCard from "@/components/LifestyleCorrelationsCard";
 
 const CATEGORY_META: Record<DailyInsight["category"], { label: string; emoji: string; bg: string; fg: string }> = {
   sleep:     { label: "Sleep",     emoji: "😴", bg: "bg-indigo-100",   fg: "text-indigo-800"   },
@@ -109,6 +110,13 @@ export default function InsightsFeedPage() {
 
       {/* Stats strip + filter */}
       <div className="max-w-4xl mx-auto px-5 py-4">
+        {/* Lifestyle correlations — Oura tag-driven deltas. Sits above
+            the insights feed because it's a higher-order pattern view
+            (multi-week aggregate) than the per-day Daily Insights below. */}
+        <div className="mb-4">
+          <LifestyleCorrelationsCard />
+        </div>
+
         <div className="grid grid-cols-3 gap-2 mb-4">
           <div className="rounded-lg border border-gray-200 px-3 py-2.5 bg-white">
             <p className="text-[10px] text-gray-600 uppercase tracking-wide font-semibold">Total insights</p>

@@ -1021,6 +1021,54 @@ export interface WeeklyRecap {
   has_content:       boolean;
 }
 
+// ── Oura tags ────────────────────────────────────────────────────────────
+
+export interface OuraTagDisplay {
+  code:     string;
+  label:    string;
+  emoji:    string;
+  category: string;
+}
+
+export interface OuraTag {
+  id:            string;
+  external_id:   string;
+  tag_type_code: string;
+  comment:       string | null;
+  start_time:    string | null;
+  end_time:      string | null;
+  start_day:     string;
+  end_day:       string | null;
+  display:       OuraTagDisplay;
+}
+
+export interface OuraTagsPayload {
+  tags:  OuraTag[];
+  today: OuraTag[];
+}
+
+export interface TagCorrelationItem {
+  tag_code:      string;
+  tag_label:     string;
+  tag_emoji:     string;
+  metric:        string;
+  metric_label:  string;
+  unit:          string;
+  positive_days: number;
+  negative_days: number;
+  positive_avg:  number;
+  negative_avg:  number;
+  delta:         number;
+  abs_pct:       number;
+  worse_on_tag:  boolean;
+}
+
+export interface TagCorrelations {
+  window_days:    number;
+  items:          TagCorrelationItem[];
+  tag_day_counts: Record<string, number>;
+}
+
 // ── Friend pulse strip ───────────────────────────────────────────────────
 
 export interface FriendGlance {
@@ -2050,6 +2098,14 @@ export const api = {
     friendsGlance(): Promise<FriendsGlancePayload> {
       return request("/api/community/friends-glance");
     },
+  },
+
+  // ── Oura tags + lifestyle correlations ──────────────────────────────────
+  ouraTags(days = 30): Promise<OuraTagsPayload> {
+    return request(`/api/oura/tags?days=${days}&today=${localToday()}`);
+  },
+  tagCorrelations(days = 60): Promise<TagCorrelations> {
+    return request(`/api/insights/tag-correlations?days=${days}`);
   },
 
   // ── Goals (Coach Al program) ───────────────────────────────────────────────

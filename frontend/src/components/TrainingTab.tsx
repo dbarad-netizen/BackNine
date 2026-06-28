@@ -43,6 +43,7 @@ const ACTIVITY_ICON: Record<string, string> = {
   dance: "💃", tennis: "🎾", basketball: "🏀", soccer: "⚽", golf: "⛳",
   skiing: "🎿", snowboarding: "🏂", climbing: "🧗", boxing: "🥊",
   sauna: "🧖", meditation: "🧘", breathing: "🌬️", rest: "😌", ice_bath: "🧊",
+  nap: "🛌",
 };
 
 function workoutGlyph(w: { activity?: string; type: string; kind?: string }): string {

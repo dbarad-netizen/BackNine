@@ -412,6 +412,41 @@ def _build_system_prompt(health_context: dict, profile: dict) -> str:
                 if groups_str:
                     prompt_parts.append(f"  • Muscle groups trained this week: {groups_str}")
 
+    # ── OURA LIFESTYLE TAGS (TODAY + RECENT PATTERNS) ──
+    # The user logs contextual events into their Oura ring (sauna,
+    # alcohol, caffeine after 2pm, late meal, stressful day, travel, etc).
+    # These are gold for correlation reasoning — "your last 3 alcohol
+    # nights all had sleep eff <75%" beats any generic platitude.
+    tags_today = health_context.get("oura_tags_today")
+    if tags_today and isinstance(tags_today, list) and len(tags_today) > 0:
+        prompt_parts.append("\n=== TODAY'S LOGGED TAGS (from the user's Oura ring) ===")
+        for t in tags_today[:8]:
+            disp = (t or {}).get("display") or {}
+            label = disp.get("label") or t.get("tag_type_code")
+            line = f"  • {label}"
+            if t.get("comment"):
+                line += f" — {str(t['comment'])[:80]}"
+            prompt_parts.append(line)
+
+    tag_corr = health_context.get("oura_tag_correlations")
+    if tag_corr and isinstance(tag_corr, dict):
+        items = tag_corr.get("items") or []
+        # Only surface the top 3 most-impactful correlations so we don't
+        # bloat the system prompt with noise.
+        worth_showing = [i for i in items if i.get("abs_pct") and i["abs_pct"] >= 5][:3]
+        if worth_showing:
+            prompt_parts.append("\n=== TOP LIFESTYLE-TAG CORRELATIONS (last 60 days) ===")
+            prompt_parts.append("  Observational patterns from the user's Oura tag history. NOT causation —")
+            prompt_parts.append("  use 'associated with' language, never 'caused by'.")
+            for c in worth_showing:
+                direction = "worse" if c.get("worse_on_tag") else "better"
+                prompt_parts.append(
+                    f"  • On {c['tag_label']} days, {c['metric_label']} is {direction} by "
+                    f"{abs(c['delta']):.1f}{c['unit']} ({c['abs_pct']:.0f}%): "
+                    f"{c['positive_avg']}{c['unit']} vs {c['negative_avg']}{c['unit']} on other days "
+                    f"({c['positive_days']} tag days, {c['negative_days']} other days)"
+                )
+
     # Guidelines
     prompt_parts.append(
         "\n=== COACHING GUIDELINES ===\n"
