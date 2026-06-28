@@ -1069,6 +1069,24 @@ export interface TagCorrelations {
   tag_day_counts: Record<string, number>;
 }
 
+// ── Private Journal ──────────────────────────────────────────────────────
+
+export interface JournalEntry {
+  id:          string;
+  date:        string;
+  text:        string;
+  tags:        string[];
+  created_at:  string;
+  updated_at:  string;
+}
+
+export interface JournalTodayPayload {
+  entry:           JournalEntry | null;
+  streak_days:     number;
+  suggested_tags:  string[];
+  date:            string;
+}
+
 // ── Friend pulse strip ───────────────────────────────────────────────────
 
 export interface FriendGlance {
@@ -2106,6 +2124,21 @@ export const api = {
   },
   tagCorrelations(days = 60): Promise<TagCorrelations> {
     return request(`/api/insights/tag-correlations?days=${days}`);
+  },
+
+  // ── Private journal ─────────────────────────────────────────────────────
+  // Privacy contract: text/tags here NEVER leave the user's own view.
+  // Server-side: not in PulseFeed, not in friend events, not in Weekly
+  // Recap, not in Groups. Coach Al sees recent entries inside the user's
+  // own chat with a privacy directive in his system prompt.
+  journalToday(): Promise<JournalTodayPayload> {
+    return request("/api/journal/today");
+  },
+  saveJournal(body: { text: string; tags?: string[]; date?: string }): Promise<JournalTodayPayload> {
+    return request("/api/journal", {
+      method: "POST",
+      body:   JSON.stringify({ ...body, date: body.date || localToday() }),
+    });
   },
 
   // ── Goals (Coach Al program) ───────────────────────────────────────────────

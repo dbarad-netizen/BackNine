@@ -447,6 +447,35 @@ def _build_system_prompt(health_context: dict, profile: dict) -> str:
                     f"({c['positive_days']} tag days, {c['negative_days']} other days)"
                 )
 
+    # ── PRIVATE REFLECTION JOURNAL ──
+    # The user keeps a private journal that ONLY shows up here, in this
+    # Coach Al chat. Friends, groups, the PulseFeed, and the Weekly Recap
+    # all NEVER see it. You may reference patterns from it to make your
+    # coaching smarter, but never paraphrase or quote an entry in a way
+    # the user might later see surfaced outside this conversation.
+    journal = health_context.get("journal_recent")
+    if journal and isinstance(journal, list) and len(journal) > 0:
+        prompt_parts.append("\n=== PRIVATE JOURNAL — LAST 5 DAYS (CONFIDENTIAL TO THIS CHAT) ===")
+        prompt_parts.append("These entries are the user writing to themselves. They appear only in")
+        prompt_parts.append("this conversation. Use them to spot patterns alongside the user's")
+        prompt_parts.append("physical metrics, but DO NOT volunteer them back to the user verbatim,")
+        prompt_parts.append("repeat sensitive content, or surface them in any shared/social context.")
+        prompt_parts.append("You are NOT a therapist. Stay in the lane of physical-pattern observation")
+        prompt_parts.append("connected to what the user wrote — never advise on the emotion itself.")
+        for entry in journal[:5]:
+            if not isinstance(entry, dict):
+                continue
+            d = entry.get("date") or ""
+            text = (entry.get("text") or "").strip()
+            if not text:
+                continue
+            tags = entry.get("tags") or []
+            tag_str = f" [tags: {', '.join(tags)}]" if tags else ""
+            # Trim long entries so a verbose user doesn't blow up the prompt.
+            if len(text) > 400:
+                text = text[:400] + "…"
+            prompt_parts.append(f"  • {d}{tag_str}: {text}")
+
     # Guidelines
     prompt_parts.append(
         "\n=== COACHING GUIDELINES ===\n"

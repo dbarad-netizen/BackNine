@@ -46,6 +46,7 @@ import nutrition_today_extras as nut_extras
 import tonight_sleep as ts
 import weekly_recap as wrecap
 import oura_tags as otags
+import journal as jrnl
 import friends_glance as fr_glance
 import coach_al_group_voice as cag
 import labs as lbs
@@ -4189,6 +4190,17 @@ async def health_chat(request: Request):
     except Exception:
         health_context["oura_tag_correlations"] = None
 
+    # Private reflection journal — last 5 days of entries the user wrote
+    # to themselves. Coach Al sees these to spot qualitative + quantitative
+    # patterns ("you wrote about work stress for 3 of the last 5 days; sleep
+    # efficiency averaged 76% on those nights vs 83% otherwise"). System
+    # prompt enforces the privacy contract — entries never repeated outside
+    # this chat.
+    try:
+        health_context["journal_recent"] = jrnl.list_recent(user_id, days=5, limit=5)
+    except Exception:
+        health_context["journal_recent"] = []
+
     try:
         reply = ch.chat(message, health_context, profile, history)
     except RuntimeError as e:
@@ -4943,6 +4955,63 @@ def get_tag_correlations(request: Request, days: int = 60):
     the Lifestyle Correlations card on the Insights page."""
     session = _require_session(request)
     return otags.correlate_tags(session["user_id"], days=days)
+
+
+# ── Private reflection journal ────────────────────────────────────────────
+# Hard privacy bar: journal text is per-user, NEVER surfaced in PulseFeed,
+# friend events, Weekly Recap, or Group chat. Coach Al sees recent entries
+# inside the user's own private chat with an explicit system-prompt
+# instruction that the content stays in that conversation only.
+
+@app.get("/api/journal/today")
+def get_journal_today(request: Request):
+    """Return today's journal entry for the user, plus the current
+    multi-day streak and the suggested-tag set used by the composer."""
+    session = _require_session(request)
+    uid = session["user_id"]
+    today = _user_local_today_iso(request)
+    return {
+        "entry":          jrnl.get_entry(uid, today),
+        "streak_days":    jrnl.get_streak(uid, today),
+        "suggested_tags": jrnl.SUGGESTED_TAGS,
+        "date":           today,
+    }
+
+
+@app.post("/api/journal")
+async def save_journal(request: Request):
+    """Upsert today's (or a specified date's) journal entry.
+    Body: { text: string, tags?: string[], date?: 'YYYY-MM-DD' }
+    Empty text deletes any existing entry for that date."""
+    session = _require_session(request)
+    uid = session["user_id"]
+    body = await request.json()
+    date_in = (body.get("date") or "").strip()
+    if not date_in or not _valid_ymd(date_in):
+        date_in = _user_local_today_iso(request)
+    text = (body.get("text") or "")
+    tags = body.get("tags") or []
+    saved = jrnl.save_entry(uid, date_in, text, tags if isinstance(tags, list) else [])
+    streak = jrnl.get_streak(uid, date_in)
+    return {"entry": saved, "streak_days": streak, "date": date_in}
+
+
+@app.get("/api/journal/recent")
+def get_journal_recent(request: Request, days: int = 14):
+    """User's recent entries, newest first. Used to power the Insights
+    page list view (not currently surfaced — kept for future expansion)."""
+    session = _require_session(request)
+    return {"entries": jrnl.list_recent(session["user_id"], days=days)}
+
+
+@app.get("/api/journal/correlations")
+def get_journal_correlations(request: Request, days: int = 60):
+    """For each journal tag used ≥3 times in the window, observational
+    deltas vs. sleep / HRV / RHR / readiness. Powers a future card on
+    the Insights page (extends the Oura tag correlations to include
+    journal-driven tags too)."""
+    session = _require_session(request)
+    return jrnl.correlate_tags(session["user_id"], days=days)
 
 
 # ── Goals (Coach Al program) ──────────────────────────────────────────────────

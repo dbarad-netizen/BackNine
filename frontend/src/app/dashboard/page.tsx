@@ -52,6 +52,7 @@ import MorningBriefing from "@/components/MorningBriefing";
 import NutritionCoachCard from "@/components/NutritionCoachCard";
 import WeeklyRecapCard from "@/components/WeeklyRecapCard";
 import TodaysTagsCard from "@/components/TodaysTagsCard";
+import JournalCard from "@/components/JournalCard";
 import DailyInsightCard from "@/components/DailyInsightCard";
 import SymptomCard from "@/components/SymptomCard";
 import WeeklyInsight from "@/components/WeeklyInsight";
@@ -1618,6 +1619,14 @@ export default function DashboardPage() {
                 analysis. Surfaces "On low-energy days, sleep averaged
                 5.8h vs 7.1h" once 3+ symptom days exist. */}
             <SymptomCard />
+
+            {/* Private Journal — daily reflection log. Pairs with the
+                Daily Check-in above (mood + symptoms = the quick log;
+                journal = the deeper one). Privacy contract enforced
+                end-to-end: text never leaves the user's own view. Coach
+                Al sees recent entries inside his chat with a privacy
+                directive in his system prompt. */}
+            <JournalCard />
 
             {/* ── Daily Greeting + Score Snapshot ── */}
             {(() => {
