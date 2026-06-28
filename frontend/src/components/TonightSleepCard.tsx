@@ -217,31 +217,12 @@ export default function TonightSleepCard({ onAsk }: Props = {}) {
             {balanceEmoji(data.balance.key)} {data.balance.label}
           </span>
         )}
-        {data.last_night && (() => {
-          // Only render "Last night" when the data IS last night. If
-          // Oura's API hasn't published today's session yet, the most
-          // recent night we have is actually 2+ days ago — and labeling
-          // that "last night" is wrong, while date-stamping it forces the
-          // user to do mental math. Better UX: just hide the pill. The
-          // user can check their Oura app for last night's number; we'll
-          // show ours when our data agrees.
-          const nightDate = new Date(data.last_night.date + "T00:00:00");
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          const daysAgo = Math.round((today.getTime() - nightDate.getTime()) / 86_400_000);
-          // daysAgo === 1 means literally last night → show.
-          // daysAgo === 0 (today, edge case) or > 1 (older) → hide.
-          if (daysAgo !== 1) return null;
-          return (
-            <span
-              className="text-[11px] font-medium px-2 py-1 rounded-lg bg-white/15 text-white border border-white/20"
-              title="Last night's total sleep, per Oura"
-            >
-              Last night: {data.last_night.hours.toFixed(1)}h
-              {data.last_night.efficiency !== null && ` · ${data.last_night.efficiency}% eff`}
-            </span>
-          );
-        })()}
+        {/* Last Night pill removed. It was a raw duplicate of what Oura's
+            own app shows, and any visible disagreement (API lag, methodology
+            differences, genuine drift) made us look broken even when we
+            were technically correct. Users have Oura's app for raw numbers;
+            our value is the prescription, the streak, the balance signal,
+            and Coach Al's read across pillars. */}
         {data.tomorrow_intensity && data.tomorrow_intensity !== "rest" && (
           <span className="text-[11px] font-medium px-2 py-1 rounded-lg bg-indigo-100 text-indigo-900 border border-indigo-200 capitalize">
             Tomorrow: {data.tomorrow_intensity}
