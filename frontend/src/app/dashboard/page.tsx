@@ -44,7 +44,11 @@ import ChatWidget from "@/components/ChatWidget";
 import ProfileModal from "@/components/ProfileModal";
 import CoachAlAvatar from "@/components/CoachAlAvatar";
 import MorningBriefing from "@/components/MorningBriefing";
-import TonightSleepCard from "@/components/TonightSleepCard";
+// Tonight's Sleep card retired from the Scorecard — sleep coaching now
+// lives inside Coach Al chat (chat still has full balance + bedtime
+// context). Component + backend endpoint kept in the repo so we can
+// revive cleanly if/when we find a clear value-add for the surface.
+// import TonightSleepCard from "@/components/TonightSleepCard";
 import NutritionCoachCard from "@/components/NutritionCoachCard";
 import WeeklyRecapCard from "@/components/WeeklyRecapCard";
 import DailyInsightCard from "@/components/DailyInsightCard";
@@ -1588,12 +1592,13 @@ export default function DashboardPage() {
                 the merge note in MorningBriefing.tsx. */}
             <MorningBriefing onOpenChat={() => openChatRef.current?.()} />
 
-            {/* Tonight's Sleep prescription — forward-looking companion to
-                the Morning Briefing's backward-looking recap. Recommends a
-                bedtime window, surfaces sleep debt + streak, and shifts the
-                window earlier if tomorrow's training is heavy. Renders
-                nothing when Oura history is too sparse. */}
-            <TonightSleepCard onAsk={(seed) => openChatRef.current?.(seed)} />
+            {/* Tonight's Sleep card retired. Sleep coaching now lives
+                inside Coach Al chat (he sees balance + bedtime + streak
+                in his system prompt). The card kept landing in states
+                where it duplicated Oura's own readout or rendered as a
+                generic 'aim for Xh' — neither of which earned its space
+                on the Scorecard. Reintroduce if we find a sharper hook. */}
+
 
             {/* Weekly Recap — end-of-week celebration card. Only visible
                 Sat-Tue of the current ISO week (the celebration window).
