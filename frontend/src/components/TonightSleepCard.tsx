@@ -217,12 +217,43 @@ export default function TonightSleepCard({ onAsk }: Props = {}) {
             {balanceEmoji(data.balance.key)} {data.balance.label}
           </span>
         )}
-        {data.last_night && (
-          <span className="text-[11px] font-medium px-2 py-1 rounded-lg bg-white/15 text-white border border-white/20">
-            Last night: {data.last_night.hours.toFixed(1)}h
-            {data.last_night.efficiency !== null && ` · ${data.last_night.efficiency}% eff`}
-          </span>
-        )}
+        {data.last_night && (() => {
+          // Date-stamp the most recent night we have data for. Oura's
+          // public API typically lags 30min-2h behind their own app,
+          // so the "last night" we display may actually be the night
+          // before last if today's session hasn't published yet. The
+          // explicit date makes any mismatch with the user's Oura app
+          // self-explanatory rather than looking like a math bug.
+          const nightDate = new Date(data.last_night.date + "T00:00:00");
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const daysAgo = Math.round((today.getTime() - nightDate.getTime()) / 86_400_000);
+          const stale = daysAgo > 1;
+          const dateLabel = nightDate.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+          return (
+            <>
+              <span
+                className={`text-[11px] font-medium px-2 py-1 rounded-lg border ${
+                  stale
+                    ? "bg-amber-100 text-amber-900 border-amber-300"
+                    : "bg-white/15 text-white border-white/20"
+                }`}
+                title={stale ? "Most recent night Oura's API has returned. Today's may still be processing on Oura's side." : `Night ending ${dateLabel}`}
+              >
+                Night of {dateLabel}: {data.last_night.hours.toFixed(1)}h
+                {data.last_night.efficiency !== null && ` · ${data.last_night.efficiency}% eff`}
+              </span>
+              {stale && (
+                <span
+                  className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-amber-100 text-amber-900 border border-amber-300"
+                  title="Oura's public API hasn't published today's session yet — typical 30min-2h lag after the ring syncs to their cloud. Tap ↻ to retry."
+                >
+                  ⏳ Waiting on Oura sync
+                </span>
+              )}
+            </>
+          );
+        })()}
         {data.tomorrow_intensity && data.tomorrow_intensity !== "rest" && (
           <span className="text-[11px] font-medium px-2 py-1 rounded-lg bg-indigo-100 text-indigo-900 border border-indigo-200 capitalize">
             Tomorrow: {data.tomorrow_intensity}
