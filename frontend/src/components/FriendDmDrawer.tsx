@@ -40,6 +40,21 @@ export default function FriendDmDrawer({ friend, onClose }: Props) {
     }
   }, []);
 
+  // Tell the global Coach Al ChatWidget to hide its floating pill while
+  // this drawer is open — otherwise the pill physically overlaps our
+  // send button on mobile (both are fixed bottom-right at z-40).
+  useEffect(() => {
+    const id = "friend-dm";
+    window.dispatchEvent(new CustomEvent("bn:drawer-toggle", {
+      detail: { id, open: !!friend },
+    }));
+    return () => {
+      window.dispatchEvent(new CustomEvent("bn:drawer-toggle", {
+        detail: { id, open: false },
+      }));
+    };
+  }, [friend]);
+
   // Load + start polling whenever we open with a different friend.
   useEffect(() => {
     if (!friend) {

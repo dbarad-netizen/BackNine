@@ -42,6 +42,25 @@ export default function ChatWidget({ onRegisterOpen }: Props) {
   // A seed message to auto-send once the drawer is open + history hydrated
   // (e.g. "Ask Coach Al about this" on the Weekly Insight card).
   const [pendingSeed, setPendingSeed] = useState<string | null>(null);
+  // Tracks which other bottom-fixed drawers (friend DM, group chat, etc.)
+  // are currently open. When any are, we hide our pill on mobile so it
+  // doesn't sit on top of the drawer's send button.
+  const [openDrawers, setOpenDrawers] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ id: string; open: boolean }>).detail;
+      if (!detail?.id) return;
+      setOpenDrawers(prev => {
+        const next = new Set(prev);
+        if (detail.open) next.add(detail.id);
+        else next.delete(detail.id);
+        return next;
+      });
+    };
+    window.addEventListener("bn:drawer-toggle", handler);
+    return () => window.removeEventListener("bn:drawer-toggle", handler);
+  }, []);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLTextAreaElement>(null);
 
@@ -156,13 +175,17 @@ export default function ChatWidget({ onRegisterOpen }: Props) {
   return (
     <>
       {/* ── Floating pill ── */}
-      {/* When the drawer is open on mobile, hide the pill so it doesn't sit on
-          top of the drawer's Send button (close via the header ✕ or backdrop).
-          On desktop it stays and becomes a "Close" toggle. */}
+      {/* Hide the pill on mobile when:
+          • Coach Al's own drawer is open (use the header ✕ to close), OR
+          • Any other bottom-fixed drawer is open (friend DM, group chat) —
+            otherwise the pill physically overlaps that drawer's send button.
+          On desktop the pill stays visible since there's room. */}
       <button
         onClick={() => setOpen(v => !v)}
         aria-label="Chat with Coach Al"
-        className={`fixed bottom-5 right-4 z-40 ${open ? "hidden sm:flex" : "flex"} items-center gap-2 rounded-full pl-1.5 pr-4 py-1.5 text-white text-sm font-semibold shadow-lg transition-all hover:scale-105 active:scale-95`}
+        className={`fixed bottom-5 right-4 z-40 ${
+          (open || openDrawers.size > 0) ? "hidden sm:flex" : "flex"
+        } items-center gap-2 rounded-full pl-1.5 pr-4 py-1.5 text-white text-sm font-semibold shadow-lg transition-all hover:scale-105 active:scale-95`}
         style={{
           background: "linear-gradient(135deg, #1B3829 0%, #2D6A4F 100%)",
           boxShadow:  "0 4px 20px rgba(27,56,41,0.4)",

@@ -49,6 +49,20 @@ export default function GroupChatDrawer({ group, onClose, onLeft }: Props) {
     }
   }, []);
 
+  // Hide the global Coach Al pill while the group drawer is open so it
+  // doesn't sit on top of our send button on mobile.
+  useEffect(() => {
+    const id = "group-chat";
+    window.dispatchEvent(new CustomEvent("bn:drawer-toggle", {
+      detail: { id, open: !!group },
+    }));
+    return () => {
+      window.dispatchEvent(new CustomEvent("bn:drawer-toggle", {
+        detail: { id, open: false },
+      }));
+    };
+  }, [group]);
+
   useEffect(() => {
     if (!group) {
       setMessages(null); setText(""); setError(null); setLeaveConfirm(false);
