@@ -214,11 +214,6 @@ export default function JournalCard() {
           </div>
         </div>
       )}
-
-      <p className="text-[10px] text-gray-500 mt-3 leading-snug">
-        BackNine is a wellness tool, not a substitute for mental health care.
-        If you&apos;re struggling, the 988 Suicide &amp; Crisis Lifeline is available 24/7 by call or text in the US.
-      </p>
     </section>
   );
 }
