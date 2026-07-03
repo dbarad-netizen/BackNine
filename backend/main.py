@@ -309,8 +309,29 @@ app.add_middleware(
 
 @app.exception_handler(Exception)
 async def debug_exception_handler(request: Request, exc: Exception):
+    """Return 500s with CORS headers so browsers actually expose the
+    error to JavaScript. Starlette's CORSMiddleware doesn't add headers
+    to responses returned by exception handlers, so we do it manually
+    here — otherwise Safari shows every 500 as an opaque 'Load failed'
+    and there's no way to debug from the browser side."""
     import traceback
-    return JSONResponse(status_code=500, content={"error": str(exc), "trace": traceback.format_exc()})
+    origin = request.headers.get("origin", "")
+    _ALLOWED_ORIGINS = {
+        FRONTEND_URL,
+        "http://localhost:3000",
+        "https://back-nine-six.vercel.app",
+        "https://back-nine-d28t.vercel.app",
+    }
+    headers: dict[str, str] = {}
+    if origin in _ALLOWED_ORIGINS:
+        headers["Access-Control-Allow-Origin"]      = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+        headers["Vary"]                             = "Origin"
+    return JSONResponse(
+        status_code=500,
+        content={"error": str(exc), "trace": traceback.format_exc()},
+        headers=headers,
+    )
 
 @app.get("/debug-sb")
 def debug_supabase():
@@ -532,11 +553,20 @@ def _require_session(request: Request) -> dict:
     raise HTTPException(status_code=401, detail="Not authenticated")
 
 
-async def _ensure_valid_token(session: dict) -> Tuple[str, Optional[dict]]:
+async def _ensure_valid_token(session: dict) -> Tuple[Optional[str], Optional[dict]]:
     """Return (access_token, updated_session_or_None).
     updated_session is set when tokens were refreshed so the caller can
     write a fresh JWT cookie back to the client.
+
+    Returns (None, None) when the session has no Oura connection at all
+    (Supabase-Auth-only users, or users who never linked their ring).
+    Callers must gracefully handle the None token — this used to raise
+    KeyError which crashed /api/nutrition/summary and any other endpoint
+    that unconditionally called this helper.
     """
+    if not session.get("access_token"):
+        # No Oura link on this session — return cleanly, don't blow up.
+        return None, None
     expires_at = session.get("expires_at", 0)
     if expires_at and datetime.now(timezone.utc).timestamp() > expires_at - 60:
         # Token is expired or about to expire — refresh
@@ -557,7 +587,7 @@ async def _ensure_valid_token(session: dict) -> Tuple[str, Optional[dict]]:
                 "expires_at":    session["expires_at"],
             }).eq("user_id", session["user_id"]).eq("provider", "oura").execute()
         return session["access_token"], session  # signal: cookie needs refresh
-    return session["access_token"], None
+    return session.get("access_token"), None
 
 
 def _build_trend(rm, slm, am, smm, days=30) -> list[dict]:
@@ -2753,14 +2783,21 @@ async def update_nutrition_settings(request: Request):
 async def get_nutrition_summary(request: Request, date: Optional[str] = None):
     session = _require_session(request)
     uid     = session["user_id"]
-    access_token, _ = await _ensure_valid_token(session)
-    # Fetch active calories from Oura for context
+    # Oura is optional here — the endpoint returns useful data even for
+    # users without a ring. Fetch active calories only when we have a
+    # valid token; otherwise skip the Oura call entirely.
+    active_cals: dict[str, int] = {}
     try:
-        raw = await fetch_all(access_token, days=14)
-        _, _, am, _ = parse_oura_data(raw)
-        active_cals = {d: am[d].get("active_cal", 0) for d in am if am[d].get("active_cal")}
+        access_token, _ = await _ensure_valid_token(session)
     except Exception:
-        active_cals = {}
+        access_token = None
+    if access_token:
+        try:
+            raw = await fetch_all(access_token, days=14)
+            _, _, am, _ = parse_oura_data(raw)
+            active_cals = {d: am[d].get("active_cal", 0) for d in am if am[d].get("active_cal")}
+        except Exception:
+            active_cals = {}
     today_str = date if (date and _valid_ymd(date)) else None
     return nutr.weekly_summary(active_cals, uid, today_str=today_str)
 
