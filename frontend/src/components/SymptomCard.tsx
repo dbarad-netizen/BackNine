@@ -168,7 +168,10 @@ export default function SymptomCard() {
 
   // Symptom-day count for the user's window — drives "ready for correlation?" hint
   const symptomDays60 = logs.filter(l => (l.symptoms || []).length > 0).length;
-  const correlationReady = symptomDays60 >= 3;
+  // Match the backend's shared MIN_SAMPLE_SIZE. Bumped from 3 → 5 as
+  // part of the correlation-confidence tightening (Fable IMPROVE #4).
+  const MIN_CORR_DAYS = 5;
+  const correlationReady = symptomDays60 >= MIN_CORR_DAYS;
 
   if (loading) return null;
 
@@ -220,7 +223,7 @@ export default function SymptomCard() {
       <p className="text-[10px] uppercase tracking-wide font-semibold text-gray-600 mb-1.5">
         Anything off? <span className="font-normal lowercase text-gray-600 normal-case">(skip if feeling fine)</span>
         {symptomDays60 > 0 && symptomDays60 < 3 && (
-          <span className="ml-1 font-medium text-[#1B3829] normal-case lowercase"> · {symptomDays60}/3 logged to unlock correlations</span>
+          <span className="ml-1 font-medium text-[#1B3829] normal-case lowercase"> · {symptomDays60}/{MIN_CORR_DAYS} logged to unlock correlations</span>
         )}
       </p>
 
@@ -326,7 +329,7 @@ export default function SymptomCard() {
                 <>
                   {corr.insufficient_data && (
                     <p className="text-xs text-gray-600 italic">
-                      Need at least 3 days logged for &quot;{corr.symptom_label}&quot; to compute correlations. You have {corr.symptom_day_count}.
+                      Need at least {corr.min_sample_size ?? 5} days logged for &quot;{corr.symptom_label}&quot; to compute correlations. You have {corr.symptom_day_count}.
                     </p>
                   )}
 
@@ -350,28 +353,51 @@ export default function SymptomCard() {
                             <th className="py-1.5 pr-2 font-semibold">Metric</th>
                             <th className="py-1.5 pr-2 font-semibold text-right">Symptom days</th>
                             <th className="py-1.5 pr-2 font-semibold text-right">Other days</th>
-                            <th className="py-1.5 font-semibold text-right">Δ</th>
+                            <th className="py-1.5 pr-2 font-semibold text-right">Δ</th>
+                            <th className="py-1.5 font-semibold text-right">n</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {corr.deltas.slice(0, 8).map(d => (
-                            <tr key={d.metric} className="border-b border-gray-100">
-                              <td className="py-1 pr-2">{d.label}</td>
-                              <td className={`py-1 pr-2 text-right font-mono ${d.worse_on_symptom ? "text-rose-700 font-semibold" : "text-gray-800"}`}>
-                                {d.symptom_avg}{d.unit ? ` ${d.unit}` : ""}
-                              </td>
-                              <td className="py-1 pr-2 text-right font-mono text-gray-700">
-                                {d.symptom_free_avg}{d.unit ? ` ${d.unit}` : ""}
-                              </td>
-                              <td className={`py-1 text-right font-mono ${d.worse_on_symptom ? "text-rose-700 font-semibold" : "text-gray-700"}`}>
-                                {d.delta > 0 ? "+" : ""}{d.delta} ({d.abs_delta_pct}%)
-                              </td>
-                            </tr>
-                          ))}
+                          {corr.deltas.slice(0, 8).map(d => {
+                            // Muted rendering for low-confidence rows so
+                            // a skeptical reader immediately sees "this
+                            // is an early signal" not "this is a fact."
+                            const isLow = d.confidence === "low";
+                            const worseTone = d.worse_on_symptom
+                              ? (isLow ? "text-rose-500" : "text-rose-700 font-semibold")
+                              : (isLow ? "text-gray-600" : "text-gray-800");
+                            const confBadge =
+                              d.confidence === "high"   ? "bg-emerald-100 text-emerald-800 border-emerald-200" :
+                              d.confidence === "medium" ? "bg-sky-100 text-sky-800 border-sky-200" :
+                                                          "bg-gray-100 text-gray-600 border-gray-200";
+                            return (
+                              <tr key={d.metric} className="border-b border-gray-100">
+                                <td className={`py-1 pr-2 ${isLow ? "text-gray-700" : ""}`}>{d.label}</td>
+                                <td className={`py-1 pr-2 text-right font-mono ${worseTone}`}>
+                                  {d.symptom_avg}{d.unit ? ` ${d.unit}` : ""}
+                                </td>
+                                <td className="py-1 pr-2 text-right font-mono text-gray-700">
+                                  {d.symptom_free_avg}{d.unit ? ` ${d.unit}` : ""}
+                                </td>
+                                <td className={`py-1 pr-2 text-right font-mono ${worseTone}`}>
+                                  {d.delta > 0 ? "+" : ""}{d.delta} ({d.abs_delta_pct}%)
+                                </td>
+                                <td className="py-1 text-right">
+                                  <span
+                                    className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${confBadge}`}
+                                    title={d.confidence_label || `${d.positive_n ?? "?"} matching days`}
+                                  >
+                                    {d.positive_n ?? "?"}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                       <p className="text-[10px] text-gray-600 italic">
-                        Observational pattern only — correlation, not causation. Bring to your doctor if a pattern feels meaningful.
+                        Observational pattern only — correlation, not causation. The <span className="font-mono not-italic">n</span> column shows how many matching days each row is based on;
+                        green = confident (10+), blue = moderate (7-9), gray = early signal (5-6). Bring to your doctor if a pattern feels meaningful.
                       </p>
                     </>
                   )}

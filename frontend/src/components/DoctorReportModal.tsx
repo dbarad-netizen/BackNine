@@ -32,14 +32,21 @@ import {
   type GoalProgressReportPayload,
   type AnnualPhysicalReportPayload,
 } from "@/lib/api";
+import DoctorHandoffOnePager from "@/components/DoctorHandoffOnePager";
 
 // ── Tab definitions ──────────────────────────────────────────────────────
 // "Sleep" tab is the comprehensive Personal Health Report (renamed from
 // "Overview" — David's most-used view is the sleep section so the label
 // reflects that). Annual Physical is the one-page summary for the PCP
 // visit and is the lightest report — sits early in the tab order.
-type TabId = "annual" | "overview" | "cardio" | "preproc" | "training" | "nutrition" | "goal";
+// "Handoff" is the primary Fable IMPROVE #1 report — a ruthlessly one-page
+// clinical summary that leads with flags, trends, meds, and patient-reported
+// context. It sits first in the tab order because a doctor gets ~30 seconds
+// with a patient printout; the seven detailed views behind it are for a
+// curious physician who wants to drill in.
+type TabId = "handoff" | "annual" | "overview" | "cardio" | "preproc" | "training" | "nutrition" | "goal";
 const TABS: { id: TabId; label: string }[] = [
+  { id: "handoff",   label: "Handoff (1-page)" },
   { id: "annual",    label: "Annual Physical" },
   { id: "overview",  label: "Sleep" },
   { id: "cardio",    label: "Cardiometabolic" },
@@ -210,7 +217,9 @@ function SeriesStat({ label, series, digits = 0 }: { label: string; series: Doct
 
 export default function DoctorReportModal({ open, onClose }: Props) {
   const [days, setDays]           = useState<number>(30);
-  const [activeTab, setActiveTab] = useState<TabId>("overview");
+  // Handoff is the primary/marketed tab — default it. Users looking for
+  // the seven detailed views can still get there in one tap.
+  const [activeTab, setActiveTab] = useState<TabId>("handoff");
 
   // Overview tab data lives at the modal level because the inline BP entry
   // needs to refetch it. The other tabs each manage their own state inside
@@ -334,6 +343,7 @@ export default function DoctorReportModal({ open, onClose }: Props) {
               {!loading && !error && data && <ReportBody data={data} onBpSaved={loadReport} />}
             </>
           )}
+          {activeTab === "handoff"   && <DoctorHandoffOnePager />}
           {activeTab === "annual"    && <AnnualTab />}
           {activeTab === "cardio"    && <CardiometabolicTab days={days} />}
           {activeTab === "preproc"   && <PreProcedureTab />}

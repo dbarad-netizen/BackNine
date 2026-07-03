@@ -47,6 +47,8 @@ import tonight_sleep as ts
 import weekly_recap as wrecap
 import oura_tags as otags
 import journal as jrnl
+import coach_memory as cmem
+import doctor_one_pager as dop
 import friends_glance as fr_glance
 import coach_al_group_voice as cag
 import labs as lbs
@@ -2019,6 +2021,35 @@ def delete_bp(reading_id: str, request: Request):
     if not ok:
         raise HTTPException(status_code=404, detail="Reading not found")
     return {"status": "deleted"}
+
+
+@app.get("/api/doctor-one-pager")
+async def get_doctor_one_pager(request: Request, refresh: bool = False):
+    """The one-page clinical summary — trends, flags, meds/supplements,
+    patient-reported symptoms, latest labs. This is the primary,
+    marketable doctor artifact (Fable IMPROVE #1). The seven detailed
+    tab reports sit BEHIND this as specialty views.
+
+    Freshness pass mirrors /api/doctor-report — 30-min cache TTL for
+    Oura, ?refresh=1 to force a fresh pull.
+    """
+    session = _require_session(request)
+    user_id = session["user_id"]
+    profile = _get_profile(user_id) or {}
+    if refresh or not oc.is_fresh(user_id, max_age_hours=0.5):
+        try:
+            access_token, _ = await _ensure_valid_token(session)
+            if access_token:
+                raw = await fetch_all(access_token, days=90)
+                rm, slm, am, smm = parse_oura_data(raw)
+                if rm or slm or am or smm:
+                    try:
+                        oc.store_days(user_id, rm, slm, am, smm)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+    return dop.build_one_pager(user_id, profile)
 
 
 @app.get("/api/doctor-report")
@@ -4201,6 +4232,15 @@ async def health_chat(request: Request):
     except Exception:
         health_context["journal_recent"] = []
 
+    # Persistent Coach Al memory — user-authored facts (injuries,
+    # preferences, goals) that must carry across every conversation.
+    # This is the Sonar-parity feature that keeps Coach Al from feeling
+    # like a goldfish that re-reads the dashboard every turn.
+    try:
+        health_context["coach_memory"] = cmem.get_active_memories_for_chat(user_id, limit=40)
+    except Exception:
+        health_context["coach_memory"] = []
+
     try:
         reply = ch.chat(message, health_context, profile, history)
     except RuntimeError as e:
@@ -5002,6 +5042,64 @@ def get_journal_recent(request: Request, days: int = 14):
     page list view (not currently surfaced — kept for future expansion)."""
     session = _require_session(request)
     return {"entries": jrnl.list_recent(session["user_id"], days=days)}
+
+
+# ── Coach Al persistent memory ──────────────────────────────────────────
+# Fable IMPROVE #2: user-authored facts (injuries, preferences, goals,
+# medical context) that Coach Al carries across every chat session.
+# Privacy: memories are per-user, backend-only access, never shared.
+
+@app.get("/api/coach/memory")
+def list_coach_memory(request: Request):
+    """User's saved memories + the category catalog for the composer."""
+    session = _require_session(request)
+    return {
+        "memories":   cmem.list_memories(session["user_id"]),
+        "categories": [
+            {"key": c, **cmem.CATEGORY_DISPLAY[c]} for c in cmem.CATEGORIES
+        ],
+        "max_content_len": cmem.MAX_CONTENT_LEN,
+    }
+
+
+@app.post("/api/coach/memory")
+async def add_coach_memory(request: Request):
+    """Body: { category, content }. Both required."""
+    session = _require_session(request)
+    body = await request.json()
+    saved = cmem.add_memory(
+        session["user_id"],
+        (body.get("category") or "other"),
+        (body.get("content") or ""),
+    )
+    if not saved:
+        raise HTTPException(status_code=400, detail="content required and must be non-empty")
+    return saved
+
+
+@app.patch("/api/coach/memory/{memory_id}")
+async def update_coach_memory(memory_id: str, request: Request):
+    """Body: { category?, content? }. At least one required."""
+    session = _require_session(request)
+    body = await request.json()
+    updated = cmem.update_memory(
+        session["user_id"], memory_id,
+        category=body.get("category"),
+        content=body.get("content"),
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="Memory not found or nothing to update")
+    return updated
+
+
+@app.delete("/api/coach/memory/{memory_id}")
+def delete_coach_memory(memory_id: str, request: Request):
+    """Soft-delete via active=false."""
+    session = _require_session(request)
+    ok = cmem.delete_memory(session["user_id"], memory_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Memory not found")
+    return {"status": "deleted"}
 
 
 @app.get("/api/journal/correlations")

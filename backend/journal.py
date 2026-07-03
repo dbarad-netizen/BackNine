@@ -184,7 +184,7 @@ def get_streak(user_id: str, today_iso: Optional[str] = None) -> int:
 
 # ── correlations ────────────────────────────────────────────────────────
 
-def correlate_tags(user_id: str, days: int = 60, min_occurrences: int = 3) -> dict:
+def correlate_tags(user_id: str, days: int = 60, min_occurrences: Optional[int] = None) -> dict:
     """For each tag the user has used at least `min_occurrences` times in
     the window, compare metrics on tag-positive days vs. tag-negative
     days. Returns a list of (tag, metric, positive_avg, negative_avg).
@@ -276,9 +276,16 @@ def correlate_tags(user_id: str, days: int = 60, min_occurrences: int = 3) -> di
     }
     lower_better = {"rhr"}
 
+    # Fable IMPROVE #4: shared confidence gate.
+    from correlation_confidence import (
+        MIN_SAMPLE_SIZE, MIN_NEG_SAMPLE_SIZE,
+        confidence_level, should_surface, confidence_label,
+    )
+    threshold = min_occurrences if min_occurrences is not None else MIN_SAMPLE_SIZE
+
     items: list[dict] = []
     for tag, days_set in tag_days.items():
-        if len(days_set) < min_occurrences:
+        if len(days_set) < threshold:
             continue
         for metric_key, unit in metric_units.items():
             pos_vals = [get_metrics(d)[metric_key] for d in days_set if d in all_days]
@@ -286,7 +293,7 @@ def correlate_tags(user_id: str, days: int = 60, min_occurrences: int = 3) -> di
             neg_days = all_days - days_set
             neg_vals = [get_metrics(d)[metric_key] for d in neg_days]
             neg_vals = [v for v in neg_vals if v is not None]
-            if len(pos_vals) < 2 or len(neg_vals) < 3:
+            if len(pos_vals) < MIN_SAMPLE_SIZE or len(neg_vals) < MIN_NEG_SAMPLE_SIZE:
                 continue
             pos_avg = sum(pos_vals) / len(pos_vals)
             neg_avg = sum(neg_vals) / len(neg_vals)
@@ -294,7 +301,11 @@ def correlate_tags(user_id: str, days: int = 60, min_occurrences: int = 3) -> di
             if abs(delta) < 0.05:
                 continue
             pct = (delta / neg_avg * 100) if neg_avg else 0
+            abs_pct = round(abs(pct), 1)
+            if not should_surface(len(pos_vals), len(neg_vals), abs_pct):
+                continue
             worse = (delta < 0) if metric_key not in lower_better else (delta > 0)
+            conf = confidence_level(len(pos_vals), len(neg_vals))
             items.append({
                 "tag":           tag,
                 "metric":        metric_key,
@@ -305,8 +316,10 @@ def correlate_tags(user_id: str, days: int = 60, min_occurrences: int = 3) -> di
                 "positive_avg":  round(pos_avg, 1),
                 "negative_avg":  round(neg_avg, 1),
                 "delta":         round(delta, 1),
-                "abs_pct":       round(abs(pct), 1),
+                "abs_pct":       abs_pct,
                 "worse_on_tag":  worse,
+                "confidence":       conf,
+                "confidence_label": confidence_label(conf, len(pos_vals)),
             })
 
     items.sort(key=lambda i: -i["abs_pct"])
@@ -314,4 +327,5 @@ def correlate_tags(user_id: str, days: int = 60, min_occurrences: int = 3) -> di
         "window_days":    days,
         "items":          items[:20],
         "tag_day_counts": {tag: len(s) for tag, s in tag_days.items()},
+        "min_sample_size": MIN_SAMPLE_SIZE,
     }

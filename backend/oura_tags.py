@@ -181,7 +181,7 @@ def _per_day_metric(rows_by_day: dict, day: str, key: str) -> Optional[float]:
         return None
 
 
-def correlate_tags(user_id: str, days: int = 60, min_occurrences: int = 3) -> dict:
+def correlate_tags(user_id: str, days: int = 60, min_occurrences: Optional[int] = None) -> dict:
     """For each tag type the user has logged at least `min_occurrences`
     times in the window, compare metrics on tag-positive days vs. tag-free
     days. Returns a list of (tag, metric, positive_avg, negative_avg, delta).
@@ -274,8 +274,17 @@ def correlate_tags(user_id: str, days: int = 60, min_occurrences: int = 3) -> di
     # Lower-is-better metrics — we flip the "worse_on_tag" framing here.
     lower_better = {"rhr"}
 
+    # Fable IMPROVE #4: shared confidence gate. min_occurrences is now
+    # sourced from the shared module unless the caller overrides it,
+    # so all three engines apply identical thresholds.
+    from correlation_confidence import (
+        MIN_SAMPLE_SIZE, MIN_NEG_SAMPLE_SIZE,
+        confidence_level, should_surface, confidence_label,
+    )
+    threshold = min_occurrences if min_occurrences is not None else MIN_SAMPLE_SIZE
+
     for code, days_set in tag_days.items():
-        if len(days_set) < min_occurrences:
+        if len(days_set) < threshold:
             continue
         info = describe(code)
         for metric_key, unit in metric_units.items():
@@ -284,7 +293,9 @@ def correlate_tags(user_id: str, days: int = 60, min_occurrences: int = 3) -> di
             neg_days = all_days - days_set
             neg_vals = [get_metrics(d)[metric_key] for d in neg_days]
             neg_vals = [v for v in neg_vals if v is not None]
-            if len(pos_vals) < 2 or len(neg_vals) < 3:
+            # Sample-size gate per metric (some metrics may be sparse
+            # even when the tag is well-represented — e.g. HRV blanks).
+            if len(pos_vals) < MIN_SAMPLE_SIZE or len(neg_vals) < MIN_NEG_SAMPLE_SIZE:
                 continue
             pos_avg = sum(pos_vals) / len(pos_vals)
             neg_avg = sum(neg_vals) / len(neg_vals)
@@ -292,7 +303,12 @@ def correlate_tags(user_id: str, days: int = 60, min_occurrences: int = 3) -> di
             if abs(delta) < 0.05:   # filter trivially small deltas
                 continue
             pct = (delta / neg_avg * 100) if neg_avg else 0
+            abs_pct = round(abs(pct), 1)
+            # Combined gate: sample size + effect size must both clear.
+            if not should_surface(len(pos_vals), len(neg_vals), abs_pct):
+                continue
             worse = (delta < 0) if metric_key not in lower_better else (delta > 0)
+            conf = confidence_level(len(pos_vals), len(neg_vals))
             items.append({
                 "tag_code":      code,
                 "tag_label":     info["label"],
@@ -305,8 +321,11 @@ def correlate_tags(user_id: str, days: int = 60, min_occurrences: int = 3) -> di
                 "positive_avg":  round(pos_avg, 1),
                 "negative_avg":  round(neg_avg, 1),
                 "delta":         round(delta, 1),
-                "abs_pct":       round(abs(pct), 1),
+                "abs_pct":       abs_pct,
                 "worse_on_tag":  worse,
+                # Confidence tier + human blurb for the frontend / chat.
+                "confidence":       conf,
+                "confidence_label": confidence_label(conf, len(pos_vals)),
             })
 
     # Sort by |delta| as % of baseline so the biggest effects bubble up.
@@ -315,6 +334,7 @@ def correlate_tags(user_id: str, days: int = 60, min_occurrences: int = 3) -> di
         "window_days":     days,
         "items":           items[:20],
         "tag_day_counts":  {code: len(s) for code, s in tag_days.items()},
+        "min_sample_size": MIN_SAMPLE_SIZE,
     }
 
 

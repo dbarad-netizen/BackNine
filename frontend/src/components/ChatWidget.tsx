@@ -20,6 +20,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { api, type ChatMessage, type CoachObservation } from "@/lib/api";
 import CoachAlAvatar from "@/components/CoachAlAvatar";
+import CoachMemoryCard from "@/components/CoachMemoryCard";
 
 function AlAvatar({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
   const px = { sm: 28, md: 36, lg: 48 };
@@ -46,6 +47,10 @@ export default function ChatWidget({ onRegisterOpen }: Props) {
   // are currently open. When any are, we hide our pill on mobile so it
   // doesn't sit on top of the drawer's send button.
   const [openDrawers, setOpenDrawers] = useState<Set<string>>(new Set());
+  // Memory panel toggle. When open, the drawer body swaps from chat →
+  // the CoachMemoryCard so the user can add persistent facts Coach Al
+  // will respect across every future conversation.
+  const [memoryOpen, setMemoryOpen] = useState(false);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -232,7 +237,16 @@ export default function ChatWidget({ onRegisterOpen }: Props) {
             <p className="text-sm font-bold text-white leading-tight">Coach Al</p>
             <p className="text-[11px] text-white/60">Your BackNine AI health coach</p>
           </div>
-          {messages.length > 0 && (
+          <button
+            onClick={() => setMemoryOpen(v => !v)}
+            className={`text-[10px] mr-1.5 px-2 py-1 rounded-md transition-colors ${
+              memoryOpen ? "bg-white/20 text-white" : "text-white/60 hover:text-white hover:bg-white/10"
+            }`}
+            title="Manage what Coach Al remembers about you"
+          >
+            🧠 Memory
+          </button>
+          {messages.length > 0 && !memoryOpen && (
             <button
               onClick={handleClear}
               className={`text-[10px] mr-2 px-2 py-1 rounded-md transition-colors ${
@@ -253,7 +267,19 @@ export default function ChatWidget({ onRegisterOpen }: Props) {
           </button>
         </div>
 
+        {/* Memory panel — swaps in when the user taps 🧠 Memory in the
+            header. Same drawer space, different content. Keeping this
+            inside the chat drawer means the user can jot down "avoiding
+            lunges" without leaving Coach Al's context. */}
+        {memoryOpen && (
+          <div className="flex-1 overflow-y-auto px-3 py-3 min-h-0">
+            <CoachMemoryCard />
+          </div>
+        )}
+
         {/* Messages */}
+        {!memoryOpen && (
+        <>
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0">
           {hydrating && (
             <div className="flex items-center justify-center py-10">
@@ -373,6 +399,8 @@ export default function ChatWidget({ onRegisterOpen }: Props) {
             </svg>
           </button>
         </div>
+        </>
+        )}
       </div>
     </>
   );

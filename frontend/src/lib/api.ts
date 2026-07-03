@@ -1048,25 +1048,119 @@ export interface OuraTagsPayload {
 }
 
 export interface TagCorrelationItem {
-  tag_code:      string;
-  tag_label:     string;
-  tag_emoji:     string;
-  metric:        string;
-  metric_label:  string;
-  unit:          string;
-  positive_days: number;
-  negative_days: number;
-  positive_avg:  number;
-  negative_avg:  number;
-  delta:         number;
-  abs_pct:       number;
-  worse_on_tag:  boolean;
+  tag_code:         string;
+  tag_label:        string;
+  tag_emoji:        string;
+  metric:           string;
+  metric_label:     string;
+  unit:             string;
+  positive_days:    number;
+  negative_days:    number;
+  positive_avg:     number;
+  negative_avg:     number;
+  delta:            number;
+  abs_pct:          number;
+  worse_on_tag:     boolean;
+  /** Confidence tier from the shared correlation_confidence module.
+   *  low = 5-6 tag days, medium = 7-9, high = 10+ */
+  confidence:       "low" | "medium" | "high" | null;
+  confidence_label: string;
 }
 
 export interface TagCorrelations {
   window_days:    number;
   items:          TagCorrelationItem[];
   tag_day_counts: Record<string, number>;
+}
+
+// ── Doctor Handoff one-pager (Fable IMPROVE #1) ──────────────────────────
+
+export interface DoctorOnePagerSnapshot {
+  name:            string | null;
+  age:             number | null;
+  biological_sex:  string | null;
+  height:          string | null;
+  weight_lbs:      number | null;
+  report_date:     string;
+  window_days:     number;
+}
+
+export interface DoctorOnePagerVitals {
+  bp: {
+    systolic_now:    number | null;
+    diastolic_now:   number | null;
+    systolic_trend:  "↑" | "↓" | "→";
+    diastolic_trend: "↑" | "↓" | "→";
+    n_readings?:     number;
+  };
+  oura: {
+    rhr_now:      number | null;
+    hrv_now:      number | null;
+    sleep_h_now:  number | null;
+    rhr_trend:    "↑" | "↓" | "→";
+    hrv_trend:    "↑" | "↓" | "→";
+    sleep_trend:  "↑" | "↓" | "→";
+  };
+}
+
+export interface DoctorOnePagerStack {
+  medications: string[];
+  supplements: string[];
+  peptides:    string[];
+}
+
+export interface DoctorOnePagerSymptomLog {
+  date:      string;
+  symptoms:  string[];
+  severity?: string;
+  notes?:    string;
+}
+
+export interface DoctorOnePagerLab {
+  metric:  string;
+  value:   number | string;
+  unit:    string | null;
+  date:    string;
+}
+
+export interface DoctorOnePagerPayload {
+  snapshot:         DoctorOnePagerSnapshot;
+  vitals:           DoctorOnePagerVitals;
+  flags:            string[];
+  stack:            DoctorOnePagerStack;
+  patient_reported: {
+    recent_symptoms: DoctorOnePagerSymptomLog[];
+    memory_flags:    string[];
+  };
+  labs:             DoctorOnePagerLab[];
+}
+
+// ── Coach Al persistent memory ───────────────────────────────────────────
+
+export type CoachMemoryCategory =
+  | "injury" | "preference" | "goal" | "medical" | "lifestyle" | "other";
+
+export interface CoachMemoryItem {
+  id:         string;
+  category:   CoachMemoryCategory;
+  content:    string;
+  source:     "user" | "auto";
+  active:     boolean;
+  created_at: string;
+  updated_at: string;
+  display:    { label: string; emoji: string };
+}
+
+export interface CoachMemoryCategoryOption {
+  key:   CoachMemoryCategory;
+  label: string;
+  emoji: string;
+}
+
+export interface CoachMemoryPayload {
+  memories:         CoachMemoryItem[];
+  categories:       CoachMemoryCategoryOption[];
+  max_content_len:  number;
 }
 
 // ── Private Journal ──────────────────────────────────────────────────────
@@ -1371,6 +1465,12 @@ export interface SymptomCorrelationDelta {
   delta:                number;
   abs_delta_pct:        number;
   worse_on_symptom:     boolean | null;
+  /** Per-metric sample sizes + confidence tier (Fable IMPROVE #4).
+   *  Absent on old cached responses. */
+  positive_n?:          number;
+  negative_n?:          number;
+  confidence?:          "low" | "medium" | "high" | null;
+  confidence_label?:    string;
 }
 
 export interface SymptomCorrelation {
@@ -1381,6 +1481,7 @@ export interface SymptomCorrelation {
   deltas:                   SymptomCorrelationDelta[];
   narrative:                string | null;
   insufficient_data?:       boolean;
+  min_sample_size?:         number;
 }
 
 // ── Daily Insight ────────────────────────────────────────────────────────
@@ -1569,6 +1670,9 @@ export const api = {
   },
 
   // ── Doctor's Report (Overview tab — comprehensive) ───────────────────
+  doctorOnePager(opts: { refresh?: boolean } = {}): Promise<DoctorOnePagerPayload> {
+    return request(`/api/doctor-one-pager${opts.refresh ? "?refresh=1" : ""}`);
+  },
   doctorReport(opts: { days?: number; end?: string; refresh?: boolean } = {}): Promise<DoctorReportPayload> {
     const days = opts.days ?? 30;
     const qs = new URLSearchParams({ days: String(days) });
@@ -2124,6 +2228,26 @@ export const api = {
   },
   tagCorrelations(days = 60): Promise<TagCorrelations> {
     return request(`/api/insights/tag-correlations?days=${days}`);
+  },
+
+  // ── Coach Al memory ─────────────────────────────────────────────────────
+  coachMemory(): Promise<CoachMemoryPayload> {
+    return request("/api/coach/memory");
+  },
+  addCoachMemory(body: { category: CoachMemoryCategory; content: string }): Promise<CoachMemoryItem> {
+    return request("/api/coach/memory", {
+      method: "POST",
+      body:   JSON.stringify(body),
+    });
+  },
+  updateCoachMemory(id: string, patch: { category?: CoachMemoryCategory; content?: string }): Promise<CoachMemoryItem> {
+    return request(`/api/coach/memory/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body:   JSON.stringify(patch),
+    });
+  },
+  deleteCoachMemory(id: string): Promise<{ status: string }> {
+    return request(`/api/coach/memory/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
 
   // ── Private journal ─────────────────────────────────────────────────────

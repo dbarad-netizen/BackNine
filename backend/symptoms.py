@@ -298,7 +298,15 @@ def correlate(user_id: str, days: int = 30, symptom_id: Optional[str] = None) ->
     sym_dates = symptom_dates & all_dates
     free_dates = all_dates - symptom_dates
 
-    if len(sym_dates) < 3:
+    # Fable IMPROVE #4: enforce shared minimum sample size across all
+    # correlation engines. n=3 was where a skeptical user started
+    # calling us out for pattern-matching noise.
+    from correlation_confidence import (
+        MIN_SAMPLE_SIZE, MIN_NEG_SAMPLE_SIZE,
+        confidence_level, should_surface, confidence_label,
+    )
+
+    if len(sym_dates) < MIN_SAMPLE_SIZE:
         return {
             "symptom":              symptom_id,
             "symptom_label":        _symptom_label(symptom_id),
@@ -307,20 +315,27 @@ def correlate(user_id: str, days: int = 30, symptom_id: Optional[str] = None) ->
             "deltas":               [],
             "narrative":            None,
             "insufficient_data":    True,
+            "min_sample_size":      MIN_SAMPLE_SIZE,
         }
 
-    # Compute averages per metric
+    # Compute averages per metric — each metric's own sample sizes are
+    # also gated (a metric with only 4 non-null days shouldn't surface).
     deltas: list[dict] = []
     for key, meta in METRIC_LABELS.items():
         sym_vals = [metrics_window[d][key] for d in sym_dates  if key in metrics_window[d]]
         free_vals = [metrics_window[d][key] for d in free_dates if key in metrics_window[d]]
-        if len(sym_vals) < 2 or len(free_vals) < 2:
+        # Per-metric sample-size gate. Positive side must clear the
+        # shared MIN; negative side just needs enough to average.
+        if len(sym_vals) < MIN_SAMPLE_SIZE or len(free_vals) < MIN_NEG_SAMPLE_SIZE:
             continue
         sym_avg  = sum(sym_vals) / len(sym_vals)
         free_avg = sum(free_vals) / len(free_vals)
         delta    = sym_avg - free_avg
         denom    = max(abs(free_avg), 0.001)
         abs_delta_pct = round(abs(delta) / denom * 100, 1)
+        # Suppress deltas that are too small to matter, regardless of n.
+        if not should_surface(len(sym_vals), len(free_vals), abs_delta_pct):
+            continue
         # "worse_on_symptom" is true if the direction is bad given the metric
         if meta["direction"] == "higher_better":
             worse = delta < 0   # symptom days had LOWER values of a higher-is-better metric
@@ -328,6 +343,7 @@ def correlate(user_id: str, days: int = 30, symptom_id: Optional[str] = None) ->
             worse = delta > 0   # symptom days had HIGHER values of a lower-is-better metric
         else:
             worse = None
+        conf = confidence_level(len(sym_vals), len(free_vals))
         deltas.append({
             "metric":               key,
             "label":                meta["label"],
@@ -338,6 +354,13 @@ def correlate(user_id: str, days: int = 30, symptom_id: Optional[str] = None) ->
             "delta":                round(delta, 2),
             "abs_delta_pct":        abs_delta_pct,
             "worse_on_symptom":     worse,
+            # New: sample sizes + confidence tier for this specific metric,
+            # so a skeptical reader can see "based on X days · early signal"
+            # or "based on 14 days · high confidence" per row.
+            "positive_n":           len(sym_vals),
+            "negative_n":           len(free_vals),
+            "confidence":           conf,
+            "confidence_label":     confidence_label(conf, len(sym_vals)),
         })
 
     # Sort by magnitude of relative change; biggest deltas first
