@@ -50,6 +50,8 @@ export default function WeeklyRecapCard({ weekAnchor, onAsk }: Props = {}) {
   const [shared,   setShared]   = useState(false);
   const [error,    setError]    = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
+  const [extBusy,  setExtBusy]  = useState(false);
+  const [extToast, setExtToast] = useState<string | null>(null);
 
   useEffect(() => {
     api.weeklyRecap(weekAnchor)
@@ -77,6 +79,40 @@ export default function WeeklyRecapCard({ weekAnchor, onAsk }: Props = {}) {
       setError(e instanceof Error ? e.message : "Couldn't share — try again in a moment.");
     } finally {
       setSharing(false);
+    }
+  };
+
+  /**
+   * External share — Twitter / LinkedIn / iMessage. Uses navigator.share
+   * on devices that support it (iOS/Android open the native sheet), and
+   * falls back to clipboard copy elsewhere. The share_text already
+   * embeds the referral URL, so any signup that clicks through gets
+   * credited to the user via the standard referral loop.
+   */
+  const handleShareExternal = async () => {
+    if (extBusy) return;
+    setExtBusy(true); setError(null); setExtToast(null);
+    try {
+      const { share_text, share_url } = await api.shareWeeklyRecapExternal(weekAnchor);
+      const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
+      if (nav.share) {
+        try {
+          await nav.share({ text: share_text, url: share_url });
+          setExtToast("Shared.");
+        } catch {
+          // User canceled — no error state.
+        }
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(share_text);
+        setExtToast("Copied — paste into Twitter, LinkedIn, or a text.");
+      } else {
+        // Very old browser fallback: dump into a prompt.
+        window.prompt("Copy this to share:", share_text);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't prepare a share link — try again.");
+    } finally {
+      setExtBusy(false);
     }
   };
 
@@ -183,6 +219,16 @@ export default function WeeklyRecapCard({ weekAnchor, onAsk }: Props = {}) {
             ✓ Shared to your friends&apos; feed
           </span>
         )}
+        {/* External share — Twitter/LinkedIn/text. Referral URL is
+            embedded in the copy the backend generates. */}
+        <button
+          onClick={handleShareExternal}
+          disabled={extBusy}
+          className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-[#1B3829]/25 text-[#1B3829] hover:bg-[#1B3829]/5 transition-colors disabled:opacity-40"
+          title="Share to Twitter, LinkedIn, or a text — with your referral link"
+        >
+          {extBusy ? "Preparing…" : "🔗 Share externally"}
+        </button>
         {onAsk && (
           <button
             onClick={() => {
@@ -198,6 +244,9 @@ export default function WeeklyRecapCard({ weekAnchor, onAsk }: Props = {}) {
         )}
       </div>
       {error && <p className="text-[11px] text-rose-700 mt-2">{error}</p>}
+      {extToast && !error && (
+        <p className="text-[11px] text-emerald-800 mt-2">{extToast}</p>
+      )}
     </section>
   );
 }

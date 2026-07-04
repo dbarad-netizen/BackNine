@@ -1554,6 +1554,20 @@ export interface OcrLabMarker {
   raw_line:        string;
 }
 
+/** Onboarding welcome-card state. `show` is the composite: card is
+ *  visible only when at least one step is incomplete AND the user hasn't
+ *  dismissed. `completed` is a convenience for the celebration state. */
+export interface OnboardingStatus {
+  show:         boolean;
+  completed:    boolean;
+  dismissed_at: string | null;
+  steps: {
+    oura_connected: boolean;
+    goal_set:       boolean;
+    checked_in:     boolean;
+  };
+}
+
 export interface OcrLabResult {
   date:    string;
   markers: OcrLabMarker[];
@@ -1601,6 +1615,12 @@ export interface LabEntry {
   egfr?:         number;
   alt?:          number;
   ast?:          number;
+  ggt?:          number;
+  // Longevity-focused additions (matched to REFERENCE_RANGES on backend)
+  lp_a?:         number;
+  non_hdl?:      number;
+  homa_ir?:      number;
+  uric_acid?:    number;
   notes?:        string;
 }
 
@@ -1946,6 +1966,14 @@ export const api = {
       body:   JSON.stringify(week ? { week } : {}),
     });
   },
+  /** External share text + referral URL for Twitter/LinkedIn/text. Backend
+   *  formats the copy and embeds the user's stable referral code. */
+  shareWeeklyRecapExternal(week?: string): Promise<{ share_text: string; share_url: string; referral_code: string }> {
+    return request("/api/community/weekly-recap/share-external", {
+      method: "POST",
+      body:   JSON.stringify(week ? { week } : {}),
+    });
+  },
   logWorkout(w: Omit<Workout, "id" | "logged_at" | "muscle_groups" | "total_volume_lbs">): Promise<Workout> {
     return request("/api/training/workouts", { method: "POST", body: JSON.stringify(w) });
   },
@@ -2011,6 +2039,14 @@ export const api = {
     const form = new FormData();
     form.append("file", file);
     return request("/api/labs/ocr", { method: "POST", body: form });
+  },
+
+  // ── Onboarding ────────────────────────────────────────────────────────────
+  onboardingStatus(): Promise<OnboardingStatus> {
+    return request("/api/onboarding/status");
+  },
+  dismissOnboarding(): Promise<{ status: string }> {
+    return request("/api/onboarding/dismiss", { method: "POST" });
   },
 
   // ── Challenges ──────────────────────────────────────────────────────────────

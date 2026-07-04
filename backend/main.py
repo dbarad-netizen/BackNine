@@ -49,6 +49,7 @@ import oura_tags as otags
 import journal as jrnl
 import coach_memory as cmem
 import data_freshness as freshness
+import onboarding as onb
 import doctor_one_pager as dop
 import friends_glance as fr_glance
 import coach_al_group_voice as cag
@@ -1241,7 +1242,7 @@ async def _refresh_oura_cache_bg(user_id: str, access_token: str, days: int) -> 
 
 
 @app.get("/api/dashboard")
-async def get_dashboard(request: Request, background_tasks: BackgroundTasks, days: int = 120):
+async def get_dashboard(request: Request, background_tasks: BackgroundTasks, days: int = 365):
     session = _require_session(request)
     user_id = session["user_id"]
 
@@ -2971,6 +2972,82 @@ async def share_weekly_recap(request: Request):
     return {"event": event, "recap": recap}
 
 
+@app.post("/api/community/weekly-recap/share-external")
+async def share_weekly_recap_external(request: Request):
+    """Generate a Twitter/LinkedIn-ready copy string plus a referral URL
+    for the user to paste into an external channel. Unlike the in-app
+    share above, this one is for OUTSIDE the app — the referral loop.
+
+    Returns:
+      { share_text: str, share_url: str, referral_code: str }
+
+    We keep the copy short enough for Twitter (< 280 chars including
+    URL) and warm — "this is what I did this week, come do it with me"
+    is a stronger hook than raw stats. Referral URL points at the app
+    root with ?ref=<code>; the code is the same stable one used
+    everywhere else in the referral loop, so the ledger works
+    transparently.
+    """
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    week  = (body.get("week") or "").strip() or None
+    recap = wrecap.build_payload(user_id, week)
+    if not recap.get("has_content"):
+        raise HTTPException(status_code=400, detail="Nothing to share yet — log a workout, meal, or sleep night this week first.")
+
+    # Grab or mint the user's referral code — this is what stamps any
+    # signup that comes from the shared URL.
+    try:
+        referral = frd.get_or_create_referral(user_id, _display_name_for(user_id))
+        code = referral.get("code") or ""
+    except Exception:
+        code = ""
+
+    # Short share text — pulls one highlight, keeps it under 200 chars
+    # so a URL still fits within Twitter's 280-char cap.
+    highlight = (recap.get("highlight") or recap.get("headline") or "").strip()
+    if highlight and len(highlight) > 160:
+        highlight = highlight[:157].rstrip() + "…"
+
+    t = recap.get("training", {}) or {}
+    n = recap.get("nutrition", {}) or {}
+    s = recap.get("sleep", {})    or {}
+
+    bullets = []
+    if t.get("workouts"):
+        bullets.append(f"{t['workouts']} sessions")
+    if n.get("days_logged"):
+        bullets.append(f"{n['days_logged']} days dialed in on nutrition")
+    if s.get("avg_hours"):
+        try:
+            bullets.append(f"{float(s['avg_hours']):.1f}h avg sleep")
+        except Exception:
+            pass
+    line = " · ".join(bullets[:3])
+
+    base_url = os.getenv("FRONTEND_URL", "https://back-nine-d28t.vercel.app").rstrip("/")
+    share_url = f"{base_url}?ref={code}" if code else base_url
+
+    if highlight and line:
+        share_text = f"BackNine week wrap: {highlight}\n{line}\nCome do it with me → {share_url}"
+    elif highlight:
+        share_text = f"BackNine week wrap: {highlight}\nCome do it with me → {share_url}"
+    elif line:
+        share_text = f"BackNine this week: {line}\nCome do it with me → {share_url}"
+    else:
+        share_text = f"Another good week on BackNine. Come do it with me → {share_url}"
+
+    return {
+        "share_text":    share_text,
+        "share_url":     share_url,
+        "referral_code": code,
+    }
+
+
 @app.get("/api/sleep/tonight")
 async def get_tonight_sleep(request: Request, refresh: bool = False):
     """Tonight's Sleep prescription — recommended bedtime/lights-out window,
@@ -3345,6 +3422,24 @@ async def import_lab_pdf(request: Request, file: UploadFile = File(...)):
         "extracted": extracted,   # {marker_key: float}
         "count":     len(extracted),
     }
+
+
+@app.get("/api/onboarding/status")
+def get_onboarding_status(request: Request):
+    """Derived onboarding state — steps + dismissed_at + show flag.
+    Cheap to poll on every dashboard load."""
+    session = _require_session(request)
+    return onb.status(session["user_id"])
+
+
+@app.post("/api/onboarding/dismiss")
+def post_onboarding_dismiss(request: Request):
+    """Skip the welcome card permanently (stamps dismissed_at now)."""
+    session = _require_session(request)
+    ok = onb.dismiss(session["user_id"])
+    if not ok:
+        raise HTTPException(status_code=500, detail="Could not dismiss onboarding.")
+    return {"status": "dismissed"}
 
 
 @app.post("/api/labs/ocr")

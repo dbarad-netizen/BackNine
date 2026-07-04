@@ -92,6 +92,14 @@ REFERENCE_RANGES: Dict[str, dict] = {
     "psa":                  {"unit": "ng/mL",  "low": 0.0,  "high": 4.0,  "optimal_low": 0.0,  "optimal_high": 2.0,  "label": "PSA",                    "group": "Other"},
     "apolipoprotein_b":     {"unit": "mg/dL",  "low": 0,    "high": 90,   "optimal_low": 0,    "optimal_high": 80,   "label": "Apolipoprotein B",       "group": "Other"},
     "vldl":                 {"unit": "mg/dL",  "low": 5,    "high": 40,   "optimal_low": 5,    "optimal_high": 20,   "label": "VLDL Cholesterol",       "group": "Other"},
+    # High-signal longevity markers men-50+ actually track. Ranges are
+    # standard clinical + tighter optimal targets from longevity
+    # literature (Attia, functional-medicine consensus).
+    "lp_a":                 {"unit": "nmol/L", "low": 0,    "high": 75,   "optimal_low": 0,    "optimal_high": 50,   "label": "Lipoprotein(a)",         "group": "Lipids"},
+    "non_hdl":              {"unit": "mg/dL",  "low": 0,    "high": 130,  "optimal_low": 0,    "optimal_high": 100,  "label": "Non-HDL Cholesterol",    "group": "Lipids"},
+    "homa_ir":              {"unit": "",       "low": 0.5,  "high": 2.0,  "optimal_low": 0.5,  "optimal_high": 1.0,  "label": "HOMA-IR",                "group": "Metabolic"},
+    "uric_acid":            {"unit": "mg/dL",  "low": 3.5,  "high": 7.2,  "optimal_low": 4.0,  "optimal_high": 5.5,  "label": "Uric Acid",              "group": "Metabolic"},
+    "ggt":                  {"unit": "U/L",    "low": 0,    "high": 60,   "optimal_low": 0,    "optimal_high": 25,   "label": "GGT",                    "group": "Kidney/Liver"},
 }
 
 LAB_GROUPS = ["Metabolic", "Lipids", "Thyroid", "Hormones", "Inflammation", "Blood", "Vitamins", "Kidney/Liver", "Electrolytes", "CBC", "Iron", "Other"]
@@ -376,6 +384,25 @@ def parse_pdf(file_bytes: bytes) -> Tuple[Optional[str], Dict[str, float]]:
         "vldl":               [
             "vldl", "vldl cholesterol", "vldl chol",
             "vldl cholesterol cal", "very low density lipoprotein",
+        ],
+        "lp_a":               [
+            "lipoprotein (a)", "lipoprotein(a)", "lp(a)", "lp (a)",
+            "lp-a", "lipoprotein a",
+        ],
+        "non_hdl":            [
+            "non-hdl cholesterol", "non hdl cholesterol", "non-hdl",
+            "non hdl", "non-hdl chol", "cholesterol, non-hdl",
+        ],
+        "homa_ir":            [
+            "homa-ir", "homa ir", "homa index", "insulin resistance (homa-ir)",
+            "homeostatic model assessment", "homa2-ir",
+        ],
+        "uric_acid":          [
+            "uric acid", "uric acid, serum", "urate", "serum uric acid",
+        ],
+        "ggt":                [
+            "ggt", "gamma-glutamyl transferase", "gamma glutamyl transferase",
+            "gamma gt", "ggtp", "gamma-gt",
         ],
     }
 

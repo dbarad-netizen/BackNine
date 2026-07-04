@@ -28,6 +28,7 @@ import StackEfficacyCard from "@/components/StackEfficacyCard";
 import LongevityMetricModal from "@/components/LongevityMetricModal";
 import AppleHealthCard from "@/components/AppleHealthCard";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
+import OnboardingCard from "@/components/OnboardingCard";
 import BloodPressureCard from "@/components/BloodPressureCard";
 import DoctorReportModal from "@/components/DoctorReportModal";
 import DayMealsDrawer from "@/components/DayMealsDrawer";
@@ -1520,6 +1521,12 @@ export default function DashboardPage() {
             {!data.freshness?.oura?.is_stale && data.freshness?.apple_health?.is_stale && (
               <DataFreshnessBadge freshness={data.freshness.apple_health} variant="block" />
             )}
+
+            {/* Cold-start onboarding welcome — self-hides for anyone
+                who's completed the 3 steps or tapped Skip. Sits at the
+                TOP of the Scorecard so a brand-new user always sees
+                "Do this first" before any empty-state cards. */}
+            <OnboardingCard />
 
             {/* Apple Health card — for users without Oura who are syncing AH.
                 Surfaces the metrics AH actually provides (steps, sleep duration,
