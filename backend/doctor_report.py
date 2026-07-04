@@ -180,11 +180,17 @@ def _apple_health_section(user_id: str, days: int) -> Optional[dict]:
 
 
 def _weight_section(user_id: str, start: str, end: str) -> dict:
-    """Weight entries inside the window + simple delta."""
+    """Weight entries inside the window + simple delta. Applies the
+    shared units policy: dedupe same-date rows so the report can't
+    show two contradictory body-fat values for the same day (Fable
+    caught this in the re-eval), and normalize kg→lbs at the boundary."""
+    from report_units import normalize_weight_lbs, dedupe_weight_entries
     try:
         entries = nut.get_weight_entries(user_id) or []
     except Exception:
         entries = []
+    # Dedupe first so downstream code never sees the double-weigh-in bug.
+    entries = dedupe_weight_entries(entries)
     # Entries are typically (date, weight_lbs, body_fat_pct, …). Be defensive.
     in_window = []
     for e in entries:
@@ -192,7 +198,7 @@ def _weight_section(user_id: str, start: str, end: str) -> dict:
         if d and start <= d <= end:
             in_window.append({
                 "date":         d,
-                "weight_lbs":   e.get("weight_lbs"),
+                "weight_lbs":   normalize_weight_lbs(e),
                 "body_fat_pct": e.get("body_fat_pct"),
                 "notes":        e.get("notes"),
             })

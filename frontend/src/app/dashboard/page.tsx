@@ -27,6 +27,7 @@ import StackEfficacyCard from "@/components/StackEfficacyCard";
 // The Annual Physical report reads from that canonical source.
 import LongevityMetricModal from "@/components/LongevityMetricModal";
 import AppleHealthCard from "@/components/AppleHealthCard";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 import BloodPressureCard from "@/components/BloodPressureCard";
 import DoctorReportModal from "@/components/DoctorReportModal";
 import DayMealsDrawer from "@/components/DayMealsDrawer";
@@ -1293,19 +1294,25 @@ export default function DashboardPage() {
           <div className="hidden sm:block w-px h-5 bg-gray-200 shrink-0 mr-1" />
           {/* Mobile spacer — pushes the right cluster over since tabs are hidden */}
           <div className="flex-1 sm:hidden" />
-          {/* Tabs (desktop only — mobile uses the ☰ menu) */}
+          {/* Tabs (desktop only — mobile uses the ☰ menu)
+              Fable Phase 3 fix: tabs used to visually clip "Clubhouse" to
+              "Clubhous" at tablet-ish widths. We now:
+                • tighten padding + gap at sm/md so all six tabs fit,
+                • drop the icons at sm–md widths (label is the signal
+                  users read; icons return at lg+ for scanning),
+                • and let the label breathe with min-w-0 + full text at lg. */}
           <div className="hidden sm:flex overflow-x-auto scrollbar-none flex-1">
             {NAV_ITEMS.map(({ id, label, icon }) => (
               <button
                 key={id}
                 onClick={() => setSection(id)}
-                className={`flex items-center gap-1.5 px-3 py-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${
+                className={`flex items-center gap-0 lg:gap-1.5 px-2 md:px-2.5 lg:px-3 py-3 text-[13px] lg:text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${
                   section === id
                     ? "text-[#1B3829] border-[#1B3829]"
                     : "text-gray-600 border-transparent hover:text-gray-900 hover:border-gray-300"
                 }`}
               >
-                <span className="text-base leading-none">{icon}</span>
+                <span className="hidden lg:inline text-base leading-none">{icon}</span>
                 {label}
               </button>
             ))}
@@ -1348,10 +1355,19 @@ export default function DashboardPage() {
               👤
             </button>
             <button
-              onClick={() => api.logout().then(() => (window.location.href = "/"))}
+              onClick={async () => {
+                // Full sign out — clears our JWT, Supabase Auth session,
+                // sb-* localStorage, dashboard cache, then redirects.
+                // Old "Disconnect" only cleared our JWT and left the
+                // Supabase session intact, which is how users ended up
+                // stuck in prior accounts on the same browser.
+                await api.signOutFully();
+                window.location.href = "/";
+              }}
               className="hidden sm:block text-xs text-gray-600 hover:text-gray-700 transition-colors"
+              title="Sign out of BackNine"
             >
-              Disconnect
+              Sign out
             </button>
             {/* Mobile menu button */}
             <button
@@ -1427,10 +1443,14 @@ export default function DashboardPage() {
                 <span className="text-lg leading-none">👤</span>Profile
               </button>
               <button
-                onClick={() => api.logout().then(() => (window.location.href = "/"))}
+                onClick={async () => {
+                  setNavOpen(false);
+                  await api.signOutFully();
+                  window.location.href = "/";
+                }}
                 className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 text-left"
               >
-                <span className="text-lg leading-none">🚪</span>Log out
+                <span className="text-lg leading-none">🚪</span>Sign out
               </button>
             </nav>
           </div>
@@ -1489,6 +1509,18 @@ export default function DashboardPage() {
 
           return (
           <div className="space-y-6">
+            {/* Stale-data warning — surfaces at the top of the Scorecard
+                when Oura hasn't synced in >48h. Fable's re-eval flagged
+                that dashboard tiles were presenting 9-day-old data as
+                "today" with no indication. This block-variant makes it
+                impossible to miss. */}
+            {data.freshness?.oura?.is_stale && (
+              <DataFreshnessBadge freshness={data.freshness.oura} variant="block" />
+            )}
+            {!data.freshness?.oura?.is_stale && data.freshness?.apple_health?.is_stale && (
+              <DataFreshnessBadge freshness={data.freshness.apple_health} variant="block" />
+            )}
+
             {/* Apple Health card — for users without Oura who are syncing AH.
                 Surfaces the metrics AH actually provides (steps, sleep duration,
                 HRV, RHR, weight, body fat, VO2 max) instead of leaving the

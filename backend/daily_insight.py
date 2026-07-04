@@ -279,10 +279,20 @@ def _parse_json_safe(raw: str) -> Optional[dict]:
     return None
 
 
-def _generate_insight(window: dict, profile: dict, prior_feedback: list[dict]) -> Optional[dict]:
+def _generate_insight(
+    window: dict,
+    profile: dict,
+    prior_feedback: list[dict],
+    muted_categories: Optional[list[str]] = None,
+) -> Optional[dict]:
     """Run Claude Haiku over the data window. Returns dict with headline /
     pattern / action / evidence / confidence / category, or None on
-    failure."""
+    failure.
+
+    `muted_categories` (Fable Phase 3 fix) is a list of category strings we
+    do NOT want Claude to pick this time — the user has seen the same
+    category too many times in a row and further repeats read as nagging.
+    We tell Claude to explicitly steer clear."""
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         log.warning("daily_insight: ANTHROPIC_API_KEY not set; skipping")
@@ -321,9 +331,19 @@ def _generate_insight(window: dict, profile: dict, prior_feedback: list[dict]) -
                 f"disliked categories: {down_cats[:5] or 'none'}.\n"
             )
 
+    mute_hint = ""
+    if muted_categories:
+        mute_hint = (
+            "Categories to AVOID this time (user has seen the same theme "
+            f"repeatedly and needs variety): {sorted(set(muted_categories))}. "
+            "Pick a different lens even if the pattern in a muted category "
+            "is strong — pick the runner-up.\n"
+        )
+
     user_msg = (
         patient_hint
         + feedback_hint
+        + mute_hint
         + "Cross-domain 14-day data (JSON):\n"
         + _truncate_for_prompt(window)
         + "\n\nFind ONE pattern + ONE action. Output the JSON now."
@@ -393,9 +413,31 @@ def get_or_generate(user_id: str, profile: dict, today_iso: str) -> Optional[dic
     except Exception:
         pass
 
+    # Fable Phase 3 fix: cap category repeats. If Claude has picked the
+    # same category ≥3 times in the last 30 days, mute it for the next
+    # generation so the feed doesn't read as three variations of the same
+    # nag (the "not logging enough" pattern Fable saw all three lifetime
+    # insights land on).
+    muted_categories: list[str] = []
+    try:
+        cutoff_30 = (_date.today() - timedelta(days=30)).isoformat()
+        recent = (sb.table("daily_insights")
+                    .select("category")
+                    .eq("user_id", user_id)
+                    .gte("date", cutoff_30)
+                    .execute())
+        counts: dict[str, int] = {}
+        for r in (recent.data or []):
+            cat = (r.get("category") or "").strip()
+            if cat:
+                counts[cat] = counts.get(cat, 0) + 1
+        muted_categories = [c for c, n in counts.items() if n >= 3]
+    except Exception:
+        pass
+
     # Build window + generate
     window = _assemble_window(user_id, days=14)
-    insight = _generate_insight(window, profile, prior_feedback)
+    insight = _generate_insight(window, profile, prior_feedback, muted_categories)
     if not insight:
         return None
 

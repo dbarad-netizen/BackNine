@@ -108,6 +108,23 @@ Voice and constraints:
 - Don't start with 'Looking at' or 'This report' — get to the substance.
 - If the payload has very little data, say so honestly in 1 sentence.
 
+CONSISTENCY WITH THE VISIBLE REPORT — critical (Fable IMPROVE #1 note):
+- The narrative sits at the TOP of a report that renders the same payload
+  visually below. Doctors will read your paragraph, then scan the tables
+  right after it. Contradicting the tables destroys credibility. Rules:
+  1. Do NOT say "no sleep data" or "no sleep quality metrics" if the
+     payload has ANY of: sleep hours, efficiency, deep, REM, or a
+     sleep-fragmentation section. If those exist, describe them.
+  2. Do NOT say "no BP data" if the payload's `bp` section has readings.
+  3. Do NOT say "no weight data" if a weight table exists in the payload.
+  4. Units in the paragraph MUST match units elsewhere in the report:
+     weight in lbs (never kg), height in ft/in (never cm), steps as
+     whole integers (never decimals like 10485.2), BP in mmHg. If the
+     payload has a `weight_lbs` field, use lbs.
+  5. If the payload's `data_availability` field says "minimal", it is OK
+     to lead with "Minimal data available" — but ONLY when that field
+     actually says minimal. Do not preemptively cop out.
+
 Output ONLY a JSON object with the shape: {"text": "your paragraph here"}
 No code fences, no explanation, just the JSON.
 """

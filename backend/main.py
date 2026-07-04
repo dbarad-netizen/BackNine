@@ -48,6 +48,7 @@ import weekly_recap as wrecap
 import oura_tags as otags
 import journal as jrnl
 import coach_memory as cmem
+import data_freshness as freshness
 import doctor_one_pager as dop
 import friends_glance as fr_glance
 import coach_al_group_voice as cag
@@ -1723,6 +1724,19 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
     all_days = sorted(set(list(rm) + list(slm) + list(am)))
     data_through = all_days[-1] if all_days else today_str
 
+    # Freshness metadata — Fable IMPROVE #2. Frontend tiles use this
+    # to display "as of X ago" when data is stale, instead of pretending
+    # 9-day-old readings are "today's."
+    try:
+        oura_age = freshness.oura_data_age_hours(user_id)
+        oura_sync = freshness.oura_last_sync_iso(user_id)
+    except Exception:
+        oura_age, oura_sync = None, None
+    try:
+        ah_age = freshness.apple_health_data_age_hours(user_id)
+    except Exception:
+        ah_age = None
+
     payload = {
         "generated":    datetime.now(timezone.utc).isoformat(),
         "data_through": data_through,
@@ -1745,6 +1759,23 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
         "trend":    trend,
         "coaches":  coaches,
         "coaching": coaching,
+        # New — single source of truth for "how old is this data" that
+        # every tile / card / AI surface reads from.
+        "freshness": {
+            "oura": {
+                "data_age_hours":  oura_age,
+                "last_sync":       oura_sync,
+                "is_stale":        (oura_age is not None and oura_age > freshness.STALE_THRESHOLD_HOURS),
+                "is_fresh":        (oura_age is not None and oura_age <= freshness.FRESH_THRESHOLD_HOURS),
+            },
+            "apple_health": {
+                "data_age_hours":  ah_age,
+                "is_stale":        (ah_age is not None and ah_age > freshness.STALE_THRESHOLD_HOURS),
+                "is_fresh":        (ah_age is not None and ah_age <= freshness.FRESH_THRESHOLD_HOURS),
+            },
+            "stale_threshold_hours": freshness.STALE_THRESHOLD_HOURS,
+            "fresh_threshold_hours": freshness.FRESH_THRESHOLD_HOURS,
+        },
     }
 
     # If tokens were just refreshed, write the new JWT cookie in the response
@@ -4303,6 +4334,15 @@ async def health_chat(request: Request):
     except Exception:
         health_context["coach_memory"] = []
 
+    # Data-freshness advisory — the piece the briefing was missing when
+    # it hallucinated "should show up in an hour or two" 9 days after
+    # the last sync. Coach Al now sees explicit staleness state and has
+    # a hard rule in his system prompt about acknowledging + adapting.
+    try:
+        health_context["freshness_advisory"] = freshness.build_freshness_advisory(user_id)
+    except Exception:
+        health_context["freshness_advisory"] = None
+
     try:
         reply = ch.chat(message, health_context, profile, history)
     except RuntimeError as e:
@@ -4552,6 +4592,15 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
         },
         "coaching": {"short_term": short_text},
     }
+
+    # Data-freshness advisory — critical for the briefing since Fable's
+    # re-eval caught this surface hallucinating "should show up in an
+    # hour or two" nine days after the last sync. The prompt now has a
+    # hard rule to acknowledge stale data instead of inventing recency.
+    try:
+        health_context["freshness_advisory"] = freshness.build_freshness_advisory(user_id)
+    except Exception:
+        health_context["freshness_advisory"] = None
 
     # No-data short-circuit: if there's nothing meaningful in today's metrics
     # OR the 7-day context, skip the Claude call and return a friendly static

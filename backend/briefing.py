@@ -45,8 +45,23 @@ def _build_system_prompt(
         "• Do not use lists, bullets, or markdown. Plain prose only.\n"
         "• Do not greet with 'Good morning' — the UI already does that.\n"
         "• Do not sign off as 'Coach Al' — the UI shows the avatar.\n"
-        "• If data is missing, say so briefly and pivot to what IS known. Never invent numbers."
+        "• If data is missing, say so briefly and pivot to what IS known. Never invent numbers.\n"
+        "• DATA FRESHNESS: If the freshness advisory below says data is STALE\n"
+        "  (>48h old), your briefing MUST acknowledge it explicitly and pivot to a\n"
+        "  reconnect prompt. Do NOT say 'last night' or 'this morning' or invent\n"
+        "  recency. Concrete example — instead of 'your sleep score came in solid\n"
+        "  last night, though your detailed metrics haven't synced yet' when the\n"
+        "  ring hasn't been worn in 9 days, say 'It's been about a week since your\n"
+        "  ring last synced — pop it on tonight and I'll be able to give you a real\n"
+        "  read tomorrow. In the meantime, here's what to focus on today...'"
     )
+
+    # Data-freshness advisory — same block chat.py uses. Placed BEFORE the
+    # actual data sections so the model sees staleness state first and
+    # can adapt every downstream sentence.
+    freshness_advisory = health_context.get("freshness_advisory")
+    if freshness_advisory:
+        parts.append(freshness_advisory)
 
     # User Profile (keep brief — the model already has lots to work with)
     name = profile.get("name", "")

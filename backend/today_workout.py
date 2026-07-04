@@ -145,6 +145,43 @@ BackNine. Each morning, prescribe ONE workout for the user based on
 their goal, recent training history, today's readiness, and the
 strength program library they have access to.
 
+## COLD-START SAFETY DIRECTIVE — READ FIRST (Fable ADD #6)
+
+This is non-negotiable. Before prescribing anything, check the user's
+training history in the context:
+
+  • If `strength_sessions_30d` is 0 AND `recent_workouts` is empty
+    (unknown fitness level, no history to build on), you MUST prescribe
+    a CONSERVATIVE FIRST SESSION regardless of what the user's stated
+    goals suggest. NEVER prescribe a barbell compound lift as the very
+    first session for someone with no history — that is a safety and
+    liability exposure. A brand-new 56-year-old will read "Barbell
+    Deadlift 4×4-6" and either hurt themselves or lose trust in the app.
+
+  • Conservative first-session template:
+      - Bodyweight or dumbbell only
+      - Movements: goblet squat (light dumbbell), incline push-up,
+        bird-dog, glute bridge, dumbbell row (light)
+      - Sets/reps: 2×8-12, moderate effort, focus on form
+      - session_name: "Getting Started — Foundation Session"
+      - intensity: "easy"
+      - duration_min: 25-30
+      - rationale: MUST include a sentence acknowledging this is their
+        first logged session and inviting them to log completion so
+        future prescriptions can build on real capability data.
+
+  • If `patient.age` is 50+ AND history is thin (< 3 sessions in 30d),
+    default to MODERATE intensity even for known movements, and prefer
+    dumbbell / machine over barbell for compound lifts.
+
+  • Never prescribe: barbell deadlift, barbell back squat, or barbell
+    bench press as the first session for any user — regardless of age
+    — when history is empty. Bodyweight and dumbbell variants only for
+    session one.
+
+Now the rest of your operating rules:
+
+
 Voice:
 - Specific. Name the exercises. Suggest sets/reps where helpful.
 - Adaptive. If readiness is LOW (<70) or sleep was POOR (<6h or eff <80%),
@@ -303,11 +340,34 @@ def _generate(user_id: str, profile: dict, today_iso: str) -> Optional[dict]:
 
 def _fallback_prescription(workouts: list[dict]) -> dict:
     """When Claude isn't available, fall back to a deterministic pick:
-    if user trained today/yesterday, suggest a Zone 2 / mobility day;
-    otherwise pick the first Full-Body session as a safe default."""
+    if the user has no history AT ALL, prescribe a conservative
+    foundation session (Fable ADD #6 safety); if they trained recently,
+    suggest a Zone 2 / mobility day; otherwise pick the first Full-Body
+    session as a safe default."""
     today = _date.today().isoformat()
     yesterday = (_date.today() - timedelta(days=1)).isoformat()
     trained_recently = any((w.get("date") or "") in (today, yesterday) for w in workouts[:5])
+
+    # Cold-start guardrail — no logged workouts means no capability data.
+    # Never prescribe compound barbell lifts to someone we know nothing
+    # about. A conservative foundation session builds baseline data we
+    # can prescribe from tomorrow.
+    if not workouts:
+        return {
+            "session_name": "Getting Started — Foundation Session",
+            "session_type": "strength",
+            "intensity":    "easy",
+            "duration_min": 25,
+            "exercises":    [
+                {"name": "Goblet Squat (light dumbbell)", "sets": 2, "reps": "8-12"},
+                {"name": "Incline Push-Up",               "sets": 2, "reps": "8-12"},
+                {"name": "Dumbbell Row (light)",          "sets": 2, "reps": "8-12"},
+                {"name": "Glute Bridge",                  "sets": 2, "reps": "10-15"},
+                {"name": "Bird-Dog",                      "sets": 2, "reps": "8/side"},
+            ],
+            "rationale":    "First session — foundation movements only. Focus on form, log completion, and tomorrow's prescription will build on what you actually did.",
+            "source":       "template_fallback",
+        }
 
     if trained_recently:
         return {

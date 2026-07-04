@@ -333,6 +333,20 @@ export interface AppleHealthBlock {
   last_sync_at?: string;
 }
 
+export interface DataFreshnessSource {
+  data_age_hours:  number | null;
+  last_sync?:      string | null;
+  is_stale:        boolean;
+  is_fresh:        boolean;
+}
+
+export interface DashboardFreshness {
+  oura:                    DataFreshnessSource;
+  apple_health:            DataFreshnessSource;
+  stale_threshold_hours:   number;
+  fresh_threshold_hours:   number;
+}
+
 export interface DashboardData {
   generated:            string;
   data_through:         string;
@@ -348,6 +362,10 @@ export interface DashboardData {
   readiness_forecast:   ReadinessForecast;
   prediction_accuracy?: PredictionAccuracy;
   longevity_score?:     LongevityScore;
+  /** Data freshness state — Fable IMPROVE #2. Frontend tiles read from
+   *  this to render 'as of X ago' when stale instead of pretending
+   *  9-day-old data is today's. */
+  freshness?:           DashboardFreshness;
 }
 
 export interface Wearable {
@@ -1599,6 +1617,40 @@ export const api = {
   wearables():          Promise<{ connected: Wearable[]; available: Wearable[] }> { return request("/api/wearables"); },
   disconnect(p: string): Promise<void> { return request(`/api/wearables/${p}`, { method: "DELETE" }); },
   logout():             Promise<void> { clearToken(); return request("/auth/logout", { method: "POST" }); },
+  /**
+   * Full sign-out: clears BackNine JWT + Supabase Auth session + every
+   * sb-* localStorage key + dashboard cache, then hits the backend
+   * /auth/logout endpoint. This is what the "Sign out" button in the
+   * account menu should call, NOT `logout()` alone — plain logout()
+   * leaves the Supabase session intact, which is how a user got stuck
+   * in a previous account on the same browser.
+   *
+   * Explicitly returns nothing; the caller redirects to root.
+   */
+  async signOutFully(): Promise<void> {
+    // 1. Clear our own JWT + dashboard cache
+    clearToken();
+    // 2. Sign out of Supabase Auth. Import lazily so this file stays
+    // free of a supabase-js dep at module top.
+    if (typeof window !== "undefined") {
+      try {
+        const { supabase } = await import("@/lib/supabase");
+        await supabase.auth.signOut();
+      } catch { /* best-effort — proceed with cleanup */ }
+      // 3. Belt-and-suspenders: nuke any sb-* localStorage keys Supabase
+      // may have left behind (some flows leave stale rows).
+      try {
+        Object.keys(localStorage)
+          .filter(k => k.startsWith("sb-") || k === "bn_token" || k === "bn_dashboard_cache")
+          .forEach(k => localStorage.removeItem(k));
+      } catch { /* noop */ }
+    }
+    // 4. Fire the backend logout endpoint. Ignore failure — the browser
+    // state is already clean.
+    try {
+      await request("/auth/logout", { method: "POST" });
+    } catch { /* silent */ }
+  },
   connectOura(userId?: string): void {
     const url = userId
       ? `https://backnine-hu60.onrender.com/auth/oura?link_user_id=${encodeURIComponent(userId)}`

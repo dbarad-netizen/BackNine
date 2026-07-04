@@ -264,6 +264,26 @@ def build_payload(
     remaining_kcal    = max(0,   target_kcal    - consumed_kcal)
     suggestion        = _next_meal_hint(remaining_protein, remaining_kcal)
 
+    # Fable Phase 3 fix: at day's end with nothing logged, an aggressive
+    # "eat 150g protein and 2000 kcal in one sitting" prescription is
+    # nonsense. Suppress the prescription and instead offer an honest
+    # nudge to log or write the day off. This applies our own "hide or
+    # be prescriptive" principle to Next Plate the same way we applied
+    # it to Tonight's Sleep.
+    if day_progress >= 0.90 and consumed_kcal == 0:
+        suggestion = (
+            "Nothing logged today. Want to just log dinner and call it? "
+            "We'll pick tomorrow back up with a fresh plate."
+        )
+    elif day_progress >= 0.90 and remaining_kcal > 800:
+        # 90% of the day gone with a huge deficit remaining is not a
+        # prescriptive moment either — the ship has sailed on hitting
+        # target. Reframe as tomorrow-focused.
+        suggestion = (
+            "Day's mostly done and you're well under target. Light dinner "
+            "and tomorrow's the reset — no need to force-eat now."
+        )
+
     return {
         "date":             end_date.isoformat(),
         "pace":             pace,                 # {kind, message}

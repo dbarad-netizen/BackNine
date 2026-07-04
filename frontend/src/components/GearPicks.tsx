@@ -197,7 +197,12 @@ export default function GearPicks({ signals, onJump, context = "scorecard" }: Pr
   // CONTEXT_CATEGORIES above — edit there if you want to broaden a tab.
   const allowed = CONTEXT_CATEGORIES[context];
   const all     = computeRecommendations(signals)
-    .filter(r => !allowed || allowed.has(ITEM_CATEGORY[r.item.id] || ""));
+    .filter(r => !allowed || allowed.has(ITEM_CATEGORY[r.item.id] || ""))
+    // Fable Phase 3 fix: data-justify or don't render. If we can't tie a
+    // pick to a signal in the user's data, it's an ad, not a
+    // recommendation. Hide non-personalized cards from the Scorecard.
+    // Users can still discover them via "Browse the full shop →".
+    .filter(r => r.personalized);
   const visible = all.filter(r => !dismissed.has(r.item.id));
   const picks   = visible.slice(0, visibleCount);
   if (picks.length === 0) return null;
@@ -274,6 +279,15 @@ export default function GearPicks({ signals, onJump, context = "scorecard" }: Pr
       >
         {moreAvailable ? "Give me more suggestions ↓" : "Browse the full shop →"}
       </button>
+
+      {/* Fable Phase 3 fix: FTC disclosure at point of recommendation.
+          These are affiliate links — the reader should know before they
+          click, not five taps deeper in the footer. */}
+      <p className="mt-2 text-[10px] text-gray-500 leading-snug">
+        Some links are affiliate — if you buy, BackNine may earn a small
+        commission at no extra cost to you. Picks are chosen for your data
+        first, not for the payout.
+      </p>
     </section>
   );
 }

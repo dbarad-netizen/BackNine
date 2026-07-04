@@ -39,6 +39,14 @@ def _build_system_prompt(health_context: dict, profile: dict) -> str:
     """
     prompt_parts = []
 
+    # ── DATA FRESHNESS ADVISORY (Fable IMPROVE #2) ──
+    # Injected right after the safety directive so the model sees it
+    # BEFORE the actual metric numbers. Prevents the "your sleep score
+    # came in solid last night" hallucination 9 days after last sync.
+    freshness_advisory = health_context.get("freshness_advisory")
+    if freshness_advisory:
+        prompt_parts.append(freshness_advisory)
+
     # ── SAFETY DIRECTIVE (Fable ADD #9) ──
     # This block is FIRST because it takes precedence over every other
     # instruction below. Any conflict is resolved in favor of these
