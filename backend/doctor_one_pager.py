@@ -184,12 +184,15 @@ def _flags(vitals: dict, labs_list: list[dict]) -> list[str]:
     if ora.get("sleep_h_now") and ora["sleep_h_now"] < 6.5:
         out.append(f"Average sleep {ora['sleep_h_now']}h/night (below 6.5h)")
 
-    # Lab-driven flags (only when we have a value)
+    # Lab-driven flags. _labs() now emits rows with `key` (canonical
+    # marker key from labs.REFERENCE_RANGES), which is what we index on
+    # here. It also emits `status`, so we can generically flag anything
+    # out of range without hard-coding one metric at a time.
     labs_by_key: dict[str, dict] = {}
     for lab in labs_list or []:
-        key = (lab.get("metric") or "").lower()
+        key = (lab.get("key") or "").lower()
         if key and key not in labs_by_key:
-            labs_by_key[key] = lab  # first (most recent) wins if sorted desc
+            labs_by_key[key] = lab
 
     def _lab_val(key: str) -> Optional[float]:
         row = labs_by_key.get(key)
@@ -199,14 +202,37 @@ def _flags(vitals: dict, labs_list: list[dict]) -> list[str]:
             return float(row.get("value"))
         except (TypeError, ValueError):
             return None
+
+    # Priority flags — clinically meaningful thresholds a PCP would
+    # want called out even before the generic out-of-range sweep.
     ldl = _lab_val("ldl")
     if ldl and ldl >= 160:
         out.append(f"LDL {ldl:.0f} mg/dL (high)")
-    a1c = _lab_val("hba1c") or _lab_val("a1c")
+    a1c = _lab_val("hba1c")
     if a1c and a1c >= 6.5:
         out.append(f"HbA1c {a1c:.1f}% (diabetic range)")
     elif a1c and a1c >= 5.7:
         out.append(f"HbA1c {a1c:.1f}% (pre-diabetic range)")
+
+    # Generic out-of-range sweep. Skip markers already flagged above.
+    already_flagged_keys = {"ldl", "hba1c"}
+    for lab in labs_list or []:
+        key = (lab.get("key") or "").lower()
+        if key in already_flagged_keys:
+            continue
+        if lab.get("status") != "out_of_range":
+            continue
+        metric = lab.get("metric") or key
+        value  = lab.get("value")
+        unit   = lab.get("unit") or ""
+        rng    = lab.get("range") or ""
+        if value is None:
+            continue
+        # e.g. "hsCRP 2.1 mg/L (ref 0-1.0)"
+        piece = f"{metric} {value}{(' ' + unit) if unit else ''}"
+        if rng:
+            piece += f" (ref {rng})"
+        out.append(piece)
 
     return out
 
@@ -297,30 +323,59 @@ def _latest_weight(user_id: str) -> Optional[float]:
 def _labs(user_id: str, limit: int = 10) -> list[dict]:
     """Latest lab values, most-recent-first. Reads from the canonical
     labs source (labs.get_entries) so this matches what shows on the
-    Nutrition tab and Annual Physical Snapshot."""
+    Nutrition tab and Annual Physical Snapshot.
+
+    NOTE (bug fix): labs.get_entries returns entries with marker values
+    as *top-level fields* per entry (e.g. {id, date, glucose: 92,
+    ldl: 108, ...}). Earlier this function iterated looking for a
+    single `metric` field on each entry, which meant it silently
+    returned [] every time. Now we walk each entry's marker fields
+    against REFERENCE_RANGES, and keep the most recent value per
+    marker across all entries. Ranges + labels come from
+    labs.REFERENCE_RANGES so we're consistent with the rest of the
+    app.
+    """
     try:
         entries = lbs.get_entries(user_id) or []
     except Exception:
         return []
-    # Sort by date desc and keep just the display fields
-    def _key(e):
-        return (e.get("date") or ""), (e.get("metric") or "")
-    entries = sorted(entries, key=_key, reverse=True)
+    # Newest first — one entry can hold many markers.
+    entries = sorted(entries, key=lambda e: e.get("date") or "", reverse=True)
+    seen: set[str] = set()
     trimmed: list[dict] = []
-    seen_metrics: set[str] = set()
     for e in entries:
-        metric = (e.get("metric") or "").lower()
-        if not metric or metric in seen_metrics:
-            continue
-        seen_metrics.add(metric)
-        trimmed.append({
-            "metric": e.get("metric"),
-            "value":  e.get("value"),
-            "unit":   e.get("unit"),
-            "date":   e.get("date"),
-        })
-        if len(trimmed) >= limit:
-            break
+        date_str = e.get("date")
+        for key, ref in lbs.REFERENCE_RANGES.items():
+            if key in seen:
+                continue
+            val = e.get(key)
+            if val is None:
+                continue
+            try:
+                fval = float(val)
+            except (TypeError, ValueError):
+                continue
+            # Determine in-range status once, here, so the frontend
+            # and the Handoff narrative don't recompute independently.
+            low, high = ref.get("low"), ref.get("high")
+            status = "unknown"
+            try:
+                if low is not None and high is not None:
+                    status = "in_range" if low <= fval <= high else "out_of_range"
+            except Exception:
+                pass
+            trimmed.append({
+                "metric": ref.get("label", key),
+                "key":    key,
+                "value":  round(fval, 3),
+                "unit":   ref.get("unit", ""),
+                "date":   date_str,
+                "range":  f"{low}-{high}" if (low is not None and high is not None) else "",
+                "status": status,
+            })
+            seen.add(key)
+            if len(trimmed) >= limit:
+                return trimmed
     return trimmed
 
 

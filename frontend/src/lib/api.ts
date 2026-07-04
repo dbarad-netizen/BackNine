@@ -1541,6 +1541,26 @@ export interface SystemWorkoutTemplate {
 
 // ── Labs types ─────────────────────────────────────────────────────────────────
 
+/** Response shape from the vision-first OCR endpoint. Includes a
+ *  per-marker confidence tag ("low"|"medium"|"high") and the raw line
+ *  Claude read the value from, so the review UI can call out anything
+ *  worth double-checking before saving. */
+export interface OcrLabMarker {
+  key:             string;   // canonical marker key (matches labs.REFERENCE_RANGES)
+  value:           number;
+  unit:            string;
+  reference_range: string;
+  confidence:      "low" | "medium" | "high";
+  raw_line:        string;
+}
+
+export interface OcrLabResult {
+  date:    string;
+  markers: OcrLabMarker[];
+  method:  "text" | "vision" | "empty" | "unsupported";
+  count:   number;
+}
+
 export interface LabEntry {
   id:         string;
   date:       string;
@@ -1983,6 +2003,14 @@ export const api = {
     const form = new FormData();
     form.append("file", file);
     return request("/api/labs/import-pdf", { method: "POST", body: form });
+  },
+  /** Vision-first OCR path — accepts PDF or image (photo of a paper report).
+   *  Returns per-marker rows with confidence tags, so the review UI can
+   *  steer the user's eye toward anything Claude wasn't sure about. */
+  ocrLabReport(file: File): Promise<OcrLabResult> {
+    const form = new FormData();
+    form.append("file", file);
+    return request("/api/labs/ocr", { method: "POST", body: form });
   },
 
   // ── Challenges ──────────────────────────────────────────────────────────────

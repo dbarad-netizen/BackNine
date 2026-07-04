@@ -376,12 +376,25 @@ function LabSummary({ entries }: { entries: LabEntry[] }) {
   );
 }
 
-// ── PDF import preview panel ──────────────────────────────────────────────────
+// ── PDF/photo import preview panel ────────────────────────────────────────────
+// Vision-first: accepts PDFs AND photos of paper reports (phone snap of a
+// LabCorp printout, portal-exported PDF, iPhone HEIC photo). Uses the
+// new /api/labs/ocr endpoint which internally tries the free pdfplumber
+// text path first and falls back to Claude Vision when needed. The
+// preview panel shows a per-marker confidence tag so the user's eye
+// goes straight to anything flagged low.
 interface PdfPreview {
   date: string;
-  extracted: Record<string, number>;
   count: number;
+  method: "text" | "vision" | "empty" | "unsupported";
 }
+
+const ACCEPT = ".pdf,image/png,image/jpeg,image/webp,image/heic";
+const _IMG_EXT = [".png", ".jpg", ".jpeg", ".webp", ".heic"];
+const _looksImportable = (name: string): boolean => {
+  const n = name.toLowerCase();
+  return n.endsWith(".pdf") || _IMG_EXT.some(e => n.endsWith(e));
+};
 
 function PdfImportPanel({ onConfirm, onCancel }: {
   onConfirm: (date: string, values: Record<string, number>, notes: string) => Promise<void>;
@@ -392,29 +405,33 @@ function PdfImportPanel({ onConfirm, onCancel }: {
   const [preview, setPreview] = useState<PdfPreview | null>(null);
   const [editDate, setEditDate] = useState("");
   const [editValues, setEditValues] = useState<Record<string, string>>({});
+  const [confidenceByKey, setConfidenceByKey] = useState<Record<string, "low" | "medium" | "high">>({});
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const processFile = async (file: File) => {
-    if (!file.name.toLowerCase().endsWith(".pdf")) {
-      setError("Please upload a PDF file.");
+    if (!_looksImportable(file.name)) {
+      setError("Please upload a PDF or a photo (JPG/PNG/HEIC/WebP).");
       return;
     }
     setUploading(true);
     setError(null);
     try {
-      const result = await api.importLabPdf(file);
-      setPreview(result);
+      const result = await api.ocrLabReport(file);
+      setPreview({ date: result.date, count: result.count, method: result.method });
       setEditDate(result.date);
-      const init: Record<string, string> = {};
-      for (const [k, v] of Object.entries(result.extracted)) {
-        init[k] = String(v);
+      const initVals: Record<string, string> = {};
+      const initConf: Record<string, "low" | "medium" | "high"> = {};
+      for (const m of result.markers) {
+        initVals[m.key] = String(m.value);
+        initConf[m.key] = m.confidence;
       }
-      setEditValues(init);
+      setEditValues(initVals);
+      setConfidenceByKey(initConf);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      setError(`Parse error: ${msg}`);
+      setError(`Extraction error: ${msg}`);
     } finally {
       setUploading(false);
     }
@@ -448,7 +465,7 @@ function PdfImportPanel({ onConfirm, onCancel }: {
     return (
       <div className="rounded-2xl border border-gray-200 bg-white p-5 space-y-4">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold text-gray-900">Import from PDF</p>
+          <p className="text-sm font-semibold text-gray-900">Import lab report</p>
           <button onClick={onCancel} className="text-gray-600 hover:text-gray-700 text-xl leading-none">×</button>
         </div>
 
@@ -461,23 +478,23 @@ function PdfImportPanel({ onConfirm, onCancel }: {
             dragging ? "border-cyan-500 bg-cyan-500/10" : "border-gray-300 hover:border-zinc-500"
           }`}
         >
-          <input type="file" accept=".pdf" onChange={handleFileInput}
+          <input type="file" accept={ACCEPT} onChange={handleFileInput}
             className="absolute inset-0 opacity-0 cursor-pointer" />
           {uploading ? (
-            <p className="text-sm text-gray-600">Parsing PDF…</p>
+            <p className="text-sm text-gray-600">Reading your report…</p>
           ) : (
             <>
               <span className="text-3xl">📄</span>
-              <p className="text-sm text-gray-700 font-medium">Drop your lab PDF here</p>
-              <p className="text-xs text-gray-600">or click to browse · Quest, LabCorp, hospital portals</p>
+              <p className="text-sm text-gray-700 font-medium">Drop a PDF or photo of your lab report</p>
+              <p className="text-xs text-gray-600">Quest, LabCorp, hospital portals — or an iPhone photo of the printout</p>
             </>
           )}
         </div>
 
-        {error && <p className="text-xs text-red-400 text-center">{error}</p>}
+        {error && <p className="text-xs text-red-500 text-center">{error}</p>}
 
         <p className="text-xs text-gray-600 text-center">
-          Your PDF is sent securely to BackNine for extraction and saved to your account.
+          Your file is sent securely to BackNine for extraction and saved to your account.
         </p>
       </div>
     );
@@ -489,7 +506,14 @@ function PdfImportPanel({ onConfirm, onCancel }: {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-semibold text-gray-900">Review extracted results</p>
-          <p className="text-xs text-gray-600 mt-0.5">{preview.count} marker{preview.count !== 1 ? "s" : ""} found</p>
+          <p className="text-xs text-gray-600 mt-0.5">
+            {preview.count} marker{preview.count !== 1 ? "s" : ""} found
+            {preview.method === "vision" && (
+              <span className="ml-1.5 inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                AI-read · double-check low-confidence rows
+              </span>
+            )}
+          </p>
         </div>
         <button onClick={onCancel} className="text-gray-600 hover:text-gray-700 text-xl leading-none">×</button>
       </div>
@@ -513,17 +537,29 @@ function PdfImportPanel({ onConfirm, onCancel }: {
                 const val = parseFloat(editValues[m.key] ?? "");
                 const status = !isNaN(val) ? statusFor(m.key, val) : "normal";
                 const s = STATUS_STYLE[status];
+                const conf = confidenceByKey[m.key];
+                const isLowConf = conf === "low";
                 return (
                   <div key={m.key}>
-                    <label className="block text-xs text-gray-600 mb-1">
-                      {m.label} <span className="text-gray-600">({m.unit})</span>
+                    <label className="flex items-center gap-1 text-xs text-gray-600 mb-1">
+                      <span>{m.label} <span className="text-gray-600">({m.unit})</span></span>
+                      {isLowConf && (
+                        <span
+                          className="rounded-full bg-amber-50 border border-amber-200 px-1 py-[1px] text-[9px] font-semibold text-amber-700"
+                          title="AI wasn't certain about this value — please verify against the report"
+                        >
+                          verify
+                        </span>
+                      )}
                     </label>
                     <div className="flex items-center gap-1.5">
                       <input
                         type="number" step="any"
                         value={editValues[m.key] ?? ""}
                         onChange={e => setEditValues(prev => ({ ...prev, [m.key]: e.target.value }))}
-                        className="flex-1 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:border-[#1B3829]"
+                        className={`flex-1 bg-white border rounded-lg px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:border-[#1B3829] ${
+                          isLowConf ? "border-amber-300 bg-amber-50/40" : "border-gray-200"
+                        }`}
                       />
                       <span className={`text-xs font-semibold shrink-0 ${s.text}`}>{s.label}</span>
                     </div>
@@ -536,8 +572,9 @@ function PdfImportPanel({ onConfirm, onCancel }: {
       })}
 
       {preview.count === 0 && (
-        <p className="text-sm text-amber-400 text-center py-2">
-          No markers were automatically detected. This PDF may use unusual formatting — try the manual entry form instead.
+        <p className="text-sm text-amber-600 text-center py-2">
+          Couldn&rsquo;t read any lab values from this file. If it&rsquo;s a photo, try a
+          straight-on shot with good lighting — or use manual entry.
         </p>
       )}
 
@@ -617,7 +654,7 @@ export default function LabsTab() {
             onClick={() => setInputMode("pdf")}
             className="flex items-center justify-center gap-2 py-3 rounded-xl bg-[#1B3829] text-white hover:bg-[#2D6A4F] text-sm font-medium transition-all"
           >
-            <span>📄</span> Import PDF
+            <span>📄</span> Import PDF or photo
           </button>
           <button
             onClick={() => setInputMode("manual")}

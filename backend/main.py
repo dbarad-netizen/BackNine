@@ -53,6 +53,7 @@ import doctor_one_pager as dop
 import friends_glance as fr_glance
 import coach_al_group_voice as cag
 import labs as lbs
+import labs_ocr as lbs_ocr
 import challenges as chl
 import apple_health as ah
 import oura_cache as oc
@@ -3344,6 +3345,34 @@ async def import_lab_pdf(request: Request, file: UploadFile = File(...)):
         "extracted": extracted,   # {marker_key: float}
         "count":     len(extracted),
     }
+
+
+@app.post("/api/labs/ocr")
+async def ocr_lab_report(request: Request, file: UploadFile = File(...)):
+    """Vision-first lab extraction. Accepts PDF or image; tries the
+    free text-only regex parser first and only escalates to Claude
+    Vision when the text path underdelivers (< 6 markers) or when the
+    input is an image the text path can't read at all.
+
+    Returns:
+      {
+        date:    "YYYY-MM-DD" | null,
+        markers: [{key, value, unit, reference_range, confidence, raw_line}],
+        method:  "text" | "vision" | "empty" | "unsupported",
+        count:   int,
+      }
+    """
+    _require_session(request)
+    contents = await file.read()
+    if len(contents) > 20 * 1024 * 1024:   # 20 MB safety cap
+        raise HTTPException(status_code=413, detail="File too large (20 MB max).")
+    result   = lbs_ocr.extract_from_bytes(contents, file.filename or "")
+    # Frontend expects a date to prefill the entry form; if extraction
+    # didn't yield one, fall back to today so the user doesn't stare at
+    # an empty date field.
+    if not result.get("date"):
+        result["date"] = _user_local_today_iso(request)
+    return result
 
 
 # ── Challenges ────────────────────────────────────────────────────────────────
