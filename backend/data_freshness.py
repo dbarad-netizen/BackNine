@@ -127,11 +127,47 @@ def stamp(value, as_of_iso: Optional[str], source: str = "unknown") -> dict:
 
 # ── source-age lookups ──────────────────────────────────────────────────
 
+# A source counts as "active" only if it has 3+ rows in the last N days.
+# Below that we treat it as "inactive/not in use" — no stale banner. This
+# is the whole point of the July-3 false-positive fix: David had a lone
+# Apple Health row from May 5 (~9 weeks earlier). Under the old rule the
+# banner screamed "9 weeks ago" every time he loaded the dashboard even
+# though he never uses AH and the Oura data he does use was fresh.
+_ACTIVITY_WINDOW_DAYS = 30
+_MIN_ACTIVE_ROWS      = 3
+
+
+def _source_is_active(sb: Client, table: str, user_id: str,
+                      extra_where: Optional[dict] = None) -> bool:
+    """Does this user have ≥ _MIN_ACTIVE_ROWS rows for this source in the
+    last _ACTIVITY_WINDOW_DAYS days? If not, the source is 'inactive' —
+    stale banners for it are user-hostile."""
+    try:
+        cutoff = (_date.today() - timedelta(days=_ACTIVITY_WINDOW_DAYS)).isoformat()
+        q = (sb.table(table)
+               .select("date", count="exact")
+               .eq("user_id", user_id)
+               .gte("date", cutoff)
+               .limit(_MIN_ACTIVE_ROWS))
+        for k, v in (extra_where or {}).items():
+            q = q.eq(k, v)
+        res = q.execute()
+        return len(res.data or []) >= _MIN_ACTIVE_ROWS
+    except Exception:
+        return False
+
+
 def oura_data_age_hours(user_id: str) -> Optional[float]:
     """Hours since the most recent Oura data row cached for this user.
-    None if nothing is cached (e.g. user never connected Oura)."""
+    Returns None when:
+      • nothing is cached (user never connected the ring), OR
+      • the source is 'inactive' (no recent activity → no meaningful
+        recency to report, don't fire a stale banner).
+    """
     sb = _sb()
     if not sb or not user_id:
+        return None
+    if not _source_is_active(sb, "oura_daily_cache", user_id):
         return None
     try:
         res = (
@@ -175,9 +211,15 @@ def oura_last_sync_iso(user_id: str) -> Optional[str]:
 
 
 def apple_health_data_age_hours(user_id: str) -> Optional[float]:
-    """Hours since the most recent Apple Health row for this user."""
+    """Hours since the most recent Apple Health row for this user.
+
+    Returns None when the source is inactive (< 3 rows in the last 30 days).
+    A single stray row from months ago should not fire a "9 weeks ago"
+    banner — the user has clearly moved on to another source."""
     sb = _sb()
     if not sb or not user_id:
+        return None
+    if not _source_is_active(sb, "apple_health_daily", user_id):
         return None
     try:
         res = (
@@ -220,7 +262,7 @@ def build_freshness_advisory(user_id: str) -> Optional[str]:
         else:
             lines.append(f"  • Oura data is {round(oura_age)}h old (fresh).")
     else:
-        lines.append("  • No Oura data cached — user may not have connected their ring.")
+        lines.append("  • Oura: inactive or not connected — do NOT reference Oura numbers unless the payload explicitly contains them.")
 
     if ah_age is not None:
         if ah_age > STALE_THRESHOLD_HOURS:
@@ -230,6 +272,8 @@ def build_freshness_advisory(user_id: str) -> Optional[str]:
             lines.append(f"  • Apple Health data is {round(ah_age)}h old (yellow).")
         else:
             lines.append(f"  • Apple Health data is {round(ah_age)}h old (fresh).")
+    else:
+        lines.append("  • Apple Health: inactive or not connected — do NOT invoke it.")
 
     header = (
         "\n=== DATA FRESHNESS — READ AND RESPECT ===\n"
