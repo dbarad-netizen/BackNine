@@ -68,11 +68,16 @@ def _build_system_prompt(
     # can't be reframed as lifestyle tweaks). Recent insights and the
     # active goal give the briefing continuity with what the app has
     # already told the user this week.
+    # Prompt-block context keys — _ctx suffix keeps them from colliding
+    # with the older health_context keys (main.py's briefing endpoint
+    # sets active_goal = <dict>; if we read that here and tried to
+    # "\n".join() it into parts, we crash with TypeError. This was the
+    # July-5 briefing outage.) `isinstance(str)` guard is belt-and-braces.
     for key in ("clinical_escalation", "data_quality_flags",
-                "active_visit", "active_goal", "recent_insights",
-                "weekly_recap_highlight"):
+                "active_visit_ctx", "active_goal_ctx",
+                "recent_insights_ctx", "weekly_recap_ctx"):
         block = health_context.get(key)
-        if block:
+        if isinstance(block, str) and block:
             parts.append(block)
 
     # User Profile (keep brief — the model already has lots to work with)

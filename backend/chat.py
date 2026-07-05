@@ -61,10 +61,14 @@ def _build_system_prompt(health_context: dict, profile: dict) -> str:
     # surfaced" and Coach Al denied ever surfacing it. Fix: the same
     # insights, active goal, weekly recap, and user-reported data
     # quality flags that appear on the dashboard now appear here.
-    for key in ("data_quality_flags", "active_visit", "active_goal",
-                "recent_insights", "weekly_recap_highlight"):
+    # NOTE: these keys carry the _ctx suffix to avoid colliding with older
+    # health_context keys ("active_goal" is a structured dict in the
+    # briefing endpoint's chain — merging our string block onto that same
+    # key crashed the briefing when the join() saw a dict).
+    for key in ("data_quality_flags", "active_visit_ctx", "active_goal_ctx",
+                "recent_insights_ctx", "weekly_recap_ctx"):
         block = health_context.get(key)
-        if block:
+        if isinstance(block, str) and block:
             prompt_parts.append(block)
 
     # ── SAFETY DIRECTIVE (Fable ADD #9) ──

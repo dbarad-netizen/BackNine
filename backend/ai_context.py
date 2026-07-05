@@ -238,15 +238,22 @@ def build(user_id: str, profile: Optional[dict] = None) -> dict:
     what the app is actually showing the user.
 
     Returns a dict of preformatted strings + raw structured data.
-    Missing sections come back as "" (safe to concatenate)."""
+    Missing sections come back as "" (safe to concatenate).
+
+    IMPORTANT: keys used for prompt-block strings use the `_ctx` suffix
+    so they don't collide with older code paths that set the same
+    key with structured dicts (main.py's briefing endpoint used
+    "active_goal" to mean the goal-progress dict, not a prompt block).
+    The overwrite crashed the briefing on July 5 — dict got joined into
+    a string parts list. Suffix keeps namespaces separate."""
     profile = profile or {}
     return {
         "freshness_advisory":     _freshness(user_id),
         "clinical_escalation":    _clinical(user_id, profile),
-        "active_visit":           _active_visit(user_id),
-        "active_goal":            _active_goal(user_id),
-        "recent_insights":        _recent_insights(user_id),
-        "weekly_recap_highlight": _weekly_recap(user_id),
+        "active_visit_ctx":       _active_visit(user_id),
+        "active_goal_ctx":        _active_goal(user_id),
+        "recent_insights_ctx":    _recent_insights(user_id),
+        "weekly_recap_ctx":       _weekly_recap(user_id),
         "data_quality_flags":     _data_quality_flags(user_id),
     }
 
