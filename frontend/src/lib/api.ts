@@ -2083,6 +2083,15 @@ export const api = {
     return request("/api/onboarding/dismiss", { method: "POST" });
   },
 
+  // ── Manual sleep entry (Whoop / Garmin / Fitbit / Polar bridge) ───────────
+  /** Log last night's sleep manually. Only hours + optional quality;
+   *  no HRV/RHR/scores (not cross-device comparable). */
+  logManualSleep(body: { hours: number; quality?: number; device_tag?: string; night_date?: string }):
+    Promise<{ date: string; hours: number; quality: number | null; device_tag: string | null; source: "manual" }>
+  {
+    return request("/api/sleep/manual", { method: "POST", body: JSON.stringify(body) });
+  },
+
   // ── Doctor Visits (Prep Mode Phase 1) ─────────────────────────────────────
   listVisits(status?: "upcoming" | "completed" | "canceled"): Promise<{ visits: DoctorVisit[] }> {
     const q = status ? `?status=${status}` : "";

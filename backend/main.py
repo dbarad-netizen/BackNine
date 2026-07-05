@@ -3478,6 +3478,98 @@ def account_deletion_status(request: Request):
     return pending or {}
 
 
+@app.post("/api/sleep/manual")
+async def log_manual_sleep(request: Request):
+    """Manual sleep entry for users whose device isn't on the direct
+    integration list (Whoop, Garmin, Fitbit, Polar, etc.). Sleep hours
+    + optional self-rated quality + optional device tag.
+
+    Explicitly no HRV / RHR / sleep-score fields — those aren't
+    comparable across devices (Whoop rMSSD, Oura lnRMSSD, etc.) and
+    would poison the Longevity Score if we accepted them at face
+    value. Same reason we don't ask for a "Whoop recovery score."
+
+    Writes to device_readings (source='manual') so every downstream
+    card (briefing, streak, Longevity Score's sleep component) picks
+    it up. If a real device syncs the same night afterward, the
+    device_readings resolver prefers the device reading over manual.
+
+    Body: {
+      hours:      float 0-14 (required),
+      quality:    int 1-5     (optional, self-rated),
+      device_tag: str         (optional, informational only),
+      night_date: YYYY-MM-DD  (optional, defaults to user's yesterday),
+    }
+    """
+    import device_readings as _dr
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    # Hours — the only required field.
+    try:
+        hours = float(body.get("hours"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="hours is required (number).")
+    if not (0 < hours <= 14):
+        raise HTTPException(status_code=400, detail="hours must be between 0 and 14.")
+
+    # Quality is optional. If present, clamp to 1..5.
+    quality_raw = body.get("quality")
+    quality: Optional[int] = None
+    if quality_raw is not None:
+        try:
+            q = int(quality_raw)
+            if 1 <= q <= 5:
+                quality = q
+        except (TypeError, ValueError):
+            pass
+
+    # Device tag — informational only, no ranking impact.
+    device_tag = str(body.get("device_tag") or "").strip()[:40] or None
+
+    # Night date — the sleep row is keyed by the *wake* date (matching
+    # Oura's convention). Defaults to the user's yesterday so a morning
+    # entry lands on the correct day.
+    night_date_raw = (body.get("night_date") or "").strip()
+    if night_date_raw and _valid_ymd(night_date_raw):
+        night_date = night_date_raw
+    else:
+        try:
+            today_iso = _user_local_today_iso(request)
+            night_date = (datetime.strptime(today_iso, "%Y-%m-%d").date()).isoformat()
+        except Exception:
+            night_date = _user_local_today_iso(request)
+
+    metadata = {"device_tag": device_tag} if device_tag else {}
+
+    try:
+        _dr.upsert_reading(
+            user_id=user_id, source="manual", metric="sleep_hours",
+            date_str=night_date, value=round(hours, 2), unit="hours",
+            metadata=metadata,
+        )
+        if quality is not None:
+            _dr.upsert_reading(
+                user_id=user_id, source="manual", metric="sleep_quality_self",
+                date_str=night_date, value=quality, unit="1-5",
+                metadata=metadata,
+            )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Couldn't save: {exc}")
+
+    return {
+        "date":       night_date,
+        "hours":      round(hours, 2),
+        "quality":    quality,
+        "device_tag": device_tag,
+        "source":     "manual",
+    }
+
+
 @app.get("/api/visits")
 def api_list_visits(request: Request, status: Optional[str] = None):
     """List this user's visits (newest first). Optional status filter."""

@@ -32,6 +32,7 @@ import OnboardingCard from "@/components/OnboardingCard";
 import VisitPrepCard from "@/components/VisitPrepCard";
 import VisitDetailModal from "@/components/VisitDetailModal";
 import VisitCreateModal from "@/components/VisitCreateModal";
+import SleepQuickLogCard from "@/components/SleepQuickLogCard";
 import BloodPressureCard from "@/components/BloodPressureCard";
 import DoctorReportModal from "@/components/DoctorReportModal";
 import DayMealsDrawer from "@/components/DayMealsDrawer";
@@ -1538,6 +1539,17 @@ export default function DashboardPage() {
                 or was within the last 21 days (post-visit capture window).
                 Self-hides otherwise. Tap → opens the VisitDetailModal. */}
             <VisitPrepCard onOpen={(id) => setActiveVisitId(id)} />
+
+            {/* Manual sleep quick-log — empty-state card for users on
+                Whoop / Garmin / Fitbit / Polar with no Oura or Apple
+                Health sleep source. Self-hides the moment ANY sleep
+                source has data for last night (Oura today rings or AH
+                daily row). No HRV/RHR/score entry — cross-device
+                incomparable and would corrupt the Longevity Score. */}
+            <SleepQuickLogCard
+              hasSleepAlready={Boolean(displaySl && displaySl > 0)}
+              onSaved={() => { window.location.reload(); }}
+            />
 
             {/* Apple Health card — for users without Oura who are syncing AH.
                 Surfaces the metrics AH actually provides (steps, sleep duration,
