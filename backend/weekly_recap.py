@@ -312,17 +312,62 @@ def build_payload(user_id: str, anchor_iso: Optional[str] = None) -> dict:
         or (sleep.get("nights_logged") or 0) > 0
     )
 
+    # Sunday Scorecard ritual (Fable v2 recommendation): each recap
+    # carries a next-week plan headline + one specific experiment to
+    # try. Rendered on the card so the user leaves with a plan, not
+    # just a look-back. Kept deterministic (no LLM cost per view);
+    # simple rule-based prescriptions from the pillars.
+    next_week_plan = _next_week_plan(training, nutrition, sleep)
+    experiment     = _one_experiment(training, nutrition, sleep)
+
     return {
-        "week_start":  monday.isoformat(),
-        "week_end":    sunday.isoformat(),
+        "week_start":     monday.isoformat(),
+        "week_end":       sunday.isoformat(),
         "is_current_week": sunday >= _date.today() >= monday,
-        "training":    training,
-        "nutrition":   nutrition,
-        "sleep":       sleep,
-        "headline":    headline,
-        "highlight":   highlight,
-        "has_content": has_content,
+        "training":       training,
+        "nutrition":      nutrition,
+        "sleep":          sleep,
+        "headline":       headline,
+        "highlight":      highlight,
+        "has_content":    has_content,
+        "next_week_plan": next_week_plan,
+        "experiment":     experiment,
     }
+
+
+def _next_week_plan(t: dict, n: dict, s: dict) -> Optional[str]:
+    """One-sentence plan for the coming week — the ritual's forward
+    half. Deterministic so it can render at scale without LLM cost.
+    Priority: sleep first (biggest lever), then training gap, then
+    nutrition consistency."""
+    avg_h = s.get("avg_hours")
+    if avg_h and avg_h < 6.8:
+        return f"Sleep is the lever this week — target lights-out 30 min earlier to move avg past 7h."
+    workouts = t.get("workouts") or 0
+    if workouts < 3:
+        return "Load up on training density: three sessions minimum, one lower-body and one cardio."
+    if (n.get("protein_days") or 0) < (n.get("days_logged") or 0) - 1:
+        return "Protein consistency was the miss — hit target on 5+ days this week."
+    prs = t.get("pr_count") or 0
+    if prs == 0:
+        return "You held the line — try a PR attempt on one compound lift this week."
+    return "Recovery week: hold volume, chase quality, one full rest day mid-week."
+
+
+def _one_experiment(t: dict, n: dict, s: dict) -> Optional[str]:
+    """A single, specific, testable thing to try. Fable's spec calls
+    this out because 'try one thing' is the actionability people
+    actually respond to."""
+    # Cycle through experiments by domain deterministically based on
+    # what looks weakest this week — pick the single most measurable one.
+    avg_h = s.get("avg_hours")
+    if avg_h and avg_h < 7:
+        return "Wind-down cue: phone in a different room from 9:30pm every night — measure sleep score delta by Sunday."
+    if (t.get("cardio_min") or 0) < 60:
+        return "Add one 30-min Zone 2 walk mid-week — check whether RHR trends down over the following 5 nights."
+    if (n.get("protein_days") or 0) < 4:
+        return "Front-load protein at breakfast (35g+) every day this week; see whether the streak lasts past day 3."
+    return "Two-minute morning breath practice before checking your phone — track energy at 11am on Friday."
 
 
 # ── group recap aggregator ────────────────────────────────────────────────

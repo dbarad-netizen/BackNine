@@ -61,7 +61,7 @@ def _build_system_prompt(health_context: dict, profile: dict) -> str:
     # surfaced" and Coach Al denied ever surfacing it. Fix: the same
     # insights, active goal, weekly recap, and user-reported data
     # quality flags that appear on the dashboard now appear here.
-    for key in ("data_quality_flags", "active_goal",
+    for key in ("data_quality_flags", "active_visit", "active_goal",
                 "recent_insights", "weekly_recap_highlight"):
         block = health_context.get(key)
         if block:

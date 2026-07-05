@@ -3478,6 +3478,154 @@ def account_deletion_status(request: Request):
     return pending or {}
 
 
+@app.get("/api/visits")
+def api_list_visits(request: Request, status: Optional[str] = None):
+    """List this user's visits (newest first). Optional status filter."""
+    import visits as _v
+    session = _require_session(request)
+    return {"visits": _v.list_visits(session["user_id"], status=status)}
+
+
+@app.get("/api/visits/active")
+def api_active_visit(request: Request):
+    """The one visit worth showing on the Scorecard right now:
+    upcoming within 14 days, or recently completed within 21 days."""
+    import visits as _v
+    session = _require_session(request)
+    row = _v.get_active_visit(session["user_id"], _user_local_today_iso(request))
+    if not row:
+        return {}
+    return {"visit": row, "prep_phase": _v.prep_phase(row, _user_local_today_iso(request))}
+
+
+@app.post("/api/visits")
+async def api_create_visit(request: Request):
+    """Create a new upcoming visit. Body: { visit_date, provider_type, reason? }."""
+    import visits as _v
+    session = _require_session(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    visit_date    = (body.get("visit_date") or "").strip()
+    provider_type = (body.get("provider_type") or "primary_care").strip()
+    reason        = (body.get("reason") or "").strip() or None
+    try:
+        row = _v.create_visit(session["user_id"], visit_date, provider_type, reason)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"visit": row}
+
+
+@app.get("/api/visits/{visit_id}")
+def api_get_visit(request: Request, visit_id: str):
+    import visits as _v
+    session = _require_session(request)
+    row = _v.get_visit(session["user_id"], visit_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Visit not found")
+    return {"visit": row}
+
+
+@app.patch("/api/visits/{visit_id}")
+async def api_update_visit(request: Request, visit_id: str):
+    """Patch a visit — currently used for question edits, reason
+    changes, and date reschedules."""
+    import visits as _v
+    session = _require_session(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    try:
+        row = _v.update_visit(session["user_id"], visit_id, **body)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if not row:
+        raise HTTPException(status_code=404, detail="Visit not found")
+    return {"visit": row}
+
+
+@app.post("/api/visits/{visit_id}/generate-questions")
+def api_generate_questions(request: Request, visit_id: str):
+    """Generate (or regenerate) the AI question draft for this visit.
+    Overwrites question_drafts unless the user has edited them — in
+    which case we merge (preserve edited ones, replace the rest)."""
+    import visits as _v
+    import visit_questions as _vq
+    session = _require_session(request)
+    user_id = session["user_id"]
+    visit   = _v.get_visit(user_id, visit_id)
+    if not visit:
+        raise HTTPException(status_code=404, detail="Visit not found")
+
+    profile = _get_profile(user_id) or {}
+    drafts  = _vq.generate(
+        user_id,
+        profile,
+        visit.get("provider_type") or "primary_care",
+        visit.get("reason"),
+    )
+
+    # Merge policy: keep any user_edited=True items from the existing
+    # list, then top up with new drafts until we hit the max.
+    existing = visit.get("question_drafts") or []
+    kept = [q for q in existing if isinstance(q, dict) and q.get("user_edited")]
+    seen_texts = { (q.get("text") or "").strip() for q in kept }
+    merged = list(kept)
+    for q in drafts:
+        text = (q.get("text") or "").strip()
+        if text and text not in seen_texts and len(merged) < 7:
+            merged.append(q)
+            seen_texts.add(text)
+
+    updated = _v.update_visit(user_id, visit_id, question_drafts=merged)
+    return {"visit": updated, "generated": drafts}
+
+
+@app.post("/api/visits/{visit_id}/complete")
+async def api_complete_visit(request: Request, visit_id: str):
+    """Mark a visit complete. Body: { notes?, outcome_summary? }.
+    Reuses existing lab OCR and med editor for the actual data
+    changes — this endpoint just closes the visit and stores notes."""
+    import visits as _v
+    session = _require_session(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    row = _v.complete_visit(
+        session["user_id"], visit_id,
+        notes=body.get("notes"),
+        outcome=body.get("outcome_summary"),
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Visit not found")
+    return {"visit": row}
+
+
+@app.post("/api/visits/{visit_id}/cancel")
+def api_cancel_visit(request: Request, visit_id: str):
+    import visits as _v
+    session = _require_session(request)
+    row = _v.cancel_visit(session["user_id"], visit_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Visit not found")
+    return {"visit": row}
+
+
+@app.delete("/api/visits/{visit_id}")
+def api_delete_visit(request: Request, visit_id: str):
+    import visits as _v
+    session = _require_session(request)
+    ok = _v.delete_visit(session["user_id"], visit_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Visit not found")
+    return {"status": "deleted"}
+
+
 @app.get("/api/onboarding/status")
 def get_onboarding_status(request: Request):
     """Derived onboarding state — steps + dismissed_at + show flag.

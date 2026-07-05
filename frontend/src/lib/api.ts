@@ -1037,6 +1037,10 @@ export interface WeeklyRecap {
   headline:          string;
   highlight:         string | null;
   has_content:       boolean;
+  /** Fable v2 Sunday Scorecard ritual: next-week plan headline (one sentence) */
+  next_week_plan?:   string | null;
+  /** Fable v2 Sunday Scorecard ritual: one specific, testable experiment to try */
+  experiment?:       string | null;
 }
 
 // ── Oura tags ────────────────────────────────────────────────────────────
@@ -1557,6 +1561,36 @@ export interface OcrLabMarker {
 /** Onboarding welcome-card state. `show` is the composite: card is
  *  visible only when at least one step is incomplete AND the user hasn't
  *  dismissed. `completed` is a convenience for the celebration state. */
+/** Doctor Visit Prep Mode — a single visit + AI-drafted question list. */
+export type VisitPrepPhase =
+  | "future" | "t_minus_14" | "t_minus_3" | "t_minus_1"
+  | "visit_day" | "post_visit" | "closed";
+
+export interface VisitQuestion {
+  id:              string;
+  text:            string;
+  source_data:     string;
+  provider_scope:  string;
+  user_edited?:    boolean;
+}
+
+export interface DoctorVisit {
+  id:                string;
+  user_id?:          string;
+  visit_date:        string;
+  provider_type:     "primary_care" | "cardiology" | "urology" | "endocrinology" |
+                     "dermatology"  | "orthopedics" | "other";
+  reason?:           string | null;
+  status:            "upcoming" | "completed" | "canceled";
+  question_drafts:   VisitQuestion[];
+  post_visit_notes?: string | null;
+  outcome_summary?:  string | null;
+  created_at?:       string;
+  updated_at?:       string;
+  completed_at?:     string | null;
+  canceled_at?:      string | null;
+}
+
 export interface OnboardingStatus {
   show:         boolean;
   completed:    boolean;
@@ -2047,6 +2081,36 @@ export const api = {
   },
   dismissOnboarding(): Promise<{ status: string }> {
     return request("/api/onboarding/dismiss", { method: "POST" });
+  },
+
+  // ── Doctor Visits (Prep Mode Phase 1) ─────────────────────────────────────
+  listVisits(status?: "upcoming" | "completed" | "canceled"): Promise<{ visits: DoctorVisit[] }> {
+    const q = status ? `?status=${status}` : "";
+    return request(`/api/visits${q}`);
+  },
+  activeVisit(): Promise<{ visit?: DoctorVisit; prep_phase?: VisitPrepPhase }> {
+    return request("/api/visits/active");
+  },
+  createVisit(body: { visit_date: string; provider_type: DoctorVisit["provider_type"]; reason?: string }): Promise<{ visit: DoctorVisit }> {
+    return request("/api/visits", { method: "POST", body: JSON.stringify(body) });
+  },
+  getVisit(id: string): Promise<{ visit: DoctorVisit }> {
+    return request(`/api/visits/${id}`);
+  },
+  updateVisit(id: string, patch: Partial<DoctorVisit>): Promise<{ visit: DoctorVisit }> {
+    return request(`/api/visits/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+  },
+  generateVisitQuestions(id: string): Promise<{ visit: DoctorVisit; generated: VisitQuestion[] }> {
+    return request(`/api/visits/${id}/generate-questions`, { method: "POST" });
+  },
+  completeVisit(id: string, body: { notes?: string; outcome_summary?: string }): Promise<{ visit: DoctorVisit }> {
+    return request(`/api/visits/${id}/complete`, { method: "POST", body: JSON.stringify(body) });
+  },
+  cancelVisit(id: string): Promise<{ visit: DoctorVisit }> {
+    return request(`/api/visits/${id}/cancel`, { method: "POST" });
+  },
+  deleteVisit(id: string): Promise<{ status: string }> {
+    return request(`/api/visits/${id}`, { method: "DELETE" });
   },
 
   // ── Account lifecycle (App Store req + GDPR/CCPA) ─────────────────────────

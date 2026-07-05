@@ -219,6 +219,18 @@ def _data_quality_flags(user_id: str) -> str:
 
 # ── public API ──────────────────────────────────────────────────────────
 
+def _active_visit(user_id: str) -> str:
+    """Doctor Visit Prep Mode integration — the upcoming visit is a
+    context Coach Al must not deny. If the user asks 'what should I do
+    this week' with a physical two days away, the answer changes."""
+    try:
+        import visits as _v
+        row = _v.get_active_visit(user_id)
+        return _v.context_block_for_coach(row) if row else ""
+    except Exception:
+        return ""
+
+
 def build(user_id: str, profile: Optional[dict] = None) -> dict:
     """Assemble the shared AI context bundle. Every AI surface (chat,
     briefing, today_workout, daily_insight) reads from this — one
@@ -231,6 +243,7 @@ def build(user_id: str, profile: Optional[dict] = None) -> dict:
     return {
         "freshness_advisory":     _freshness(user_id),
         "clinical_escalation":    _clinical(user_id, profile),
+        "active_visit":           _active_visit(user_id),
         "active_goal":            _active_goal(user_id),
         "recent_insights":        _recent_insights(user_id),
         "weekly_recap_highlight": _weekly_recap(user_id),

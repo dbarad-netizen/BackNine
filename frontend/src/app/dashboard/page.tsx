@@ -29,6 +29,9 @@ import LongevityMetricModal from "@/components/LongevityMetricModal";
 import AppleHealthCard from "@/components/AppleHealthCard";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 import OnboardingCard from "@/components/OnboardingCard";
+import VisitPrepCard from "@/components/VisitPrepCard";
+import VisitDetailModal from "@/components/VisitDetailModal";
+import VisitCreateModal from "@/components/VisitCreateModal";
 import BloodPressureCard from "@/components/BloodPressureCard";
 import DoctorReportModal from "@/components/DoctorReportModal";
 import DayMealsDrawer from "@/components/DayMealsDrawer";
@@ -863,6 +866,9 @@ export default function DashboardPage() {
   const [profileInitialTab, setProfileInitialTab] = useState<"profile" | "friends">("profile");
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showShare, setShowShare] = useState(false);
+  // Doctor Visit Prep Mode — modal state.
+  const [activeVisitId,     setActiveVisitId]     = useState<string | null>(null);
+  const [showCreateVisit,   setShowCreateVisit]   = useState(false);
   const [autoLogWorkout, setAutoLogWorkout] = useState(false);
   const [showMealAdd, setShowMealAdd] = useState(false);
   const [showWorkoutAdd, setShowWorkoutAdd] = useState(false);
@@ -1527,6 +1533,11 @@ export default function DashboardPage() {
                 TOP of the Scorecard so a brand-new user always sees
                 "Do this first" before any empty-state cards. */}
             <OnboardingCard />
+
+            {/* Doctor Visit Prep — appears when a visit is within 14 days
+                or was within the last 21 days (post-visit capture window).
+                Self-hides otherwise. Tap → opens the VisitDetailModal. */}
+            <VisitPrepCard onOpen={(id) => setActiveVisitId(id)} />
 
             {/* Apple Health card — for users without Oura who are syncing AH.
                 Surfaces the metrics AH actually provides (steps, sleep duration,
@@ -2834,6 +2845,20 @@ export default function DashboardPage() {
               api.nutritionToday().then(setNutToday).catch(() => {});
             }
           }}
+        />
+      )}
+
+      {/* ── Doctor Visit modals ── */}
+      {activeVisitId && (
+        <VisitDetailModal
+          visitId={activeVisitId}
+          onClose={() => setActiveVisitId(null)}
+        />
+      )}
+      {showCreateVisit && (
+        <VisitCreateModal
+          onClose={() => setShowCreateVisit(false)}
+          onCreated={(v) => { setShowCreateVisit(false); setActiveVisitId(v.id); }}
         />
       )}
 

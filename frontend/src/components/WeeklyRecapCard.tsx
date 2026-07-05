@@ -125,7 +125,10 @@ export default function WeeklyRecapCard({ weekAnchor, onAsk }: Props = {}) {
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="min-w-0">
           <p className="text-[10px] uppercase tracking-wide font-semibold text-amber-800">
-            Coach Al · weekly recap
+            {/* Fable v2 Sunday Scorecard ritual: on Sunday itself the
+                weekly recap becomes a named ritual. Same card, sharper
+                framing for the weekly rhythm. */}
+            {new Date().getDay() === 0 ? "Coach Al · Sunday Scorecard" : "Coach Al · weekly recap"}
           </p>
           <h3 className="text-base font-bold text-gray-900 leading-tight mt-0.5">
             {recap.is_current_week ? "This week" : "Last week"} · {fmtRange(recap.week_start, recap.week_end)}
@@ -189,6 +192,26 @@ export default function WeeklyRecapCard({ weekAnchor, onAsk }: Props = {}) {
           </p>
         </div>
       </div>
+
+      {/* Sunday Scorecard ritual — next week plan + one experiment.
+          These give the recap its forward half: "what's the plan, and
+          what one thing should I try?" Renders quietly when the fields
+          are absent so we never fake action guidance. */}
+      {(recap.next_week_plan || recap.experiment) && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2 mb-3">
+          <p className="text-[10px] uppercase tracking-wide font-semibold text-emerald-800 mb-1">
+            Next week
+          </p>
+          {recap.next_week_plan && (
+            <p className="text-[13px] text-gray-900 leading-snug">{recap.next_week_plan}</p>
+          )}
+          {recap.experiment && (
+            <p className="text-[12px] text-emerald-900 leading-snug mt-1.5">
+              <span className="font-semibold">One experiment:</span> {recap.experiment}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* PR list — only render when there's something to brag about */}
       {t.prs.length > 0 && (

@@ -69,7 +69,7 @@ def _build_system_prompt(
     # active goal give the briefing continuity with what the app has
     # already told the user this week.
     for key in ("clinical_escalation", "data_quality_flags",
-                "active_goal", "recent_insights",
+                "active_visit", "active_goal", "recent_insights",
                 "weekly_recap_highlight"):
         block = health_context.get(key)
         if block:
