@@ -2049,6 +2049,23 @@ export const api = {
     return request("/api/onboarding/dismiss", { method: "POST" });
   },
 
+  // ── Account lifecycle (App Store req + GDPR/CCPA) ─────────────────────────
+  /** Full data export as a JSON blob. Downloaded client-side. */
+  exportAccount(): Promise<Record<string, unknown>> {
+    return request("/api/account/export");
+  },
+  /** Request account deletion — starts a 7-day grace window. Live tokens
+   *  are revoked immediately; the actual purge happens after grace. */
+  requestAccountDeletion(): Promise<{ deletion_scheduled_at: string; grace_days: number }> {
+    return request("/api/account/delete", { method: "POST" });
+  },
+  cancelAccountDeletion(): Promise<{ canceled_at: string }> {
+    return request("/api/account/delete/cancel", { method: "POST" });
+  },
+  accountDeletionStatus(): Promise<{ scheduled_at?: string; grace_days_remaining?: number }> {
+    return request("/api/account/deletion-status");
+  },
+
   // ── Challenges ──────────────────────────────────────────────────────────────
   myChallenges(): Promise<{ challenges: Challenge[]; user_id: string }> {
     return request("/api/challenges/me");

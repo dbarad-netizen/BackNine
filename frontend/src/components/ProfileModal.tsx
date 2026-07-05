@@ -295,6 +295,12 @@ export default function ProfileModal({ onClose, initialTab = "profile" }: Props)
               {error && (
                 <p className="text-xs text-red-500 bg-red-50 rounded-xl px-3 py-2">{error}</p>
               )}
+
+              {/* Fable Round 2 fix (App Store req + GDPR/CCPA): user-facing
+                  data export + account deletion controls. Lives inside a
+                  <details> so it doesn't crowd the primary Profile edit
+                  workflow — a user who wants it will find it in seconds. */}
+              <AccountDangerZone />
             </div>
           )
         ) : (
@@ -543,5 +549,158 @@ function FriendsPanel() {
         )}
       </div>
     </div>
+  );
+}
+
+
+// ── Account Danger Zone — export + delete ───────────────────────────────────
+// Fable Round 2 fix (App Store req + GDPR/CCPA). Collapsed by default
+// so it doesn't crowd the primary Profile-edit workflow. Export downloads
+// the full JSON blob client-side; delete starts a 7-day grace window with
+// a Cancel button until the window elapses.
+
+function AccountDangerZone() {
+  const [pending, setPending] = useState<{ scheduled_at?: string; grace_days_remaining?: number } | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  useEffect(() => {
+    api.accountDeletionStatus().then(setPending).catch(() => setPending(null));
+  }, []);
+
+  const handleExport = async () => {
+    setBusy("export"); setMsg(null);
+    try {
+      const blob = await api.exportAccount();
+      const text = JSON.stringify(blob, null, 2);
+      const url  = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+      const a    = document.createElement("a");
+      const stamp = new Date().toISOString().slice(0, 10);
+      a.href     = url;
+      a.download = `backnine-export-${stamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setMsg({ ok: true, text: "Export downloaded." });
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "Export failed — try again in a moment." });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleRequestDelete = async () => {
+    setBusy("delete"); setMsg(null);
+    try {
+      const res = await api.requestAccountDeletion();
+      setPending({
+        scheduled_at:         res.deletion_scheduled_at,
+        grace_days_remaining: res.grace_days,
+      });
+      setConfirmDelete(false);
+      setMsg({ ok: true, text: "Deletion scheduled. You can cancel any time in the next 7 days." });
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "Couldn't schedule deletion — try again." });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleCancelDelete = async () => {
+    setBusy("cancel"); setMsg(null);
+    try {
+      await api.cancelAccountDeletion();
+      setPending(null);
+      setMsg({ ok: true, text: "Deletion canceled. Your account is safe." });
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "Couldn't cancel — try again." });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const hasPending = pending && pending.scheduled_at;
+
+  return (
+    <details className="rounded-xl border border-gray-200 bg-gray-50/60 px-3 py-2 mt-2">
+      <summary className="cursor-pointer text-xs font-semibold uppercase tracking-widest text-gray-600 select-none">
+        Account & data
+      </summary>
+
+      <div className="mt-3 space-y-3">
+        {hasPending && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+            <p className="text-[12px] text-amber-900 font-semibold">
+              Deletion scheduled for {new Date(pending!.scheduled_at as string).toLocaleDateString()}
+              {pending!.grace_days_remaining != null && (
+                <> — {Math.max(0, Math.round(pending!.grace_days_remaining))} days remaining</>
+              )}
+            </p>
+            <button
+              onClick={handleCancelDelete}
+              disabled={busy === "cancel"}
+              className="mt-1.5 text-[11px] font-semibold text-amber-800 underline disabled:opacity-40"
+            >
+              {busy === "cancel" ? "Canceling…" : "Cancel deletion"}
+            </button>
+          </div>
+        )}
+
+        <div className="space-y-1.5">
+          <p className="text-[11px] text-gray-600 leading-snug">
+            Download all your data — meals, workouts, sleep, labs, journal, chat history — as JSON.
+          </p>
+          <button
+            onClick={handleExport}
+            disabled={busy === "export"}
+            className="text-[12px] font-semibold px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:border-gray-500 hover:text-gray-900 disabled:opacity-40 transition-colors"
+          >
+            {busy === "export" ? "Preparing…" : "Export my data"}
+          </button>
+        </div>
+
+        {!hasPending && (
+          <div className="space-y-1.5 pt-2 border-t border-gray-200">
+            <p className="text-[11px] text-gray-600 leading-snug">
+              Delete your account. You&rsquo;ll have a 7-day grace window to cancel before your data is permanently removed.
+            </p>
+            {!confirmDelete ? (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="text-[12px] font-semibold px-3 py-1.5 rounded-lg border border-red-200 text-red-700 hover:border-red-400 hover:bg-red-50 transition-colors"
+              >
+                Delete my account
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleRequestDelete}
+                  disabled={busy === "delete"}
+                  className="text-[12px] font-semibold px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white disabled:opacity-40 transition-colors"
+                >
+                  {busy === "delete" ? "Scheduling…" : "Confirm — start 7-day countdown"}
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  className="text-[12px] font-medium text-gray-600 hover:text-gray-900"
+                >
+                  Never mind
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {msg && (
+          <p className={`text-[11px] px-2 py-1 rounded-lg ${
+            msg.ok ? "text-emerald-800 bg-emerald-50" : "text-red-700 bg-red-50"
+          }`}>
+            {msg.text}
+          </p>
+        )}
+      </div>
+    </details>
   );
 }

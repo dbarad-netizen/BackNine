@@ -47,6 +47,26 @@ def _build_system_prompt(health_context: dict, profile: dict) -> str:
     if freshness_advisory:
         prompt_parts.append(freshness_advisory)
 
+    # ── CLINICAL ESCALATION FLAGS (Fable Round 2 #2 + #3) ──
+    # When BP or RHR crossed a guideline threshold, the model MUST
+    # surface it honestly if asked — not reframe it as a lifestyle
+    # experiment (the "carb-timing/BP" bug Fable found). Injected
+    # BEFORE the profile & memories so it can't get buried.
+    escalation_block = health_context.get("clinical_escalation")
+    if escalation_block:
+        prompt_parts.append(escalation_block)
+
+    # ── SHARED AI CONTEXT (Fable Round 2 #3 fix) ──
+    # The bug: user asked about "the low-carb BP relationship you
+    # surfaced" and Coach Al denied ever surfacing it. Fix: the same
+    # insights, active goal, weekly recap, and user-reported data
+    # quality flags that appear on the dashboard now appear here.
+    for key in ("data_quality_flags", "active_goal",
+                "recent_insights", "weekly_recap_highlight"):
+        block = health_context.get(key)
+        if block:
+            prompt_parts.append(block)
+
     # ── SAFETY DIRECTIVE (Fable ADD #9) ──
     # This block is FIRST because it takes precedence over every other
     # instruction below. Any conflict is resolved in favor of these

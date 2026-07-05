@@ -2137,7 +2137,13 @@ async def get_doctor_one_pager(request: Request, refresh: bool = False):
                         pass
         except Exception:
             pass
-    return dop.build_one_pager(user_id, profile)
+    # Fable Round 2 hygiene fix: Handoff used to be dated "tomorrow"
+    # because _date.today() runs on Render (UTC) and rolls after ~5pm
+    # PT while the user is still on today's date. Pass the user's
+    # device-local date through so the "As of" line matches what the
+    # user sees on their clock.
+    local_today = _user_local_today_iso(request)
+    return dop.build_one_pager(user_id, profile, today_iso=local_today)
 
 
 @app.get("/api/doctor-report")
@@ -3424,6 +3430,54 @@ async def import_lab_pdf(request: Request, file: UploadFile = File(...)):
     }
 
 
+@app.get("/api/account/export")
+def account_export(request: Request):
+    """Full data export as a JSON blob. Right-to-portability primitive.
+    Streams every row keyed by this user across the entire schema."""
+    import account_lifecycle as _acct
+    session = _require_session(request)
+    return _acct.export(session["user_id"])
+
+
+@app.post("/api/account/delete")
+def account_request_delete(request: Request):
+    """Request account deletion — stamps a 7-day grace window. Live
+    device tokens are revoked immediately so nothing keeps writing to
+    the account. The actual cascade delete is done by a separate purge
+    job after the grace window elapses (admin manual until job lands)."""
+    import account_lifecycle as _acct
+    session = _require_session(request)
+    try:
+        return _acct.request_delete(session["user_id"])
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/account/delete/cancel")
+def account_cancel_delete(request: Request):
+    """Undo a pending deletion. Clears the timestamps on profiles."""
+    import account_lifecycle as _acct
+    session = _require_session(request)
+    try:
+        return _acct.cancel_delete(session["user_id"])
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/account/deletion-status")
+def account_deletion_status(request: Request):
+    """Render-driver for the banner: returns { scheduled_at,
+    grace_days_remaining } during the grace window, {} otherwise."""
+    import account_lifecycle as _acct
+    session = _require_session(request)
+    pending = _acct.pending_deletion(session["user_id"])
+    return pending or {}
+
+
 @app.get("/api/onboarding/status")
 def get_onboarding_status(request: Request):
     """Derived onboarding state — steps + dismissed_at + show flag.
@@ -4467,6 +4521,17 @@ async def health_chat(request: Request):
     except Exception:
         health_context["freshness_advisory"] = None
 
+    # Fable Round 2 #3/#4 — shared AI context service. Adds clinical
+    # escalation flags, active goal, recent insights, weekly recap,
+    # and data-quality flags so chat can reference the same things
+    # the dashboard is already showing. merge_into preserves any keys
+    # already set above (e.g. freshness_advisory).
+    try:
+        import ai_context as _aic
+        _aic.merge_into(health_context, user_id, profile)
+    except Exception:
+        pass
+
     try:
         reply = ch.chat(message, health_context, profile, history)
     except RuntimeError as e:
@@ -4725,6 +4790,15 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
         health_context["freshness_advisory"] = freshness.build_freshness_advisory(user_id)
     except Exception:
         health_context["freshness_advisory"] = None
+
+    # Fable Round 2 #3 — same shared AI context bundle chat reads from.
+    # The briefing is where a lot of "we surfaced X" claims originate,
+    # so it needs to see the flags + insights + goal too.
+    try:
+        import ai_context as _aic
+        _aic.merge_into(health_context, user_id, profile)
+    except Exception:
+        pass
 
     # No-data short-circuit: if there's nothing meaningful in today's metrics
     # OR the 7-day context, skip the Claude call and return a friendly static

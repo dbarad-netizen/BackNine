@@ -95,14 +95,18 @@ def _mean(vals: list[float]) -> Optional[float]:
 
 # ── section builders ─────────────────────────────────────────────────────
 
-def _snapshot(profile: dict, latest_weight: Optional[float]) -> dict:
+def _snapshot(profile: dict, latest_weight: Optional[float],
+              today_iso: Optional[str] = None) -> dict:
+    """`today_iso` is the user's device-local YYYY-MM-DD passed by the
+    caller (main.py's _user_local_today_iso). Falls back to server-local
+    only when the caller didn't provide one (used by internal jobs)."""
     return {
         "name":         (profile.get("name") or "").strip() or None,
         "age":          _age_from_birthdate(profile.get("birthdate")),
         "biological_sex": profile.get("biological_sex"),
         "height":       _height_ft_in(profile.get("height_cm")),
         "weight_lbs":   latest_weight,
-        "report_date":  _date.today().isoformat(),
+        "report_date":  today_iso or _date.today().isoformat(),
         "window_days":  30,
     }
 
@@ -117,22 +121,62 @@ def _vitals(user_id: str, days: int = 30) -> dict:
     prior_start = (today - timedelta(days=days * 2)).isoformat()
 
     # ── BP ──
-    bp_row = {"systolic_now": None, "diastolic_now": None, "systolic_trend": "→", "diastolic_trend": "→"}
+    # Fable Round 2 P0 fix: this used to call bp_mod.list_entries(user_id),
+    # which doesn't exist — the actual function is bp_mod.list_readings.
+    # The AttributeError got swallowed by the outer try/except and BP
+    # silently came back as None/None on the Handoff. Meanwhile the
+    # Cardiometabolic report (which uses bp.summary directly) was
+    # correctly showing 17 readings averaging 151/95. That mismatch was
+    # the highest-priority finding in the audit — a doctor scanning the
+    # one-pager should see the same BP the specialty view shows.
+    bp_row = {
+        "systolic_now": None, "diastolic_now": None,
+        "systolic_trend": "→", "diastolic_trend": "→",
+        "n_readings": 0,
+        "evening_systolic": None, "evening_diastolic": None,
+    }
     try:
-        bp_entries = bp_mod.list_entries(user_id) or []
-        # entries are dict rows with 'date', 'systolic', 'diastolic'
-        now_bp = [e for e in bp_entries if e.get("date") and e["date"] >= now_start]
+        # Pull enough history for both the current and prior windows in
+        # one query. days*2 + a small buffer covers "compare last 30d to
+        # the 30d before that" cleanly.
+        bp_entries = bp_mod.list_readings(user_id, days=days * 2 + 7) or []
+        now_bp   = [e for e in bp_entries if e.get("date") and e["date"] >= now_start]
         prior_bp = [e for e in bp_entries if e.get("date") and prior_start <= e["date"] < prior_end]
         sys_now  = _mean([float(e["systolic"])  for e in now_bp   if e.get("systolic")])
         dia_now  = _mean([float(e["diastolic"]) for e in now_bp   if e.get("diastolic")])
         sys_prev = _mean([float(e["systolic"])  for e in prior_bp if e.get("systolic")])
         dia_prev = _mean([float(e["diastolic"]) for e in prior_bp if e.get("diastolic")])
+
+        # Evening split matters clinically — Fable flagged that this
+        # user's evening average (155/98) was worse than the day
+        # average, which is exactly the pattern a doctor wants to see
+        # highlighted. "Evening" = a taken_at time ≥ 17:00 local.
+        def _is_evening(row: dict) -> bool:
+            t = row.get("taken_at") or row.get("time") or ""
+            # Prefer taken_at ISO; fall back to a bare HH:MM string.
+            if isinstance(t, str) and "T" in t:
+                try:
+                    return int(t.split("T")[1][:2]) >= 17
+                except Exception:
+                    return False
+            if isinstance(t, str) and ":" in t:
+                try:
+                    return int(t.split(":")[0]) >= 17
+                except Exception:
+                    return False
+            return False
+        evening_now = [e for e in now_bp if _is_evening(e)]
+        eve_sys = _mean([float(e["systolic"])  for e in evening_now if e.get("systolic")])
+        eve_dia = _mean([float(e["diastolic"]) for e in evening_now if e.get("diastolic")])
+
         bp_row = {
             "systolic_now":     round(sys_now) if sys_now else None,
             "diastolic_now":    round(dia_now) if dia_now else None,
             "systolic_trend":   _trend_arrow(sys_now, sys_prev, threshold_pct=2.0),
             "diastolic_trend":  _trend_arrow(dia_now, dia_prev, threshold_pct=2.0),
             "n_readings":       len(now_bp),
+            "evening_systolic":  round(eve_sys) if eve_sys else None,
+            "evening_diastolic": round(eve_dia) if eve_dia else None,
         }
     except Exception:
         pass
@@ -238,6 +282,16 @@ def _flags(vitals: dict, labs_list: list[dict]) -> list[str]:
 
 
 def _stack(profile: dict) -> dict:
+    """Meds / supps / peptides list for the Handoff. Names pass through
+    name_normalize so common misspellings ("taladafil" → "Tadalafil",
+    "Reservatol" → "Resveratrol") are cleaned up before a physician
+    reads them. This is credibility work — not medical judgment. When
+    a name isn't recognized we return it unchanged so we never
+    silently substitute a different drug."""
+    try:
+        from name_normalize import normalize_name
+    except Exception:
+        normalize_name = lambda s: s  # noqa: E731
     def _names(arr) -> list[str]:
         if not isinstance(arr, list):
             return []
@@ -246,7 +300,7 @@ def _stack(profile: dict) -> dict:
             if isinstance(item, dict):
                 nm = (item.get("name") or "").strip()
                 if nm:
-                    out.append(nm)
+                    out.append(normalize_name(nm))
         return out[:15]
     return {
         "medications": _names(profile.get("medications")),
@@ -293,8 +347,23 @@ def _patient_reported(user_id: str) -> dict:
         except Exception:
             pass
 
+    # Fable Round 2 hygiene fix: the Handoff was rendering
+    # "Recent symptoms (14d): — (mild)" from rows where the user
+    # opened the check-in card and picked a severity but never tagged a
+    # symptom — those rows have an empty symptoms array. Filter them
+    # out here so they never reach the frontend renderer.
+    cleaned: list[dict] = []
+    for row in symptoms:
+        syms = row.get("symptoms") or []
+        if not isinstance(syms, list) or len(syms) == 0:
+            continue
+        # Also drop rows where every tag is blank / whitespace.
+        if not any((isinstance(s, str) and s.strip()) for s in syms):
+            continue
+        cleaned.append(row)
+
     return {
-        "recent_symptoms": symptoms[:10],
+        "recent_symptoms": cleaned[:10],
         "memory_flags":    memory_medical,
     }
 
@@ -381,17 +450,38 @@ def _labs(user_id: str, limit: int = 10) -> list[dict]:
 
 # ── public ───────────────────────────────────────────────────────────────
 
-def build_one_pager(user_id: str, profile: dict) -> dict:
+def build_one_pager(user_id: str, profile: dict,
+                    today_iso: Optional[str] = None) -> dict:
     """Assemble the full one-pager payload. Best-effort throughout — a
-    missing section renders empty on the frontend, doesn't 500."""
+    missing section renders empty on the frontend, doesn't 500.
+
+    `today_iso`: user's device-local date. Passed by the endpoint so
+    the "As of <date>" line never shows a future date under UTC drift.
+    """
     latest_wt = _latest_weight(user_id)
     labs_list = _labs(user_id, limit=10)
     vitals    = _vitals(user_id, days=30)
+
+    # Fable Round 2 P0 — auto-pin the most severe clinical escalation
+    # flag to the top of the Handoff. This is the "bring to your
+    # doctor" line a physician needs to see first when the app knows
+    # BP is running above guideline.
+    escalation_flags: list[dict] = []
+    handoff_pin_row: Optional[dict] = None
+    try:
+        import clinical_escalation as _esc
+        escalation_flags = _esc.assess(user_id, profile) or []
+        handoff_pin_row  = _esc.handoff_pin(escalation_flags)
+    except Exception:
+        pass
+
     return {
-        "snapshot":          _snapshot(profile, latest_wt),
+        "snapshot":          _snapshot(profile, latest_wt, today_iso=today_iso),
         "vitals":            vitals,
         "flags":             _flags(vitals, labs_list),
         "stack":             _stack(profile),
         "patient_reported":  _patient_reported(user_id),
         "labs":              labs_list,
+        "escalation_pin":    handoff_pin_row,   # None when no flags
+        "escalation_flags":  escalation_flags,  # full list for optional expansion
     }

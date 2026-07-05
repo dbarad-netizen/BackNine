@@ -96,11 +96,42 @@ function personalizedReason(item: GearItem, category: string, s: GearSignals): s
   }
 
   if (category === "Recovery") {
+    // Fable Round 2 hygiene fix: four recovery cards used to all carry
+    // the identical "HRV trending down" reason. Vary the framing per
+    // item so the section reads like a set of considered picks, not
+    // a copy-paste. Reasons still key off real signals — we just pick
+    // a different angle per product.
     if (s.trainingLoadZone === "caution" || s.trainingLoadZone === "danger") {
-      return "Your training load is running high right now — recovery tools help you absorb it without burning out.";
+      switch (item.id) {
+        case "foam-roller":
+          return "Training load is running high — 10 min a day on this cuts DOMS and speeds turnaround between sessions.";
+        case "massage-gun":
+          return "Your load is in the caution zone — targeted percussion on the calves and quads keeps you off the couch tomorrow.";
+        case "ice-barrel":
+        case "cold-plunge":
+          return "Load-management tool for high-volume weeks. Use post-workout or on rest days, not right before a lift.";
+        case "sauna":
+        case "sauna-blanket":
+          return "Sauna is the recovery move with the strongest longevity evidence — pairs well with your current training load.";
+        default:
+          return "Your training load is running high right now — recovery tools help you absorb it without burning out.";
+      }
     }
     if (s.hrvDirection === "falling") {
-      return "Your HRV has been trending down lately — extra recovery could help it rebound.";
+      switch (item.id) {
+        case "foam-roller":
+          return "HRV has been drifting down — daily myofascial work is the cheapest lever to shift back toward baseline.";
+        case "massage-gun":
+          return "Falling HRV pattern — reducing sympathetic tone with post-workout percussion often nudges HRV back up.";
+        case "ice-barrel":
+        case "cold-plunge":
+          return "HRV trending down — cold exposure done sparingly (2-3×/week) can improve vagal tone. Skip pre-strength days.";
+        case "sauna":
+        case "sauna-blanket":
+          return "HRV drifting — passive heat sessions raise plasma volume and often show up on the ring within a week.";
+        default:
+          return "Your HRV has been trending down lately — extra recovery could help it rebound.";
+      }
     }
   }
 

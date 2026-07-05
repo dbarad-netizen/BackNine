@@ -63,6 +63,18 @@ def _build_system_prompt(
     if freshness_advisory:
         parts.append(freshness_advisory)
 
+    # Fable Round 2 #2/#3/#4 — shared AI context blocks. Clinical
+    # escalation flags MUST be surfaced honestly in the briefing (they
+    # can't be reframed as lifestyle tweaks). Recent insights and the
+    # active goal give the briefing continuity with what the app has
+    # already told the user this week.
+    for key in ("clinical_escalation", "data_quality_flags",
+                "active_goal", "recent_insights",
+                "weekly_recap_highlight"):
+        block = health_context.get(key)
+        if block:
+            parts.append(block)
+
     # User Profile (keep brief — the model already has lots to work with)
     name = profile.get("name", "")
     age = profile.get("age")
