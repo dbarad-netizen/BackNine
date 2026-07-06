@@ -157,15 +157,40 @@ def _source_is_active(sb: Client, table: str, user_id: str,
         return False
 
 
+def is_oura_paused(user_id: str) -> bool:
+    """Has the user marked Oura as intentionally paused? Reads
+    profiles.oura_paused_at — any non-null timestamp means "paused."
+    Best-effort — a lookup failure returns False (do NOT falsely
+    suppress the freshness signal if we can't check)."""
+    sb = _sb()
+    if not sb or not user_id:
+        return False
+    try:
+        res = (sb.table("profiles")
+                 .select("oura_paused_at")
+                 .eq("id", user_id)
+                 .limit(1).execute())
+        rows = res.data or []
+        if not rows:
+            return False
+        return bool(rows[0].get("oura_paused_at"))
+    except Exception:
+        return False
+
+
 def oura_data_age_hours(user_id: str) -> Optional[float]:
     """Hours since the most recent Oura data row cached for this user.
     Returns None when:
       • nothing is cached (user never connected the ring), OR
       • the source is 'inactive' (no recent activity → no meaningful
-        recency to report, don't fire a stale banner).
+        recency to report, don't fire a stale banner), OR
+      • the user has explicitly paused Oura (Chris fix): treat the
+        same as 'inactive/not connected' so the banner stops nagging.
     """
     sb = _sb()
     if not sb or not user_id:
+        return None
+    if is_oura_paused(user_id):
         return None
     if not _source_is_active(sb, "oura_daily_cache", user_id):
         return None

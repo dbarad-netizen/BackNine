@@ -36,6 +36,53 @@ const CONFIDENCE_LABEL: Record<DailyInsight["confidence"], string> = {
   low:    "Early signal",
 };
 
+/**
+ * "Log now" CTA resolver. Coach Al's action text often ends in
+ * "log something tonight" — but there's no button. Chris (Whoop user
+ * in beta) actually asked David where to log the sleep the insight
+ * card was suggesting. This resolver looks at the insight's category
+ * and action text and returns a { label, targetId } tuple so we can
+ * render a jump-to button next to the "Try this week" line.
+ *
+ * Returns null when the insight doesn't map to a logging surface —
+ * we never render a fake CTA.
+ */
+function logCta(category: DailyInsight["category"], action: string): { label: string; targetId: string } | null {
+  const lower = (action || "").toLowerCase();
+  const asksToLog =
+    lower.includes("log ")   || lower.includes(" logging") ||
+    lower.includes("track ") || lower.includes("record ");
+
+  if (category === "sleep" && (asksToLog || lower.includes("sleep"))) {
+    return { label: "Log sleep", targetId: "sleep-quick-log" };
+  }
+  if (category === "nutrition" && (asksToLog || lower.includes("meal") || lower.includes("protein"))) {
+    return { label: "Log a meal", targetId: "meal-quick-add" };
+  }
+  // NOTE: no training CTA yet — the workout logger lives on the Training
+  // tab and there's no direct scroll target on the Scorecard. Skip
+  // rather than render a broken button. Add back when the training
+  // surface gets a scorecard-anchored quick-log.
+  // General "start by logging sleep tonight" pattern (Chris's screenshot
+  // literally had this) — cat is often "general" but the text says sleep.
+  if (category === "general" && lower.includes("sleep")) {
+    return { label: "Log sleep", targetId: "sleep-quick-log" };
+  }
+  return null;
+}
+
+function scrollToTarget(targetId: string): void {
+  const el = document.getElementById(targetId);
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  // Give the element a brief attention pulse so the user's eye lands
+  // on it — matches the "log now" mental model of jumping to action.
+  el.classList.add("ring-2", "ring-[#1B3829]/60", "ring-offset-2");
+  setTimeout(() => {
+    el.classList.remove("ring-2", "ring-[#1B3829]/60", "ring-offset-2");
+  }, 1600);
+}
+
 interface Props {
   /** When true, render as an inline section without the outer rounded-card
    *  chrome — used when the insight is embedded INSIDE another card (the
@@ -129,7 +176,26 @@ export default function DailyInsightCard({ embedded = false }: Props = {}) {
       <p className="text-sm text-gray-800 leading-relaxed mb-2">{insight.pattern}</p>
 
       <div className="rounded-lg border border-[#1B3829]/20 bg-white px-3 py-2 mb-2">
-        <p className="text-[10px] uppercase tracking-wide font-semibold text-[#1B3829] mb-0.5">Try this week</p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-[10px] uppercase tracking-wide font-semibold text-[#1B3829] mb-0.5">Try this week</p>
+          {/* Log-now CTA (Chris fix): closes the loop between insight
+              guidance and action. If the action mentions logging and the
+              category maps to a known input surface, render a jump-to
+              button. Silently absent when no target exists — we never
+              render a fake or dead-end CTA. */}
+          {(() => {
+            const cta = logCta(insight.category, insight.action);
+            if (!cta) return null;
+            return (
+              <button
+                onClick={() => scrollToTarget(cta.targetId)}
+                className="shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-md bg-[#1B3829] hover:bg-[#2D6A4F] text-white transition-colors"
+              >
+                {cta.label} →
+              </button>
+            );
+          })()}
+        </div>
         <p className="text-sm text-gray-900 leading-snug">{insight.action}</p>
       </div>
 

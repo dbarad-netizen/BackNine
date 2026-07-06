@@ -2090,6 +2090,17 @@ export const api = {
     return request("/api/onboarding/dismiss", { method: "POST" });
   },
 
+  // ── Oura pause / resume (Chris fix — user is on break from the ring) ──────
+  ouraStatus(): Promise<{ paused: boolean; paused_at: string | null }> {
+    return request("/api/wearables/oura/status");
+  },
+  pauseOura(): Promise<{ paused: boolean; paused_at: string }> {
+    return request("/api/wearables/oura/pause", { method: "POST" });
+  },
+  resumeOura(): Promise<{ paused: boolean; paused_at: null }> {
+    return request("/api/wearables/oura/resume", { method: "POST" });
+  },
+
   // ── Manual sleep entry (Whoop / Garmin / Fitbit / Polar bridge) ───────────
   /** Log last night's sleep manually. Only hours + optional quality;
    *  no HRV/RHR/scores (not cross-device comparable). */

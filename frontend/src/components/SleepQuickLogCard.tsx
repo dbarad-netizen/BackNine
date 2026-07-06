@@ -72,6 +72,7 @@ export default function SleepQuickLogCard({ hasSleepAlready, onSaved }: Props) {
   if (compactMode) {
     return (
       <button
+        id="sleep-quick-log"
         onClick={() => setCompactMode(false)}
         className="w-full py-2.5 rounded-2xl border border-sky-200 bg-white text-sm font-semibold text-sky-800 hover:bg-sky-50 transition-colors flex items-center justify-center gap-2 shadow-sm"
       >
@@ -106,7 +107,10 @@ export default function SleepQuickLogCard({ hasSleepAlready, onSaved }: Props) {
   };
 
   return (
-    <section className="rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-white p-4 shadow-sm space-y-3">
+    <section
+      id="sleep-quick-log"
+      className="rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-white p-4 shadow-sm space-y-3"
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-sky-800">

@@ -3487,6 +3487,69 @@ def account_deletion_status(request: Request):
     return pending or {}
 
 
+@app.get("/api/wearables/oura/status")
+def get_oura_status(request: Request):
+    """Whether the user has explicitly paused Oura (Chris fix). Returns
+    { paused: bool, paused_at: iso|null }. Cheap enough for every
+    dashboard load."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    sb = get_supabase()
+    if not sb:
+        return {"paused": False, "paused_at": None}
+    try:
+        res = (sb.table("profiles")
+                 .select("oura_paused_at")
+                 .eq("id", user_id)
+                 .limit(1).execute())
+        rows = res.data or []
+        if not rows:
+            return {"paused": False, "paused_at": None}
+        pa = rows[0].get("oura_paused_at")
+        return {"paused": bool(pa), "paused_at": pa}
+    except Exception:
+        return {"paused": False, "paused_at": None}
+
+
+@app.post("/api/wearables/oura/pause")
+def pause_oura(request: Request):
+    """Mark Oura as intentionally paused. Nothing about the connection
+    is severed (tokens stay valid) — we just stop nagging the user
+    about the ring being out of date. Great for people taking a
+    break from wearing it or transitioning to another tracker."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    sb = get_supabase()
+    if not sb:
+        raise HTTPException(status_code=500, detail="Supabase unavailable")
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        sb.table("profiles").upsert(
+            {"id": user_id, "oura_paused_at": now},
+            on_conflict="id",
+        ).execute()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    return {"paused": True, "paused_at": now}
+
+
+@app.post("/api/wearables/oura/resume")
+def resume_oura(request: Request):
+    """Clear the paused flag — treat Oura as an active source again.
+    Does nothing to the Oura connection itself; it's just the app's
+    'stop suppressing freshness' switch."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    sb = get_supabase()
+    if not sb:
+        raise HTTPException(status_code=500, detail="Supabase unavailable")
+    try:
+        sb.table("profiles").update({"oura_paused_at": None}).eq("id", user_id).execute()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    return {"paused": False, "paused_at": None}
+
+
 @app.post("/api/sleep/manual")
 async def log_manual_sleep(request: Request):
     """Manual sleep entry for users whose device isn't on the direct

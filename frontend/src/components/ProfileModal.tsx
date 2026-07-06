@@ -12,6 +12,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { api, type UserProfile, type Friend, type FriendInvite } from "@/lib/api";
+import OuraPauseToggle from "./OuraPauseToggle";
 
 const GOAL_OPTIONS = [
   { id: "longevity",      label: "Longevity",         icon: "🧬" },
@@ -295,6 +296,18 @@ export default function ProfileModal({ onClose, initialTab = "profile" }: Props)
               {error && (
                 <p className="text-xs text-red-500 bg-red-50 rounded-xl px-3 py-2">{error}</p>
               )}
+
+              {/* Wearable state controls. Pause Oura is the "I'm taking a
+                  break from the ring" switch — mutes the freshness banner
+                  without disconnecting. Chris (Whoop user in beta) hit
+                  this: former Oura wearer, now on Fitbit + Apple Watch,
+                  got the "your data is old" nag on every load. */}
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-widest">
+                  Wearables
+                </p>
+                <OuraPauseToggle />
+              </div>
 
               {/* Fable Round 2 fix (App Store req + GDPR/CCPA): user-facing
                   data export + account deletion controls. Lives inside a
