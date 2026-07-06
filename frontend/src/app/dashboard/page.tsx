@@ -1542,12 +1542,18 @@ export default function DashboardPage() {
 
             {/* Manual sleep quick-log — empty-state card for users on
                 Whoop / Garmin / Fitbit / Polar with no Oura or Apple
-                Health sleep source. Self-hides the moment ANY sleep
-                source has data for last night (Oura today rings or AH
-                daily row). No HRV/RHR/score entry — cross-device
-                incomparable and would corrupt the Longevity Score. */}
+                Health sleep source.
+
+                CRITICAL: the check must anchor to TODAY's sleep score
+                only (slScore), NOT to displaySl. displaySl falls back
+                through the historical trend, so a user with 3-week-old
+                Oura cache would see the card hide even though last
+                night was empty — the exact bug Chris hit on the beta
+                account. Anchor to slScore + sm.total (Oura sleep
+                model duration for last night). If both are missing,
+                the card renders and the user has a path to log. */}
             <SleepQuickLogCard
-              hasSleepAlready={Boolean(displaySl && displaySl > 0)}
+              hasSleepAlready={Boolean((slScore && slScore > 0) || (sm?.total && sm.total > 0))}
               onSaved={() => { window.location.reload(); }}
             />
 

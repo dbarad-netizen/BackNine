@@ -56,8 +56,33 @@ export default function SleepQuickLogCard({ hasSleepAlready, onSaved }: Props) {
   const [busy,     setBusy]     = useState(false);
   const [error,    setError]    = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
+  // Compact mode: when sleep data already exists, render as a small
+  // "+ Log sleep manually" pill that expands into the full form when
+  // tapped. This gives every user a persistent path to manual entry —
+  // Chris (the Whoop user David flagged) never found the input because
+  // the card was empty-state only. When there's no sleep yet, the form
+  // stays open by default (compactMode starts false).
+  const [compactMode, setCompactMode] = useState(hasSleepAlready);
 
-  if (hasSleepAlready || dismissed) return null;
+  if (dismissed) return null;
+
+  // Compact pill: rendered when sleep already exists for last night.
+  // Tap to expand into the full form (useful for backfilling a
+  // different night, correcting a bad reading, etc.).
+  if (compactMode) {
+    return (
+      <button
+        onClick={() => setCompactMode(false)}
+        className="w-full py-2.5 rounded-2xl border border-sky-200 bg-white text-sm font-semibold text-sky-800 hover:bg-sky-50 transition-colors flex items-center justify-center gap-2 shadow-sm"
+      >
+        <span className="text-base leading-none">💤</span>
+        Log sleep manually
+        <span className="text-xs font-normal text-sky-800/70">
+          · from a different device or night
+        </span>
+      </button>
+    );
+  }
 
   const submit = async () => {
     setError(null);
@@ -96,10 +121,10 @@ export default function SleepQuickLogCard({ hasSleepAlready, onSaved }: Props) {
           </p>
         </div>
         <button
-          onClick={() => setDismissed(true)}
+          onClick={() => hasSleepAlready ? setCompactMode(true) : setDismissed(true)}
           className="shrink-0 text-gray-500 hover:text-gray-900 text-lg leading-none px-1"
-          title="Hide this card"
-          aria-label="Hide sleep log card"
+          title={hasSleepAlready ? "Collapse this card" : "Hide this card"}
+          aria-label="Close sleep log card"
         >
           ×
         </button>
