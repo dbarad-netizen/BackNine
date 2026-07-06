@@ -65,7 +65,8 @@ def _build_system_prompt(health_context: dict, profile: dict) -> str:
     # health_context keys ("active_goal" is a structured dict in the
     # briefing endpoint's chain — merging our string block onto that same
     # key crashed the briefing when the join() saw a dict).
-    for key in ("data_quality_flags", "active_visit_ctx", "active_goal_ctx",
+    for key in ("data_quality_flags", "training_flag_ctx", "manual_readings_ctx",
+                "active_visit_ctx", "active_goal_ctx",
                 "recent_insights_ctx", "weekly_recap_ctx"):
         block = health_context.get(key)
         if isinstance(block, str) and block:

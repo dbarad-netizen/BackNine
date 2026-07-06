@@ -316,6 +316,14 @@ const GEAR: GearCategory[] = [
         link: "https://www.garmin.com/en-US/p/845658",
       },
       {
+        id: "vivoo-urine-test",
+        name: "Wellness Test Strips + App",
+        brand: "Vivoo",
+        description: "At-home urine test that reads hydration, ketones, magnesium, calcium, oxidative stress, and more. Snap a photo of the strip, app returns 9-metric report + actions in a minute. Great pair with the Longevity Score and any lab-workup cycle.",
+        price: "From $30/mo",
+        link: "https://vivoo.io",
+      },
+      {
         id: "cgm-stelo",
         name: "Stelo Glucose Biosensor",
         brand: "Dexcom",

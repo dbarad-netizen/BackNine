@@ -31,14 +31,15 @@ interface Props {
 }
 
 const DEVICE_TAGS = [
-  { value: "",         label: "Not sure / other" },
-  { value: "whoop",    label: "Whoop" },
-  { value: "garmin",   label: "Garmin" },
-  { value: "fitbit",   label: "Fitbit" },
-  { value: "polar",    label: "Polar" },
-  { value: "samsung",  label: "Samsung / Galaxy Watch" },
-  { value: "pixel",    label: "Google / Pixel Watch" },
-  { value: "estimate", label: "Just my own estimate" },
+  { value: "",             label: "Not sure / other" },
+  { value: "apple_watch",  label: "Apple Watch" },
+  { value: "whoop",        label: "Whoop" },
+  { value: "garmin",       label: "Garmin" },
+  { value: "fitbit",       label: "Fitbit" },
+  { value: "polar",        label: "Polar" },
+  { value: "samsung",      label: "Samsung / Galaxy Watch" },
+  { value: "pixel",        label: "Google / Pixel Watch" },
+  { value: "estimate",     label: "Just my own estimate" },
 ];
 
 const QUALITY_LABELS: Record<number, { emoji: string; label: string }> = {

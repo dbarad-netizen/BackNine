@@ -73,8 +73,8 @@ def _build_system_prompt(
     # sets active_goal = <dict>; if we read that here and tried to
     # "\n".join() it into parts, we crash with TypeError. This was the
     # July-5 briefing outage.) `isinstance(str)` guard is belt-and-braces.
-    for key in ("clinical_escalation", "data_quality_flags",
-                "active_visit_ctx", "active_goal_ctx",
+    for key in ("clinical_escalation", "data_quality_flags", "training_flag_ctx",
+                "manual_readings_ctx", "active_visit_ctx", "active_goal_ctx",
                 "recent_insights_ctx", "weekly_recap_ctx"):
         block = health_context.get(key)
         if isinstance(block, str) and block:

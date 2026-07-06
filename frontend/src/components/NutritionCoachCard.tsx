@@ -116,15 +116,13 @@ export default function NutritionCoachCard({ onAsk }: Props = {}) {
         </div>
       </div>
 
-      {/* Day progress + next-meal hint */}
-      {data.next_meal_hint && (
-        <div className="rounded-lg border border-white/20 bg-white/95 px-3 py-2 mb-2">
-          <p className="text-[10px] uppercase tracking-wide font-semibold text-[#1B3829] mb-0.5">
-            Next plate
-          </p>
-          <p className="text-sm text-gray-900 leading-snug">{data.next_meal_hint}</p>
-        </div>
-      )}
+      {/* Next Plate suggestion removed per David's feedback (2026-07-06):
+          the macros bar + day-progress line stay because those track hard
+          numbers, but the free-text "next plate" suggestion wasn't
+          driving action — users don't want Coach Al deciding their next
+          meal. Backend still returns next_meal_hint for now (harmless);
+          we just stop rendering it. Delete the field entirely when we
+          also remove _next_meal_hint from nutrition_today_extras.py. */}
 
       <div className="flex items-center justify-between gap-2 mt-1">
         <p className="text-[10px] text-emerald-100/70 italic">

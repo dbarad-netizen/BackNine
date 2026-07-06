@@ -219,6 +219,58 @@ def _data_quality_flags(user_id: str) -> str:
 
 # ── public API ──────────────────────────────────────────────────────────
 
+def _manual_readings(user_id: str) -> str:
+    """Recently manual-logged health readings (sleep hours, weight,
+    steps, etc.) that don't flow through the Oura or Apple Health
+    caches. Fix for the Chris pattern: user typed 7.5h into the sleep
+    quick-log, freshness banner cleared but Coach Al still said 'I
+    don't see last night's sleep' because the chat context never
+    read device_readings. Now injected so the model can cite the
+    number the user actually entered."""
+    try:
+        from datetime import date as _date, timedelta as _td
+        import os
+        from supabase import create_client
+        url = os.getenv("SUPABASE_URL")
+        key = os.getenv("SUPABASE_SERVICE_KEY")
+        if not (url and key):
+            return ""
+        sb = create_client(url, key)
+        cutoff = (_date.today() - _td(days=7)).isoformat()
+        res = (sb.table("device_readings")
+                 .select("date, source, metric, value, unit, metadata")
+                 .eq("user_id", user_id)
+                 .eq("source", "manual")
+                 .gte("date", cutoff)
+                 .order("date", desc=True)
+                 .limit(40).execute())
+        rows = res.data or []
+        if not rows:
+            return ""
+        lines = [
+            "\n=== USER-ENTERED READINGS (last 7 days) ===",
+            "The user typed these values in themselves (not from a "
+            "connected device). Treat them as authoritative: if the "
+            "user asks about last night's sleep and there's a manual "
+            "row here for that date, cite THAT value — do not say "
+            "'I don't see it' just because Oura hasn't synced.",
+        ]
+        for r in rows:
+            date = r.get("date") or ""
+            metric = r.get("metric") or ""
+            value  = r.get("value")
+            unit   = r.get("unit") or ""
+            meta   = r.get("metadata") or {}
+            tag    = meta.get("device_tag") if isinstance(meta, dict) else None
+            piece = f"  • {date} {metric}: {value}{(' ' + unit) if unit else ''}"
+            if tag:
+                piece += f"  (from {tag})"
+            lines.append(piece)
+        return "\n".join(lines) + "\n"
+    except Exception:
+        return ""
+
+
 def _active_visit(user_id: str) -> str:
     """Doctor Visit Prep Mode integration — the upcoming visit is a
     context Coach Al must not deny. If the user asks 'what should I do
@@ -227,6 +279,18 @@ def _active_visit(user_id: str) -> str:
         import visits as _v
         row = _v.get_active_visit(user_id)
         return _v.context_block_for_coach(row) if row else ""
+    except Exception:
+        return ""
+
+
+def _training_flag(user_id: str) -> str:
+    """Today's injury/discomfort flag, if the user set one. Coach Al
+    must acknowledge by name and skip movements loading the affected
+    area."""
+    try:
+        import training_flags as _tf
+        from datetime import date as _d
+        return _tf.context_block_for_coach(_tf.today_flag(user_id, _d.today().isoformat()))
     except Exception:
         return ""
 
@@ -251,10 +315,12 @@ def build(user_id: str, profile: Optional[dict] = None) -> dict:
         "freshness_advisory":     _freshness(user_id),
         "clinical_escalation":    _clinical(user_id, profile),
         "active_visit_ctx":       _active_visit(user_id),
+        "training_flag_ctx":      _training_flag(user_id),
         "active_goal_ctx":        _active_goal(user_id),
         "recent_insights_ctx":    _recent_insights(user_id),
         "weekly_recap_ctx":       _weekly_recap(user_id),
         "data_quality_flags":     _data_quality_flags(user_id),
+        "manual_readings_ctx":    _manual_readings(user_id),
     }
 
 
