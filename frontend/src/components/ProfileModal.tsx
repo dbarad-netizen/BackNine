@@ -293,6 +293,64 @@ export default function ProfileModal({ onClose, initialTab = "profile" }: Props)
                 </div>
               </div>
 
+              {/* Training level — feeds today_workout.py's cold-start
+                  safety directive so beginner defaults stick even after
+                  the user has logged sessions, and advanced unlocks the
+                  full compound-lift library. Optional; missing = safe. */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-widest mb-1.5">
+                  Training level
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(["beginner", "intermediate", "advanced"] as const).map(lvl => {
+                    const selected = profile.training_level === lvl;
+                    const emoji = lvl === "beginner" ? "🌱" : lvl === "intermediate" ? "🏃" : "🔥";
+                    return (
+                      <button
+                        key={lvl}
+                        onClick={() => setProfile(p => ({ ...p, training_level: selected ? null : lvl }))}
+                        className={`flex flex-col items-center gap-1 rounded-xl px-2 py-2.5 text-xs font-medium transition-colors border ${
+                          selected
+                            ? "bg-[#1B3829]/8 border-[#1B3829]/40 text-[#1B3829]"
+                            : "bg-gray-50 border-gray-200 text-gray-600 hover:border-gray-400"
+                        }`}
+                      >
+                        <span className="text-lg leading-none">{emoji}</span>
+                        <span className="capitalize">{lvl}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-gray-500 leading-snug mt-1">
+                  Beginner sticks to bodyweight + light dumbbell forever. Advanced unlocks the full compound-lift library.
+                </p>
+              </div>
+
+              {/* Chronic injuries — feeds workout prescription to avoid
+                  movements loading these areas. Simple comma-separated
+                  entry so we don't overbuild UI. */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-widest mb-1.5">
+                  Injuries / areas to protect
+                </label>
+                <input
+                  type="text"
+                  value={(profile.chronic_injuries ?? []).map(i => i.area).join(", ")}
+                  onChange={e => {
+                    const areas = e.target.value.split(",").map(s => s.trim()).filter(Boolean);
+                    setProfile(p => ({
+                      ...p,
+                      chronic_injuries: areas.map(a => ({ area: a })),
+                    }));
+                  }}
+                  placeholder="e.g. right shoulder, lower back, left knee"
+                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-[#1B3829]"
+                />
+                <p className="text-[10px] text-gray-500 leading-snug mt-1">
+                  Coach Al avoids movements that load these areas when prescribing your daily workout.
+                </p>
+              </div>
+
               {error && (
                 <p className="text-xs text-red-500 bg-red-50 rounded-xl px-3 py-2">{error}</p>
               )}

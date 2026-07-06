@@ -279,18 +279,58 @@ export interface LabResult {
   notes?:           string;
 }
 
+export interface TrainingFlag {
+  id:         string;
+  date:       string;
+  flag_type:  "injury" | "discomfort" | "illness" | "fatigue";
+  body_area?: string | null;
+  severity?:  number | null;
+  notes?:     string | null;
+  created_at?: string;
+}
+
+export interface NutritionVice {
+  id:         string;
+  date:       string;
+  vice_type:  "alcohol" | "nicotine" | "weed" | "edibles" | "processed" | "sugar" | "caffeine" | "other";
+  amount?:    string | null;
+  notes?:     string | null;
+  created_at?: string;
+}
+
+export interface HydrationEntry {
+  id:         string;
+  date:       string;
+  volume_oz:  number;
+  source?:    string | null;
+  notes?:     string | null;
+  created_at?: string;
+}
+
+export interface ChronicInjury {
+  area:  string;          // "right shoulder", "lower back", "left knee", etc.
+  notes?: string;
+}
+
 export interface UserProfile {
-  name?:           string | null;
-  age?:            number | null;     // derived from birthdate when set
-  birthdate?:      string | null;     // ISO YYYY-MM-DD
-  biological_sex?: "male" | "female" | null;
-  height_cm?:      number | null;     // entered as ft/in in UI, stored as cm
-  health_goals?:   string[];
-  vo2_max?:        number | null;
-  supplements?:    Supplement[];
-  peptides?:       Peptide[];
-  medications?:    Medication[];
-  labs?:           LabResult[];
+  name?:              string | null;
+  age?:               number | null;     // derived from birthdate when set
+  birthdate?:         string | null;     // ISO YYYY-MM-DD
+  biological_sex?:    "male" | "female" | null;
+  height_cm?:         number | null;     // entered as ft/in in UI, stored as cm
+  health_goals?:      string[];
+  vo2_max?:           number | null;
+  supplements?:       Supplement[];
+  peptides?:          Peptide[];
+  medications?:       Medication[];
+  labs?:              LabResult[];
+  /** Self-reported training experience. Drives today_workout's cold-start
+   *  safety rules — beginner stays in bodyweight/dumbbell land forever
+   *  regardless of history; advanced gets the full library. */
+  training_level?:    "beginner" | "intermediate" | "advanced" | null;
+  /** Ongoing injuries or areas to protect. Feeds into workout prescription
+   *  (avoid movements loading these areas). */
+  chronic_injuries?:  ChronicInjury[];
 }
 
 export interface ChatMessage {
@@ -2088,6 +2128,51 @@ export const api = {
   },
   dismissOnboarding(): Promise<{ status: string }> {
     return request("/api/onboarding/dismiss", { method: "POST" });
+  },
+
+  // ── Training flags (injury / discomfort / illness for the day) ────────────
+  listTrainingFlags(days = 14): Promise<{ flags: TrainingFlag[] }> {
+    return request(`/api/training-flags?days=${days}`);
+  },
+  todayTrainingFlag(): Promise<{ flag: TrainingFlag | null }> {
+    return request("/api/training-flags/today");
+  },
+  createTrainingFlag(body: {
+    flag_type: TrainingFlag["flag_type"]; body_area?: string;
+    severity?: number; notes?: string; date?: string;
+  }): Promise<{ flag: TrainingFlag }> {
+    return request("/api/training-flags", { method: "POST", body: JSON.stringify(body) });
+  },
+  deleteTrainingFlag(id: string): Promise<{ status: string }> {
+    return request(`/api/training-flags/${id}`, { method: "DELETE" });
+  },
+
+  // ── Vices (alcohol, weed, nicotine, junk food, etc.) ──────────────────────
+  listVices(days = 30): Promise<{ vices: NutritionVice[] }> {
+    return request(`/api/nutrition/vices?days=${days}`);
+  },
+  createVice(body: {
+    vice_type: NutritionVice["vice_type"]; amount?: string;
+    notes?: string; date?: string;
+  }): Promise<{ vice: NutritionVice }> {
+    return request("/api/nutrition/vices", { method: "POST", body: JSON.stringify(body) });
+  },
+  deleteVice(id: string): Promise<{ status: string }> {
+    return request(`/api/nutrition/vices/${id}`, { method: "DELETE" });
+  },
+
+  // ── Hydration (optional per David — easy to remove) ───────────────────────
+  getHydration(date?: string): Promise<{ date: string; entries: HydrationEntry[]; total_oz: number }> {
+    const q = date ? `?date=${date}` : "";
+    return request(`/api/nutrition/hydration${q}`);
+  },
+  logHydration(body: { volume_oz: number; source?: string; notes?: string; date?: string }):
+    Promise<{ entry: HydrationEntry }>
+  {
+    return request("/api/nutrition/hydration", { method: "POST", body: JSON.stringify(body) });
+  },
+  deleteHydration(id: string): Promise<{ status: string }> {
+    return request(`/api/nutrition/hydration/${id}`, { method: "DELETE" });
   },
 
   // ── Oura pause / resume (Chris fix — user is on break from the ring) ──────

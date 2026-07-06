@@ -3487,6 +3487,212 @@ def account_deletion_status(request: Request):
     return pending or {}
 
 
+@app.get("/api/training-flags")
+def api_list_training_flags(request: Request, days: int = 14):
+    """Recent injury/discomfort flags for the user."""
+    import training_flags as _tf
+    session = _require_session(request)
+    return {"flags": _tf.recent_flags(session["user_id"], days=days)}
+
+
+@app.get("/api/training-flags/today")
+def api_today_training_flag(request: Request):
+    """The most recent flag for today, if any. Used by the Training tab
+    to show a 'Recovery day active' banner and by ai_context."""
+    import training_flags as _tf
+    session = _require_session(request)
+    today   = _user_local_today_iso(request)
+    return {"flag": _tf.today_flag(session["user_id"], today)}
+
+
+@app.post("/api/training-flags")
+async def api_create_training_flag(request: Request):
+    """Log an injury/discomfort/illness/fatigue flag for a given day.
+    Body: { flag_type, body_area?, severity?, notes?, date? }."""
+    import training_flags as _tf
+    session = _require_session(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    date = (body.get("date") or "").strip() or _user_local_today_iso(request)
+    try:
+        row = _tf.log_flag(
+            session["user_id"],
+            flag_type=(body.get("flag_type") or "").strip(),
+            date_str=date,
+            body_area=body.get("body_area"),
+            severity=body.get("severity"),
+            notes=body.get("notes"),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"flag": row}
+
+
+@app.delete("/api/training-flags/{flag_id}")
+def api_delete_training_flag(request: Request, flag_id: str):
+    import training_flags as _tf
+    session = _require_session(request)
+    ok = _tf.dismiss_flag(session["user_id"], flag_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Flag not found")
+    return {"status": "deleted"}
+
+
+@app.get("/api/nutrition/vices")
+def api_list_vices(request: Request, days: int = 30):
+    """Recent vice logs. Used by the Nutrition tab and by insight
+    correlation ('drinks 3+ nights/week → HRV -12%')."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    sb = get_supabase()
+    if not sb:
+        return {"vices": []}
+    try:
+        cutoff = (datetime.now(timezone.utc).date() - timedelta(days=days)).isoformat()
+        res = (sb.table("nutrition_vices")
+                 .select("*")
+                 .eq("user_id", user_id)
+                 .gte("date", cutoff)
+                 .order("date", desc=True)
+                 .limit(200).execute())
+        return {"vices": res.data or []}
+    except Exception:
+        return {"vices": []}
+
+
+@app.post("/api/nutrition/vices")
+async def api_create_vice(request: Request):
+    """Log a vice. Body: { vice_type, amount?, notes?, date? }."""
+    _VICES = {"alcohol", "nicotine", "weed", "edibles", "processed", "sugar", "caffeine", "other"}
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    vt = (body.get("vice_type") or "").strip()
+    if vt not in _VICES:
+        raise HTTPException(status_code=400, detail=f"vice_type must be one of {sorted(_VICES)}")
+    date = (body.get("date") or "").strip() or _user_local_today_iso(request)
+    row = {
+        "user_id":   user_id,
+        "date":      date,
+        "vice_type": vt,
+        "amount":    (body.get("amount") or "").strip()[:80] or None,
+        "notes":     (body.get("notes") or "").strip()[:400] or None,
+    }
+    sb = get_supabase()
+    if not sb:
+        raise HTTPException(status_code=500, detail="Supabase unavailable")
+    try:
+        res = sb.table("nutrition_vices").insert(row).execute()
+        return {"vice": (res.data or [row])[0]}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.delete("/api/nutrition/vices/{vice_id}")
+def api_delete_vice(request: Request, vice_id: str):
+    session = _require_session(request)
+    sb = get_supabase()
+    if not sb:
+        raise HTTPException(status_code=500, detail="Supabase unavailable")
+    try:
+        res = (sb.table("nutrition_vices").delete()
+                 .eq("user_id", session["user_id"])
+                 .eq("id", vice_id).execute())
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Vice not found")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    return {"status": "deleted"}
+
+
+@app.get("/api/nutrition/hydration")
+def api_get_hydration(request: Request, date: Optional[str] = None):
+    """Hydration entries for a day (default today). Returns list + sum
+    for the day so the UI can render both the running total and the
+    log detail."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    day = date if (date and _valid_ymd(date)) else _user_local_today_iso(request)
+    sb = get_supabase()
+    if not sb:
+        return {"date": day, "entries": [], "total_oz": 0}
+    try:
+        res = (sb.table("hydration_log")
+                 .select("*")
+                 .eq("user_id", user_id)
+                 .eq("date", day)
+                 .order("created_at", desc=True).execute())
+        rows = res.data or []
+        total = round(sum(float(r.get("volume_oz") or 0) for r in rows), 1)
+        return {"date": day, "entries": rows, "total_oz": total}
+    except Exception:
+        return {"date": day, "entries": [], "total_oz": 0}
+
+
+@app.post("/api/nutrition/hydration")
+async def api_log_hydration(request: Request):
+    """Log a drink. Body: { volume_oz, source?, notes?, date? }.
+    Source can be 'water' | 'coffee' | 'tea' | 'electrolyte' | 'other'.
+    Only water/electrolyte count as hydration in later coaching — the
+    rest are logged for full picture."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    try:
+        oz = float(body.get("volume_oz"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="volume_oz required (number)")
+    if not (0 < oz <= 200):
+        raise HTTPException(status_code=400, detail="volume_oz must be between 0 and 200")
+    date = (body.get("date") or "").strip() or _user_local_today_iso(request)
+    row = {
+        "user_id":   user_id,
+        "date":      date,
+        "volume_oz": round(oz, 1),
+        "source":    (body.get("source") or "water").strip() or "water",
+        "notes":     (body.get("notes") or "").strip()[:200] or None,
+    }
+    sb = get_supabase()
+    if not sb:
+        raise HTTPException(status_code=500, detail="Supabase unavailable")
+    try:
+        res = sb.table("hydration_log").insert(row).execute()
+        return {"entry": (res.data or [row])[0]}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.delete("/api/nutrition/hydration/{entry_id}")
+def api_delete_hydration(request: Request, entry_id: str):
+    session = _require_session(request)
+    sb = get_supabase()
+    if not sb:
+        raise HTTPException(status_code=500, detail="Supabase unavailable")
+    try:
+        res = (sb.table("hydration_log").delete()
+                 .eq("user_id", session["user_id"])
+                 .eq("id", entry_id).execute())
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Entry not found")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    return {"status": "deleted"}
+
+
 @app.get("/api/wearables/oura/status")
 def get_oura_status(request: Request):
     """Whether the user has explicitly paused Oura (Chris fix). Returns
@@ -4461,7 +4667,7 @@ async def save_profile(request: Request):
     session = _require_session(request)
     user_id = session["user_id"]
     body = await request.json()
-    allowed = {"name", "age", "biological_sex", "height_cm", "health_goals", "vo2_max", "birthdate", "supplements", "peptides", "medications"}
+    allowed = {"name", "age", "biological_sex", "height_cm", "health_goals", "vo2_max", "birthdate", "supplements", "peptides", "medications", "training_level", "chronic_injuries"}
     data = {k: v for k, v in body.items() if k in allowed}
     # Empty birthdate string clears it (Postgres date column rejects "").
     if "birthdate" in data and not data["birthdate"]:

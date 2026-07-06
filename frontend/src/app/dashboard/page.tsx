@@ -33,6 +33,8 @@ import VisitPrepCard from "@/components/VisitPrepCard";
 import VisitDetailModal from "@/components/VisitDetailModal";
 import VisitCreateModal from "@/components/VisitCreateModal";
 import SleepQuickLogCard from "@/components/SleepQuickLogCard";
+import TrainingFlagCard from "@/components/TrainingFlagCard";
+import NutritionExtrasCard from "@/components/NutritionExtrasCard";
 import BloodPressureCard from "@/components/BloodPressureCard";
 import DoctorReportModal from "@/components/DoctorReportModal";
 import DayMealsDrawer from "@/components/DayMealsDrawer";
@@ -2456,6 +2458,12 @@ export default function DashboardPage() {
                 next-meal suggestion. Renders nothing when targets unset. */}
             {!nutLoading && <NutritionCoachCard onAsk={(seed) => openChatRef.current?.(seed)} />}
 
+            {/* Vices + Hydration (David batch 2026-07-06). Vices are
+                episodic pattern-detection input (alcohol/nicotine/etc.);
+                hydration is optional and easy to remove if it doesn't
+                drive value. Both flow into insight correlation. */}
+            {!nutLoading && <NutritionExtrasCard />}
+
             {!nutLoading && nutToday && (
               <>
                 {/* ─ Calorie + Macro summary ─ */}
@@ -2687,6 +2695,12 @@ export default function DashboardPage() {
         {/* ── TRAINING ── */}
         {section === "training" && (
           <div className="space-y-4">
+            {/* Injury/discomfort flag (David batch 2026-07-06). Compact
+                pill by default; expands into a quick form; turns into
+                a "Recovery mode" banner once a flag is set. Flows into
+                today_workout's injury directive + Coach Al context. */}
+            <TrainingFlagCard />
+
             {/* Training Load (ACWR) */}
             <section className="rounded-2xl border bg-white p-6" style={{ borderColor: training_load.color + "66" }}>
               <p className="text-xs text-gray-600 uppercase tracking-widest mb-3">Training Load (ACWR)</p>
