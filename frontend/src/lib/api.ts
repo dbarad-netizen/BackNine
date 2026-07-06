@@ -343,6 +343,13 @@ export interface DataFreshnessSource {
 export interface DashboardFreshness {
   oura:                    DataFreshnessSource;
   apple_health:            DataFreshnessSource;
+  /** True when at least one source (Oura, Apple Health, or any device_readings
+   *  entry including manual) has data younger than fresh_threshold_hours. */
+  any_source_fresh?:       boolean;
+  /** True when NO source has data within stale_threshold_hours. This is the
+   *  signal the block-variant banner reads — we only nag when the user
+   *  genuinely has no current data path. */
+  all_sources_stale?:      boolean;
   stale_threshold_hours:   number;
   fresh_threshold_hours:   number;
 }

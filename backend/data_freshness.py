@@ -238,6 +238,70 @@ def apple_health_data_age_hours(user_id: str) -> Optional[float]:
         return None
 
 
+def device_readings_age_hours(user_id: str) -> Optional[float]:
+    """Hours since the most recent row in device_readings across ANY
+    source (Whoop / Garmin / Fitbit / Withings / manual / etc.). This
+    is the catch-all path: users who moved from Oura to another
+    tracker (Chris pattern) get freshness from whichever source they
+    now actually use, including manual entries via the sleep
+    quick-log card. Returns None if the table is empty for this user."""
+    sb = _sb()
+    if not sb or not user_id:
+        return None
+    try:
+        res = (
+            sb.table("device_readings")
+              .select("date")
+              .eq("user_id", user_id)
+              .order("date", desc=True)
+              .limit(1)
+              .execute()
+        )
+        rows = res.data or []
+        if not rows:
+            return None
+        return _age_hours(str(rows[0].get("date")))
+    except Exception:
+        return None
+
+
+def any_source_fresh(user_id: str) -> bool:
+    """True if ANY connected source has data younger than
+    FRESH_THRESHOLD_HOURS. The point: don't scream "your Oura is
+    stale!" at a user whose Apple Watch synced ten minutes ago and
+    who has just logged sleep manually. The banner should only fire
+    when NO source is producing current data.
+
+    This is what Chris exposed: former Oura user, now on Fitbit +
+    Apple Watch + manual entries. Oura hasn't updated in weeks (by
+    design), but his data is not stale — the app just didn't know
+    how to look past Oura."""
+    ages = [
+        oura_data_age_hours(user_id),
+        apple_health_data_age_hours(user_id),
+        device_readings_age_hours(user_id),
+    ]
+    for a in ages:
+        if a is not None and a <= FRESH_THRESHOLD_HOURS:
+            return True
+    return False
+
+
+def any_source_within_yellow(user_id: str) -> bool:
+    """True if ANY source has data within the yellow window (< 48h).
+    Used to decide whether to render a soft advisory versus the
+    hard 'no fresh data anywhere' block banner."""
+    ages = [
+        oura_data_age_hours(user_id),
+        apple_health_data_age_hours(user_id),
+        device_readings_age_hours(user_id),
+    ]
+    for a in ages:
+        if a is not None and a <= STALE_THRESHOLD_HOURS:
+            return True
+    return False
+
+
 # ── AI advisory ─────────────────────────────────────────────────────────
 
 def build_freshness_advisory(user_id: str) -> Optional[str]:

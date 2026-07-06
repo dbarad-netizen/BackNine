@@ -1775,6 +1775,15 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
                 "is_stale":        (ah_age is not None and ah_age > freshness.STALE_THRESHOLD_HOURS),
                 "is_fresh":        (ah_age is not None and ah_age <= freshness.FRESH_THRESHOLD_HOURS),
             },
+            # New meta-signal (Chris fix): the block-variant banner
+            # should only fire when NO source is producing fresh data.
+            # A former-Oura user now on Apple Watch + Fitbit + manual
+            # was getting the "Oura is old" nag despite having current
+            # data flowing in from other sources. Frontend gates the
+            # big banner on `all_sources_stale` instead of the per-
+            # source `is_stale`.
+            "any_source_fresh":   freshness.any_source_fresh(user_id),
+            "all_sources_stale":  not freshness.any_source_within_yellow(user_id),
             "stale_threshold_hours": freshness.STALE_THRESHOLD_HOURS,
             "fresh_threshold_hours": freshness.FRESH_THRESHOLD_HOURS,
         },

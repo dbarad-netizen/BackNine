@@ -1518,14 +1518,19 @@ export default function DashboardPage() {
           return (
           <div className="space-y-6">
             {/* Stale-data warning — surfaces at the top of the Scorecard
-                when Oura hasn't synced in >48h. Fable's re-eval flagged
-                that dashboard tiles were presenting 9-day-old data as
-                "today" with no indication. This block-variant makes it
-                impossible to miss. */}
-            {data.freshness?.oura?.is_stale && (
+                only when NO source is producing current data. Chris fix
+                (July 6): a former Oura user who's now on Apple Watch +
+                Fitbit + manual entries was getting the "your Oura is
+                old" banner even though his other sources were current.
+                We now gate on `all_sources_stale` (backend-computed),
+                so the banner only fires when the user genuinely has no
+                fresh data anywhere. Whichever source is stalest still
+                gets called out inside the badge — but only when it
+                matters. */}
+            {data.freshness?.all_sources_stale && data.freshness?.oura?.is_stale && (
               <DataFreshnessBadge freshness={data.freshness.oura} variant="block" />
             )}
-            {!data.freshness?.oura?.is_stale && data.freshness?.apple_health?.is_stale && (
+            {data.freshness?.all_sources_stale && !data.freshness?.oura?.is_stale && data.freshness?.apple_health?.is_stale && (
               <DataFreshnessBadge freshness={data.freshness.apple_health} variant="block" />
             )}
 
