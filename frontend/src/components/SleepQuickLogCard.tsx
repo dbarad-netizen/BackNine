@@ -108,10 +108,10 @@ export default function SleepQuickLogCard({ hasSleepAlready, onSaved }: Props) {
           </p>
         </div>
         <button
-          onClick={() => hasSleepAlready ? setCompactMode(true) : setDismissed(true)}
+          onClick={() => setDismissed(true)}
           className="shrink-0 text-gray-500 hover:text-gray-900 text-lg leading-none px-1"
-          title={hasSleepAlready ? "Collapse this card" : "Hide this card"}
-          aria-label="Close sleep log card"
+          title="Hide this card"
+          aria-label="Hide sleep log card"
         >
           ×
         </button>
