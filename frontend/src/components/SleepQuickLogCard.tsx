@@ -57,34 +57,16 @@ export default function SleepQuickLogCard({ hasSleepAlready, onSaved }: Props) {
   const [busy,     setBusy]     = useState(false);
   const [error,    setError]    = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
-  // Compact mode: when sleep data already exists, render as a small
-  // "+ Log sleep manually" pill that expands into the full form when
-  // tapped. This gives every user a persistent path to manual entry —
-  // Chris (the Whoop user David flagged) never found the input because
-  // the card was empty-state only. When there's no sleep yet, the form
-  // stays open by default (compactMode starts false).
-  const [compactMode, setCompactMode] = useState(hasSleepAlready);
 
-  if (dismissed) return null;
-
-  // Compact pill: rendered when sleep already exists for last night.
-  // Tap to expand into the full form (useful for backfilling a
-  // different night, correcting a bad reading, etc.).
-  if (compactMode) {
-    return (
-      <button
-        id="sleep-quick-log"
-        onClick={() => setCompactMode(false)}
-        className="w-full py-2.5 rounded-2xl border border-sky-200 bg-white text-sm font-semibold text-sky-800 hover:bg-sky-50 transition-colors flex items-center justify-center gap-2 shadow-sm"
-      >
-        <span className="text-base leading-none">💤</span>
-        Log sleep manually
-        <span className="text-xs font-normal text-sky-800/70">
-          · from a different device or night
-        </span>
-      </button>
-    );
-  }
+  // Design: card is EMPTY-STATE ONLY. When a device (Oura, Apple Health)
+  // has reported sleep for last night, the card renders nothing. We
+  // don't nag active-Oura users with a "log sleep manually" pill — that
+  // reads as noise. The Chris pattern (Whoop / paused Oura / manual
+  // entry) still works cleanly: without a fresh device reading,
+  // hasSleepAlready is false and the full form renders. If a user
+  // needs to backfill a different night later, we'll expose that from
+  // a Sleep detail view, not from the Scorecard.
+  if (hasSleepAlready || dismissed) return null;
 
   const submit = async () => {
     setError(null);
