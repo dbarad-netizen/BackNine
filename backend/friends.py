@@ -58,10 +58,34 @@ def _now() -> datetime:
 
 # ── Invites ───────────────────────────────────────────────────────────────────
 
-def create_invite(inviter_id: str, inviter_name: str) -> dict:
-    """Create a one-time invite code for inviter_id to share."""
+# Allowed relationship tags for demand-signal instrumentation. Kept
+# intentionally narrow (Fable's "keep the door open" note): we're not
+# building family features yet — just measuring what fraction of
+# invites are spouses vs friends vs parents so the family-graph
+# decision has data behind it post-launch.
+_VALID_RELATIONSHIPS = {
+    "partner", "parent", "adult_child", "sibling",
+    "friend", "colleague", "other",
+}
+
+
+def create_invite(inviter_id: str, inviter_name: str,
+                  relationship_type: Optional[str] = None) -> dict:
+    """Create a one-time invite code for inviter_id to share.
+
+    `relationship_type` is a metadata-only tag (Fable-endorsed
+    instrumentation, 2026-07-06). Zero user-facing behavior change
+    on ship — the tag exists so post-launch we can answer "what
+    fraction of invites are spouses?" and let that data drive the
+    family-graph decision. Never gate features on this. Invalid or
+    missing values are stored as null; we don't reject the invite."""
     if not inviter_name or inviter_name.strip().lower() in {"backnine user", "a backnine friend", ""}:
         inviter_name = "Friend"
+
+    # Normalize the tag: accept only the whitelist, else null.
+    tag = (relationship_type or "").strip().lower() or None
+    if tag not in _VALID_RELATIONSHIPS:
+        tag = None
 
     sb = _sb()
     code = _short_code()
@@ -70,15 +94,17 @@ def create_invite(inviter_id: str, inviter_name: str) -> dict:
         try:
             expires = _now() + timedelta(hours=INVITE_TTL_HOURS)
             sb.table("friend_invites").insert({
-                "code":         code,
-                "inviter_id":   inviter_id,
-                "inviter_name": inviter_name,
-                "expires_at":   expires.isoformat(),
+                "code":              code,
+                "inviter_id":        inviter_id,
+                "inviter_name":      inviter_name,
+                "expires_at":        expires.isoformat(),
+                "relationship_type": tag,
             }).execute()
             return {
-                "code":         code,
-                "inviter_name": inviter_name,
-                "expires_at":   expires.isoformat(),
+                "code":              code,
+                "inviter_name":      inviter_name,
+                "expires_at":        expires.isoformat(),
+                "relationship_type": tag,
             }
         except Exception:
             code = _short_code()
@@ -92,6 +118,7 @@ def _create_friendship(
     inviter_name: str,
     accepter_id: str,
     accepter_name: str,
+    relationship_type: Optional[str] = None,
 ) -> dict:
     """
     Create (or restore) a bidirectional friendship between two users.
@@ -133,13 +160,19 @@ def _create_friendship(
             return (refreshed.data or [existing_row])[0]
         return existing_row
 
-    insert_res = sb.table("friendships").insert({
+    payload = {
         "user_id_a":    user_a,
         "user_id_b":    user_b,
         "user_a_name":  user_a_name,
         "user_b_name":  user_b_name,
         "initiated_by": inviter_id,
-    }).execute()
+    }
+    # Relationship-type instrumentation (Fable 2026-07-06): the tag
+    # copies from the invite to the friendship row and stays. Never
+    # gated on anywhere; pure demand-signal metadata.
+    if relationship_type:
+        payload["relationship_type"] = relationship_type
+    insert_res = sb.table("friendships").insert(payload).execute()
     return (insert_res.data or [{}])[0]
 
 
@@ -182,7 +215,10 @@ def accept_invite(code: str, accepter_id: str, accepter_name: str) -> dict:
     if inviter_id == accepter_id:
         raise ValueError("You can't friend yourself")
 
-    friendship = _create_friendship(sb, inviter_id, inviter_name, accepter_id, accepter_name)
+    friendship = _create_friendship(
+        sb, inviter_id, inviter_name, accepter_id, accepter_name,
+        relationship_type=row.get("relationship_type"),
+    )
 
     # Mark the invite consumed
     sb.table("friend_invites").update({

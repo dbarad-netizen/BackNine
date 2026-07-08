@@ -11,7 +11,7 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
-import { api, type UserProfile, type Friend, type FriendInvite } from "@/lib/api";
+import { api, type UserProfile, type Friend, type FriendInvite, type RelationshipType } from "@/lib/api";
 import OuraPauseToggle from "./OuraPauseToggle";
 
 const GOAL_OPTIONS = [
@@ -421,6 +421,10 @@ function FriendsPanel() {
   const [invite,        setInvite]        = useState<FriendInvite | null>(null);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [copied,        setCopied]        = useState(false);
+  // Fable-endorsed demand-signal instrumentation (2026-07-06). Not a
+  // family feature — just a tag on the invite row so we can measure
+  // "what fraction of invites are spouses vs friends" post-launch.
+  const [inviteRelationship, setInviteRelationship] = useState<RelationshipType | "">("");
 
   const [acceptCode,    setAcceptCode]    = useState("");
   const [accepting,     setAccepting]     = useState(false);
@@ -448,7 +452,9 @@ function FriendsPanel() {
     setInviteLoading(true);
     setCopied(false);
     try {
-      const i = await api.friends.invite();
+      const i = await api.friends.invite(
+        inviteRelationship === "" ? undefined : inviteRelationship,
+      );
       setInvite(i);
     } catch {
       setInvite(null);
@@ -550,14 +556,34 @@ function FriendsPanel() {
           Invite a Friend
         </label>
         {!invite ? (
-          <button
-            onClick={handleInvite}
-            disabled={inviteLoading}
-            className="w-full py-2.5 rounded-xl bg-[#1B3829]/8 hover:bg-[#1B3829]/15 text-[#1B3829] text-sm font-semibold transition-colors disabled:opacity-50 border border-[#1B3829]/30"
-            style={{ backgroundColor: "rgba(27,56,41,0.08)" }}
-          >
-            {inviteLoading ? "Generating…" : "Generate invite code"}
-          </button>
+          <div className="space-y-2">
+            {/* Optional "how do you know them?" — pure demand-signal
+                instrumentation. Skipping it is fine; leaves the tag
+                null. Never changes anything downstream today. */}
+            <select
+              value={inviteRelationship}
+              onChange={e => setInviteRelationship(e.target.value as RelationshipType | "")}
+              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-[#1B3829]"
+              aria-label="How do you know this person?"
+            >
+              <option value="">How do you know them? (optional)</option>
+              <option value="partner">Partner / spouse</option>
+              <option value="parent">Parent</option>
+              <option value="adult_child">Adult child</option>
+              <option value="sibling">Sibling</option>
+              <option value="friend">Friend</option>
+              <option value="colleague">Colleague</option>
+              <option value="other">Other</option>
+            </select>
+            <button
+              onClick={handleInvite}
+              disabled={inviteLoading}
+              className="w-full py-2.5 rounded-xl bg-[#1B3829]/8 hover:bg-[#1B3829]/15 text-[#1B3829] text-sm font-semibold transition-colors disabled:opacity-50 border border-[#1B3829]/30"
+              style={{ backgroundColor: "rgba(27,56,41,0.08)" }}
+            >
+              {inviteLoading ? "Generating…" : "Generate invite code"}
+            </button>
+          </div>
         ) : (
           <div className="space-y-2">
             <div className="rounded-xl bg-gradient-to-br from-[#1B3829] to-[#2D6A4F] px-4 py-3 text-white">

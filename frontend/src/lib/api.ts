@@ -2615,8 +2615,11 @@ export const api = {
 
   // ── Friends ────────────────────────────────────────────────────────────────
   friends: {
-    invite(): Promise<FriendInvite> {
-      return request("/api/friends/invite", { method: "POST" });
+    invite(relationship_type?: RelationshipType): Promise<FriendInvite> {
+      return request("/api/friends/invite", {
+        method: "POST",
+        body:   JSON.stringify(relationship_type ? { relationship_type } : {}),
+      });
     },
     accept(code: string): Promise<unknown> {
       return request("/api/friends/accept", {
@@ -3104,10 +3107,19 @@ export interface DirectMessage {
 }
 
 // ── Friends types ─────────────────────────────────────────────────────────────
+/** Fable-endorsed demand-signal instrumentation (2026-07-06). Purely
+ *  metadata — no user-facing behavior branches off this. Stored on the
+ *  invite row and copied to the resulting friendship so we can answer
+ *  "what fraction of invites are spouses?" post-launch. */
+export type RelationshipType =
+  | "partner" | "parent" | "adult_child" | "sibling"
+  | "friend"  | "colleague" | "other";
+
 export interface FriendInvite {
-  code:         string;
-  inviter_name: string;
-  expires_at:   string;
+  code:               string;
+  inviter_name:       string;
+  expires_at:         string;
+  relationship_type?: RelationshipType | null;
 }
 
 export interface Friend {

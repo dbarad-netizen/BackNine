@@ -5534,11 +5534,26 @@ def _display_name_for(user_id: str) -> str:
 
 @app.post("/api/friends/invite")
 async def create_friend_invite(request: Request):
-    """Generate a one-time invite code for the current user to share."""
+    """Generate a one-time invite code for the current user to share.
+
+    Optional body: { relationship_type } — the inviter's tag for how
+    they know the invitee (partner/parent/adult_child/sibling/friend/
+    colleague/other). Metadata-only; drives no user-facing behavior.
+    Used post-launch to measure family-graph demand signal."""
     session = _require_session(request)
     user_id = session["user_id"]
+    rel_type: Optional[str] = None
     try:
-        return frd.create_invite(user_id, _display_name_for(user_id))
+        body = await request.json()
+        rel_type = (body.get("relationship_type") or "").strip() or None
+    except Exception:
+        pass  # body optional; missing = plain invite
+    try:
+        return frd.create_invite(
+            user_id,
+            _display_name_for(user_id),
+            relationship_type=rel_type,
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"could not create invite: {e}")
 
