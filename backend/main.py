@@ -5500,6 +5500,26 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
         except Exception:
             pass
 
+    # Sync-nudge signal (David 2026-07-09): when the sleep score is
+    # present but the detailed session (duration/HRV/RHR) isn't, AND
+    # the user is on the front-half of their day (10am+ local), it's
+    # very likely the ring hasn't synced yet. Set a flag the frontend
+    # renders as a subtle "Open the Oura app to nudge the sync" hint.
+    # We do NOT gate the narrative on this — the coach still speaks
+    # to what's there. The hint is purely UX.
+    ring_sync_hint = False
+    try:
+        _has_score = bool((t_sl.get("score") or 0) > 0) or bool((t_rdy.get("score") or 0) > 0)
+        _has_session = bool(t_sm.get("total"))
+        # Only fire past ~10am local (Oura usually publishes within a
+        # few hours of wake; earlier than that we just wait quietly).
+        from zoneinfo import ZoneInfo as _Z
+        _local_hour = datetime.now(tz=_Z("America/New_York")).hour
+        if _has_score and not _has_session and _local_hour >= 10:
+            ring_sync_hint = True
+    except Exception:
+        pass
+
     return {
         "date":                today_str,
         "narrative":           narrative,
@@ -5512,6 +5532,7 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
         "app_streak":          _compute_app_streak(user_id, today_str),
         "has_data":            True,
         "sleep_status":        "ok",
+        "ring_sync_hint":      ring_sync_hint,
     }
 
 

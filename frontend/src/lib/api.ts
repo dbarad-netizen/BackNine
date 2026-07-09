@@ -2716,6 +2716,11 @@ export interface BriefingResponse {
   app_streak:          number;     // consecutive days the user has opened BackNine
   has_data?:           boolean;    // false = welcome state for users with no metrics yet
   sleep_status?:       "ok" | "pending";  // "pending" = last night's sleep hasn't synced yet
+  /** True when the sleep score is present but Oura's detailed session (duration,
+   *  HRV) hasn't published yet, AND it's past mid-morning. Signals a likely
+   *  ring-sync issue on the Oura side. Frontend renders a subtle "open Oura
+   *  app to nudge sync" hint under the narrative when true. */
+  ring_sync_hint?:     boolean;
 }
 
 export interface WeeklyInsightStat {

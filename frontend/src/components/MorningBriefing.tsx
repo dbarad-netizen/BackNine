@@ -315,6 +315,23 @@ export default function MorningBriefing({ onOpenChat }: Props) {
               </p>
             ))
           )}
+
+          {/* Ring sync hint (David 2026-07-09): sleep score is present but
+              Oura's session detail hasn't published yet. This is Oura-side,
+              not us — but we can help the user fix it in one tap. Renders
+              only when the backend flags it (past ~10am local + score
+              present + session absent). */}
+          {data.ring_sync_hint && (
+            <div className="mt-3 rounded-lg bg-white/8 border border-white/15 px-3 py-2">
+              <p className="text-[11px] text-white/85 leading-snug">
+                <span className="font-semibold">Oura tip:</span> your sleep
+                score is in but the detailed session (duration, HRV) hasn&rsquo;t
+                published yet. Open the Oura app and tap the sync arrow at
+                the top — that usually pulls last night&rsquo;s detail through
+                within a minute.
+              </p>
+            </div>
+          )}
         </div>
       </div>
 

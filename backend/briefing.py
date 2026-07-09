@@ -142,15 +142,28 @@ def _build_system_prompt(
                     parts.append(f"  • {label}: {v:.1f}{unit}")
                 else:
                     parts.append(f"  • {label}: {v}{unit}")
-        # Guard against hallucinated sleep figures: if last night's detailed sleep
-        # (duration/HRV) hasn't synced but we have the score, tell Coach Al not to
-        # quote a duration/HRV or borrow the 7-day average as if it were last night.
+        # Guard against hallucinated sleep figures: if last night's detailed
+        # sleep (duration/HRV) hasn't synced but we have the score, tell Coach
+        # Al not to quote a duration/HRV or borrow the 7-day average as if it
+        # were last night. Rewritten 2026-07-09 after David hit the credibility
+        # bug: the model was quoting "still syncing" to the user, which read
+        # as OUR failure even though the missing data is Oura-side (session
+        # detail lags the score by hours on some rings/days). Now the note
+        # is framed as an internal directive — work with what's here, don't
+        # narrate what isn't.
         if today.get("sleep_hours") is None:
             parts.append(
-                "  • NOTE: last night's sleep DURATION and HRV have not synced yet. "
-                "Do NOT state any sleep duration or HRV number for last night, and do "
-                "NOT present the 7-day average as last night's figure. You may still "
-                "reference the readiness and sleep SCORE above."
+                "  • INTERNAL DIRECTIVE (do not quote to user): last night's sleep "
+                "duration and HRV numbers are not in this payload. This is normal "
+                "when Oura's session detail lags the score by a few hours. "
+                "Coach the user based ONLY on what IS present (the sleep score, "
+                "readiness, and 7-day averages). Do NOT invent a duration or HRV "
+                "for last night, do NOT use the 7-day average as if it were last "
+                "night, and DO NOT tell the user their data is 'still syncing' "
+                "or 'hasn't come through' — that reads as an app failure. If the "
+                "user asks about sleep detail specifically, say plainly that "
+                "Oura hasn't published last night's session yet and suggest they "
+                "open the Oura app to nudge the sync."
             )
 
     seven = health_context.get("seven_day") or {}
