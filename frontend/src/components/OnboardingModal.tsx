@@ -14,7 +14,7 @@
  */
 
 import { useState } from "react";
-import { api } from "@/lib/api";
+import { api, localToday } from "@/lib/api";
 
 const BACKEND = "https://backnine-hu60.onrender.com";
 
@@ -161,7 +161,7 @@ export default function OnboardingModal({ onDone }: Props) {
                     <input
                       className={inp}
                       type="date"
-                      max={new Date().toISOString().slice(0, 10)}
+                      max={localToday()}
                       value={birthdate}
                       onChange={e => setBirthdate(e.target.value)}
                     />

@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import {
   api,
+  localToday,
   type WeeklyPlan,
   type WeeklySession,
   type Workout,
@@ -409,7 +410,7 @@ export function WorkoutLogger({
         : undefined;
 
       const w = await api.logWorkout({
-        date:         new Date().toISOString().slice(0, 10),
+        date:         localToday(),
         type:         workoutType,
         exercises:    clean,
         duration_min: duration ? parseInt(duration) : undefined,

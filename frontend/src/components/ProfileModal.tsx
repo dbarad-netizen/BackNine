@@ -11,7 +11,7 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
-import { api, type UserProfile, type Friend, type FriendInvite, type RelationshipType } from "@/lib/api";
+import { api, localToday, type UserProfile, type Friend, type FriendInvite, type RelationshipType } from "@/lib/api";
 import OuraPauseToggle from "./OuraPauseToggle";
 
 const GOAL_OPTIONS = [
@@ -180,7 +180,7 @@ export default function ProfileModal({ onClose, initialTab = "profile" }: Props)
                 <label className="block text-xs font-semibold text-gray-600 uppercase tracking-widest mb-1.5">Date of Birth</label>
                 <input
                   type="date"
-                  max={new Date().toISOString().slice(0, 10)}
+                  max={localToday()}
                   className={inp}
                   value={profile.birthdate ?? ""}
                   onChange={e => setProfile(prev => ({ ...prev, birthdate: e.target.value || null }))}
@@ -673,7 +673,7 @@ function AccountDangerZone() {
       const text = JSON.stringify(blob, null, 2);
       const url  = URL.createObjectURL(new Blob([text], { type: "application/json" }));
       const a    = document.createElement("a");
-      const stamp = new Date().toISOString().slice(0, 10);
+      const stamp = localToday();
       a.href     = url;
       a.download = `backnine-export-${stamp}.json`;
       document.body.appendChild(a);

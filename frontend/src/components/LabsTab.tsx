@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts";
-import { api, type LabEntry } from "@/lib/api";
+import { api, localToday, type LabEntry } from "@/lib/api";
 
 // ── Reference range metadata (mirrors backend) ────────────────────────────────
 const GROUPS: Record<string, { label: string; unit: string; low: number; high: number; opt_lo: number; opt_hi: number; key: string }[]> = {
@@ -159,7 +159,7 @@ interface LogFormProps {
   onSave: (entry: Partial<LabEntry> & { date: string }) => Promise<void>;
 }
 function LabLogForm({ onSave }: LogFormProps) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localToday();
   const [date, setDate] = useState(today);
   const [values, setValues] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState("");

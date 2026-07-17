@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
   api,
+  localToday,
   getPendingReferral,
   clearPendingReferral,
   readDashboardCache,
@@ -1471,7 +1472,7 @@ export default function DashboardPage() {
 
         {/* ── COACH (also the landing page) ── */}
         {section === "coaching" && (() => {
-          const todayStr   = new Date().toISOString().slice(0, 10);
+          const todayStr   = localToday();
           const isStale    = !!(data.today?.date && data.today.date < todayStr);
           const rdyScore   = rdy?.score  as number | undefined;
           const slScore    = sl?.score   as number | undefined;
@@ -2878,7 +2879,7 @@ export default function DashboardPage() {
             // Refetch the weekly summary so the chart + averages reflect the edit.
             api.nutritionSummary().then(setNutSummary).catch(() => {});
             // Also refetch today if the day they edited is today.
-            if (drawerDate === new Date().toISOString().slice(0, 10)) {
+            if (drawerDate === localToday()) {
               api.nutritionToday().then(setNutToday).catch(() => {});
             }
           }}

@@ -16,7 +16,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { api, type Mood, type SymptomLog, type SymptomCorrelation } from "@/lib/api";
+import { api, localToday, type Mood, type SymptomLog, type SymptomCorrelation } from "@/lib/api";
 
 // Mood emoji row — moved out of MorningBriefing into this unified card so
 // users have ONE place to do the daily check-in. Mood = emotional pulse;
@@ -60,7 +60,7 @@ export default function SymptomCard() {
   const [corr, setCorr]         = useState<SymptomCorrelation | null>(null);
   const [corrLoading, setCorrLoading] = useState(false);
 
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = localToday();
 
   useEffect(() => {
     Promise.all([

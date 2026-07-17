@@ -15,7 +15,7 @@
  */
 
 import { useMemo, useState } from "react";
-import type { LabResult } from "@/lib/api";
+import { localToday, type LabResult } from "@/lib/api";
 
 interface Props {
   labs:   LabResult[];
@@ -70,7 +70,7 @@ export default function LabsCard({ labs, onSave }: Props) {
 
   const openAdd = () => {
     setEditing(-1);
-    setDraft({ ...EMPTY_DRAFT, date: new Date().toISOString().slice(0, 10) });
+    setDraft({ ...EMPTY_DRAFT, date: localToday() });
     setError(null);
   };
 

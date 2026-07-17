@@ -9,7 +9,7 @@
  */
 
 import { useState } from "react";
-import { api, type DoctorVisit } from "@/lib/api";
+import { api, localToday, type DoctorVisit } from "@/lib/api";
 
 interface Props {
   onClose:   () => void;
@@ -76,7 +76,7 @@ export default function VisitCreateModal({ onClose, onCreated }: Props) {
                 type="date"
                 value={date}
                 onChange={e => setDate(e.target.value)}
-                min={new Date().toISOString().slice(0, 10)}
+                min={localToday()}
                 className="mt-1 w-full text-sm rounded-lg border border-gray-200 px-2.5 py-2"
               />
             </label>

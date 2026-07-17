@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { api, type Challenge, type ChallengeParticipant, type ChallengeMessage } from "@/lib/api";
+import { api, localToday, type Challenge, type ChallengeParticipant, type ChallengeMessage } from "@/lib/api";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const TYPE_OPTIONS = [
@@ -27,7 +27,7 @@ function daysLabel(n: number) {
 }
 
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  return localToday();
 }
 
 /** Generate every date string from start to end inclusive */

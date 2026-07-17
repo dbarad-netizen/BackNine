@@ -19,6 +19,18 @@ export function localToday(d: Date = new Date()): string {
   return `${y}-${m}-${day}`;
 }
 
+/** Naive local ISO datetime (no timezone suffix) — matches user's clock.
+ *  `new Date().toISOString()` returns UTC, which broke the nutrition
+ *  day-progress + chat pace-check math on 2026-07-09 (evening request
+ *  keyed to next-day UTC → 3am hour → "day just getting started"). Use
+ *  this helper whenever the backend needs the user's actual local
+ *  hour-of-day, not the wall-clock in London. */
+export function localNowIso(d: Date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+         `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 // ── Token storage ─────────────────────────────────────────────────────────────
 // On load, grab token from URL ?token= param (set by backend after OAuth),
 // persist to localStorage, then remove from URL so it's not bookmarked.
@@ -2020,8 +2032,14 @@ export const api = {
   nutritionTodayCoach(): Promise<NutritionCoachPayload> {
     // Pass the client's local ISO timestamp so the server's "early / late /
     // on-pace" math uses the user's actual hour-of-day, not the Render UTC.
-    const localNow = new Date().toISOString();
-    return request(`/api/nutrition/today-coach?local_now=${encodeURIComponent(localNow)}`);
+    //
+    // BUG FIX (2026-07-09): `new Date().toISOString()` ALWAYS returns UTC
+    // (e.g. "2026-07-10T03:00:00.000Z" when it's 8pm PT). The server's
+    // fromisoformat parsed the Z suffix as UTC and .hour returned 3 —
+    // giving 0% day progress and "Day's just getting started" at 8pm
+    // local. localNowIso builds a naive local ISO string so hour/minute
+    // are the user's actual clock time.
+    return request(`/api/nutrition/today-coach?local_now=${encodeURIComponent(localNowIso())}`);
   },
   tonightSleep(opts: { refresh?: boolean } = {}): Promise<TonightSleepPayload> {
     return request(`/api/sleep/tonight${opts.refresh ? "?refresh=1" : ""}`);
@@ -2423,7 +2441,10 @@ export const api = {
         message,
         history,
         date:      localToday(),
-        local_now: new Date().toISOString(),
+        // Naive local ISO — .toISOString() returns UTC and broke the
+        // hour-of-day math (2026-07-09 bug). See nutritionTodayCoach
+        // above for the same fix.
+        local_now: localNowIso(),
       }),
     });
   },
