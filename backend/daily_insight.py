@@ -195,6 +195,56 @@ def _assemble_window(user_id: str, days: int = 14) -> dict:
     except Exception:
         pass
 
+    # Vices + hydration + stack adherence (David 2026-07-09). Coach Al
+    # can now correlate "electrolyte drinks → +8 mmHg systolic" or
+    # "days I skipped losartan → higher evening BP" — the kind of
+    # honest cross-domain observation that makes tracking these things
+    # feel worth the effort. Kept compact: date + type + amount only,
+    # no notes (those stay private).
+    vices: list[dict] = []
+    hydration_daily: list[dict] = []
+    adherence: list[dict] = []
+    if sb:
+        try:
+            res = (sb.table("nutrition_vices")
+                     .select("date, vice_type, amount")
+                     .eq("user_id", user_id)
+                     .gte("date", start).lte("date", end)
+                     .limit(200).execute())
+            vices = res.data or []
+        except Exception:
+            pass
+        try:
+            res = (sb.table("hydration_log")
+                     .select("date, volume_oz, source")
+                     .eq("user_id", user_id)
+                     .gte("date", start).lte("date", end)
+                     .limit(400).execute())
+            # Aggregate per day + per source so patterns like
+            # "electrolyte drinks correlate with BP" become visible.
+            by_day: dict[str, dict] = {}
+            for r in (res.data or []):
+                d = r.get("date")
+                if not d:
+                    continue
+                slot = by_day.setdefault(d, {"date": d, "total_oz": 0.0, "sources": {}})
+                oz = float(r.get("volume_oz") or 0)
+                slot["total_oz"] = round(slot["total_oz"] + oz, 1)
+                src = (r.get("source") or "water").strip() or "water"
+                slot["sources"][src] = round(slot["sources"].get(src, 0.0) + oz, 1)
+            hydration_daily = sorted(by_day.values(), key=lambda r: r["date"], reverse=True)
+        except Exception:
+            pass
+        try:
+            res = (sb.table("stack_adherence_log")
+                     .select("date, item_kind, item_name, taken")
+                     .eq("user_id", user_id)
+                     .gte("date", start).lte("date", end)
+                     .limit(500).execute())
+            adherence = res.data or []
+        except Exception:
+            pass
+
     return {
         "range":           {"start": start, "end": end, "days": days},
         "daily":           [r for r in daily_rows if len(r) > 1],  # drop empty rows
@@ -205,6 +255,9 @@ def _assemble_window(user_id: str, days: int = 14) -> dict:
         "nutrition_daily": nutrition_rows,
         "mood":            mood_rows,
         "active_goal":     active_goal,
+        "vices":           vices,
+        "hydration_daily": hydration_daily,
+        "adherence":       adherence,
     }
 
 
@@ -234,6 +287,14 @@ Voice and constraints:
   often in cross-domain patterns (e.g. sleep × HRV, training × HRV, BP ×
   sleep, body fat × calories). One signal alone is usually less
   interesting.
+- HIGH-VALUE CROSS-DOMAIN PAIRS to look for (David 2026-07-09):
+    • `vices` × next-day HRV/sleep/BP (e.g. alcohol → HRV drop)
+    • `hydration_daily.sources.electrolyte` × BP (sodium load → BP)
+    • `adherence` × downstream metrics on days-taken vs missed
+      (e.g. days-taken losartan vs missed → evening BP delta).
+      This is the "did the supplement/med actually do anything?"
+      question — use it when there's at least 3 taken + 3 missed days.
+    • hydration × sleep efficiency (dehydration → fragmentation)
 - If the data is too sparse to find anything meaningful, return
   confidence='low' and a pattern that acknowledges that ("Not enough
   days of data yet to spot a real pattern — keep logging").

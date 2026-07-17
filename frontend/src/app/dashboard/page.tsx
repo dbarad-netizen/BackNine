@@ -36,6 +36,7 @@ import VisitCreateModal from "@/components/VisitCreateModal";
 import SleepQuickLogCard from "@/components/SleepQuickLogCard";
 import TrainingFlagCard from "@/components/TrainingFlagCard";
 import NutritionExtrasCard from "@/components/NutritionExtrasCard";
+import StackAdherenceCard from "@/components/StackAdherenceCard";
 import BloodPressureCard from "@/components/BloodPressureCard";
 import DoctorReportModal from "@/components/DoctorReportModal";
 import DayMealsDrawer from "@/components/DayMealsDrawer";
@@ -64,7 +65,9 @@ import TodaysTagsCard from "@/components/TodaysTagsCard";
 import JournalCard from "@/components/JournalCard";
 import DailyInsightCard from "@/components/DailyInsightCard";
 import SymptomCard from "@/components/SymptomCard";
-import WeeklyInsight from "@/components/WeeklyInsight";
+// WeeklyInsight retired 2026-07-09 per David: content overlapped Coach Al
+// briefing + Daily Insight + Weekly Recap. Component file stays in place
+// in case we want to revive under a different framing later.
 import GoalCard from "@/components/GoalCard";
 import GearPicks from "@/components/GearPicks";
 import PulseFeed from "@/components/PulseFeed";
@@ -883,10 +886,12 @@ export default function DashboardPage() {
   // 90-day per-metric history modal.
   const [lonMetricOpen, setLonMetricOpen] = useState<{ key: string; label: string } | null>(null);
   const [navOpen, setNavOpen] = useState(false);
-  // When the user has an active goal, hoist the Goal card above Weekly Insight.
-  // Seed from localStorage so returning users get the right order on first paint
-  // (no reorder flash); GoalCard confirms/updates it once it fetches.
-  const [goalActive, setGoalActive] = useState<boolean>(() => {
+  // Goal-active state remembered across sessions (used to be for card
+  // ordering with Weekly Insight; that card was retired 2026-07-09 so
+  // the state is currently only used as an "is there an active goal?"
+  // signal by the GoalCard's onActiveChange callback). Left in place —
+  // low cost, ready to gate other surfaces later.
+  const [, setGoalActive] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem("bn_goal_active") === "1";
   });
@@ -2408,21 +2413,11 @@ export default function DashboardPage() {
               onClose={() => setLonMetricOpen(null)}
             />
 
-            {/* ── Coach Al Goal & Weekly Insight ──
-                Stays ABOVE the explore fold because these are daily-relevant.
-                Goal card rises above the Weekly Insight when active so the
-                committed target leads. No active goal → Insight leads. */}
-            {goalActive ? (
-              <>
-                <GoalCard onOpenChat={(seed) => openChatRef.current?.(seed)} onActiveChange={handleGoalActive} />
-                <WeeklyInsight onOpenChat={(seed) => openChatRef.current?.(seed)} />
-              </>
-            ) : (
-              <>
-                <WeeklyInsight onOpenChat={(seed) => openChatRef.current?.(seed)} />
-                <GoalCard onOpenChat={(seed) => openChatRef.current?.(seed)} onActiveChange={handleGoalActive} />
-              </>
-            )}
+            {/* ── Coach Al Goal ──
+                Weekly Insight card retired 2026-07-09 per David: content
+                overlapped Daily Insight, Weekly Recap, and the briefing.
+                GoalCard stays as the daily-relevant commitment surface. */}
+            <GoalCard onOpenChat={(seed) => openChatRef.current?.(seed)} onActiveChange={handleGoalActive} />
 
             {/* LeagueGlance used to live here as a "Weekly Leaderboard ·
                 engagement points" pill that linked to Clubhouse. Removed
@@ -2463,6 +2458,13 @@ export default function DashboardPage() {
                 episodic pattern-detection input (alcohol/nicotine/etc.);
                 hydration is optional and easy to remove if it doesn't
                 drive value. Both flow into insight correlation. */}
+            {/* Daily stack checklist — David 2026-07-09: real adherence
+                signal so the efficacy engine can compare taken vs
+                missed days rather than fictional before-added / after-
+                added windows. Also drives points. Self-hides when the
+                user has no stack. */}
+            {!nutLoading && <StackAdherenceCard />}
+
             {!nutLoading && <NutritionExtrasCard />}
 
             {!nutLoading && nutToday && (

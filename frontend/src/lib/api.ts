@@ -291,6 +291,33 @@ export interface LabResult {
   notes?:           string;
 }
 
+export interface StackAdherenceRow {
+  id?:          string;
+  date:         string;
+  item_kind:    "medication" | "supplement" | "peptide";
+  item_key?:    string;
+  item_name:    string;
+  taken:        boolean;
+  notes?:       string | null;
+  created_at?:  string;
+}
+
+export interface StackAdherenceItem {
+  kind:          "medication" | "supplement" | "peptide";
+  name:          string;
+  key:           string;
+  taken_today:   boolean;
+  logged_today:  boolean;
+  notes?:        string | null;
+  days_taken_7:  number;
+}
+
+export interface StackAdherenceSnapshot {
+  date:    string;
+  items:   StackAdherenceItem[];
+  summary: { total_items: number; taken_today: number; logged_today: number };
+}
+
 export interface TrainingFlag {
   id:         string;
   date:       string;
@@ -2148,6 +2175,20 @@ export const api = {
     return request("/api/onboarding/dismiss", { method: "POST" });
   },
 
+  // ── Stack adherence (David 2026-07-09) ────────────────────────────────────
+  stackAdherenceToday(): Promise<StackAdherenceSnapshot> {
+    return request("/api/stack/adherence/today");
+  },
+  logStackAdherence(body: {
+    item_kind: "medication" | "supplement" | "peptide";
+    item_name: string;
+    taken:     boolean;
+    date?:     string;
+    notes?:    string;
+  }): Promise<{ row: StackAdherenceRow }> {
+    return request("/api/stack/adherence", { method: "POST", body: JSON.stringify(body) });
+  },
+
   // ── Training flags (injury / discomfort / illness for the day) ────────────
   listTrainingFlags(days = 14): Promise<{ flags: TrainingFlag[] }> {
     return request(`/api/training-flags?days=${days}`);
@@ -3043,6 +3084,16 @@ export interface LeaderboardResponse {
   entries: LeaderboardEntry[];
   /** user_id of the per-metric leader, or null if no one has a value yet. */
   leaders: { steps: string | null; sleep: string | null; activity: string | null };
+  /** David 2026-07-09: aggregate averages across the leaderboard so a user
+   *  can see "where do I stand vs the community?" at a glance. Nulls when
+   *  no one in the group has data for that metric. */
+  community?: {
+    steps:       { value: number | null; n: number };
+    sleep:       { value: number | null; n: number };
+    activity:    { value: number | null; n: number };
+    points_avg:  number;
+    total_users: number;
+  };
   date:    string;
 }
 

@@ -230,6 +230,43 @@ export default function FriendLeaderboard({ onInvite, onSeeMore }: Props = {}) {
           <p className="text-[13px] font-semibold text-gray-800 leading-snug">{headerLine}</p>
         </div>
 
+        {/* Community averages row — David 2026-07-09. Aggregates the
+            same metrics across everyone in this leaderboard (including
+            you) so the personal comparison is one glance away. Only
+            shows when there's at least one metric with real data. */}
+        {data.community && (data.community.steps.n + data.community.sleep.n + data.community.activity.n > 0) && (
+          <div className="px-4 py-2 bg-gray-50/60 border-b border-gray-100">
+            <div className="flex items-center gap-2">
+              <span className="w-7 h-7 rounded-full bg-gray-300 text-gray-700 text-[10px] font-bold flex items-center justify-center shrink-0" title="Community average">
+                Σ
+              </span>
+              <p className="flex-1 min-w-0 text-[12px] font-semibold text-gray-700">
+                Community average
+                <span className="ml-1 text-[10px] font-normal text-gray-500">
+                  · {data.community.total_users} {data.community.total_users === 1 ? "person" : "people"}
+                </span>
+              </p>
+              <div className="flex items-center gap-2 text-[11px] text-gray-700">
+                {data.community.steps.value != null && (
+                  <span title={`Average across ${data.community.steps.n} people`}>
+                    👟 <span className="font-semibold">{Math.round(data.community.steps.value).toLocaleString()}</span>
+                  </span>
+                )}
+                {data.community.sleep.value != null && (
+                  <span title={`Average sleep score across ${data.community.sleep.n} people`}>
+                    😴 <span className="font-semibold">{Math.round(data.community.sleep.value)}</span>
+                  </span>
+                )}
+                {data.community.activity.value != null && (
+                  <span title={`Average activity score across ${data.community.activity.n} people`}>
+                    🏃 <span className="font-semibold">{Math.round(data.community.activity.value)}</span>
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* One row per person — all share the same plain background so the
             container reads as one card. "You" is differentiated by the name
             color + a small YOU pill, not a full-row tint that creates the

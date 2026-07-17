@@ -3542,6 +3542,47 @@ def api_delete_training_flag(request: Request, flag_id: str):
     return {"status": "deleted"}
 
 
+@app.get("/api/stack/adherence/today")
+def get_stack_adherence_today(request: Request):
+    """Today's stack checklist — every med/supp/peptide from profile +
+    a boolean 'taken_today' + a 7-day count. Powers the checklist UI
+    on the Nutrition tab."""
+    import stack_adherence as _sa
+    session = _require_session(request)
+    user_id = session["user_id"]
+    profile = _get_profile(user_id) or {}
+    today   = _user_local_today_iso(request)
+    return _sa.today_snapshot(user_id, today, profile)
+
+
+@app.post("/api/stack/adherence")
+async def log_stack_adherence(request: Request):
+    """Toggle a stack item's taken status for a day. Body:
+    { item_kind, item_name, taken, date?, notes? }."""
+    import stack_adherence as _sa
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    date = (body.get("date") or "").strip() or _user_local_today_iso(request)
+    try:
+        row = _sa.log_adherence(
+            user_id,
+            date_str  = date,
+            item_kind = (body.get("item_kind") or "").strip(),
+            item_name = (body.get("item_name") or "").strip(),
+            taken     = bool(body.get("taken", True)),
+            notes     = body.get("notes"),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"row": row}
+
+
 @app.get("/api/nutrition/vices")
 def api_list_vices(request: Request, days: int = 30):
     """Recent vice logs. Used by the Nutrition tab and by insight
@@ -6576,10 +6617,34 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
         -(e["steps"].get("value") or 0),
     ))
 
+    # Community averages (David 2026-07-09): mean of each metric across
+    # everyone in the leaderboard including the current user. Renders
+    # as a top-of-list row so you can compare against the community
+    # aggregate at a glance. Nulls (users without today's data) are
+    # excluded from each metric independently — a friend without Oura
+    # doesn't drag "steps" down.
+    def _avg(metric_key: str) -> Optional[float]:
+        vals = [e[metric_key].get("value") for e in entries
+                if (e[metric_key].get("value") or 0) > 0]
+        if not vals:
+            return None
+        return round(sum(vals) / len(vals), 1)
+
+    community = {
+        "steps":       {"value": _avg("steps"),    "n": sum(1 for e in entries if (e["steps"].get("value")    or 0) > 0)},
+        "sleep":       {"value": _avg("sleep"),    "n": sum(1 for e in entries if (e["sleep"].get("value")    or 0) > 0)},
+        "activity":    {"value": _avg("activity"), "n": sum(1 for e in entries if (e["activity"].get("value") or 0) > 0)},
+        "points_avg":  round(
+            sum(e.get("points") or 0 for e in entries) / max(1, len(entries)), 1
+        ),
+        "total_users": len(entries),
+    }
+
     return {
-        "entries": entries,
-        "leaders": leaders,
-        "date":    today_str,
+        "entries":   entries,
+        "leaders":   leaders,
+        "community": community,
+        "date":      today_str,
     }
 
 
