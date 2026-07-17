@@ -60,19 +60,33 @@ export default function TodaysTagsCard() {
   // the last 30 days, show a compact "How to tag your day" hint the
   // first time, dismissible.
   if (tags.length === 0 && totalRecent === 0 && !dismissedHint) {
+    // Root cause of most zero-tag accounts: BackNine's original OAuth
+    // scope list didn't include `tag`, so Oura returned [] for the
+    // enhanced_tag endpoint regardless of how many tags the user
+    // logged in the ring app. Fixed 2026-07-09 by adding the scope,
+    // but existing users must reconnect Oura for the new grant to
+    // take effect. Framed as a fix, not user error.
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
     return (
-      <section className="rounded-2xl border border-sky-200 bg-sky-50/60 p-3">
+      <section className="rounded-2xl border border-amber-200 bg-amber-50/60 p-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-wide font-semibold text-sky-800 mb-1">
-              💡 Where&rsquo;s my Oura tag data?
+            <p className="text-[10px] uppercase tracking-wide font-semibold text-amber-900 mb-1">
+              ⚠️ Reconnect Oura to sync your tags
             </p>
-            <p className="text-[12px] text-gray-800 leading-snug">
-              Tags come from the Oura app — open it, tap the sun icon on
-              any day, and log things like sauna, alcohol, or late meal.
-              BackNine picks them up on the next sync and correlates
-              them with your sleep + HRV automatically.
+            <p className="text-[12px] text-gray-800 leading-snug mb-2">
+              We recently added the permission BackNine needs to pull
+              your Oura tags (sauna, alcohol, meditation, etc.). If you
+              connected Oura before that change, you&rsquo;ll need to
+              reconnect to grant it — takes 15 seconds and doesn&rsquo;t
+              re-sync your existing data.
             </p>
+            <a
+              href={`${apiBase}/auth/oura`}
+              className="inline-block text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-[#1B3829] hover:bg-[#2D6A4F] text-white transition-colors"
+            >
+              Reconnect Oura
+            </a>
           </div>
           <button
             onClick={() => {
@@ -80,8 +94,8 @@ export default function TodaysTagsCard() {
               try { window.localStorage.setItem("bn_tags_hint_dismissed", "1"); } catch {}
             }}
             className="shrink-0 text-gray-500 hover:text-gray-900 text-lg leading-none px-1"
-            title="Got it — hide"
-            aria-label="Dismiss tag hint"
+            title="Hide"
+            aria-label="Dismiss reconnect prompt"
           >×</button>
         </div>
       </section>

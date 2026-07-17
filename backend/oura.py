@@ -8,7 +8,14 @@ from typing import Optional
 OURA_AUTH_URL    = "https://cloud.ouraring.com/oauth/authorize"
 OURA_TOKEN_URL   = "https://api.ouraring.com/oauth/token"
 OURA_API_BASE    = "https://api.ouraring.com/v2/usercollection"
-OURA_SCOPES      = "daily heartrate personal session spo2 workout"
+OURA_SCOPES      = "daily heartrate personal session spo2 workout tag"
+# The `tag` scope (added 2026-07-09) is what unlocks Oura's enhanced_tag
+# endpoint — the user's contextual lifestyle tags: sauna, ice bath,
+# alcohol, late meal, stress, travel, etc. Without it, Oura returns []
+# for the endpoint regardless of how many tags the user has logged in
+# the ring app. Users who authorized BackNine BEFORE this scope was
+# added have to reconnect their ring for the scope grant to take
+# effect; see /api/oura/reconnect for the guided flow.
 
 def build_auth_url(client_id: str, redirect_uri: str, state: str) -> str:
     from urllib.parse import urlencode
