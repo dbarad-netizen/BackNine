@@ -350,6 +350,20 @@ def debug_supabase():
         "key_length":   len(key) if key else 0,
     }
 
+
+@app.get("/debug-env")
+def debug_env():
+    """Which URLs is the backend actually configured to redirect to?
+    Used to diagnose the "keep getting logged out" bug — the OAuth
+    callback bounces users to FRONTEND_URL, so if that's stale, tokens
+    end up in localStorage on the wrong domain."""
+    return {
+        "FRONTEND_URL":       os.getenv("FRONTEND_URL", "(unset)"),
+        "OURA_REDIRECT_URI":  os.getenv("OURA_REDIRECT_URI", "(unset)"),
+        "expected_frontend":  "https://www.backnine.health",
+        "expected_oura_uri":  "https://backnine-hu60.onrender.com/auth/oura/callback",
+    }
+
 # ── JWT session helpers ───────────────────────────────────────────────────────
 # Sessions are encoded as signed JWTs stored in an HttpOnly cookie.
 # No server-side store — survives backend restarts automatically.
@@ -3543,16 +3557,24 @@ def api_delete_training_flag(request: Request, flag_id: str):
 
 
 @app.get("/api/stack/adherence/today")
-def get_stack_adherence_today(request: Request):
-    """Today's stack checklist — every med/supp/peptide from profile +
-    a boolean 'taken_today' + a 7-day count. Powers the checklist UI
-    on the Nutrition tab."""
+def get_stack_adherence_today(request: Request, local_now: Optional[str] = None):
+    """Today's stack checklist — every med/supp/peptide from profile
+    grouped by time-of-day (morning/midday/evening/anytime). Summary
+    is time-window-aware (unchecked evening items at 9am aren't
+    counted as missed). `local_now` is the user's naive-local ISO —
+    powers the current-hour gate."""
     import stack_adherence as _sa
     session = _require_session(request)
     user_id = session["user_id"]
     profile = _get_profile(user_id) or {}
     today   = _user_local_today_iso(request)
-    return _sa.today_snapshot(user_id, today, profile)
+    hour: Optional[int] = None
+    if local_now:
+        try:
+            hour = int(datetime.fromisoformat(local_now.replace("Z", "+00:00")).hour)
+        except Exception:
+            hour = None
+    return _sa.today_snapshot(user_id, today, profile, current_hour=hour)
 
 
 @app.post("/api/stack/adherence")
@@ -4642,13 +4664,15 @@ def get_profile(request: Request):
 
 
 def _sanitize_supplements(raw) -> list[dict]:
-    """Normalize the supplements payload into a clean list of {name,dose,timing,notes}.
+    """Normalize the supplements payload into a clean list of
+    {name, dose, timing, time_of_day, notes}.
 
     Drops entries without a name, trims fields, caps the list at 30 items so a
     bad client can't dump a megabyte of JSON into a profile row.
     """
     if not isinstance(raw, list):
         return []
+    valid_tod = {"morning", "midday", "evening", "anytime"}
     out: list[dict] = []
     for item in raw[:30]:
         if not isinstance(item, dict):
@@ -4656,12 +4680,16 @@ def _sanitize_supplements(raw) -> list[dict]:
         name = (str(item.get("name") or "")).strip()[:80]
         if not name:
             continue
-        out.append({
+        tod = (str(item.get("time_of_day") or "")).strip().lower()
+        row = {
             "name":   name,
             "dose":   (str(item.get("dose")   or "")).strip()[:40],
             "timing": (str(item.get("timing") or "")).strip()[:40],
             "notes":  (str(item.get("notes")  or "")).strip()[:200],
-        })
+        }
+        if tod in valid_tod:
+            row["time_of_day"] = tod
+        out.append(row)
     return out
 
 
