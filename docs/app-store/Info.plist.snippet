@@ -1,0 +1,88 @@
+<!--
+    Info.plist keys required by App Store review.
+
+    Merge these into frontend/ios/App/App/Info.plist AFTER running
+    `npx cap add ios`. Capacitor generates the base plist; these are the
+    usage-description strings and capability declarations Apple rejects
+    the build without.
+
+    Every NS*UsageDescription string is shown to the user in a system
+    prompt the first time we invoke that permission — treat them as
+    user-facing copy, not internal notes.
+-->
+
+<!-- ── Camera & Photo Library ─────────────────────────────────────────
+     Lab PDF OCR and meal photos both need these. Even if a specific
+     TestFlight build doesn't actually call the APIs, Apple still
+     scrapes Info.plist and requires the strings if they're implied by
+     the app's advertised functionality (photo upload for meals is
+     screenshot-visible in the listing). -->
+
+<key>NSCameraUsageDescription</key>
+<string>BackNine uses your camera to snap meal photos and capture lab PDFs so you can log them without typing.</string>
+
+<key>NSPhotoLibraryUsageDescription</key>
+<string>BackNine reads photos you pick when you upload a meal photo or a lab PDF.</string>
+
+<key>NSPhotoLibraryAddUsageDescription</key>
+<string>BackNine saves your Doctor Handoff PDF to your Photos library when you tap Save.</string>
+
+<!-- ── HealthKit (optional at launch; keep keys so we can enable in v2)
+     If you enable HealthKit in Signing & Capabilities, uncomment these
+     two. Reviewers check the pairing every time a HealthKit capability
+     is on. -->
+
+<!--
+<key>NSHealthShareUsageDescription</key>
+<string>BackNine reads steps, heart rate, sleep, and workouts from Apple Health so your Coach Al insights include data from your Apple Watch.</string>
+
+<key>NSHealthUpdateUsageDescription</key>
+<string>BackNine writes workouts you log in the app back to Apple Health so all your fitness data stays in one place.</string>
+-->
+
+<!-- ── Face ID / Touch ID (optional; skip for launch)
+     Only include if we add biometric app-lock. -->
+
+<!--
+<key>NSFaceIDUsageDescription</key>
+<string>BackNine can use Face ID to unlock the app when you open it, so your health data stays private.</string>
+-->
+
+<!-- ── Local network (skip; we don't scan the LAN) ────────────────── -->
+
+<!-- ── App Tracking Transparency ─────────────────────────────────────
+     We do NOT track users across other apps, so we do NOT include
+     NSUserTrackingUsageDescription. Adding the string requires us to
+     present the ATT prompt on launch, and Apple audits this. Leave
+     out entirely until we actually track (and update the Privacy
+     Nutrition Labels first). -->
+
+<!-- ── Application category + queries scheme ────────────────────────
+     Cleaner than defaults for a Health app. -->
+
+<key>LSApplicationCategoryType</key>
+<string>public.app-category.healthcare-fitness</string>
+
+<!-- ── URL Types (for Oura OAuth callback + universal links) ──────── -->
+
+<key>CFBundleURLTypes</key>
+<array>
+    <dict>
+        <key>CFBundleURLName</key>
+        <string>com.strategyd.backnine</string>
+        <key>CFBundleURLSchemes</key>
+        <array>
+            <string>backnine</string>
+        </array>
+    </dict>
+</array>
+
+<!-- ── App-bound domain declaration for cookies ─────────────────────
+     Belongs alongside the Associated Domains entitlement in Signing
+     & Capabilities. Adding it here as a note so we don't miss it. -->
+
+<!-- Associated Domains capability (add in Xcode):
+     applinks:backnine.health
+     applinks:www.backnine.health
+     webcredentials:backnine.health  (for shared password autofill)
+-->

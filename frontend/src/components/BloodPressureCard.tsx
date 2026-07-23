@@ -304,6 +304,18 @@ export default function BloodPressureCard() {
           )}
         </div>
       )}
+
+      {/* Informational-use footer — App Store guideline 1.4.1 wants a
+          medical-context disclaimer on any surface that shows clinical
+          numbers. Small, non-intrusive, links to the full disclaimer. */}
+      <p className="mt-3 text-[10px] text-gray-500 leading-snug">
+        Numbers shown for personal tracking only, not medical advice or
+        interpretation. If a reading feels concerning, talk to your doctor.
+        {" "}
+        <a href="/disclaimer" className="underline hover:text-[#1B3829]">
+          Learn more
+        </a>
+      </p>
     </section>
   );
 }

@@ -93,6 +93,27 @@ export default function Home() {
     // If no error, browser redirects to Google — no further code runs
   };
 
+  // ── Apple OAuth (App Store guideline 4.8 requires this whenever we
+  //    offer any other third-party sign-in provider like Oura or Google).
+  //    Supabase handles the OAuth roundtrip via the standard Sign in with
+  //    Apple flow — Services ID + P8 key configured in Supabase Auth
+  //    Providers panel. On the roundtrip Apple returns an id_token that
+  //    GoTrue exchanges for a Supabase session; we then swap that for a
+  //    30-day BackNine JWT in the /auth/callback page (same as Google). ─
+  const handleApple = async () => {
+    setLoading(true);
+    setError(null);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "apple",
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    });
+    if (error) {
+      setError(error.message);
+      setLoading(false);
+    }
+    // If no error, browser redirects to Apple — no further code runs
+  };
+
   // ── Oura direct connect (legacy / Oura-only users) ───────────────────────────
   const handleOura = () => {
     window.location.href = `${BACKEND}/auth/oura`;
@@ -121,6 +142,27 @@ export default function Home() {
             <p className="text-xs text-zinc-400">Connect directly — no separate account needed</p>
           </div>
           <span className="text-green-400 text-xs font-medium">→</span>
+        </button>
+
+        {/* Sign in with Apple — required by App Store guideline 4.8 whenever
+            we offer any third-party sign-in (Oura counts). Apple's Human
+            Interface Guidelines specify: same visual weight as other
+            provider buttons, official Apple logo, exact wording "Sign in
+            with Apple" or "Continue with Apple". Kept black-on-white per
+            HIG example, contrasts with the Oura tile. */}
+        <button
+          onClick={handleApple}
+          disabled={loading}
+          className="w-full flex items-center justify-center gap-2.5 rounded-xl bg-white hover:bg-zinc-100 disabled:opacity-50 px-5 py-3.5 transition-colors font-medium text-black text-sm"
+          aria-label="Sign in with Apple"
+        >
+          <svg width="17" height="18" viewBox="0 0 17 18" fill="none" aria-hidden="true">
+            <path
+              d="M13.874 9.567c-.017-2.086 1.703-3.088 1.781-3.137-.97-1.42-2.48-1.615-3.017-1.638-1.286-.13-2.51.757-3.163.757-.65 0-1.658-.738-2.724-.718-1.401.02-2.694.815-3.416 2.07-1.457 2.525-.373 6.257 1.048 8.301.694.999 1.522 2.121 2.607 2.08 1.045-.042 1.44-.678 2.702-.678 1.262 0 1.616.678 2.72.657 1.123-.02 1.836-1.02 2.523-2.023.795-1.161 1.123-2.286 1.14-2.344-.025-.011-2.187-.842-2.201-3.327zM11.812 3.393c.573-.702.964-1.671.857-2.643-.83.036-1.842.556-2.436 1.245-.53.61-.998 1.601-.873 2.55.928.073 1.877-.474 2.452-1.152z"
+              fill="currentColor"
+            />
+          </svg>
+          <span>Sign in with Apple</span>
         </button>
 
         {/* Divider */}

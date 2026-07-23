@@ -1,0 +1,39 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": [
+          "TEAMID10CHARS.com.strategyd.backnine"
+        ],
+        "components": [
+          {
+            "/": "/",
+            "comment": "Root — open in-app when user taps a backnine.health link"
+          },
+          {
+            "/": "/dashboard*",
+            "comment": "Deep-link into any dashboard section"
+          },
+          {
+            "/": "/report/*",
+            "comment": "Shareable Doctor Report tokenized links"
+          },
+          {
+            "/": "/auth/callback*",
+            "comment": "OAuth callback — Apple/Google/Oura all return here"
+          },
+          {
+            "/": "/auth/reset*",
+            "comment": "Password-reset redirect from Supabase magic link"
+          }
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": [
+      "TEAMID10CHARS.com.strategyd.backnine"
+    ]
+  }
+}
