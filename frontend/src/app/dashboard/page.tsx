@@ -1297,6 +1297,9 @@ export default function DashboardPage() {
         className="sticky top-0 z-20 bg-white border-b border-gray-200 shadow-sm"
         style={{ paddingTop: "env(safe-area-inset-top)" }}
       >
+        {/* Header stays wider than content — the tab bar and right-side
+            cluster need horizontal room. Cap at max-w-5xl so it doesn't
+            stretch to full width on iPad landscape (2732pt). */}
         <div className="max-w-5xl mx-auto px-4 sm:px-6 flex items-center h-12">
           {/* Logo — taps back to the Scorecard (home) */}
           <button
@@ -1474,7 +1477,16 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+      {/* Responsive container widths (David 2026-07-23, App Store readiness):
+          - Phone (default): max-w-2xl (672px) — the single-column reading
+            width the app was designed around.
+          - Tablet portrait (md+): max-w-3xl (768px) — slightly wider so
+            iPad doesn't waste screen real estate but still reads as one
+            focused column, matching Notion / Linear / Slack conventions.
+          - Tablet landscape: max-w-4xl (896px) — extra breathing room
+            when the user rotates. Not a two-column redesign; still one
+            column, just widened. */}
+      <main className="max-w-2xl md:max-w-3xl landscape:md:max-w-4xl mx-auto px-4 md:px-6 py-6 space-y-6">
 
         {/* ── COACH (also the landing page) ── */}
         {section === "coaching" && (() => {
