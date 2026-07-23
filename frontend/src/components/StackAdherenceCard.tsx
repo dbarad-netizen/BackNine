@@ -109,7 +109,10 @@ export default function StackAdherenceCard() {
   const points = logged_today;
 
   return (
-    <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+    <section
+      id="stack-adherence-card"
+      className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm scroll-mt-20 transition-shadow"
+    >
       <div className="flex items-baseline justify-between mb-2">
         <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-600">
           Today&rsquo;s stack

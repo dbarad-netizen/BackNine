@@ -37,6 +37,7 @@ import SleepQuickLogCard from "@/components/SleepQuickLogCard";
 import TrainingFlagCard from "@/components/TrainingFlagCard";
 import NutritionExtrasCard from "@/components/NutritionExtrasCard";
 import StackAdherenceCard from "@/components/StackAdherenceCard";
+import StackAdherencePill from "@/components/StackAdherencePill";
 import BloodPressureCard from "@/components/BloodPressureCard";
 import DoctorReportModal from "@/components/DoctorReportModal";
 import DayMealsDrawer from "@/components/DayMealsDrawer";
@@ -2418,6 +2419,13 @@ export default function DashboardPage() {
                 overlapped Daily Insight, Weekly Recap, and the briefing.
                 GoalCard stays as the daily-relevant commitment surface. */}
             <GoalCard onOpenChat={(seed) => openChatRef.current?.(seed)} onActiveChange={handleGoalActive} />
+
+            {/* Stack adherence pill — David 2026-07-23. Glance-count of
+                today's meds/supps, taps through to the full checklist on
+                Nutrition with a highlight pulse so users don't have to
+                hunt for where to log doses. Self-hides for users with
+                no stack. */}
+            <StackAdherencePill onJump={() => setSection("nutrition")} />
 
             {/* LeagueGlance used to live here as a "Weekly Leaderboard ·
                 engagement points" pill that linked to Clubhouse. Removed
