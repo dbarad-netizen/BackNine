@@ -2,9 +2,9 @@
   TEMPLATE — NOT LEGAL ADVICE. Drafted for BackNine as a starting point.
   Have a licensed attorney review before publishing (health data + CA law = higher stakes).
   Fill in every [BRACKETED] placeholder:
-    [LEGAL ENTITY NAME]  – your company or "the operator of BackNine"
-    [CONTACT EMAIL]      – e.g. privacy@backnine... (you can use dbarad@yahoo.com for now)
-    [EFFECTIVE DATE]     – the date you publish this
+    Strategy D, Incorporated  – your company or "the operator of BackNine"
+    privacy@backnine.health      – e.g. privacy@backnine... (you can use dbarad@yahoo.com for now)
+    July 5, 2026     – the date you publish this
   Governing law: California (CCPA/CPRA).  Minimum age: 18+.
   KEEP THIS ACCURATE: the sub-processor list (Section 5) and data list (Section 2)
   must match what the app actually does. Update them whenever you add a vendor or feature.
@@ -12,9 +12,9 @@
 
 # Privacy Policy
 
-**Effective Date: [EFFECTIVE DATE]**
+**Effective Date: July 5, 2026**
 
-This Privacy Policy explains how [LEGAL ENTITY NAME] ("BackNine," "we," "us," or "our") collects, uses, and shares information when you use the BackNine application and related services (the "Service"). By using the Service, you agree to this Policy. If you do not agree, do not use the Service.
+This Privacy Policy explains how Strategy D, Incorporated ("BackNine," "we," "us," or "our") collects, uses, and shares information when you use the BackNine application and related services (the "Service"). By using the Service, you agree to this Policy. If you do not agree, do not use the Service.
 
 BackNine is intended only for individuals **18 years of age or older**. We do not knowingly collect information from anyone under 18.
 
@@ -97,17 +97,17 @@ If you are a California resident, you have the right to:
 - **Limit** the use of sensitive personal information to what is necessary to provide the Service; and
 - **Non-discrimination** for exercising your rights.
 
-To exercise these rights, contact us at **[CONTACT EMAIL]**. We will verify your request (typically by confirming control of your account email) before responding, and you may use an authorized agent where permitted by law. Depending on where you live, you may have similar rights under other laws; we will honor applicable rights.
+To exercise these rights, contact us at **privacy@backnine.health**. We will verify your request (typically by confirming control of your account email) before responding, and you may use an authorized agent where permitted by law. Depending on where you live, you may have similar rights under other laws; we will honor applicable rights.
 
 ## 9. Your choices
 
 - **Disconnect a wearable:** you can revoke BackNine's access to Oura or stop exporting Apple Health data at any time through those services and/or your BackNine settings.
 - **Edit or delete content:** you can edit or remove logs, reviews, friends, and other content in the app.
-- **Delete your account:** contact us at [CONTACT EMAIL] or use the in-app option where available.
+- **Delete your account:** contact us at privacy@backnine.health or use the in-app option where available.
 
 ## 10. Children
 
-The Service is for adults 18 and older. We do not knowingly collect personal information from anyone under 18. If you believe a minor has provided us information, contact us at [CONTACT EMAIL] and we will delete it.
+The Service is for adults 18 and older. We do not knowingly collect personal information from anyone under 18. If you believe a minor has provided us information, contact us at privacy@backnine.health and we will delete it.
 
 ## 11. International users
 
@@ -119,7 +119,7 @@ We may update this Policy from time to time. If we make material changes, we wil
 
 ## 13. Contact
 
-For privacy questions or to exercise your rights, contact us at **[CONTACT EMAIL]**.
+For privacy questions or to exercise your rights, contact us at **privacy@backnine.health**.
 
 ---
 

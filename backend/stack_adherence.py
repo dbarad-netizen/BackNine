@@ -152,9 +152,31 @@ def count_recent(user_id: str, days: int = 7) -> int:
 
 # ── higher-level snapshot ───────────────────────────────────────────────
 
+_VALID_TIME_OF_DAY = {"morning", "midday", "evening", "anytime"}
+
+
+def _infer_time_of_day(timing: str) -> str:
+    """Bucket a freeform timing string ('with dinner', 'AM', 'before bed')
+    into one of the four windows. Empty / unclear → 'anytime'."""
+    s = (timing or "").lower()
+    if not s:
+        return "anytime"
+    # Order matters: 'bedtime' contains 'time' but is clearly evening.
+    if any(k in s for k in ("bed", "night", "evening", "dinner", "pm", "before sleep", "sleep")):
+        return "evening"
+    if any(k in s for k in ("morning", "am", "wake", "breakfast", "sunrise")):
+        return "morning"
+    if any(k in s for k in ("midday", "noon", "lunch", "afternoon")):
+        return "midday"
+    return "anytime"
+
+
 def _items_from_profile(profile: dict) -> list[dict]:
-    """Extract the union of med / supp / peptide names from the user's
-    profile. Returns [{kind, name}, ...]. De-duplicates by (kind, key)."""
+    """Extract the union of med / supp / peptide names + their time-of-day
+    bucket from the user's profile. Returns [{kind, name, time_of_day}, ...]
+    de-duplicated by (kind, key). Time-of-day comes from the explicit
+    `time_of_day` field if set, else inferred from the freeform `timing`
+    string, else 'anytime'."""
     if not isinstance(profile, dict):
         return []
     out:  list[dict] = []
@@ -169,8 +191,14 @@ def _items_from_profile(profile: dict) -> list[dict]:
             continue
         for item in arr:
             name = ""
+            tod  = "anytime"
             if isinstance(item, dict):
                 name = (item.get("name") or "").strip()
+                explicit = (item.get("time_of_day") or "").strip().lower()
+                if explicit in _VALID_TIME_OF_DAY:
+                    tod = explicit
+                else:
+                    tod = _infer_time_of_day(item.get("timing") or "")
             elif isinstance(item, str):
                 name = item.strip()
             if not name:
@@ -179,19 +207,50 @@ def _items_from_profile(profile: dict) -> list[dict]:
             if k in seen:
                 continue
             seen.add(k)
-            out.append({"kind": kind, "name": name})
+            out.append({"kind": kind, "name": name, "time_of_day": tod})
     return out
 
 
-def today_snapshot(user_id: str, today_iso: str, profile: dict) -> dict:
-    """Combined view for the frontend checklist. Each stack item gets a
-    boolean `taken_today` (from today's log rows if any) plus a 7-day
-    streak count so the UI can show "5 of the last 7 days"."""
+# Time-of-day window boundaries (24h local). "morning" opens at wake time
+# so a 6am checkin still surfaces morning meds; "evening" opens at 5pm so
+# a 4pm log doesn't count evening meds as missed.
+_WINDOW_START_HOUR: dict[str, int] = {
+    "morning": 5,   # from wake time
+    "midday":  11,  # late-morning through afternoon
+    "evening": 17,  # 5pm onward
+    "anytime": 0,   # always open
+}
+
+
+def _window_has_opened(time_of_day: str, current_hour: int) -> bool:
+    """Has this time window opened yet in the user's day? Used to gate
+    the summary counter: unchecked morning meds at 8am are 'missed';
+    unchecked evening meds at 8am are just 'not yet time'."""
+    return current_hour >= _WINDOW_START_HOUR.get(time_of_day, 0)
+
+
+def today_snapshot(user_id: str, today_iso: str, profile: dict,
+                   current_hour: Optional[int] = None) -> dict:
+    """Combined view for the frontend checklist. Items grouped by
+    time-of-day. Summary is time-window-aware — an unchecked evening
+    med at 9am is NOT counted as missed.
+
+    `current_hour`: 0-23 hour of the user's local time. Frontend passes
+    this via `local_now` query param. Default 12 (safe midday fallback)
+    so backend can still be called without."""
     items = _items_from_profile(profile)
+    hour  = int(current_hour) if current_hour is not None else 12
+    hour  = max(0, min(23, hour))
     if not items:
-        return {"date": today_iso, "items": [], "summary": {
-            "total_items": 0, "taken_today": 0, "logged_today": 0,
-        }}
+        return {
+            "date":   today_iso,
+            "items":  [],
+            "groups": [],
+            "summary": {
+                "total_items":  0, "taken_today":  0, "logged_today": 0,
+                "expected_by_now": 0, "on_pace_pct": 0,
+            },
+        }
     day_rows = {(r.get("item_kind"), r.get("item_key")): r for r in get_day(user_id, today_iso)}
     # 7-day streak lookup
     start_7 = (_date.fromisoformat(today_iso) - timedelta(days=6)).isoformat()
@@ -204,8 +263,9 @@ def today_snapshot(user_id: str, today_iso: str, profile: dict) -> dict:
         hist_taken[k] = hist_taken.get(k, 0) + 1
 
     enriched: list[dict] = []
-    taken_today  = 0
-    logged_today = 0
+    taken_today    = 0
+    logged_today   = 0
+    expected_by_now = 0
     for it in items:
         key = _norm_key(it["name"])
         k   = (it["kind"], key)
@@ -215,23 +275,53 @@ def today_snapshot(user_id: str, today_iso: str, profile: dict) -> dict:
             logged_today += 1
         if taken:
             taken_today += 1
+        window_open = _window_has_opened(it["time_of_day"], hour)
+        if window_open:
+            expected_by_now += 1
         enriched.append({
             "kind":         it["kind"],
             "name":         it["name"],
             "key":          key,
+            "time_of_day":  it["time_of_day"],
+            "window_open":  window_open,   # is this item's time window active yet?
             "taken_today":  taken,
             "logged_today": row is not None,
             "notes":        (row or {}).get("notes"),
             "days_taken_7": hist_taken.get(k, 0),
         })
 
+    # Group by time_of_day for the UI. Only render groups that have
+    # items. Order matters — Morning → Midday → Evening → Anytime.
+    order = ["morning", "midday", "evening", "anytime"]
+    groups: list[dict] = []
+    for tod in order:
+        group_items = [i for i in enriched if i["time_of_day"] == tod]
+        if not group_items:
+            continue
+        g_taken = sum(1 for i in group_items if i["taken_today"])
+        groups.append({
+            "time_of_day":  tod,
+            "window_open":  _window_has_opened(tod, hour),
+            "items":        group_items,
+            "total":        len(group_items),
+            "taken":        g_taken,
+        })
+
+    on_pace_pct = (
+        round((taken_today / expected_by_now) * 100)
+        if expected_by_now > 0 else 100
+    )
+
     return {
-        "date": today_iso,
-        "items": enriched,
+        "date":   today_iso,
+        "items":  enriched,
+        "groups": groups,
         "summary": {
-            "total_items":  len(items),
-            "taken_today":  taken_today,
-            "logged_today": logged_today,
+            "total_items":     len(items),
+            "taken_today":     taken_today,
+            "logged_today":    logged_today,
+            "expected_by_now": expected_by_now,
+            "on_pace_pct":     on_pace_pct,
         },
     }
 

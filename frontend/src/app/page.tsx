@@ -177,6 +177,38 @@ export default function Home() {
             >
               {loading ? "…" : mode === "signin" ? "Sign in" : "Create account"}
             </button>
+
+            {/* Forgot password link — only visible in sign-in mode. Added
+                2026-07-17 after Julie got locked out with a stale
+                autofilled password and there was no self-service reset. */}
+            {mode === "signin" && (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!email) {
+                    setError("Enter your email above, then tap Forgot password.");
+                    return;
+                  }
+                  setLoading(true);
+                  setError(null);
+                  setMessage(null);
+                  try {
+                    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                      redirectTo: `${window.location.origin}/auth/reset`,
+                    });
+                    if (error) throw error;
+                    setMessage("Check your email for a reset link.");
+                  } catch (err: unknown) {
+                    setError(err instanceof Error ? err.message : "Couldn't send reset email.");
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                className="w-full text-center text-xs text-zinc-400 hover:text-zinc-200 underline underline-offset-2 transition-colors py-1"
+              >
+                Forgot password?
+              </button>
+            )}
           </form>
 
           {/* Google sign-in is temporarily disabled until OAuth is configured

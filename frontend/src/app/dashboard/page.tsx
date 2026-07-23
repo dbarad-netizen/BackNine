@@ -3040,6 +3040,13 @@ function ErrorState({ error }: { error: string }) {
                   Object.keys(localStorage)
                     .filter(k => k.startsWith("sb-"))
                     .forEach(k => localStorage.removeItem(k));
+                  // Also clear the first-party cookie fallback (added
+                  // 2026-07-20). If we leave it, _initToken will keep
+                  // reading a stale token from the cookie and re-hit
+                  // the same 401.
+                  const isLocalhost = window.location.hostname === "localhost";
+                  const domain = isLocalhost ? "" : "; Domain=.backnine.health";
+                  document.cookie = `bn_token_client=; Max-Age=0; Path=/${domain}`;
                 } catch { /* ignore */ }
               }
             }}

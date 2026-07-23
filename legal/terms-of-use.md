@@ -2,9 +2,9 @@
   TEMPLATE — NOT LEGAL ADVICE. Drafted for BackNine as a starting point.
   Have a licensed attorney review before publishing.
   Fill in every [BRACKETED] placeholder:
-    [LEGAL ENTITY NAME]  – your company or "the operator of BackNine"
-    [CONTACT EMAIL]      – e.g. support@backnine... (you can use dbarad@yahoo.com for now)
-    [EFFECTIVE DATE]     – the date you publish this
+    Strategy D, Incorporated  – your company or "the operator of BackNine"
+    support@backnine.health      – e.g. support@backnine... (you can use dbarad@yahoo.com for now)
+    July 5, 2026     – the date you publish this
   Governing law: California.  Minimum age: 18+.
   NOTE: Section 16 (Arbitration) is optional and has real consequences —
   discuss with your attorney before keeping or removing it.
@@ -12,9 +12,9 @@
 
 # Terms of Use
 
-**Effective Date: [EFFECTIVE DATE]**
+**Effective Date: July 5, 2026**
 
-These Terms of Use ("Terms") are a binding agreement between you and [LEGAL ENTITY NAME] ("BackNine," "we," "us," or "our") governing your access to and use of the BackNine application, website, and related services (together, the "Service"). By creating an account or using the Service, you agree to these Terms. **If you do not agree, do not use the Service.**
+These Terms of Use ("Terms") are a binding agreement between you and Strategy D, Incorporated ("BackNine," "we," "us," or "our") governing your access to and use of the BackNine application, website, and related services (together, the "Service"). By creating an account or using the Service, you agree to these Terms. **If you do not agree, do not use the Service.**
 
 Please also read our [Privacy Policy](./privacy-policy.md) and our [Medical & Health Disclaimer](./medical-disclaimer.md), which are part of these Terms.
 
@@ -30,7 +30,7 @@ BackNine is a **personal health and fitness dashboard for general informational 
 
 ## 3. Your account
 
-To use most features you must create an account, which may involve signing in with an email address or a third-party login (such as Google) and connecting a wearable such as an Oura Ring. You agree to provide accurate information and to keep it up to date. You are responsible for maintaining the security of your account and for all activity that occurs under it. Notify us promptly at [CONTACT EMAIL] if you suspect any unauthorized use.
+To use most features you must create an account, which may involve signing in with an email address or a third-party login (such as Google) and connecting a wearable such as an Oura Ring. You agree to provide accurate information and to keep it up to date. You are responsible for maintaining the security of your account and for all activity that occurs under it. Notify us promptly at support@backnine.health if you suspect any unauthorized use.
 
 ## 4. Acceptable use
 
@@ -50,7 +50,7 @@ We may suspend or terminate accounts that violate these Terms.
 
 The Service lets you create content such as workouts, weigh-ins, meals, mood check-ins, profile details, gear reviews, comments, and messages, and to share certain information with friends, groups/crews, leaderboards, and challenges ("User Content").
 
-You retain ownership of your User Content. By submitting User Content, you grant [LEGAL ENTITY NAME] a non-exclusive, worldwide, royalty-free license to host, store, reproduce, display, and use that content **solely to operate, provide, and improve the Service** (for example, to show your activity to friends you connect with, to generate leaderboards, or to display your gear reviews to the community). You are responsible for your User Content and represent that you have the rights to share it.
+You retain ownership of your User Content. By submitting User Content, you grant Strategy D, Incorporated a non-exclusive, worldwide, royalty-free license to host, store, reproduce, display, and use that content **solely to operate, provide, and improve the Service** (for example, to show your activity to friends you connect with, to generate leaderboards, or to display your gear reviews to the community). You are responsible for your User Content and represent that you have the rights to share it.
 
 When you connect with friends or join a group, certain information (such as your display name, activity milestones, scores, streaks, and messages you send) will be visible to those people. Be thoughtful about what you choose to share.
 
@@ -70,7 +70,7 @@ The Service may recommend products and link to third-party merchants. Some links
 
 ## 9. Intellectual property
 
-The Service, including its software, design, text, graphics, and branding (but excluding User Content and third-party content), is owned by [LEGAL ENTITY NAME] and its licensors and is protected by intellectual-property laws. We grant you a limited, personal, non-exclusive, non-transferable, revocable license to use the Service for your own personal, non-commercial use, subject to these Terms. You may not copy, modify, distribute, sell, or create derivative works from the Service without our permission.
+The Service, including its software, design, text, graphics, and branding (but excluding User Content and third-party content), is owned by Strategy D, Incorporated and its licensors and is protected by intellectual-property laws. We grant you a limited, personal, non-exclusive, non-transferable, revocable license to use the Service for your own personal, non-commercial use, subject to these Terms. You may not copy, modify, distribute, sell, or create derivative works from the Service without our permission.
 
 ## 10. Disclaimers of warranties
 
@@ -78,11 +78,11 @@ THE SERVICE AND ALL CONTENT ARE PROVIDED "AS IS" AND "AS AVAILABLE," WITHOUT WAR
 
 ## 11. Limitation of liability
 
-TO THE FULLEST EXTENT PERMITTED BY LAW, [LEGAL ENTITY NAME] AND ITS OWNERS, OFFICERS, EMPLOYEES, AND AGENTS WILL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES, OR FOR ANY LOSS OF PROFITS, DATA, GOODWILL, OR HEALTH OUTCOMES, ARISING OUT OF OR RELATING TO YOUR USE OF (OR INABILITY TO USE) THE SERVICE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES. TO THE FULLEST EXTENT PERMITTED BY LAW, OUR TOTAL LIABILITY FOR ALL CLAIMS RELATING TO THE SERVICE WILL NOT EXCEED THE GREATER OF (A) THE AMOUNT YOU PAID US IN THE 12 MONTHS BEFORE THE CLAIM, OR (B) USD $100. Some jurisdictions do not allow certain limitations, so some of the above may not apply to you.
+TO THE FULLEST EXTENT PERMITTED BY LAW, Strategy D, Incorporated AND ITS OWNERS, OFFICERS, EMPLOYEES, AND AGENTS WILL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES, OR FOR ANY LOSS OF PROFITS, DATA, GOODWILL, OR HEALTH OUTCOMES, ARISING OUT OF OR RELATING TO YOUR USE OF (OR INABILITY TO USE) THE SERVICE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES. TO THE FULLEST EXTENT PERMITTED BY LAW, OUR TOTAL LIABILITY FOR ALL CLAIMS RELATING TO THE SERVICE WILL NOT EXCEED THE GREATER OF (A) THE AMOUNT YOU PAID US IN THE 12 MONTHS BEFORE THE CLAIM, OR (B) USD $100. Some jurisdictions do not allow certain limitations, so some of the above may not apply to you.
 
 ## 12. Indemnification
 
-You agree to indemnify and hold harmless [LEGAL ENTITY NAME] and its owners, officers, employees, and agents from any claims, damages, losses, liabilities, and expenses (including reasonable attorneys' fees) arising out of or related to your use of the Service, your User Content, or your violation of these Terms or applicable law.
+You agree to indemnify and hold harmless Strategy D, Incorporated and its owners, officers, employees, and agents from any claims, damages, losses, liabilities, and expenses (including reasonable attorneys' fees) arising out of or related to your use of the Service, your User Content, or your violation of these Terms or applicable law.
 
 ## 13. Termination
 
@@ -96,11 +96,23 @@ We may modify or discontinue the Service, in whole or in part, at any time. We m
 
 These Terms are governed by the laws of the **State of California**, without regard to its conflict-of-laws rules. Subject to Section 16, you and we agree that any dispute will be resolved exclusively in the state or federal courts located in California, and you consent to their jurisdiction.
 
-## 16. Dispute resolution and arbitration (optional — review with counsel)
+## 16. Dispute resolution and arbitration
 
-> The following clause is optional. Arbitration and class-action waivers have significant legal effects for both you and your users. **Discuss with your attorney whether to keep, modify, or remove this section before publishing.**
+> **PLEASE READ CAREFULLY.** This section requires that most disputes between you and us be resolved by **binding individual arbitration**, and it **waives your right to a jury trial and to participate in a class action.** You have a limited right to opt out (see Section 16.6 below).
 
-Any dispute arising out of or relating to these Terms or the Service that cannot be resolved informally will be resolved by binding individual arbitration, rather than in court, except that either party may bring claims in small-claims court. **You and we waive the right to a jury trial and to participate in a class action.** [Specify arbitration provider, rules, location, and any fee terms with your attorney.]
+**16.1 Informal resolution.** Before either party may bring a formal proceeding, the party raising a dispute must first send a written notice describing the dispute to the other party (to Strategy D, Incorporated at support@backnine.health, or to the address you provided at signup). The parties will then attempt in good faith to resolve the dispute within thirty (30) days.
+
+**16.2 Binding arbitration.** If the parties cannot resolve the dispute informally, any claim or dispute arising out of or relating to these Terms or the Service (a "Dispute") that is not resolved in small-claims court will be resolved by **binding individual arbitration** administered by the American Arbitration Association (AAA) under its **Consumer Arbitration Rules** (available at adr.org). The arbitration will be conducted by a single, neutral arbitrator; will take place in **Los Angeles County, California** (or by videoconference at your election); and will apply the substantive law of California without regard to conflict-of-law rules. The arbitrator's award may be entered as a judgment in any court of competent jurisdiction.
+
+**16.3 Small-claims carve-out.** Either party may bring a claim in small-claims court in a jurisdiction where personal jurisdiction and venue are proper, provided that the claim remains in that court and is not removed or appealed to a court of general jurisdiction.
+
+**16.4 Class-action waiver.** **You and Strategy D, Incorporated each waive the right to a jury trial and the right to participate in a class action, class arbitration, or representative proceeding.** The arbitrator may award relief only on an individual basis and may not consolidate more than one person's claims. If this waiver is held unenforceable, then the entirety of Section 16 (other than this sentence) is void, and the dispute will proceed in the courts identified in Section 15.
+
+**16.5 Fees.** For any Dispute in which you are the claimant and the amount in controversy is less than USD $10,000, Strategy D, Incorporated will pay the AAA filing, administration, and arbitrator fees. In all other cases, fees will be allocated per the AAA Consumer Arbitration Rules. Each party will otherwise bear its own attorneys' fees unless the arbitrator awards them as permitted by law.
+
+**16.6 30-day opt-out.** You may opt out of this arbitration provision by sending a written notice to support@backnine.health within **thirty (30) days** of the date you first accept these Terms. The notice must include your full name, the email address associated with your account, and a clear statement that you wish to opt out. Opting out does not affect any other part of these Terms.
+
+**16.7 Injunctive relief for IP.** Notwithstanding the above, either party may seek injunctive or other equitable relief in the courts identified in Section 15 to protect its intellectual-property rights.
 
 ## 17. Miscellaneous
 
@@ -108,7 +120,7 @@ These Terms, together with the Privacy Policy and Medical & Health Disclaimer, a
 
 ## 18. Contact
 
-Questions about these Terms can be sent to **[CONTACT EMAIL]**.
+Questions about these Terms can be sent to **support@backnine.health**.
 
 ---
 

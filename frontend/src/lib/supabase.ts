@@ -39,13 +39,34 @@ export async function establishSession(supabaseAccessToken: string): Promise<voi
   }
   const data = await res.json();
   if (data?.token) {
-    localStorage.setItem("bn_token", data.token);
+    try { localStorage.setItem("bn_token", data.token); } catch { /* private mode */ }
+    // Also write the first-party cookie fallback so the home-screen
+    // webview and Safari share persistence. See api.ts::_writeTokenCookie
+    // for the reasoning; duplicated here to avoid a circular import.
+    _writeBackNineTokenCookie(data.token);
   }
+}
+
+function _writeBackNineTokenCookie(token: string): void {
+  if (typeof document === "undefined") return;
+  const isLocalhost = window.location.hostname === "localhost";
+  const domain = isLocalhost ? "" : "; Domain=.backnine.health";
+  const secure = isLocalhost ? "" : "; Secure";
+  document.cookie =
+    `bn_token_client=${encodeURIComponent(token)}` +
+    `; Max-Age=${60 * 60 * 24 * 30}` +
+    `; Path=/` +
+    domain +
+    `; SameSite=Lax` +
+    secure;
 }
 
 /** Clear all auth state (sign out). */
 export function clearAuth() {
   if (typeof window !== "undefined") {
-    localStorage.removeItem("bn_token");
+    try { localStorage.removeItem("bn_token"); } catch { /* private mode */ }
+    const isLocalhost = window.location.hostname === "localhost";
+    const domain = isLocalhost ? "" : "; Domain=.backnine.health";
+    document.cookie = `bn_token_client=; Max-Age=0; Path=/${domain}`;
   }
 }

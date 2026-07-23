@@ -33,19 +33,77 @@ export function localNowIso(d: Date = new Date()): string {
 
 // ── Token storage ─────────────────────────────────────────────────────────────
 // On load, grab token from URL ?token= param (set by backend after OAuth),
-// persist to localStorage, then remove from URL so it's not bookmarked.
+// persist to localStorage AND a first-party cookie, then remove from URL
+// so it's not bookmarked.
+//
+// Why both storage paths (David 2026-07-20): iOS Safari has two failure
+// modes we need to survive.
+//   1. Home-screen standalone webview has its own localStorage bucket
+//      separate from Safari's — a token in Safari doesn't carry to the
+//      home-screen icon.
+//   2. Safari's ITP can clear script-writable localStorage after 7 days
+//      without direct first-party interaction.
+// A first-party cookie on `.backnine.health` survives both cases better
+// than localStorage alone. It's not HttpOnly (we need JS access), so we
+// keep it best-effort — real security still relies on the JWT itself
+// being signed and short-scoped.
+const TOKEN_COOKIE = "bn_token_client";
+const TOKEN_TTL_S  = 60 * 60 * 24 * 30;  // 30 days matches backend JWT
+
+function _readTokenCookie(): string | null {
+  if (typeof document === "undefined") return null;
+  const m = document.cookie.match(new RegExp("(?:^|; )" + TOKEN_COOKIE + "=([^;]+)"));
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+function _writeTokenCookie(token: string): void {
+  if (typeof document === "undefined") return;
+  const isLocalhost = window.location.hostname === "localhost";
+  // Cookie deliberately set on the parent domain so www.backnine.health
+  // and backnine.health share it. Localhost gets a plain path cookie.
+  const domain = isLocalhost ? "" : "; Domain=.backnine.health";
+  const secure = isLocalhost ? "" : "; Secure";
+  document.cookie =
+    `${TOKEN_COOKIE}=${encodeURIComponent(token)}` +
+    `; Max-Age=${TOKEN_TTL_S}` +
+    `; Path=/` +
+    domain +
+    `; SameSite=Lax` +
+    secure;
+}
+
+function _clearTokenCookie(): void {
+  if (typeof document === "undefined") return;
+  const isLocalhost = window.location.hostname === "localhost";
+  const domain = isLocalhost ? "" : "; Domain=.backnine.health";
+  document.cookie = `${TOKEN_COOKIE}=; Max-Age=0; Path=/${domain}`;
+}
+
 function _initToken(): string | null {
   if (typeof window === "undefined") return null;
   const params = new URLSearchParams(window.location.search);
   const urlToken = params.get("token");
   if (urlToken) {
-    localStorage.setItem("bn_token", urlToken);
+    try { localStorage.setItem("bn_token", urlToken); } catch { /* private mode */ }
+    _writeTokenCookie(urlToken);
     const url = new URL(window.location.href);
     url.searchParams.delete("token");
     window.history.replaceState({}, "", url.toString());
     return urlToken;
   }
-  return localStorage.getItem("bn_token");
+  // Prefer localStorage (survives across visits when available) then
+  // fall back to the cookie (survives standalone webview + some ITP).
+  let cached: string | null = null;
+  try { cached = localStorage.getItem("bn_token"); } catch { /* private mode */ }
+  if (cached) return cached;
+  const cookieToken = _readTokenCookie();
+  if (cookieToken) {
+    // Migrate back into localStorage on the way through so future reads
+    // hit the fast path.
+    try { localStorage.setItem("bn_token", cookieToken); } catch { /* ignore */ }
+    return cookieToken;
+  }
+  return null;
 }
 
 let _token: string | null = null;
@@ -58,7 +116,8 @@ export function getToken(): string | null {
 export function clearToken(): void {
   _token = null;
   if (typeof window !== "undefined") {
-    localStorage.removeItem("bn_token");
+    try { localStorage.removeItem("bn_token"); } catch { /* private mode */ }
+    _clearTokenCookie();
     clearDashboardCache();
   }
 }
@@ -262,11 +321,17 @@ export interface LongevityHistory {
   };
 }
 
+export type TimeOfDay = "morning" | "midday" | "evening" | "anytime";
+
 export interface Supplement {
-  name:    string;
-  dose?:   string;     // e.g. "400mg", "2 caps"
-  timing?: string;     // e.g. "morning", "with dinner"
-  notes?:  string;
+  name:         string;
+  dose?:        string;     // e.g. "400mg", "2 caps"
+  timing?:      string;     // e.g. "morning", "with dinner"
+  /** Structured time-of-day bucket (David 2026-07-09 UX fix). Adherence
+   *  card only counts unchecked items as "missed" when their window has
+   *  passed. Missing → derived from `timing` text via heuristics. */
+  time_of_day?: TimeOfDay;
+  notes?:       string;
 }
 
 /** Peptides use the exact same shape as supplements today — separate type
@@ -306,16 +371,36 @@ export interface StackAdherenceItem {
   kind:          "medication" | "supplement" | "peptide";
   name:          string;
   key:           string;
+  time_of_day:   TimeOfDay;
+  /** Has the item's time window opened yet for this user's local day?
+   *  Frontend uses this to visually differentiate "missed" from
+   *  "not yet time to take." */
+  window_open:   boolean;
   taken_today:   boolean;
   logged_today:  boolean;
   notes?:        string | null;
   days_taken_7:  number;
 }
 
+export interface StackAdherenceGroup {
+  time_of_day:  TimeOfDay;
+  window_open:  boolean;
+  items:        StackAdherenceItem[];
+  total:        number;
+  taken:        number;
+}
+
 export interface StackAdherenceSnapshot {
   date:    string;
-  items:   StackAdherenceItem[];
-  summary: { total_items: number; taken_today: number; logged_today: number };
+  items:   StackAdherenceItem[];   // flat list — kept for backwards compat
+  groups:  StackAdherenceGroup[];  // primary render path
+  summary: {
+    total_items:     number;
+    taken_today:     number;
+    logged_today:    number;
+    expected_by_now: number;
+    on_pace_pct:     number;
+  };
 }
 
 export interface TrainingFlag {
@@ -2177,7 +2262,9 @@ export const api = {
 
   // ── Stack adherence (David 2026-07-09) ────────────────────────────────────
   stackAdherenceToday(): Promise<StackAdherenceSnapshot> {
-    return request("/api/stack/adherence/today");
+    // Pass user's local time so the backend can gate window_open
+    // (an unchecked evening med at 9am shouldn't count as missed).
+    return request(`/api/stack/adherence/today?local_now=${encodeURIComponent(localNowIso())}`);
   },
   logStackAdherence(body: {
     item_kind: "medication" | "supplement" | "peptide";

@@ -2,21 +2,21 @@
   TEMPLATE — NOT LEGAL ADVICE. Drafted for BackNine as a starting point.
   Have a licensed attorney review before publishing.
   Fill in every [BRACKETED] placeholder:
-    [LEGAL ENTITY NAME]  – your company or "the operator of BackNine"
-    [CONTACT EMAIL]      – e.g. support@backnine... (you can use dbarad@yahoo.com for now)
-    [EFFECTIVE DATE]     – the date you publish this
+    Strategy D, Incorporated  – your company or "the operator of BackNine"
+    support@backnine.health      – e.g. support@backnine... (you can use dbarad@yahoo.com for now)
+    July 5, 2026     – the date you publish this
   Governing law: California.  Minimum age: 18+.
 -->
 
 # Medical & Health Disclaimer
 
-**Effective Date: [EFFECTIVE DATE]**
+**Effective Date: July 5, 2026**
 
 Please read this disclaimer carefully before using BackNine. By using BackNine, you acknowledge and agree to the statements below.
 
 ## 1. BackNine is not a medical provider
 
-BackNine ("the App," "we," "us," or "our," operated by [LEGAL ENTITY NAME]) is a personal health and fitness dashboard provided for **general informational and entertainment purposes only**. We are **not** a doctor, nurse, dietitian, physical therapist, mental-health professional, or any other kind of licensed healthcare provider, and BackNine is **not** a medical device, electronic health record, or telehealth service.
+BackNine ("the App," "we," "us," or "our," operated by Strategy D, Incorporated) is a personal health and fitness dashboard provided for **general informational and entertainment purposes only**. We are **not** a doctor, nurse, dietitian, physical therapist, mental-health professional, or any other kind of licensed healthcare provider, and BackNine is **not** a medical device, electronic health record, or telehealth service.
 
 Nothing in BackNine — including scores, trends, charts, insights, "Coach Al" messages, training or nutrition suggestions, goals, briefings, gear recommendations, or any other content — is **medical advice, diagnosis, or treatment**, and none of it should be relied upon as a substitute for the advice of a qualified healthcare professional.
 
@@ -35,7 +35,7 @@ Only a professional who knows your personal history can tell you what is appropr
 
 ## 3. No professional relationship
 
-Using BackNine does not create a doctor-patient, therapist-client, trainer-client, or any other professional or fiduciary relationship between you and [LEGAL ENTITY NAME] or anyone associated with BackNine.
+Using BackNine does not create a doctor-patient, therapist-client, trainer-client, or any other professional or fiduciary relationship between you and Strategy D, Incorporated or anyone associated with BackNine.
 
 ## 4. "Coach Al" and AI-generated content
 
@@ -55,11 +55,11 @@ Exercise, dietary changes, fasting, and other physical activities carry inherent
 
 ## 8. No warranty; limitation of liability
 
-BackNine and all of its content are provided "as is," without warranties of any kind. To the fullest extent permitted by law, [LEGAL ENTITY NAME] disclaims all liability for any loss, injury, or damage arising from your use of, or reliance on, BackNine or its content. Your use of BackNine is at your own risk. This disclaimer is in addition to, and incorporated into, our Terms of Use.
+BackNine and all of its content are provided "as is," without warranties of any kind. To the fullest extent permitted by law, Strategy D, Incorporated disclaims all liability for any loss, injury, or damage arising from your use of, or reliance on, BackNine or its content. Your use of BackNine is at your own risk. This disclaimer is in addition to, and incorporated into, our Terms of Use.
 
 ## 9. Contact
 
-Questions about this disclaimer can be sent to **[CONTACT EMAIL]**.
+Questions about this disclaimer can be sent to **support@backnine.health**.
 
 ---
 

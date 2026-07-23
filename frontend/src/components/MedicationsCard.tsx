@@ -21,8 +21,14 @@ interface Props {
   onSave: (next: Medication[]) => Promise<void>;
 }
 
-type Draft = { name: string; dose: string; timing: string; notes: string };
-const EMPTY_DRAFT: Draft = { name: "", dose: "", timing: "", notes: "" };
+type Draft = {
+  name:        string;
+  dose:        string;
+  timing:      string;
+  time_of_day: "" | "morning" | "midday" | "evening" | "anytime";
+  notes:       string;
+};
+const EMPTY_DRAFT: Draft = { name: "", dose: "", timing: "", time_of_day: "", notes: "" };
 
 const inp =
   "w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-[#1B3829] focus:ring-1 focus:ring-[#1B3829]/20";
@@ -44,10 +50,11 @@ export default function MedicationsCard({ medications, onSave }: Props) {
     const m = medications[i];
     setEditing(i);
     setDraft({
-      name:   m.name   ?? "",
-      dose:   m.dose   ?? "",
-      timing: m.timing ?? "",
-      notes:  m.notes  ?? "",
+      name:        m.name        ?? "",
+      dose:        m.dose        ?? "",
+      timing:      m.timing      ?? "",
+      time_of_day: (m as { time_of_day?: string }).time_of_day as Draft["time_of_day"] ?? "",
+      notes:       m.notes       ?? "",
     });
     setError(null);
   };
@@ -77,11 +84,12 @@ export default function MedicationsCard({ medications, onSave }: Props) {
       setError("Name is required");
       return;
     }
-    const clean: Medication = {
+    const clean: Medication & { time_of_day?: Draft["time_of_day"] } = {
       name,
-      dose:   draft.dose.trim()   || undefined,
-      timing: draft.timing.trim() || undefined,
-      notes:  draft.notes.trim()  || undefined,
+      dose:        draft.dose.trim()   || undefined,
+      timing:      draft.timing.trim() || undefined,
+      time_of_day: draft.time_of_day || undefined,
+      notes:       draft.notes.trim()  || undefined,
     };
     const next = [...medications];
     if (editing === -1) next.push(clean);
@@ -226,6 +234,17 @@ function MedicationForm({
           onChange={e => setDraft({ ...draft, timing: e.target.value })}
         />
       </div>
+      <select
+        className={inp}
+        value={draft.time_of_day}
+        onChange={e => setDraft({ ...draft, time_of_day: e.target.value as Draft["time_of_day"] })}
+      >
+        <option value="">Time of day (for adherence grouping)</option>
+        <option value="morning">🌅 Morning</option>
+        <option value="midday">☀️ Midday</option>
+        <option value="evening">🌙 Evening</option>
+        <option value="anytime">🕐 Anytime</option>
+      </select>
       <input
         className={inp}
         placeholder="Notes (prescriber, condition, etc.)"
