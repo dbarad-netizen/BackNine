@@ -18,8 +18,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
-import { establishSession } from "@/lib/api";
+import { supabase, establishSession } from "@/lib/supabase";
 
 export default function ResetPasswordPage() {
   const router = useRouter();

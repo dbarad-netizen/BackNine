@@ -403,6 +403,52 @@ export interface StackAdherenceSnapshot {
   };
 }
 
+// ── Proven For You experiments (David 2026-07-23, Fable competitive brief)
+export type ExperimentMetric =
+  | "sleep_score" | "sleep_hours" | "hrv_ms" | "rhr_bpm"
+  | "weight_lb"   | "bp_systolic" | "bp_diastolic"
+  | "steps"       | "energy_score" | "mood_score"
+  | "readiness_score" | "activity_score"
+  | "protein_g"   | "calories";
+
+export type ExperimentStatus = "active" | "completed" | "abandoned" | "insufficient_data";
+export type ExperimentDirection = "better" | "worse" | "no_change";
+export type ExperimentSignificance = "noise" | "notable" | "meaningful";
+
+export interface Experiment {
+  id:                  string;
+  user_id:             string;
+  created_at:          string;
+  insight_id:          string | null;
+  hypothesis:          string;
+  action:              string;
+  metric_type:         ExperimentMetric;
+  baseline_start_date: string;
+  baseline_end_date:   string;
+  test_start_date:     string;
+  test_end_date:       string;
+  baseline_avg:        number | null;
+  baseline_stddev:     number | null;
+  baseline_n:          number | null;
+  test_avg:            number | null;
+  test_n:              number | null;
+  delta:               number | null;
+  direction:           ExperimentDirection | null;
+  significance:        ExperimentSignificance | null;
+  status:              ExperimentStatus;
+  completed_at:        string | null;
+  user_note:           string | null;
+  // Hydrated by backend for UI:
+  metric_label:        string;
+  unit:                string;
+  direction_bias:      "higher_is_better" | "lower_is_better";
+  day_index?:          number | null;
+  day_total?:          number | null;
+  progress_pct?:       number | null;
+  headline?:           string;
+  proven?:             boolean;
+}
+
 export interface TrainingFlag {
   id:         string;
   date:       string;
@@ -2274,6 +2320,34 @@ export const api = {
     notes?:    string;
   }): Promise<{ row: StackAdherenceRow }> {
     return request("/api/stack/adherence", { method: "POST", body: JSON.stringify(body) });
+  },
+
+  // ── Proven For You experiments (Fable moat 2026-07-23) ────────────────────
+  commitExperiment(body: {
+    hypothesis:  string;
+    action:      string;
+    metric_type: ExperimentMetric;
+    insight_id?: string;
+  }): Promise<{ row: Experiment }> {
+    return request("/api/experiments/commit", { method: "POST", body: JSON.stringify(body) });
+  },
+  activeExperiments(): Promise<{ experiments: Experiment[] }> {
+    return request("/api/experiments/active");
+  },
+  provenLedger(limit = 50): Promise<{ ledger: Experiment[] }> {
+    return request(`/api/experiments/ledger?limit=${limit}`);
+  },
+  experimentHistory(limit = 100): Promise<{ experiments: Experiment[] }> {
+    return request(`/api/experiments/history?limit=${limit}`);
+  },
+  abandonExperiment(id: string): Promise<{ status: string }> {
+    return request(`/api/experiments/${id}/abandon`, { method: "POST" });
+  },
+  saveExperimentNote(id: string, note: string): Promise<{ status: string }> {
+    return request(`/api/experiments/${id}/note`, {
+      method: "POST",
+      body: JSON.stringify({ note }),
+    });
   },
 
   // ── Training flags (injury / discomfort / illness for the day) ────────────

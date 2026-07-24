@@ -3605,6 +3605,120 @@ async def log_stack_adherence(request: Request):
     return {"row": row}
 
 
+# ── Proven For You — n-of-1 experiment loop ───────────────────────────────
+#
+# David 2026-07-23 (Fable competitive brief): closes the loop between a
+# Daily Insight suggesting an experiment and a permanent evidence
+# ledger. Also feeds Stack Efficacy with real causal-window data.
+
+@app.post("/api/experiments/commit")
+async def api_commit_experiment(request: Request):
+    """Commit to a 7-day experiment. Body:
+    { hypothesis, action, metric_type, insight_id? }.
+    Baseline gets computed synchronously here so the user sees the
+    active experiment immediately with its "day X of 7" progress
+    bar starting."""
+    import experiments as _exp
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    try:
+        row = _exp.commit_experiment(
+            user_id     = user_id,
+            hypothesis  = (body.get("hypothesis") or "").strip(),
+            action      = (body.get("action") or "").strip(),
+            metric_type = (body.get("metric_type") or "").strip(),
+            insight_id  = (body.get("insight_id") or None),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"row": row}
+
+
+@app.get("/api/experiments/active")
+def api_experiments_active(request: Request):
+    """Currently-running experiments with progress hydration for the
+    Scorecard card. Sorted newest-first. Opportunistically finalizes
+    any experiments whose test window closed — no cron required
+    because BackNine has no background scheduler. Silent-fail: if
+    finalization errors, we still return the current active list."""
+    import experiments as _exp
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        _exp.finalize_due_experiments(user_id=user_id)
+    except Exception:
+        log.exception("opportunistic finalize failed for %s", user_id)
+    return {"experiments": _exp.get_active(user_id)}
+
+
+@app.get("/api/experiments/ledger")
+def api_experiments_ledger(request: Request, limit: int = 50):
+    """The Proven For You ledger — completed experiments only, with
+    delta + significance labels. Insufficient / abandoned entries are
+    excluded because the ledger is a trust artifact, not a history log.
+    Also opportunistically finalizes due experiments so a user opening
+    the ledger sees their newest result even if they haven't touched
+    the app in a while."""
+    import experiments as _exp
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        _exp.finalize_due_experiments(user_id=user_id)
+    except Exception:
+        log.exception("opportunistic finalize failed for %s", user_id)
+    return {"ledger": _exp.get_ledger(user_id, limit=limit)}
+
+
+@app.get("/api/experiments/history")
+def api_experiments_history(request: Request, limit: int = 100):
+    """Full history for a hypothetical 'your experiments' view — all
+    statuses. Not shown by default; users pull it if they want to see
+    what didn't work."""
+    import experiments as _exp
+    session = _require_session(request)
+    user_id = session["user_id"]
+    return {"experiments": _exp.get_history(user_id, limit=limit)}
+
+
+@app.post("/api/experiments/{experiment_id}/abandon")
+def api_experiments_abandon(experiment_id: str, request: Request):
+    """User pressed Stop early. Marks abandoned; no delta is computed
+    (we won't publish a partial result to the ledger)."""
+    import experiments as _exp
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        _exp.abandon_experiment(user_id, experiment_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"status": "abandoned"}
+
+
+@app.post("/api/experiments/{experiment_id}/note")
+async def api_experiments_note(experiment_id: str, request: Request):
+    """Save the user's reflection on a completed experiment. Body:
+    { note }. Rendered on the ledger card next to the delta."""
+    import experiments as _exp
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    note = (body.get("note") or "").strip()
+    try:
+        _exp.save_user_note(user_id, experiment_id, note)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"status": "saved"}
+
+
 @app.get("/api/nutrition/vices")
 def api_list_vices(request: Request, days: int = 30):
     """Recent vice logs. Used by the Nutrition tab and by insight

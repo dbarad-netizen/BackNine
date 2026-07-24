@@ -38,6 +38,8 @@ import TrainingFlagCard from "@/components/TrainingFlagCard";
 import NutritionExtrasCard from "@/components/NutritionExtrasCard";
 import StackAdherenceCard from "@/components/StackAdherenceCard";
 import StackAdherencePill from "@/components/StackAdherencePill";
+import ActiveExperimentsCard from "@/components/ActiveExperimentsCard";
+import ProvenLedgerCard from "@/components/ProvenLedgerCard";
 import BloodPressureCard from "@/components/BloodPressureCard";
 import DoctorReportModal from "@/components/DoctorReportModal";
 import DayMealsDrawer from "@/components/DayMealsDrawer";
@@ -2439,6 +2441,12 @@ export default function DashboardPage() {
                 no stack. */}
             <StackAdherencePill onJump={() => setSection("nutrition")} />
 
+            {/* Active experiments — Fable moat 2026-07-23. Shows any
+                in-flight 1-week tests spawned by tapping "Test for a
+                week" on a Daily Insight. Self-hides when there are none.
+                Day-progress bar + baseline snapshot on tap. */}
+            <ActiveExperimentsCard />
+
             {/* LeagueGlance used to live here as a "Weekly Leaderboard ·
                 engagement points" pill that linked to Clubhouse. Removed
                 because Today's Leaderboard at the top of the Scorecard
@@ -2455,6 +2463,13 @@ export default function DashboardPage() {
                 Scorecard. Gear is a commercial surface — impressions matter
                 for affiliate revenue, so this earns persistent placement. */}
             <GearPicks signals={gearSignals} onJump={() => setSection("gear")} />
+
+            {/* Proven for you — Fable competitive moat. Every completed
+                experiment becomes a permanent evidence row. Anchored at
+                the bottom of the Scorecard so users see it every day
+                and it grows into a personal proof ledger. Empty state
+                educates. */}
+            <ProvenLedgerCard />
 
           </div>
           );

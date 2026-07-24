@@ -19,7 +19,34 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api, type DailyInsight } from "@/lib/api";
+import { api, type DailyInsight, type ExperimentMetric } from "@/lib/api";
+
+/**
+ * suggestMetric — light client-side dispatcher mirroring
+ * backend/experiments.py::suggest_metric_for_insight. Bias toward
+ * `null` over guessing wrong so we don't spawn junk experiments.
+ * Kept here rather than round-tripping to a backend endpoint because
+ * the mapping is tiny and stable.
+ */
+function suggestMetric(category: DailyInsight["category"], action: string): ExperimentMetric | null {
+  const txt = (action || "").toLowerCase();
+  if (txt.includes("hrv")) return "hrv_ms";
+  if (txt.includes("rhr") || (txt.includes("resting") && txt.includes("heart"))) return "rhr_bpm";
+  if (txt.includes("sleep score")) return "sleep_score";
+  if (txt.includes("sleep") && /hour|hrs|duration/.test(txt)) return "sleep_hours";
+  if (txt.includes("blood pressure") || txt.includes(" bp ") || txt.includes("systolic")) return "bp_systolic";
+  if (txt.includes("weight")) return "weight_lb";
+  if (txt.includes("step")) return "steps";
+  if (txt.includes("readiness")) return "readiness_score";
+  const catDefault: Partial<Record<DailyInsight["category"], ExperimentMetric>> = {
+    sleep:     "sleep_score",
+    recovery:  "hrv_ms",
+    cardio:    "rhr_bpm",
+    training:  "readiness_score",
+    nutrition: "weight_lb",
+  };
+  return catDefault[category] ?? null;
+}
 
 const CATEGORY_BADGE: Record<DailyInsight["category"], { label: string; emoji: string; bg: string; fg: string }> = {
   sleep:     { label: "Sleep",     emoji: "😴", bg: "bg-indigo-100",   fg: "text-indigo-800"   },
@@ -94,6 +121,11 @@ export default function DailyInsightCard({ embedded = false }: Props = {}) {
   const [insight, setInsight] = useState<DailyInsight | null>(null);
   const [loading, setLoading] = useState(true);
   const [feedbackBusy, setFeedbackBusy] = useState(false);
+  // Proven For You commit state (Fable moat 2026-07-23) — tracks whether
+  // the user has already committed to this insight so we render a green
+  // "Testing" confirm state instead of the button.
+  const [committing, setCommitting] = useState(false);
+  const [committed,  setCommitted]  = useState(false);
 
   useEffect(() => {
     api.dailyInsight()
@@ -197,6 +229,56 @@ export default function DailyInsightCard({ embedded = false }: Props = {}) {
           })()}
         </div>
         <p className="text-sm text-gray-900 leading-snug">{insight.action}</p>
+
+        {/* Proven For You commit CTA — Fable competitive brief moat.
+            Closes the loop: user taps → 7-day test → result vs baseline
+            → Proven ledger. Silently absent when we can't confidently
+            map the insight to a trackable metric (never spawn a garbage
+            experiment). Also absent when user already committed this
+            session (renders green confirmation instead). */}
+        {(() => {
+          const metric = suggestMetric(insight.category, insight.action);
+          if (!metric) return null;
+          if (committed) {
+            return (
+              <div className="mt-2 pt-2 border-t border-[#1B3829]/10">
+                <p className="text-[11px] font-semibold text-emerald-800">
+                  ✅ Testing for 7 days &middot; check the Scorecard for progress
+                </p>
+              </div>
+            );
+          }
+          return (
+            <div className="mt-2 pt-2 border-t border-[#1B3829]/10 flex items-center justify-between gap-2">
+              <p className="text-[10px] text-gray-500 leading-tight">
+                Save the result to your <span className="font-semibold">Proven for you</span> ledger.
+              </p>
+              <button
+                onClick={async () => {
+                  if (committing) return;
+                  setCommitting(true);
+                  try {
+                    await api.commitExperiment({
+                      hypothesis:  insight.pattern,
+                      action:      insight.action,
+                      metric_type: metric,
+                      insight_id:  insight.id,
+                    });
+                    setCommitted(true);
+                  } catch {
+                    // Silent — user can tap again
+                  } finally {
+                    setCommitting(false);
+                  }
+                }}
+                disabled={committing}
+                className="shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-md bg-[#1B3829] hover:bg-[#2D6A4F] text-white transition-colors disabled:opacity-50"
+              >
+                {committing ? "Committing..." : "Test for a week →"}
+              </button>
+            </div>
+          );
+        })()}
       </div>
 
       {insight.evidence && (
