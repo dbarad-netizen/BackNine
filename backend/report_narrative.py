@@ -100,6 +100,9 @@ flag them. End with one sentence suggesting what's worth discussing.""",
 
 _VOICE_RULES = """
 Voice and constraints:
+- The reader is a physician skimming their patient's summary before a
+  visit — write the paragraph they would want to see. Concise, clinical,
+  numbers-first. Not a patient-facing pep talk.
 - 2 to 4 sentences. No more, no less.
 - Be specific. Use real numbers from the payload.
 - No diagnosis, no Rx advice, no telling the user to start/stop anything.

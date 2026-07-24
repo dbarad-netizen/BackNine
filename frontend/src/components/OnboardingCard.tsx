@@ -50,8 +50,12 @@ export default function OnboardingCard({ onFocusDailyCheckin }: Props) {
   if (loading || !status || !status.show) return null;
 
   const { steps, completed } = status;
-  const totalSteps    = 3;
-  const doneCount     = Number(steps.oura_connected) + Number(steps.goal_set) + Number(steps.checked_in);
+  const totalSteps    = 4;
+  const doneCount     =
+    Number(steps.foursome_invited) +
+    Number(steps.oura_connected) +
+    Number(steps.goal_set) +
+    Number(steps.checked_in);
   const progressPct   = Math.round((doneCount / totalSteps) * 100);
 
   const handleDismiss = async () => {
@@ -63,9 +67,21 @@ export default function OnboardingCard({ onFocusDailyCheckin }: Props) {
   const handleConnectOura = () => {
     // Kick off Oura OAuth. The backend sets the correct redirect back
     // to the dashboard, which will re-fetch onboarding status and mark
-    // step 1 done.
+    // this step done.
     const base = process.env.NEXT_PUBLIC_API_URL || "";
     window.location.href = `${base}${OURA_CONNECT_PATH}`;
+  };
+
+  const handleInviteFoursome = () => {
+    // Foursome-first — David 2026-07-23 (Fable competitive brief).
+    // Community is our structural moat; making it the first
+    // onboarding step (before Connect Oura) is the biggest default
+    // change we can ship. Jumps to the Clubhouse tab's invite form.
+    window.location.hash = "invite-friend";
+    setTimeout(() => {
+      const el = document.getElementById("invite-friend");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 30);
   };
 
   const handleSetGoal = () => {
@@ -123,18 +139,28 @@ export default function OnboardingCard({ onFocusDailyCheckin }: Props) {
         />
       </div>
 
-      {/* Steps */}
+      {/* Steps — foursome-first (David 2026-07-23, Fable brief).
+          Community is the structural moat, so make it the default
+          first move instead of a hidden feature. */}
       <ol className="space-y-1.5">
         <Step
           n={1}
+          done={steps.foursome_invited}
+          title="Bring your foursome"
+          hint="Invite your spouse, workout partners, or the guys you tee off with. Longevity is a team sport — and friends halve churn."
+          ctaLabel="Invite people"
+          onCta={handleInviteFoursome}
+        />
+        <Step
+          n={2}
           done={steps.oura_connected}
           title="Connect your Oura ring"
-          hint="Powers Sleep, HRV, Readiness, and the Doctor Handoff. Optional — the app still works without it."
+          hint="Powers Sleep, HRV, Readiness, and the Doctor Report. Optional — the app still works without it."
           ctaLabel="Connect Oura"
           onCta={handleConnectOura}
         />
         <Step
-          n={2}
+          n={3}
           done={steps.goal_set}
           title="Tell Coach Al your #1 goal"
           hint="Live longer, feel more energy, build muscle, better sleep — Coach Al personalizes off this."
@@ -142,7 +168,7 @@ export default function OnboardingCard({ onFocusDailyCheckin }: Props) {
           onCta={handleSetGoal}
         />
         <Step
-          n={3}
+          n={4}
           done={steps.checked_in}
           title="Do your first check-in"
           hint="Tap a mood on Daily Check-in. Five seconds. Builds the pattern data insights read from."

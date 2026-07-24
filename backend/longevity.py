@@ -231,10 +231,42 @@ def compute(metrics: dict, profile: dict) -> dict:
     num_metrics = len(components)
     data_coverage = f"{num_metrics}/6 metrics"
 
+    # Confidence — Fable competitive brief moat (David 2026-07-23).
+    # Bevel shows a confidence chip on their biological age but hides
+    # the underlying inputs. Ours is strictly better because we already
+    # itemize markers; the chip just names how much of the picture we
+    # actually have.
+    #
+    # Rules (coverage-based; recency guarded upstream by data-freshness
+    # module):
+    #   5-6 markers + HRV present   → high
+    #   5-6 markers + no HRV        → medium (HRV is the recovery anchor)
+    #   3-4 markers                 → medium
+    #   1-2 markers                 → low
+    #   0                           → unknown (score is None anyway)
+    if num_metrics == 0:
+        confidence = {"level": "unknown", "reason": "no metrics", "coverage_pct": 0}
+    else:
+        pct = round(100 * num_metrics / 6)
+        if num_metrics >= 5 and has_hrv:
+            level = "high"
+            reason = f"{num_metrics} of 6 markers, HRV included"
+        elif num_metrics >= 5:
+            level = "medium"
+            reason = f"{num_metrics} of 6 markers, HRV missing"
+        elif num_metrics >= 3:
+            level = "medium"
+            reason = f"{num_metrics} of 6 markers available"
+        else:
+            level = "low"
+            reason = f"only {num_metrics} of 6 markers available"
+        confidence = {"level": level, "reason": reason, "coverage_pct": pct}
+
     return {
         "score": score,
         "grade": grade,
         "biological_age_delta": biological_age_delta,
         "components": components,
         "data_coverage": data_coverage,
+        "confidence": confidence,
     }

@@ -40,6 +40,7 @@ import StackAdherenceCard from "@/components/StackAdherenceCard";
 import StackAdherencePill from "@/components/StackAdherencePill";
 import ActiveExperimentsCard from "@/components/ActiveExperimentsCard";
 import ProvenLedgerCard from "@/components/ProvenLedgerCard";
+import NudgeCard from "@/components/NudgeCard";
 import BloodPressureCard from "@/components/BloodPressureCard";
 import DoctorReportModal from "@/components/DoctorReportModal";
 import DayMealsDrawer from "@/components/DayMealsDrawer";
@@ -2019,7 +2020,33 @@ export default function DashboardPage() {
                           )}
                         </p>
                       )}
-                      <p className="text-[10px] text-gray-500 mt-1">{lon.data_coverage} available</p>
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                        <p className="text-[10px] text-gray-500">{lon.data_coverage} available</p>
+                        {lon.confidence && lon.confidence.level !== "unknown" && (() => {
+                          // Confidence chip — Fable moat 2026-07-23. Bevel shows a
+                          // confidence label on their bio-age but hides the inputs.
+                          // Ours is strictly better because tapping the score already
+                          // itemizes markers; this chip just quantifies the picture.
+                          const styleFor = {
+                            high:   "bg-emerald-100 text-emerald-800 border-emerald-300",
+                            medium: "bg-amber-100  text-amber-800  border-amber-300",
+                            low:    "bg-gray-100   text-gray-700   border-gray-300",
+                          } as const;
+                          const label = {
+                            high:   "High confidence",
+                            medium: "Moderate confidence",
+                            low:    "Low confidence",
+                          } as const;
+                          return (
+                            <span
+                              className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${styleFor[lon.confidence.level]}`}
+                              title={lon.confidence.reason}
+                            >
+                              {label[lon.confidence.level]}
+                            </span>
+                          );
+                        })()}
+                      </div>
                     </div>
                   </div>
 
@@ -2440,6 +2467,30 @@ export default function DashboardPage() {
                 hunt for where to log doses. Self-hides for users with
                 no stack. */}
             <StackAdherencePill onJump={() => setSection("nutrition")} />
+
+            {/* Today's Coach Al nudge — Fable moat 2026-07-23. Hard-
+                capped at one per user per day so we can be proactive
+                without becoming noisy. Rule dispatch runs in priority
+                order (BP high > HRV drop > sleep debt > training gap
+                > adherence dip > alcohol pattern) — first to fire
+                wins the day. */}
+            <NudgeCard onJump={(target) => {
+              // Nudge action_targets come from the backend rule set —
+              // map any that don't line up 1:1 with our Section type
+              // to the closest existing tab. Sleep + insights + visits
+              // don't have dedicated tabs today; route them to the
+              // Scorecard where their surfaces live.
+              const MAP: Record<string, Section> = {
+                nutrition: "nutrition", training: "training",
+                gear: "gear", labs: "labs",
+                challenges: "challenges", "apple-health": "apple-health",
+                sleep: "coaching", insights: "coaching", visits: "coaching",
+                coaching: "coaching",
+              };
+              const next = MAP[target] || "coaching";
+              setSection(next);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }} />
 
             {/* Active experiments — Fable moat 2026-07-23. Shows any
                 in-flight 1-week tests spawned by tapping "Test for a

@@ -14,9 +14,15 @@ the rest of the app is already reading. That way there's no drift: the
 card can never disagree with the app.
 
 Signals:
+  • foursome_invited ← row exists in friend_invites OR friendships for this user
   • oura_connected   ← row exists in oura_connections OR wearable_connections
   • goal_set         ← row exists in user_goals for this user
   • checked_in       ← row exists in symptom_logs OR mood_logs in last 3 days
+
+Ordering (David 2026-07-23, Fable competitive brief): foursome-first.
+Community is BackNine's structural moat that Bevel and Aveil can't
+fast-follow. Making it the first step of onboarding (instead of a
+hidden feature) is the highest-leverage default we can set.
 
 Dismissal:
   • profiles.onboarding_dismissed_at timestamp column. Once set, we return
@@ -51,6 +57,35 @@ def _sb() -> Optional[Client]:
     if not (url and key):
         return None
     return create_client(url, key)
+
+
+def _has_foursome(sb: Client, user_id: str) -> bool:
+    """Any sent invite OR accepted friendship counts. The point of the
+    step is the intent to include people — a pending invite is enough."""
+    for table, cols in (
+        ("friend_invites", "inviter_id"),
+        ("friendships",    "user_id"),
+    ):
+        try:
+            res = (sb.table(table)
+                     .select("id", count="exact")
+                     .eq(cols, user_id)
+                     .limit(1).execute())
+            if res.data:
+                return True
+        except Exception:
+            continue
+    # Also check reciprocal side of friendships (a friend added you)
+    try:
+        res = (sb.table("friendships")
+                 .select("id", count="exact")
+                 .eq("friend_id", user_id)
+                 .limit(1).execute())
+        if res.data:
+            return True
+    except Exception:
+        pass
+    return False
 
 
 def _has_oura(sb: Client, user_id: str) -> bool:
@@ -128,7 +163,12 @@ def status(user_id: str) -> dict:
     load — reads at most 4 small Supabase rows."""
     empty = {
         "show":         False,
-        "steps":        {"oura_connected": False, "goal_set": False, "checked_in": False},
+        "steps":        {
+            "foursome_invited": False,
+            "oura_connected":   False,
+            "goal_set":         False,
+            "checked_in":       False,
+        },
         "dismissed_at": None,
         "completed":    False,
     }
@@ -139,9 +179,10 @@ def status(user_id: str) -> dict:
         return empty
 
     steps = {
-        "oura_connected": _has_oura(sb, user_id),
-        "goal_set":       _has_goal(sb, user_id),
-        "checked_in":     _has_recent_checkin(sb, user_id),
+        "foursome_invited": _has_foursome(sb, user_id),
+        "oura_connected":   _has_oura(sb, user_id),
+        "goal_set":         _has_goal(sb, user_id),
+        "checked_in":       _has_recent_checkin(sb, user_id),
     }
     completed    = all(steps.values())
     dismissed_at = _dismissed_at(sb, user_id)

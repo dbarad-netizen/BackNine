@@ -301,6 +301,11 @@ export interface LongevityScore {
   biological_age_delta: number | null;
   components:           Record<string, LongevityComponent>;
   data_coverage:        string;
+  confidence?: {
+    level:        "high" | "medium" | "low" | "unknown";
+    reason:       string;
+    coverage_pct: number;
+  };
 }
 
 export interface LongevityHistoryPoint {
@@ -401,6 +406,27 @@ export interface StackAdherenceSnapshot {
     expected_by_now: number;
     on_pace_pct:     number;
   };
+}
+
+// ── Proactive nudge (David 2026-07-23, Fable competitive brief)
+// One per user per day. Hard-capped at the schema level.
+export type NudgeKind =
+  | "bp_high" | "hrv_drop" | "sleep_debt" | "adherence_dip"
+  | "training_gap" | "alcohol_pattern" | "weight_trend" | "goal_stalled";
+
+export interface Nudge {
+  id:            string;
+  user_id:       string;
+  date:          string;
+  kind:          NudgeKind;
+  title:         string;
+  body:          string;
+  action_label:  string | null;
+  action_target: string | null;
+  priority:      number;
+  dismissed_at:  string | null;
+  acted_at:      string | null;
+  created_at:    string;
 }
 
 // ── Proven For You experiments (David 2026-07-23, Fable competitive brief)
@@ -1813,9 +1839,10 @@ export interface OnboardingStatus {
   completed:    boolean;
   dismissed_at: string | null;
   steps: {
-    oura_connected: boolean;
-    goal_set:       boolean;
-    checked_in:     boolean;
+    foursome_invited: boolean;
+    oura_connected:   boolean;
+    goal_set:         boolean;
+    checked_in:       boolean;
   };
 }
 
@@ -2320,6 +2347,17 @@ export const api = {
     notes?:    string;
   }): Promise<{ row: StackAdherenceRow }> {
     return request("/api/stack/adherence", { method: "POST", body: JSON.stringify(body) });
+  },
+
+  // ── Proactive nudge (one per day, Fable moat 2026-07-23) ─────────────────
+  todayNudge(): Promise<{ nudge: Nudge | null }> {
+    return request("/api/nudges/today");
+  },
+  dismissNudge(id: string): Promise<{ status: string }> {
+    return request(`/api/nudges/${id}/dismiss`, { method: "POST" });
+  },
+  actedNudge(id: string): Promise<{ status: string }> {
+    return request(`/api/nudges/${id}/acted`, { method: "POST" });
   },
 
   // ── Proven For You experiments (Fable moat 2026-07-23) ────────────────────

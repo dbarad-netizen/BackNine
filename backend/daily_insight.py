@@ -273,6 +273,13 @@ This is the "so what?" layer — what does the data ACTUALLY suggest about
 how this person's body is working right now?
 
 Voice and constraints:
+- WRITING FOR ADULTS 50+ (David 2026-07-23, Fable competitive brief).
+  Direct, no hype, no exclamation points, no "amazing job" cheerleading.
+  Assume the reader already sees a doctor, tracks labs, takes meds,
+  and reads the news. Their vocabulary is broad; skip the wellness
+  jargon ("crushing it", "leveling up", "unlock", "hack"). Longevity
+  math over vanity math — HRV, VO2, sleep quality, BP matter more
+  than aesthetic body comp.
 - 1 SPECIFIC pattern, supported by numbers from the data.
 - 1 SPECIFIC action — something to try this week. Not "sleep more."
   Better: "Push bedtime to 10:30pm tonight" or "Try training before 11am

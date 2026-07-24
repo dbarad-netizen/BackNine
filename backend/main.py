@@ -3719,6 +3719,34 @@ async def api_experiments_note(experiment_id: str, request: Request):
     return {"status": "saved"}
 
 
+@app.get("/api/nudges/today")
+def api_nudges_today(request: Request):
+    """One nudge per user per day, generated on demand by rule dispatch.
+    Silent-null when nothing qualifies — the frontend just doesn't
+    render the card."""
+    import nudges as _nu
+    session = _require_session(request)
+    user_id = session["user_id"]
+    n = _nu.today(user_id)
+    return {"nudge": n}
+
+
+@app.post("/api/nudges/{nudge_id}/dismiss")
+def api_nudges_dismiss(nudge_id: str, request: Request):
+    import nudges as _nu
+    session = _require_session(request)
+    _nu.dismiss(session["user_id"], nudge_id)
+    return {"status": "dismissed"}
+
+
+@app.post("/api/nudges/{nudge_id}/acted")
+def api_nudges_acted(nudge_id: str, request: Request):
+    import nudges as _nu
+    session = _require_session(request)
+    _nu.mark_acted(session["user_id"], nudge_id)
+    return {"status": "acted"}
+
+
 @app.get("/api/nutrition/vices")
 def api_list_vices(request: Request, days: int = 30):
     """Recent vice logs. Used by the Nutrition tab and by insight
