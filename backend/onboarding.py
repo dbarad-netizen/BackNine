@@ -61,30 +61,37 @@ def _sb() -> Optional[Client]:
 
 def _has_foursome(sb: Client, user_id: str) -> bool:
     """Any sent invite OR accepted friendship counts. The point of the
-    step is the intent to include people — a pending invite is enough."""
-    for table, cols in (
-        ("friend_invites", "inviter_id"),
-        ("friendships",    "user_id"),
-    ):
-        try:
-            res = (sb.table(table)
-                     .select("id", count="exact")
-                     .eq(cols, user_id)
-                     .limit(1).execute())
-            if res.data:
-                return True
-        except Exception:
-            continue
-    # Also check reciprocal side of friendships (a friend added you)
+    step is the intent to include people — a pending invite is enough.
+
+    NOTE (David 2026-07-27 regression fix): the friendships table uses
+    user_id_a / user_id_b as its two sides — not user_id / friend_id —
+    and rows are soft-deleted via deleted_at. The initial version of
+    this check used the wrong column names, so existing users with
+    friends were seeing the onboarding card on every login. Two
+    queries (one per side of the friendship) is fine — each hits an
+    indexed column."""
+    # Cheapest first: any invite sent (single-column filter).
     try:
-        res = (sb.table("friendships")
-                 .select("id", count="exact")
-                 .eq("friend_id", user_id)
+        res = (sb.table("friend_invites")
+                 .select("code", count="exact")
+                 .eq("inviter_id", user_id)
                  .limit(1).execute())
         if res.data:
             return True
     except Exception:
         pass
+    # Then friendships, both sides. Soft-deleted rows don't count.
+    for side in ("user_id_a", "user_id_b"):
+        try:
+            res = (sb.table("friendships")
+                     .select("created_at", count="exact")
+                     .eq(side, user_id)
+                     .is_("deleted_at", "null")
+                     .limit(1).execute())
+            if res.data:
+                return True
+        except Exception:
+            continue
     return False
 
 
