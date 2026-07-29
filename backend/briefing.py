@@ -20,12 +20,18 @@ def _build_system_prompt(
     profile: dict,
     prediction_status: Optional[dict],
     yesterday_mood: Optional[str] = None,
+    briefing_type: Optional[str] = None,
+    type_ctx:      Optional[dict] = None,
 ) -> str:
     """Build the system prompt for the morning briefing.
 
-    Args mirror chat._build_system_prompt with one addition:
+    Args mirror chat._build_system_prompt with two additions:
       prediction_status: optional dict with keys streak (int), accuracy_pct (int|None),
                          last_predicted (int|None), last_actual (int|None).
+      briefing_type / type_ctx (Layer 2, David 2026-07-27): if provided,
+                         a type-specific overlay is appended to the base
+                         prompt after all other blocks. See briefing_types
+                         module for the type keys and their overlays.
     """
     parts: list[str] = []
 
@@ -335,6 +341,22 @@ def _build_system_prompt(
     from coach_voice import VOICE_BLOCK
     parts.append("\n" + VOICE_BLOCK)
 
+    # Layer 2 (David 2026-07-27): day-type overlay. Appended LAST so it
+    # takes precedence over the default 2-paragraph 60-110 word format
+    # when the type calls for a different shape (e.g. Sunday recap runs
+    # 90-130 words, experiment-progress reframes both paragraphs). The
+    # base voice + 50+ rules still apply — overlay is emphasis, not
+    # replacement.
+    if briefing_type and briefing_type != "default":
+        try:
+            import briefing_types as _bt
+            overlay = _bt.overlay_for(briefing_type, type_ctx or {})
+            if overlay:
+                parts.append("\n" + overlay)
+        except Exception:
+            # Silent fallback — default format still works
+            pass
+
     return "\n".join(parts)
 
 
@@ -343,11 +365,18 @@ def generate(
     profile: dict,
     prediction_status: Optional[dict] = None,
     yesterday_mood: Optional[str] = None,
+    briefing_type: Optional[str] = None,
+    type_ctx:      Optional[dict] = None,
 ) -> str:
     """Generate today's morning briefing.
 
     Returns the narrative text (2 short paragraphs). Caller is responsible
     for caching the result in daily_briefings.
+
+    briefing_type / type_ctx (Layer 2): if provided, a type-specific
+    prompt overlay is appended so the briefing takes the right shape
+    for the day (Sunday recap, Monday framing, experiment progress,
+    lab focus, visit prep). Default when omitted.
 
     Raises:
         RuntimeError: If ANTHROPIC_API_KEY is not set or anthropic package is missing.
@@ -362,7 +391,10 @@ def generate(
         raise RuntimeError("anthropic package not installed — run: pip install anthropic")
 
     client = anthropic.Anthropic(api_key=api_key)
-    system = _build_system_prompt(health_context, profile, prediction_status, yesterday_mood)
+    system = _build_system_prompt(
+        health_context, profile, prediction_status, yesterday_mood,
+        briefing_type=briefing_type, type_ctx=type_ctx,
+    )
 
     # The "user" turn is a meta-instruction — Claude treats it as the prompt to
     # respond to. We don't have anything user-typed; this is a generation task.

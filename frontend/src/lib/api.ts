@@ -2982,6 +2982,13 @@ export interface BriefingResponse {
    *  ring-sync issue on the Oura side. Frontend renders a subtle "open Oura
    *  app to nudge sync" hint under the narrative when true. */
   ring_sync_hint?:     boolean;
+
+  /** Layer 2 (David 2026-07-27): which briefing "type" today is —
+   *  drives an eyebrow badge on the card so users see the variety at
+   *  a glance instead of assuming today is another generic briefing. */
+  briefing_type?:       "default" | "sunday_recap" | "monday_framing"
+                      | "experiment_progress" | "lab_focus" | "visit_prep";
+  briefing_type_label?: string;   // human-facing badge text
 }
 
 export interface WeeklyInsightStat {

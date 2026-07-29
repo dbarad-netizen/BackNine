@@ -5344,6 +5344,19 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
             )
             if cached.data:
                 row = cached.data[0]
+                # Layer 2 (David 2026-07-27): even on cache hits, compute
+                # today's type label so the badge is consistent. The
+                # narrative was already written for the type it was
+                # generated under; the label just reflects that.
+                cached_type = "default"
+                cached_label = "Today's briefing"
+                try:
+                    import briefing_types as _bt
+                    _td = datetime.strptime(today_str, "%Y-%m-%d").date()
+                    cached_type, _ = _bt.pick_type(user_id, _td)
+                    cached_label = _bt.label_for(cached_type)
+                except Exception:
+                    pass
                 return {
                     "date":                today_str,
                     "narrative":           row["narrative"],
@@ -5354,6 +5367,8 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
                     "app_streak":          _compute_app_streak(user_id, today_str),
                     "has_data":            True,
                     "sleep_status":        "ok",
+                    "briefing_type":       cached_type,
+                    "briefing_type_label": cached_label,
                 }
         except Exception:
             pass  # fall through to regenerate
@@ -5678,6 +5693,18 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
     yesterday_checkin = _get_checkin(user_id, _y)
     yesterday_mood = (yesterday_checkin or {}).get("mood")
 
+    # Layer 2 (David 2026-07-27): pick today's briefing type based on
+    # what today is actually about. Silent fallback to "default" if the
+    # picker errors — the briefing still generates in the standard shape.
+    briefing_type = "default"
+    type_ctx: dict = {}
+    try:
+        import briefing_types as _bt
+        _today_d = datetime.strptime(today_str, "%Y-%m-%d").date()
+        briefing_type, type_ctx = _bt.pick_type(user_id, _today_d)
+    except Exception:
+        pass
+
     # Generate the narrative
     try:
         narrative = brf.generate(
@@ -5685,6 +5712,8 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
             profile,
             prediction_status,
             yesterday_mood=yesterday_mood,
+            briefing_type=briefing_type,
+            type_ctx=type_ctx,
         )
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
@@ -5731,6 +5760,16 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
     except Exception:
         pass
 
+    # Layer 2 UI label — small badge like "Sunday recap" or "Testing
+    # check-in" so users see the variety at a glance. Silent fallback
+    # to the generic label if the module is unavailable.
+    briefing_type_label = "Today's briefing"
+    try:
+        import briefing_types as _bt
+        briefing_type_label = _bt.label_for(briefing_type)
+    except Exception:
+        pass
+
     return {
         "date":                today_str,
         "narrative":           narrative,
@@ -5744,6 +5783,8 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
         "has_data":            True,
         "sleep_status":        "ok",
         "ring_sync_hint":      ring_sync_hint,
+        "briefing_type":       briefing_type,
+        "briefing_type_label": briefing_type_label,
     }
 
 

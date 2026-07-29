@@ -169,7 +169,7 @@ export default function MorningBriefing({ onOpenChat }: Props) {
           <CoachAlAvatar size={40} className="rounded-full ring-2 ring-white/30 shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-[10px] text-white/60 uppercase tracking-widest font-semibold mb-1">
-              Coach Al · Today&apos;s Briefing
+              Coach Al · {data?.briefing_type_label || "Today’s Briefing"}
             </p>
             <p className="text-white text-[13px] leading-snug">
               Couldn&apos;t load today&apos;s briefing — usually means the server is waking up.
@@ -217,7 +217,7 @@ export default function MorningBriefing({ onOpenChat }: Props) {
           <CoachAlAvatar size={36} className="rounded-full ring-2 ring-white/30 shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-[10px] text-white/60 uppercase tracking-widest font-semibold">
-              Coach Al · Today&apos;s Briefing
+              Coach Al · {data?.briefing_type_label || "Today’s Briefing"}
             </p>
             <p className="text-[12px] text-white/85 truncate">
               {moodEmoji && <span className="mr-1">{moodEmoji}</span>}
@@ -259,7 +259,7 @@ export default function MorningBriefing({ onOpenChat }: Props) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
             <p className="text-[10px] text-white/60 uppercase tracking-widest font-semibold truncate min-w-0">
-              Coach Al · Today&apos;s Briefing
+              Coach Al · {data?.briefing_type_label || "Today’s Briefing"}
             </p>
             {showAppStreak && (
               <div className="flex items-center gap-1.5 shrink-0">
