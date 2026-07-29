@@ -352,6 +352,7 @@ def _generate_insight(
     profile: dict,
     prior_feedback: list[dict],
     muted_categories: Optional[list[str]] = None,
+    variety_blocks: Optional[dict] = None,
 ) -> Optional[dict]:
     """Run Claude Haiku over the data window. Returns dict with headline /
     pattern / action / evidence / confidence / category, or None on
@@ -408,11 +409,39 @@ def _generate_insight(
             "is strong — pick the runner-up.\n"
         )
 
+    # Anti-repetition + rich-behavior context (David 2026-07-27).
+    # Feeding recent insights, active/proven experiments, and recent
+    # nudges into the prompt is the single biggest lever for stopping
+    # "pattern of the week" from reading the same every week. Silent
+    # fallback: if the caller doesn't pass variety_blocks, we still
+    # generate — just less well-informed.
+    variety = variety_blocks or {}
+    prior_insights_block = variety.get("recent_insights_ctx", "") or ""
+    experiments_block    = variety.get("experiments_ctx", "")    or ""
+    nudges_block         = variety.get("recent_nudges_ctx", "")  or ""
+    variety_hint = ""
+    if prior_insights_block or experiments_block or nudges_block:
+        variety_hint = (
+            "\n=== ANTI-REPETITION + BEHAVIOR CONTEXT ===\n"
+            "Read these blocks carefully. The pattern you pick today must "
+            "NOT duplicate a framing, metric, or action from the recent "
+            "insights below. If the user is actively testing something, "
+            "prefer a pattern that ties to the test (e.g. 'day 3 of your "
+            "dinner-cutoff test — early signal suggests X'). If a Proven "
+            "For You result exists, you may reference it by name to ground "
+            "today's pattern. Match the user's demonstrated interests "
+            "rather than surfacing the strongest signal in the abstract.\n"
+            + prior_insights_block
+            + experiments_block
+            + nudges_block
+        )
+
     user_msg = (
         patient_hint
         + feedback_hint
         + mute_hint
-        + "Cross-domain 14-day data (JSON):\n"
+        + variety_hint
+        + "\nCross-domain 14-day data (JSON):\n"
         + _truncate_for_prompt(window)
         + "\n\nFind ONE pattern + ONE action. Output the JSON now."
     )
@@ -505,7 +534,17 @@ def get_or_generate(user_id: str, profile: dict, today_iso: str) -> Optional[dic
 
     # Build window + generate
     window = _assemble_window(user_id, days=14)
-    insight = _generate_insight(window, profile, prior_feedback, muted_categories)
+    # Pull the shared AI-context bundle so anti-repetition + fresh-behavior
+    # blocks are available to the insight generator. Silent-fail: if the
+    # module can't import or errors, we generate without the extra
+    # context (same behavior as before this change).
+    variety_blocks: Optional[dict] = None
+    try:
+        import ai_context as _aic
+        variety_blocks = _aic.build(user_id, profile)
+    except Exception:
+        variety_blocks = None
+    insight = _generate_insight(window, profile, prior_feedback, muted_categories, variety_blocks)
     if not insight:
         return None
 

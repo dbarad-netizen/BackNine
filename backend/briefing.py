@@ -40,6 +40,22 @@ def _build_system_prompt(
         "the news. Direct, no hype, no exclamation points, no 'amazing job' talk. "
         "Longevity math over vanity math (HRV, sleep quality, BP over aesthetic body "
         "comp). Assume the reader is sophisticated; don't over-explain.\n\n"
+        "VARY YOUR OUTPUT — CRITICAL (David 2026-07-27):\n"
+        "You will see YOUR OWN last few briefings below in a block labeled "
+        "'YOUR LAST N BRIEFINGS'. Read them carefully. If today's data is "
+        "similar to recent days, the briefing must NOT open with the same "
+        "framing, quote the same numbers, or prescribe the same action as "
+        "any of those recent briefings. Rotate what you lead with (last "
+        "night's number, a 7-day trend, an experiment in progress, a "
+        "specific stack item, a training rhythm). If the user is running "
+        "an active experiment (see 'USER IS ACTIVELY TESTING' block), "
+        "tie today's briefing to that test — day-of, what to watch for. "
+        "If they have a Proven For You result (see 'PROVEN FOR THIS "
+        "USER'), reference it by name when it's relevant — the user "
+        "trusts those more than generic guidance. If nothing has "
+        "meaningfully changed and nothing new to say, be honest about "
+        "that in one sentence and pivot to a different lens rather than "
+        "re-narrating yesterday.\n\n"
         "FORMAT REQUIREMENTS:\n"
         "• Exactly 2 short paragraphs. Total 60–110 words.\n"
         "• Paragraph 1 = What happened. Lead with the most notable change since yesterday. "
@@ -80,7 +96,12 @@ def _build_system_prompt(
     # July-5 briefing outage.) `isinstance(str)` guard is belt-and-braces.
     for key in ("clinical_escalation", "data_quality_flags", "training_flag_ctx",
                 "manual_readings_ctx", "active_visit_ctx", "active_goal_ctx",
-                "recent_insights_ctx", "weekly_recap_ctx"):
+                "recent_insights_ctx", "weekly_recap_ctx",
+                # Anti-repetition + fresh-behavior blocks (David 2026-07-27).
+                # These MUST make it into the prompt or the model can't
+                # vary its output and can't reference the user's Proven
+                # For You / active experiments.
+                "recent_briefings_ctx", "experiments_ctx", "recent_nudges_ctx"):
         block = health_context.get(key)
         if isinstance(block, str) and block:
             parts.append(block)

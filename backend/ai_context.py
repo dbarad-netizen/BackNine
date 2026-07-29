@@ -295,6 +295,145 @@ def _training_flag(user_id: str) -> str:
         return ""
 
 
+def _recent_briefings(user_id: str, days: int = 5) -> str:
+    """David 2026-07-27: kill the 'same message every day' feel by
+    feeding Claude its own last N briefings and forbidding it from
+    repeating framings, numbers, or actions. This is the single biggest
+    variety lever we have — the model can't know what it wrote yesterday
+    unless we tell it.
+
+    Kept short (first ~240 chars each) — that's enough for Claude to
+    recognize its own voice and diversify."""
+    sb = _sb()
+    if not sb:
+        return ""
+    try:
+        cutoff = (_date.today() - timedelta(days=days)).isoformat()
+        res = (sb.table("daily_briefings")
+                 .select("date, narrative")
+                 .eq("user_id", user_id)
+                 .gte("date", cutoff)
+                 .order("date", desc=True)
+                 .limit(days).execute())
+        rows = res.data or []
+        if not rows:
+            return ""
+        lines = [
+            f"\n=== YOUR LAST {len(rows)} BRIEFINGS (DO NOT REPEAT) ===",
+            "You wrote these. The user has read them. If today's briefing "
+            "opens with the same framing, quotes the same numbers, or "
+            "prescribes the same action, the user will feel we're on a "
+            "loop. Vary the angle. Vary the metric you lead with. Vary the "
+            "prescribed action. If nothing has meaningfully changed, say "
+            "that plainly and pivot to a different lens (weekly context, "
+            "a specific stack item, a training rhythm, a check-in prompt) "
+            "— DO NOT re-narrate yesterday.",
+        ]
+        for r in rows:
+            d   = r.get("date") or ""
+            nar = (r.get("narrative") or "").strip().replace("\n", " ")
+            if nar:
+                lines.append(f"  • {d}: {nar[:240]}{'...' if len(nar) > 240 else ''}")
+        return "\n".join(lines) + "\n"
+    except Exception:
+        return ""
+
+
+def _experiments_ctx(user_id: str) -> str:
+    """Proven For You results + active experiments as prompt context.
+    David 2026-07-27: this is the freshest signal about what the user
+    actually does with our suggestions. Feeding it into briefing +
+    insight lets the model ground the day's message in real behavior
+    ('since the dinner-cutoff test proved out last week...') instead
+    of generic patterns."""
+    sb = _sb()
+    if not sb:
+        return ""
+    lines: list[str] = []
+    try:
+        # Active experiments — user's current bets
+        act = (sb.table("experiments")
+                 .select("action, metric_type, test_start_date, test_end_date, baseline_avg")
+                 .eq("user_id", user_id)
+                 .eq("status", "active")
+                 .order("test_start_date", desc=True)
+                 .limit(3).execute())
+        act_rows = act.data or []
+        if act_rows:
+            lines.append("\n=== USER IS ACTIVELY TESTING ===")
+            lines.append(
+                "The user committed to these 1-week experiments via the "
+                "'Test for a week' button on prior insights. If the test "
+                "window overlaps today, prefer briefing / insight content "
+                "that ties to the test — 'day 3 of your X test, here's "
+                "what to watch for.' Never suggest a NEW experiment in "
+                "the same metric while one is active."
+            )
+            for r in act_rows:
+                base = f", baseline {r.get('baseline_avg')}" if r.get('baseline_avg') is not None else ""
+                lines.append(f"  • {(r.get('action') or '')[:120]} — {r.get('metric_type')}{base}, ends {r.get('test_end_date')}")
+
+        # Proven ledger — completed experiments (better OR worse are both signal)
+        prv = (sb.table("experiments")
+                 .select("action, metric_type, delta, direction, significance, completed_at")
+                 .eq("user_id", user_id)
+                 .eq("status", "completed")
+                 .order("completed_at", desc=True)
+                 .limit(5).execute())
+        prv_rows = prv.data or []
+        proven = [r for r in prv_rows if r.get("direction") in ("better", "worse")
+                  and r.get("significance") in ("notable", "meaningful")]
+        if proven:
+            lines.append("\n=== PROVEN FOR THIS USER ===")
+            lines.append(
+                "These experiments produced a clean signal in a 7-day test "
+                "against the user's own baseline. Reference them by name "
+                "when relevant — the user trusts these more than any "
+                "generic guidance."
+            )
+            for r in proven:
+                delta = r.get("delta")
+                sign = "+" if (delta is not None and delta >= 0) else ""
+                lines.append(
+                    f"  • {(r.get('action') or '')[:120]} → "
+                    f"{r.get('metric_type')} {sign}{delta} ({r.get('significance')}, {r.get('direction')})"
+                )
+    except Exception:
+        pass
+    return "\n".join(lines) + ("\n" if lines else "")
+
+
+def _recent_nudges(user_id: str, days: int = 7) -> str:
+    """Recent proactive nudges we've shown. Prevents the briefing / insight
+    from redundantly telling the user the same thing the nudge already
+    said. David 2026-07-27."""
+    sb = _sb()
+    if not sb:
+        return ""
+    try:
+        cutoff = (_date.today() - timedelta(days=days)).isoformat()
+        res = (sb.table("nudges")
+                 .select("date, kind, title")
+                 .eq("user_id", user_id)
+                 .gte("date", cutoff)
+                 .order("date", desc=True)
+                 .limit(days).execute())
+        rows = res.data or []
+        if not rows:
+            return ""
+        lines = [
+            f"\n=== NUDGES SHOWN IN THE LAST {days} DAYS ===",
+            "The user has already seen these one-line nudges on the "
+            "Scorecard. Don't re-say the same thing in different words — "
+            "add depth or pick a different lens.",
+        ]
+        for r in rows:
+            lines.append(f"  • {r.get('date')} [{r.get('kind')}]: {r.get('title')}")
+        return "\n".join(lines) + "\n"
+    except Exception:
+        return ""
+
+
 def build(user_id: str, profile: Optional[dict] = None) -> dict:
     """Assemble the shared AI context bundle. Every AI surface (chat,
     briefing, today_workout, daily_insight) reads from this — one
@@ -321,6 +460,14 @@ def build(user_id: str, profile: Optional[dict] = None) -> dict:
         "weekly_recap_ctx":       _weekly_recap(user_id),
         "data_quality_flags":     _data_quality_flags(user_id),
         "manual_readings_ctx":    _manual_readings(user_id),
+        # Anti-repetition + rich-context layer (David 2026-07-27)
+        # These are the "same message every day" fix. Every AI surface
+        # that generates prose (briefing, insight, chat) should read
+        # these so it can vary its output and reference the user's own
+        # committed experiments.
+        "recent_briefings_ctx":   _recent_briefings(user_id),
+        "experiments_ctx":        _experiments_ctx(user_id),
+        "recent_nudges_ctx":      _recent_nudges(user_id),
     }
 
 
