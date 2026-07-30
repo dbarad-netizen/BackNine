@@ -408,6 +408,19 @@ export interface StackAdherenceSnapshot {
   };
 }
 
+// ── Linked identities (David 2026-07-30, task #142) — one BackNine user
+// can now have multiple auth methods (Oura + Apple + Google + email) all
+// resolving to the same account. Powers the Profile "Connected accounts"
+// section.
+export interface LinkedIdentity {
+  id:            string;
+  provider:      "oura" | "apple" | "google" | "email" | "supabase";
+  provider_sub:  string;
+  email:         string | null;
+  provider_name: string | null;
+  linked_at:     string;
+}
+
 // ── Proactive nudge (David 2026-07-23, Fable competitive brief)
 // One per user per day. Hard-capped at the schema level.
 export type NudgeKind =
@@ -2347,6 +2360,24 @@ export const api = {
     notes?:    string;
   }): Promise<{ row: StackAdherenceRow }> {
     return request("/api/stack/adherence", { method: "POST", body: JSON.stringify(body) });
+  },
+
+  // ── Linked identities (David 2026-07-30, task #142) ──────────────────────
+  linkedIdentities(): Promise<{ identities: LinkedIdentity[] }> {
+    return request("/api/account/linked-identities");
+  },
+  linkAppleIdentity(supabaseAppleToken: string): Promise<{ status: string; identity?: LinkedIdentity }> {
+    // Sends the freshly-obtained Supabase Apple token as a SECOND
+    // Authorization header — the primary session cookie identifies
+    // the current user; this token proves ownership of the Apple
+    // identity being linked.
+    return request("/api/account/link/apple", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${supabaseAppleToken}` },
+    });
+  },
+  unlinkIdentity(id: string): Promise<{ status: string }> {
+    return request(`/api/account/link/${id}`, { method: "DELETE" });
   },
 
   // ── Proactive nudge (one per day, Fable moat 2026-07-23) ─────────────────

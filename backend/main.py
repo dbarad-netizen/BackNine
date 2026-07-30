@@ -899,10 +899,14 @@ def exchange_supabase_for_session(request: Request, response: Response):
     login screen the next day. After this exchange runs, BackNine's
     own session takes over and the Supabase token is no longer used.
 
-    The Supabase token itself is verified here (existing JWKS / HS256
-    helper) and then discarded — we never store it. The user_id baked
-    into the BackNine session is the Supabase user UUID (`sub`), which
-    matches how the rest of the app already identifies users.
+    Identity resolution (David 2026-07-30): before minting a session,
+    check public.linked_identities for a row matching this provider +
+    provider_sub. If found, use that row's user_id — this is how
+    "Sign in with Apple after linking to an Oura account" resolves
+    back to the Oura user_id instead of creating a fresh account.
+    If not found, the Supabase UUID becomes the canonical user_id
+    and a linked_identities row is created recording this as the
+    user's first identity.
     """
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
@@ -912,15 +916,188 @@ def exchange_supabase_for_session(request: Request, response: Response):
     if not claims or not claims.get("sub"):
         raise HTTPException(status_code=401, detail="Invalid Supabase token")
 
+    supa_sub  = claims["sub"]
+    supa_mail = (claims.get("email") or "").strip().lower() or None
+    # Provider from Supabase's app_metadata — 'apple', 'google', 'email', etc.
+    provider  = (claims.get("app_metadata") or {}).get("provider") or "supabase"
+    # For OAuth providers the actual identity id is in app_metadata.provider_id
+    # (e.g. Apple's `sub`). Fall back to Supabase's own UUID for email/password
+    # users, where the Supabase user IS the identity.
+    provider_sub = str((claims.get("app_metadata") or {}).get("provider_id") or supa_sub)
+
+    # Resolve to a canonical BackNine user_id via linked_identities.
+    resolved_user_id = supa_sub
+    sb = get_supabase()
+    if sb:
+        try:
+            hit = (sb.table("linked_identities")
+                     .select("user_id")
+                     .eq("provider", provider)
+                     .eq("provider_sub", provider_sub)
+                     .limit(1)
+                     .execute())
+            if hit.data:
+                # Existing link — this identity resolves to a prior
+                # BackNine account. Route the session there.
+                resolved_user_id = hit.data[0]["user_id"]
+            else:
+                # First time we've seen this identity. Record it under
+                # the Supabase UUID as the canonical user_id.
+                sb.table("linked_identities").insert({
+                    "user_id":       supa_sub,
+                    "provider":      provider,
+                    "provider_sub":  provider_sub,
+                    "email":         supa_mail,
+                    "provider_name": (claims.get("user_metadata") or {}).get("name"),
+                }).execute()
+        except Exception:
+            # Never fail auth over the link table — degrade gracefully.
+            log.exception("linked_identities resolve failed for %s", supa_sub)
+
     session_data = {
-        "user_id":  claims["sub"],
+        "user_id":  resolved_user_id,
         "provider": "supabase",
         # No access_token / refresh_token / expires_at — BackNine's session
         # is self-contained. Wearable connections are tracked separately.
     }
     bn_token = _encode_session(session_data)
     _set_session_cookie(response, session_data)
-    return {"token": bn_token, "user_id": claims["sub"]}
+    return {"token": bn_token, "user_id": resolved_user_id}
+
+
+# ── Identity linking (David 2026-07-30, task #142) ───────────────────────
+#
+# Users can have multiple auth methods (Oura + Apple + Google + email)
+# all pointing to a single BackNine user_id. The linked_identities table
+# is the join. These endpoints let the app list current links, add new
+# ones, and (defensively) remove them.
+
+@app.get("/api/account/linked-identities")
+def api_linked_identities(request: Request):
+    """List every auth identity linked to the current user. Powers the
+    'Connected accounts' section on the Profile page."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    sb = get_supabase()
+    if not sb:
+        return {"identities": []}
+    try:
+        res = (sb.table("linked_identities")
+                 .select("id, provider, provider_sub, email, provider_name, linked_at")
+                 .eq("user_id", user_id)
+                 .order("linked_at", desc=False)
+                 .execute())
+        return {"identities": res.data or []}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/account/link/apple")
+async def api_link_apple(request: Request):
+    """Link an Apple ID to the current authenticated user.
+
+    The frontend runs its own Sign in with Apple flow (via Supabase, so
+    we get a real session out the other side), captures the Supabase
+    token, and POSTs it here as `Authorization: Bearer <token>` along
+    with the user's normal BackNine session cookie. We verify the
+    Supabase token, extract Apple's `sub`, and insert a row linking
+    Apple's identity to the current user_id.
+
+    Guardrail: if this Apple ID is already linked to a DIFFERENT user,
+    reject the request. Silent-merge across users is dangerous (data
+    theft vector) — the user has to unlink from the other account first.
+    """
+    session = _require_session(request)
+    current_user_id = session["user_id"]
+
+    # Extract & verify the second Supabase token that carries the Apple
+    # identity we want to link.
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        raise HTTPException(status_code=400, detail="Missing Supabase Apple token")
+    supa_token = auth[7:]
+    claims = _verify_supabase_jwt(supa_token)
+    if not claims or not claims.get("sub"):
+        raise HTTPException(status_code=401, detail="Invalid Supabase token")
+
+    provider = (claims.get("app_metadata") or {}).get("provider")
+    if provider != "apple":
+        raise HTTPException(status_code=400, detail=f"Expected an Apple identity, got {provider!r}")
+
+    provider_sub = str((claims.get("app_metadata") or {}).get("provider_id") or claims["sub"])
+    email        = (claims.get("email") or "").strip().lower() or None
+    name         = (claims.get("user_metadata") or {}).get("name")
+
+    sb = get_supabase()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Storage unavailable")
+
+    # Check whether this Apple identity is already linked somewhere.
+    try:
+        existing = (sb.table("linked_identities")
+                      .select("user_id")
+                      .eq("provider", "apple")
+                      .eq("provider_sub", provider_sub)
+                      .limit(1)
+                      .execute())
+        if existing.data:
+            other_user_id = existing.data[0]["user_id"]
+            if other_user_id == current_user_id:
+                return {"status": "already_linked"}
+            raise HTTPException(
+                status_code=409,
+                detail="This Apple ID is already linked to another BackNine account. "
+                       "Sign in with that account and unlink it first, then try again.",
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+
+    try:
+        row = sb.table("linked_identities").insert({
+            "user_id":       current_user_id,
+            "provider":      "apple",
+            "provider_sub":  provider_sub,
+            "email":         email,
+            "provider_name": name,
+        }).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"status": "linked", "identity": (row.data or [None])[0]}
+
+
+@app.delete("/api/account/link/{link_id}")
+def api_unlink_identity(link_id: str, request: Request):
+    """Remove a linked identity. Guard: refuse to remove the LAST
+    remaining identity (would lock the user out with no way back in)."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    sb = get_supabase()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Storage unavailable")
+
+    try:
+        # Verify this link belongs to the current user + count total
+        mine = (sb.table("linked_identities")
+                  .select("id, provider")
+                  .eq("user_id", user_id)
+                  .execute())
+        rows = mine.data or []
+        if not any(r["id"] == link_id for r in rows):
+            raise HTTPException(status_code=404, detail="Identity link not found")
+        if len(rows) <= 1:
+            raise HTTPException(
+                status_code=400,
+                detail="Can't remove your only remaining sign-in method — "
+                       "connect another one first.",
+            )
+        sb.table("linked_identities").delete().eq("id", link_id).eq("user_id", user_id).execute()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"status": "unlinked"}
 
 
 @app.post("/auth/logout")

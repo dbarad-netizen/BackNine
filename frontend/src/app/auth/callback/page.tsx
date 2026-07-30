@@ -11,6 +11,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase, establishSession } from "@/lib/supabase";
+import { api } from "@/lib/api";
 
 export default function AuthCallback() {
   const router  = useRouter();
@@ -44,31 +45,55 @@ export default function AuthCallback() {
       }
     }
 
+    // Check for a link-intent stashed by ConnectedAccountsCard. If set,
+    // this OAuth roundtrip is a LINKING request from an already-signed-
+    // in user — POST the Supabase token to /api/account/link/apple
+    // instead of establishing a fresh session (which would swap the
+    // user out of their current account). See task #142.
+    const linkIntent = typeof window !== "undefined"
+      ? localStorage.getItem("bn_link_intent")
+      : null;
+
     // Each branch must AWAIT establishSession before redirecting — the
     // dashboard's first API call needs the long-lived BackNine session,
     // not the short-lived Supabase access token.
     supabase.auth.getSession().then(async ({ data, error }) => {
+      const handleSession = async (accessToken: string) => {
+        // Link flow — user was already signed in; this OAuth completed
+        // just to prove ownership of the new identity being linked.
+        if (linkIntent === "apple") {
+          try { localStorage.removeItem("bn_link_intent"); } catch { /* ignore */ }
+          try {
+            await api.linkAppleIdentity(accessToken);
+            // Sign OUT of Supabase so the new Apple session doesn't
+            // clobber the user's existing BackNine session, then bounce
+            // to dashboard where the ConnectedAccountsCard will reload
+            // and show the new link.
+            await supabase.auth.signOut();
+            router.replace("/dashboard?linked=apple");
+          } catch (e) {
+            setError(e instanceof Error ? e.message : "Couldn't link Apple ID");
+          }
+          return;
+        }
+        // Standard sign-in flow
+        try {
+          await establishSession(accessToken);
+          router.replace("/dashboard");
+        } catch (e) {
+          setError(e instanceof Error ? e.message : "Sign-in failed");
+        }
+      };
+
       if (error || !data.session) {
         // Supabase may need to exchange the code from the URL hash/query first
         supabase.auth.onAuthStateChange(async (_event, session) => {
-          if (session) {
-            try {
-              await establishSession(session.access_token);
-              router.replace("/dashboard");
-            } catch (e) {
-              setError(e instanceof Error ? e.message : "Sign-in failed");
-            }
-          }
+          if (session) await handleSession(session.access_token);
         });
         if (error) setError(error.message);
         return;
       }
-      try {
-        await establishSession(data.session.access_token);
-        router.replace("/dashboard");
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Sign-in failed");
-      }
+      await handleSession(data.session.access_token);
     });
   }, [router]);
 

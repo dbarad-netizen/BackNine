@@ -13,6 +13,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { api, localToday, type UserProfile, type Friend, type FriendInvite, type RelationshipType } from "@/lib/api";
 import OuraPauseToggle from "./OuraPauseToggle";
+import ConnectedAccountsCard from "./ConnectedAccountsCard";
 
 const GOAL_OPTIONS = [
   { id: "longevity",      label: "Longevity",         icon: "🧬" },
@@ -721,6 +722,13 @@ function AccountDangerZone() {
   const hasPending = pending && pending.scheduled_at;
 
   return (
+    <>
+    {/* Connected accounts (David 2026-07-30, task #142) — sits above the
+        Account & data collapsible. Own bordered card so users can see
+        their linked identities at a glance without expanding a details
+        section. Self-hides via internal loading state. */}
+    <ConnectedAccountsCard />
+
     <details className="rounded-xl border border-gray-200 bg-gray-50/60 px-3 py-2 mt-2">
       <summary className="cursor-pointer text-xs font-semibold uppercase tracking-widest text-gray-600 select-none">
         Account & data
@@ -799,5 +807,6 @@ function AccountDangerZone() {
         )}
       </div>
     </details>
+    </>
   );
 }
