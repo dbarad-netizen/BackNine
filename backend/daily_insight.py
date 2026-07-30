@@ -297,11 +297,31 @@ Voice and constraints:
 - HIGH-VALUE CROSS-DOMAIN PAIRS to look for (David 2026-07-09):
     • `vices` × next-day HRV/sleep/BP (e.g. alcohol → HRV drop)
     • `hydration_daily.sources.electrolyte` × BP (sodium load → BP)
-    • `adherence` × downstream metrics on days-taken vs missed
-      (e.g. days-taken losartan vs missed → evening BP delta).
-      This is the "did the supplement/med actually do anything?"
-      question — use it when there's at least 3 taken + 3 missed days.
     • hydration × sleep efficiency (dehydration → fragmentation)
+
+- MEDICATION ADHERENCE — HARD RULES (David 2026-07-30 fix, non-negotiable):
+    1. NEVER attribute a change in a biomarker (HRV, BP, RHR, sleep,
+       weight, etc.) to a specific medication or supplement. That
+       crosses into clinical territory and we are not qualified to
+       make it. Do not write "HRV dropped when you skipped Losartan"
+       or "BP improved with Metformin." Ever.
+    2. Absence of an adherence log row for a day does NOT mean the
+       user skipped a dose. It just means they didn't log that day.
+       Do NOT infer non-adherence from missing data.
+       ONLY treat an item as skipped if the adherence payload has an
+       EXPLICIT taken=false row for that item on that date.
+    3. Only reference medications and supplements that appear in the
+       user's CURRENT profile stack (payload field `stack_current`).
+       If a medication appears in older adherence rows but is NOT in
+       stack_current, the user has stopped taking it. Do not cite it,
+       do not build patterns around it, do not mention it at all.
+    4. Adherence discussion is fine ONLY as a behavior pattern
+       ("you've logged your stack 6 of the last 7 mornings — nice
+       consistency"), never as a causal claim about a specific
+       med moving a specific biomarker.
+    5. When in doubt, pick a different pattern (sleep, training,
+       nutrition, hydration, activity). Medication-outcome claims
+       are the highest-risk output this card can produce.
 - If the data is too sparse to find anything meaningful, return
   confidence='low' and a pattern that acknowledges that ("Not enough
   days of data yet to spot a real pattern — keep logging").
@@ -534,6 +554,31 @@ def get_or_generate(user_id: str, profile: dict, today_iso: str) -> Optional[dic
 
     # Build window + generate
     window = _assemble_window(user_id, days=14)
+
+    # Inject the CURRENT profile stack so Claude has a whitelist to
+    # reference and can't invent claims about meds no longer taken.
+    # David 2026-07-30 fix: insight was citing Nifedipine (removed) and
+    # making causal claims about missing Losartan doses. Prompt now has
+    # hard rules against both, but it also needs the whitelist to check
+    # names against.
+    try:
+        stack_current: list[dict] = []
+        for kind, field in (("medication", "medications"),
+                             ("supplement", "supplements"),
+                             ("peptide",    "peptides")):
+            for it in (profile or {}).get(field) or []:
+                if isinstance(it, dict):
+                    nm = (it.get("name") or "").strip()
+                    if nm:
+                        stack_current.append({
+                            "kind":   kind,
+                            "name":   nm,
+                            "timing": (it.get("timing") or "").strip() or None,
+                        })
+        window["stack_current"] = stack_current
+    except Exception:
+        window["stack_current"] = []
+
     # Pull the shared AI-context bundle so anti-repetition + fresh-behavior
     # blocks are available to the insight generator. Silent-fail: if the
     # module can't import or errors, we generate without the extra

@@ -157,18 +157,61 @@ _VALID_TIME_OF_DAY = {"morning", "midday", "evening", "anytime"}
 
 def _infer_time_of_day(timing: str) -> str:
     """Bucket a freeform timing string ('with dinner', 'AM', 'before bed')
-    into one of the four windows. Empty / unclear → 'anytime'."""
-    s = (timing or "").lower()
+    into ONE window. Kept for callers that want a single label; if the
+    timing describes a multi-dose schedule ('morning and night', 'BID'),
+    only the first matching window is returned. Use
+    `_infer_times_of_day` when you need to render an item in multiple
+    groups (Metformin AM + PM, etc.)."""
+    picks = _infer_times_of_day(timing)
+    return picks[0] if picks else "anytime"
+
+
+def _infer_times_of_day(timing: str) -> list[str]:
+    """Return every time-of-day window this dosing string implies.
+    Handles multi-dose schedules like 'morning and night', 'BID' (twice
+    daily), 'AM/PM'. Empty/unclear → ['anytime'].
+
+    David 2026-07-30: Metformin dosed 'morning and night' was collapsing
+    to evening only because the evening check matched first. Now returns
+    both morning + evening so it shows up in both groups on the
+    StackAdherenceCard."""
+    s = (timing or "").lower().strip()
     if not s:
-        return "anytime"
-    # Order matters: 'bedtime' contains 'time' but is clearly evening.
-    if any(k in s for k in ("bed", "night", "evening", "dinner", "pm", "before sleep", "sleep")):
-        return "evening"
-    if any(k in s for k in ("morning", "am", "wake", "breakfast", "sunrise")):
-        return "morning"
+        return ["anytime"]
+
+    picks: list[str] = []
+
+    # Explicit multi-dose shorthand — assume BOTH ends of the day.
+    # BID  = bis in die   (twice daily, no time specified — split AM+PM)
+    # TID  = ter in die   (three times — AM, midday, evening)
+    # QID  = quater in die (four times — treat as anytime + flag; we
+    #        don't have a "night" bucket so cap at three visible groups)
+    if any(k in s for k in ("twice a day", "twice daily", "2x day", "2x daily", "bid ", " bid", "b.i.d")):
+        return ["morning", "evening"]
+    if any(k in s for k in ("three times a day", "three times daily", "3x day", "tid ", " tid", "t.i.d")):
+        return ["morning", "midday", "evening"]
+
+    # Match each window independently — an item can hit multiple.
+    # Evening tokens first because 'night' overlaps with 'morning and night'.
+    if any(k in s for k in ("bed", "night", "evening", "dinner", "before sleep", "sleep")):
+        picks.append("evening")
+    if any(k in s for k in ("morning", "wake", "breakfast", "sunrise")):
+        if "morning" not in picks:
+            picks.append("morning")
     if any(k in s for k in ("midday", "noon", "lunch", "afternoon")):
-        return "midday"
-    return "anytime"
+        if "midday" not in picks:
+            picks.append("midday")
+
+    # AM/PM tokens matter — check WITHOUT overlapping the words above.
+    # 'am' is dangerous (matches "cabergoline") so require a word boundary.
+    if picks == [] or "morning" not in picks:
+        if any(k in f" {s} " for k in (" am ", " am,", " am.", " am;", "/am", "am/")):
+            picks.append("morning")
+    if "evening" not in picks:
+        if any(k in f" {s} " for k in (" pm ", " pm,", " pm.", " pm;", "/pm", "pm/")):
+            picks.append("evening")
+
+    return picks or ["anytime"]
 
 
 def _items_from_profile(profile: dict) -> list[dict]:
@@ -191,23 +234,27 @@ def _items_from_profile(profile: dict) -> list[dict]:
             continue
         for item in arr:
             name = ""
-            tod  = "anytime"
+            times: list[str] = ["anytime"]
             if isinstance(item, dict):
                 name = (item.get("name") or "").strip()
                 explicit = (item.get("time_of_day") or "").strip().lower()
                 if explicit in _VALID_TIME_OF_DAY:
-                    tod = explicit
+                    times = [explicit]
                 else:
-                    tod = _infer_time_of_day(item.get("timing") or "")
+                    times = _infer_times_of_day(item.get("timing") or "")
             elif isinstance(item, str):
                 name = item.strip()
             if not name:
                 continue
+            # De-dupe by (kind, name); but emit one row per time-of-day
+            # so an item dosed morning + evening (Metformin BID) shows
+            # up in both groups. David 2026-07-30 fix.
             k = (kind, _norm_key(name))
             if k in seen:
                 continue
             seen.add(k)
-            out.append({"kind": kind, "name": name, "time_of_day": tod})
+            for tod in times:
+                out.append({"kind": kind, "name": name, "time_of_day": tod})
     return out
 
 
@@ -266,15 +313,23 @@ def today_snapshot(user_id: str, today_iso: str, profile: dict,
     taken_today    = 0
     logged_today   = 0
     expected_by_now = 0
+    # De-dupe counter increments: with multi-time meds (Metformin BID
+    # showing in both morning + evening groups), naive summing would
+    # double-count. The adherence log has one row per (kind, name, date),
+    # so the underlying "did you take it?" is one truth per item.
+    counted_taken:  set[tuple[str, str]] = set()
+    counted_logged: set[tuple[str, str]] = set()
     for it in items:
         key = _norm_key(it["name"])
         k   = (it["kind"], key)
         row = day_rows.get(k)
         taken = bool(row.get("taken")) if row else False
-        if row is not None:
+        if row is not None and k not in counted_logged:
             logged_today += 1
-        if taken:
+            counted_logged.add(k)
+        if taken and k not in counted_taken:
             taken_today += 1
+            counted_taken.add(k)
         window_open = _window_has_opened(it["time_of_day"], hour)
         if window_open:
             expected_by_now += 1
