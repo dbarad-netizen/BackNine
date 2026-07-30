@@ -29,6 +29,19 @@ build.
 - **iPad:** yes at launch. Universal (iPhone + iPad) binary.
 - **Primary category:** Health & Fitness. Secondary: Lifestyle.
 
+## Apple Developer identifiers (locked 2026-07-27)
+
+Enrolled under **Strategy D, Incorporated**. Keep these handy — they
+show up in Xcode, Supabase, and every AASA / entitlement file.
+
+| Field                  | Value                                     |
+|------------------------|-------------------------------------------|
+| Team ID                | `5TU6C6ND63`                              |
+| Bundle ID (App ID)     | `com.strategyd.backnine`                  |
+| Services ID (SIWA)     | `com.strategyd.backnine.signin`           |
+| App Store Connect app  | (populate on first Xcode Archive upload)  |
+| Sign in with Apple Key ID | (populate after creating the .p8 key)  |
+
 ## Prerequisites
 
 1. Apple Developer Program enrollment complete under **Strategy D, Incorporated** (D-U-N-S `095225396`)
