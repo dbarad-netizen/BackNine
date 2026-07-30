@@ -1,126 +1,86 @@
 "use client";
 
 /**
- * StackEfficacyCard — Phase 4 of the Insight pillar.
+ * StackEfficacyCard — RETIRED 2026-07-30.
  *
- * For each currently-active supplement / peptide / medication with at
- * least 14 days of post-start data, compares before-vs-after averages
- * across sleep, HRV, RHR, breath, SpO2, and readiness. Top deltas
- * highlight what (if anything) actually changed after the user added
- * the item.
+ * The original design compared "before you started X" averages to
+ * "after you started X" averages across HRV / RHR / sleep / etc. and
+ * displayed the delta with green/red color coding for "helpful" vs
+ * "harmful."
  *
- * Pure observational — labeled clearly as such. The point isn't to make
- * efficacy claims; it's to give the longevity-experimenter persona a
- * data-grounded read on whether their experiments are doing something.
+ * David 2026-07-30 caught the fundamental problem: when a user takes
+ * 15 things simultaneously and life confounders swing HRV 20%
+ * week-to-week, no per-item before/after can honestly separate signal
+ * from noise. The color-coded delta table read as causation regardless
+ * of the disclaimer text underneath. That's not a fixable prompt
+ * problem — it's a fundamentally unsound analytical method for the
+ * kind of data we have.
  *
- * Lives on the Nutrition tab, after the Supplements / Peptides /
- * Medications cards.
+ * Replacement: Proven For You (task #130). One variable at a time,
+ * 7-day baseline snapshot at commit, 7-day test window, Cohen's-d
+ * significance against the user's own noise. That IS honest efficacy
+ * data.
+ *
+ * We keep this component around as a pointer so returning users who
+ * open the Nutrition tab find their way to the new mechanism instead
+ * of just seeing a card disappear. Small, one-time, dismissible.
  */
 
 import { useEffect, useState } from "react";
-import { api, type StackEfficacyItem } from "@/lib/api";
 
-const CLASS_BADGE: Record<StackEfficacyItem["class"], { label: string; emoji: string; bg: string; fg: string }> = {
-  supplement: { label: "Supplement", emoji: "💊", bg: "bg-emerald-100", fg: "text-emerald-800" },
-  peptide:    { label: "Peptide",    emoji: "🧬", bg: "bg-purple-100",  fg: "text-purple-800"  },
-  medication: { label: "Medication", emoji: "🩹", bg: "bg-rose-100",    fg: "text-rose-800"    },
-};
+const DISMISSED_KEY = "bn_stack_efficacy_retirement_dismissed";
 
 export default function StackEfficacyCard() {
-  const [items, setItems]     = useState<StackEfficacyItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [dismissed, setDismissed] = useState(true);
 
   useEffect(() => {
-    api.stackEfficacy()
-      .then(r => setItems(r.items))
-      .catch(() => setItems([]))
-      .finally(() => setLoading(false));
+    try {
+      const val = localStorage.getItem(DISMISSED_KEY);
+      setDismissed(val === "1");
+    } catch {
+      setDismissed(false);
+    }
   }, []);
 
-  if (loading) return null;
-  if (items.length === 0) return null;
+  const handleDismiss = () => {
+    try { localStorage.setItem(DISMISSED_KEY, "1"); } catch { /* private mode */ }
+    setDismissed(true);
+  };
+
+  if (dismissed) return null;
 
   return (
-    <section className="rounded-2xl border border-gray-200 bg-white p-5">
-      <div className="mb-3">
-        <p className="text-sm font-semibold text-gray-900">🔬 Stack Efficacy</p>
-        <p className="text-[11px] text-gray-600 mt-0.5">
-          Did your stack experiments do anything? Per-item before-vs-after across sleep, HRV, RHR, and other recovery signals. Observational only.
-        </p>
+    <section className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+      <div className="flex items-start gap-3">
+        <span className="text-lg shrink-0" aria-hidden>📓</span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2 mb-1">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-900">
+              Stack efficacy has moved
+            </p>
+            <button
+              onClick={handleDismiss}
+              className="shrink-0 text-amber-700 hover:text-amber-900 text-base leading-none px-1 -mt-0.5"
+              aria-label="Dismiss"
+              title="Dismiss"
+            >×</button>
+          </div>
+          <p className="text-[13px] text-gray-900 font-semibold leading-tight">
+            The old before-vs-after table was retired.
+          </p>
+          <p className="text-[12px] text-gray-700 leading-relaxed mt-1">
+            Too many things change at once in real life for a raw before-vs-after
+            comparison to honestly say whether ONE supplement is doing anything.
+            Efficacy claims now come from <strong>Proven For You</strong> — commit
+            to a 7-day test on one thing at a time, and the app compares the
+            test window to your own baseline with a proper significance check.
+            Any Daily Insight can be tested this way with a single tap.
+          </p>
+          <p className="text-[11px] text-gray-600 italic mt-2 leading-snug">
+            Your Proven ledger lives on the Scorecard.
+          </p>
+        </div>
       </div>
-
-      <ul className="space-y-2.5">
-        {items.map(item => {
-          const badge = CLASS_BADGE[item.class] ?? CLASS_BADGE.supplement;
-          const topDeltas = item.deltas.slice(0, 4);
-          return (
-            <li key={`${item.class}-${item.item_name}`} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-semibold text-gray-900 truncate">{item.display_name}</p>
-                    <span className={`text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded ${badge.bg} ${badge.fg}`}>
-                      {badge.emoji} {badge.label}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-gray-600 mt-0.5">
-                    {item.dose && <span>{item.dose} · </span>}
-                    Started {item.started_on} · {item.days_since_start} day{item.days_since_start === 1 ? "" : "s"} ago
-                  </p>
-                </div>
-              </div>
-
-              {item.note && (
-                <p className="text-[11px] text-gray-600 italic">{item.note}</p>
-              )}
-
-              {topDeltas.length > 0 && (
-                <>
-                  <p className="text-[10px] uppercase tracking-wide font-semibold text-gray-600 mt-2 mb-1">
-                    Top changes — {item.before_window?.start}…{item.before_window?.end} vs {item.after_window?.start}…{item.after_window?.end}
-                  </p>
-                  <table className="w-full text-xs border-collapse">
-                    <thead>
-                      <tr className="text-left text-[10px] uppercase tracking-wide text-gray-600 border-b border-gray-200">
-                        <th className="py-1.5 pr-2 font-semibold">Metric</th>
-                        <th className="py-1.5 pr-2 font-semibold text-right">Before</th>
-                        <th className="py-1.5 pr-2 font-semibold text-right">After</th>
-                        <th className="py-1.5 font-semibold text-right">Δ</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {topDeltas.map(d => (
-                        <tr key={d.metric} className="border-b border-gray-100">
-                          <td className="py-1 pr-2">{d.label}</td>
-                          <td className="py-1 pr-2 text-right font-mono text-gray-700">{d.before_avg}{d.unit ? ` ${d.unit}` : ""}</td>
-                          <td className={`py-1 pr-2 text-right font-mono ${
-                            d.helpful === true  ? "text-emerald-700 font-semibold" :
-                            d.helpful === false ? "text-rose-700 font-semibold"    :
-                                                  "text-gray-800"
-                          }`}>
-                            {d.after_avg}{d.unit ? ` ${d.unit}` : ""}
-                          </td>
-                          <td className={`py-1 text-right font-mono ${
-                            d.helpful === true  ? "text-emerald-700 font-semibold" :
-                            d.helpful === false ? "text-rose-700 font-semibold"    :
-                                                  "text-gray-700"
-                          }`}>
-                            {d.delta > 0 ? "+" : ""}{d.delta} ({d.abs_delta_pct}%)
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-
-      <p className="text-[10px] text-gray-600 italic mt-3">
-        Correlation only — many things change at once in real life. Treat as one signal among several when deciding what to keep, drop, or talk to your doctor about.
-      </p>
     </section>
   );
 }

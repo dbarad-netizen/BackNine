@@ -2568,26 +2568,37 @@ def regenerate_today_workout(request: Request):
     return tw.regenerate(user_id, profile, today)
 
 
-# ── Stack Efficacy (Insight Phase 4) ────────────────────────────────────
-# For each currently-active supplement / peptide / medication with at
-# least 14 days of post-start data, compares before-vs-after metric
-# averages (sleep, HRV, RHR, etc.) so the user can see whether their
-# experiments are actually doing something. Pure observational.
+# ── Stack Efficacy (RETIRED 2026-07-30) ──────────────────────────────────
+# Original design: for each active med/supp/peptide with 14+ days of
+# post-start data, compare before-vs-after averages across HRV / RHR /
+# sleep / etc. and display green/red deltas.
+#
+# David 2026-07-30: fundamentally unsound causal inference. When a user
+# takes 15 things simultaneously and life confounders swing HRV 20%
+# week-to-week, no per-item before/after can separate signal from noise.
+# The color-coded delta table read as causation regardless of the
+# disclaimer text. Not a prompt problem — a fundamentally wrong method.
+#
+# Replacement: Proven For You (/api/experiments/*) which does a real
+# n-of-1 experiment on ONE variable at a time with a proper baseline
+# window and Cohen's-d significance check.
+#
+# Endpoint kept alive (returns empty) so any cached frontend build or
+# external caller doesn't break during the deprecation window.
 
 @app.get("/api/stack/efficacy")
 def get_stack_efficacy(request: Request):
-    """Return per-item before/after metric deltas for active stack items.
-    On first call we backfill events from the current profile snapshot
-    so the analysis can start running. Best-effort throughout — errors
-    surface as empty lists, never crash the request."""
-    session = _require_session(request)
-    user_id = session["user_id"]
-    profile = _get_profile(user_id) or {}
-    try:
-        stk.backfill_from_current_stack(user_id, profile)
-    except Exception:
-        pass
-    return stk.compute_efficacy(user_id)
+    """RETIRED — returns empty. Historical events are still logged into
+    stack_events for anyone who wants to rebuild an honest analytic
+    later, but the auto-computed before/after view is gone. See
+    /api/experiments/ledger for the honest replacement."""
+    _require_session(request)
+    return {
+        "items": [],
+        "note":  "Stack efficacy retired 2026-07-30. Use Proven For You "
+                 "(commit to a 7-day test on one variable at a time) via "
+                 "the 'Test for a week' button on any Daily Insight.",
+    }
 
 
 # ── Symptom journal + correlation (Insight Phase 2) ─────────────────────
