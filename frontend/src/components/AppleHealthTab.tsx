@@ -28,6 +28,11 @@ export default function AppleHealthTab() {
   // uploads the resulting export.zip here, backend parses + backfills.
   const [xmlFile, setXmlFile]         = useState<File | null>(null);
   const [xmlUploading, setXmlUploading] = useState(false);
+  // Import window — "90" = last 90 days only (fast, ~1400 writes),
+  // "365" = last year, "all" = everything in the export.
+  // David 2026-07-30: default to 90 because full-history imports were
+  // hitting Render's request timeout at ~17k Supabase round-trips.
+  const [xmlWindow, setXmlWindow]     = useState<"90" | "365" | "all">("90");
   const [xmlResult, setXmlResult]     = useState<{
     days_imported: number;
     earliest_date: string | null;
@@ -43,7 +48,14 @@ export default function AppleHealthTab() {
     setXmlError(null);
     setXmlResult(null);
     try {
-      const res = await api.appleHealthImportXml(xmlFile);
+      let sinceDate: string | undefined;
+      if (xmlWindow !== "all") {
+        const days = xmlWindow === "90" ? 90 : 365;
+        const d = new Date();
+        d.setDate(d.getDate() - days);
+        sinceDate = d.toISOString().slice(0, 10);
+      }
+      const res = await api.appleHealthImportXml(xmlFile, sinceDate);
       setXmlResult(res);
       // Reload the summary so the "Connected" card flips to green
       try {
@@ -163,13 +175,46 @@ export default function AppleHealthTab() {
               Selected: <span className="font-mono">{xmlFile.name}</span> ({Math.round(xmlFile.size / (1024*1024))} MB)
             </p>
           )}
+
+          {/* Import window — the multi-year default is what melted Render
+              on the first attempt. Default to 90 days so uploads finish
+              in seconds. */}
+          <div>
+            <p className="text-[11px] font-semibold text-gray-700 mb-1.5">
+              Import how much?
+            </p>
+            <div className="flex gap-1.5">
+              {[
+                { key: "90",  label: "Last 90 days",  hint: "fastest" },
+                { key: "365", label: "Last year",     hint: "" },
+                { key: "all", label: "Everything",    hint: "may take minutes" },
+              ].map(opt => (
+                <button
+                  key={opt.key}
+                  onClick={() => setXmlWindow(opt.key as "90" | "365" | "all")}
+                  disabled={xmlUploading}
+                  className={`flex-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold border transition-colors ${
+                    xmlWindow === opt.key
+                      ? "border-[#1B3829] bg-[#1B3829] text-white"
+                      : "border-gray-300 bg-white text-gray-700 hover:border-[#1B3829]/40"
+                  } disabled:opacity-50`}
+                >
+                  {opt.label}
+                  {opt.hint && <span className="block text-[9px] font-normal opacity-70">{opt.hint}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <button
             onClick={handleXmlUpload}
             disabled={!xmlFile || xmlUploading}
             className="w-full py-2.5 rounded-lg bg-[#1B3829] hover:bg-[#2D6A4F] text-white font-semibold text-sm transition-colors disabled:opacity-50"
           >
             {xmlUploading
-              ? "Importing — this can take a minute for large exports…"
+              ? (xmlWindow === "all"
+                  ? "Importing everything — this can take a minute or two…"
+                  : "Importing — should be seconds…")
               : "Upload & import"}
           </button>
 

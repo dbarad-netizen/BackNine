@@ -289,13 +289,23 @@ def _fill_derived(daily: Dict[str, Dict[str, float]]) -> Dict[str, Dict[str, flo
 
 # ── Public importer ─────────────────────────────────────────────────────
 
-def import_export_file(user_id: str, file: IO[bytes], since_date: Optional[str] = None) -> dict:
+def import_export_file(user_id: str, file: IO[bytes], since_date: Optional[str] = None,
+                       batch_size: int = 500) -> dict:
     """Parse a full Apple Health export and upsert every day it contains
-    into apple_health_daily via apple_health.sync_day.
+    into apple_health_daily using BATCHED writes.
 
     since_date: optional 'YYYY-MM-DD' floor. Days before this are still
     parsed (single-pass is cheaper than seek-and-skip) but not written.
-    Useful for incremental re-imports.
+    Useful for incremental re-imports and for "just the last 90 days"
+    from the UI.
+
+    batch_size: rows per Supabase upsert call. David 2026-07-30 —
+    original per-row sync_day path was doing ~17,000 round-trips for a
+    multi-year export (one per day per metric) and Render was timing
+    out. Batching drops that to N/500 calls. Also skips the
+    device_readings dual-write during bulk — that write amplification
+    (up to 15× per day) is what tipped the balance from "slow" to
+    "impossible."
 
     Returns a summary dict:
       {
@@ -318,25 +328,58 @@ def import_export_file(user_id: str, file: IO[bytes], since_date: Optional[str] 
             "metrics_seen": [], "skipped_days": 0,
         }
 
-    import apple_health as ah   # avoid circular import at module load
-    dates = sorted(daily.keys())
-    written = 0
-    skipped = 0
+    import apple_health as ah   # for FIELDS + INTEGER_FIELDS
+    dates_all = sorted(daily.keys())
+    dates = [d for d in dates_all if not since_date or d >= since_date]
+    skipped = len(dates_all) - len(dates)
     metrics_seen: set = set()
 
+    # Build all rows in memory first — cheap (500 KB max even for a
+    # decade of data), so we can slice into batches and hand the whole
+    # thing to Supabase's upsert.
+    now_iso = datetime.utcnow().isoformat()
+    rows: list[dict] = []
     for date_iso in dates:
-        if since_date and date_iso < since_date:
-            skipped += 1
-            continue
-        row = daily[date_iso]
-        payload = {"date": date_iso, **row}
-        metrics_seen.update(row.keys())
+        payload = daily[date_iso]
+        metrics_seen.update(payload.keys())
+        row = {
+            "user_id":    user_id,
+            "date":       date_iso,
+            "updated_at": now_iso,
+        }
+        for field in ah.FIELDS:
+            if field in payload and payload[field] is not None:
+                try:
+                    val = float(payload[field])
+                    row[field] = int(round(val)) if field in ah.INTEGER_FIELDS else round(val, 2)
+                except (TypeError, ValueError):
+                    pass
+        rows.append(row)
+
+    if not rows:
+        return {
+            "days_imported": 0, "earliest_date": None, "latest_date": None,
+            "metrics_seen": sorted(metrics_seen), "skipped_days": skipped,
+        }
+
+    # Batched upsert — one Supabase round-trip per batch_size rows.
+    sb = ah._sb()
+    written = 0
+    for i in range(0, len(rows), batch_size):
+        chunk = rows[i:i + batch_size]
         try:
-            ah.sync_day(user_id, payload)
-            written += 1
+            sb.table("apple_health_daily").upsert(
+                chunk, on_conflict="user_id,date"
+            ).execute()
+            written += len(chunk)
         except Exception:
-            log.exception("apple_health_xml: sync_day failed for %s %s", user_id, date_iso)
-            skipped += 1
+            log.exception("apple_health_xml batch upsert failed [%d:%d]", i, i + batch_size)
+
+    # Deliberately SKIP the per-day device_readings dual-write during
+    # bulk import. That path is 15× write-amplification and is what
+    # made this endpoint time out. device_readings gets fresh entries
+    # from the ongoing shortcut/HAE path; historical bulk sits in
+    # apple_health_daily where every read path already looks.
 
     return {
         "days_imported": written,
