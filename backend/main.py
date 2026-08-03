@@ -9,7 +9,7 @@ Routes:
   GET  /api/wearables                → list connected wearables
   DELETE /api/wearables/{provider}   → disconnect a wearable
 """
-import os, secrets
+import io, os, secrets
 from datetime import datetime, timedelta, timezone, date
 from typing import Optional, Tuple
 
@@ -7520,6 +7520,57 @@ async def get_apple_health_data(request: Request, days: int = 30):
         return ah.get_summary(user_id, days=days)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/apple-health/import-xml")
+async def apple_health_import_xml(
+    request: Request,
+    file: UploadFile = File(...),
+    since_date: Optional[str] = None,
+):
+    """Import an Apple Health "Export All Health Data" file (export.zip
+    or export.xml). Server-side streaming parser (iterparse) aggregates
+    the entire file into per-day metrics and upserts into
+    apple_health_daily via the existing sync_day path.
+
+    David 2026-07-30: the "no third-party app, no Shortcut, no wait
+    for the native iOS HealthKit build" path. Users export from
+    Apple's built-in Health app → upload the file here → we backfill
+    everything.
+
+    Body: multipart/form-data with a `file` field.
+    Optional query param: since_date=YYYY-MM-DD to skip older days on
+    the write side (parse cost is the same either way — single-pass).
+
+    Returns a summary dict:
+      { days_imported, earliest_date, latest_date, metrics_seen[], skipped_days }
+    """
+    import apple_health_xml as ahx
+    session = _require_session(request)
+    user_id = session["user_id"]
+
+    contents = await file.read()
+    if len(contents) < 50:
+        raise HTTPException(status_code=400, detail="File is empty or too small.")
+    # 500 MB cap — Apple exports for multi-year power users can approach
+    # this. Render's default request body cap is high enough; if we hit
+    # OOM later we can move to signed-URL upload to Supabase Storage.
+    if len(contents) > 500 * 1024 * 1024:
+        raise HTTPException(
+            status_code=413,
+            detail="File too large (500 MB max). Try re-exporting from Apple "
+                   "Health with a narrower date range."
+        )
+
+    try:
+        summary = ahx.import_export_file(user_id, io.BytesIO(contents), since_date=since_date)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        log.exception("apple_health_import_xml failed for %s", user_id)
+        raise HTTPException(status_code=500, detail=f"Import failed: {e}")
+
+    return summary
 
 
 @app.get("/api/debug/sleep")

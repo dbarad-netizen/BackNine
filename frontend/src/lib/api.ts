@@ -2612,6 +2612,26 @@ export const api = {
   appleHealthData(days = 30): Promise<AppleHealthSummary> {
     return request(`/api/apple-health/data?days=${days}`);
   },
+  /** Upload Apple's native "Export All Health Data" file (export.zip or
+   *  export.xml). Streaming parser on the backend aggregates the entire
+   *  file into per-day metrics and upserts them.
+   *  David 2026-07-30: "no third-party app" testing path. */
+  appleHealthImportXml(file: File, sinceDate?: string): Promise<{
+    days_imported: number;
+    earliest_date: string | null;
+    latest_date:   string | null;
+    metrics_seen:  string[];
+    skipped_days:  number;
+  }> {
+    const fd = new FormData();
+    fd.append("file", file);
+    const qs = sinceDate ? `?since_date=${encodeURIComponent(sinceDate)}` : "";
+    return request(`/api/apple-health/import-xml${qs}`, {
+      method: "POST",
+      body:   fd,
+      // DO NOT set Content-Type — browser sets multipart boundary
+    });
+  },
   /** Connection + freshness status for the AH integration. Lets the setup page
    *  show "connected · 14 days of data · last sync 2h ago" instead of leaving
    *  the user guessing whether their iOS Shortcut is actually working. */

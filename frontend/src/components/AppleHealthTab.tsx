@@ -23,6 +23,40 @@ export default function AppleHealthTab() {
   const [showSetup, setShowSetup] = useState(false);
   const [showShortcut, setShowShortcut] = useState(false);
 
+  // Apple Health "Export All Health Data" upload — David 2026-07-30 path.
+  // No third-party app, no shortcut: user exports from iPhone Health app,
+  // uploads the resulting export.zip here, backend parses + backfills.
+  const [xmlFile, setXmlFile]         = useState<File | null>(null);
+  const [xmlUploading, setXmlUploading] = useState(false);
+  const [xmlResult, setXmlResult]     = useState<{
+    days_imported: number;
+    earliest_date: string | null;
+    latest_date:   string | null;
+    metrics_seen:  string[];
+    skipped_days:  number;
+  } | null>(null);
+  const [xmlError, setXmlError]       = useState<string | null>(null);
+
+  const handleXmlUpload = async () => {
+    if (!xmlFile) return;
+    setXmlUploading(true);
+    setXmlError(null);
+    setXmlResult(null);
+    try {
+      const res = await api.appleHealthImportXml(xmlFile);
+      setXmlResult(res);
+      // Reload the summary so the "Connected" card flips to green
+      try {
+        const fresh = await api.appleHealthData(30);
+        setSummary(fresh);
+      } catch { /* non-fatal */ }
+    } catch (e: unknown) {
+      setXmlError(e instanceof Error ? e.message : "Import failed");
+    } finally {
+      setXmlUploading(false);
+    }
+  };
+
   useEffect(() => {
     setLoading(true);
     Promise.all([api.appleHealthKey(), api.appleHealthData(30)])
@@ -93,14 +127,92 @@ export default function AppleHealthTab() {
         </button>
       </div>
 
+      {/* ── Import from Apple's built-in export (David 2026-07-30 primary path) ── */}
+      <div className="rounded-2xl border border-[#1B3829]/20 bg-gradient-to-br from-emerald-50 to-white shadow-sm p-6 space-y-4">
+        <div>
+          <h3 className="font-semibold text-gray-900">
+            Import from Apple Health (recommended)
+          </h3>
+          <p className="text-sm text-gray-700 mt-1 leading-relaxed">
+            Fastest way to seed your account with real data. No third-party app.
+          </p>
+        </div>
+
+        <ol className="space-y-1.5 text-[13px] text-gray-700 pl-5 list-decimal">
+          <li>On your iPhone, open the <strong>Health</strong> app.</li>
+          <li>Tap your <strong>profile picture</strong> (top right).</li>
+          <li>Scroll to bottom → <strong>Export All Health Data</strong> → confirm.</li>
+          <li>Save/share the resulting <code className="bg-gray-100 px-1 rounded">export.zip</code> to your Mac (AirDrop, iCloud, or email works).</li>
+          <li>Upload it below. We parse it, aggregate by day, and populate everything.</li>
+        </ol>
+
+        <div className="rounded-lg border border-dashed border-gray-300 bg-white p-4 space-y-3">
+          <input
+            type="file"
+            accept=".zip,.xml,application/zip,text/xml"
+            onChange={e => {
+              setXmlFile(e.target.files?.[0] ?? null);
+              setXmlResult(null);
+              setXmlError(null);
+            }}
+            disabled={xmlUploading}
+            className="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[#1B3829] file:text-white file:font-semibold hover:file:bg-[#2D6A4F] file:cursor-pointer disabled:opacity-50"
+          />
+          {xmlFile && !xmlUploading && !xmlResult && (
+            <p className="text-[11px] text-gray-600">
+              Selected: <span className="font-mono">{xmlFile.name}</span> ({Math.round(xmlFile.size / (1024*1024))} MB)
+            </p>
+          )}
+          <button
+            onClick={handleXmlUpload}
+            disabled={!xmlFile || xmlUploading}
+            className="w-full py-2.5 rounded-lg bg-[#1B3829] hover:bg-[#2D6A4F] text-white font-semibold text-sm transition-colors disabled:opacity-50"
+          >
+            {xmlUploading
+              ? "Importing — this can take a minute for large exports…"
+              : "Upload & import"}
+          </button>
+
+          {xmlError && (
+            <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-red-700 text-[12px]">
+              {xmlError}
+            </div>
+          )}
+          {xmlResult && (
+            <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2.5 text-[12px] text-emerald-900 space-y-1">
+              <p className="font-semibold">
+                ✅ Imported {xmlResult.days_imported} day{xmlResult.days_imported === 1 ? "" : "s"}
+                {xmlResult.earliest_date && xmlResult.latest_date &&
+                  ` (${xmlResult.earliest_date} → ${xmlResult.latest_date})`}.
+              </p>
+              {xmlResult.metrics_seen.length > 0 && (
+                <p className="text-[11px] text-emerald-800">
+                  Metrics: {xmlResult.metrics_seen.slice(0, 8).join(", ")}
+                  {xmlResult.metrics_seen.length > 8 && ` +${xmlResult.metrics_seen.length - 8} more`}
+                </p>
+              )}
+              <p className="text-[11px] text-emerald-700 italic">
+                Refresh the Scorecard to see your data flow through Longevity Score, insights, and Coach Al.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <p className="text-[11px] text-gray-600 leading-snug">
+          Files are usually 20-200 MB depending on how long you've had your iPhone. Max 500 MB.
+          You can re-upload later to catch up — dates already imported get updated in place.
+        </p>
+      </div>
+
       {/* ── Setup ───────────────────────────────────────────────────────── */}
       {showSetup && (
         <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-6 space-y-6">
           <div>
-            <h3 className="font-semibold text-gray-900">Connect with Health Auto Export</h3>
+            <h3 className="font-semibold text-gray-900">Or connect with Health Auto Export</h3>
             <p className="text-sm text-gray-600 mt-1">
-              The easiest way — a free App Store app that sends your Health data to BackNine on a
-              schedule. No coding, no Apple Developer account.
+              A paid App Store app that auto-syncs your Health data on a schedule.
+              Automatic once set up, but requires a $3.99 app. Fine if you'd rather
+              not re-export monthly.
             </p>
           </div>
 
