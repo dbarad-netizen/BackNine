@@ -951,6 +951,15 @@ export default function DashboardPage() {
         if (!cached) setError(e.message);
       })
       .finally(() => setLoading(false));
+
+    // Native HealthKit auto-sync (David 2026-08-03, task #150).
+    // On iOS with HealthKit granted, pulls a 7-day rolling window and
+    // upserts into apple_health_daily. No-ops on web, no-ops if we
+    // already synced in the last 6 hours (isRecentSync guard),
+    // silent-fails on errors. Never blocks the dashboard.
+    import("@/lib/healthkit").then(({ maybeAutoSync }) => {
+      maybeAutoSync().catch(() => { /* silent */ });
+    });
     // Pre-load weight entries so Body Composition card is ready on Scorecard
     api.weightEntries()
       .then(w => setWeightLog(w.entries))

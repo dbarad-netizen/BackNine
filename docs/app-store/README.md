@@ -18,14 +18,15 @@ build.
 
 ---
 
-## Launch decisions (locked 2026-07-23)
+## Launch decisions (locked 2026-08-03)
 
 - **Monetization:** free at launch, subscription in v2. **Still sign the
   Paid Apps Agreement** during initial App Store Connect setup so the
   IAP switch later is instant.
-- **HealthKit:** v2. Keep `NSHealthShareUsageDescription` /
-  `NSHealthUpdateUsageDescription` commented in `Info.plist.snippet`
-  and do NOT enable the HealthKit capability in Xcode until v2.
+- **HealthKit:** ENABLED for V1 (updated 2026-08-03). XML upload for
+  onboarding is bad UX — native auto-sync is the only real answer.
+  `NSHealthShareUsageDescription` uncommented in `Info.plist.snippet`;
+  `NSHealthUpdateUsageDescription` stays commented (read-only in V1).
 - **iPad:** yes at launch. Universal (iPhone + iPad) binary.
 - **Primary category:** Health & Fitness. Secondary: Lifestyle.
 
@@ -51,17 +52,18 @@ show up in Xcode, Supabase, and every AASA / entitlement file.
 
 ## One-time setup (run after developer cert lands)
 
-### 1. Install Capacitor deps
+### 1. Install Capacitor deps + HealthKit plugin
 
 ```bash
 cd ~/Documents/BackNine/frontend
-npm install --save @capacitor/core @capacitor/ios
+npm install --save @capacitor/core @capacitor/ios @perfood/capacitor-healthkit
 npm install --save-dev @capacitor/cli
 ```
 
-Note: this is the first time in the project we're adding native-wrapper deps.
-Reviewed and approved per this readiness push — no other new deps beyond
-these three.
+The HealthKit plugin (`@perfood/capacitor-healthkit`) powers native
+Apple Health auto-sync (see `src/lib/healthkit.ts` + `src/components/HealthKitCard.tsx`).
+Web builds gracefully no-op — the module is dynamically imported and
+guards every call with an `isHealthKitAvailable()` check.
 
 ### 2. Build the offline shell
 
@@ -139,6 +141,40 @@ Once the Apple Developer cert lands:
 
 The button is already in `frontend/src/app/page.tsx` and will start working
 the moment Supabase's Apple provider is configured.
+
+### 7b. Enable HealthKit capability in Xcode
+
+In Xcode → Project navigator → App target → **Signing & Capabilities**:
+
+- Click **+ Capability** → search **HealthKit** → double-click to add
+- Under the HealthKit capability, leave **Background Delivery** OFF for
+  V1 (we do foreground auto-sync via maybeAutoSync on dashboard open).
+  Turn it on later if we want true background updates.
+- **Clinical Health Records** stays OFF — that's for FHIR/medical
+  records access, different review class, deferred.
+
+Confirm `NSHealthShareUsageDescription` from the snippet made it into
+`Info.plist` (search for the string "BackNine reads your steps"). Apple
+rejects any HealthKit-enabled build that's missing this string.
+
+Then run `npx cap sync ios` to make sure the plugin's Swift files get
+linked into the Xcode project.
+
+**App Review Notes for HealthKit** — paste this into App Store Connect
+when submitting so Apple's reviewer knows what to check:
+
+> "BackNine reads the following HealthKit types with the user's
+> explicit permission: step count, active energy, heart rate, resting
+> heart rate, HRV, respiratory rate, oxygen saturation, VO₂ max,
+> weight, body fat percentage, blood pressure (systolic + diastolic),
+> and sleep analysis. Data is used to compute the user's Longevity
+> Score, populate the Coach Al insights and Doctor Handoff report,
+> and drive the Proven For You experiment loop. All data is stored
+> in Supabase Postgres under row-level-security policies scoped to
+> the user's ID. Users can revoke HealthKit access at any time
+> through the iOS Settings app. No HealthKit data is shared with
+> third parties. Delete-my-account (in Settings) permanently removes
+> every row within a 7-day grace window."
 
 ### 8. Xcode target settings — Universal (iPad support)
 

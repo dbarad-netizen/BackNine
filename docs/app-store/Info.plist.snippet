@@ -27,15 +27,19 @@
 <key>NSPhotoLibraryAddUsageDescription</key>
 <string>BackNine saves your Doctor Handoff PDF to your Photos library when you tap Save.</string>
 
-<!-- ── HealthKit (optional at launch; keep keys so we can enable in v2)
-     If you enable HealthKit in Signing & Capabilities, uncomment these
-     two. Reviewers check the pairing every time a HealthKit capability
-     is on. -->
+<!-- ── HealthKit (ENABLED for V1 — David 2026-08-03)
+     Reviewers audit these strings AND the app's actual use of the
+     APIs. Keep the descriptions specific + accurate. If we ever
+     narrow what we read, update these lines. -->
 
-<!--
 <key>NSHealthShareUsageDescription</key>
-<string>BackNine reads steps, heart rate, sleep, and workouts from Apple Health so your Coach Al insights include data from your Apple Watch.</string>
+<string>BackNine reads your steps, heart rate, HRV, sleep, VO₂ max, weight, body fat, blood pressure, and respiratory data from Apple Health so Coach Al can give you insights across your ring, watch, scale, and BP cuff in one place.</string>
 
+<!-- HealthUpdate is NOT enabled — we don't write anything back to
+     HealthKit in V1. Keeping the string commented so it's ready if we
+     ever add write-back (e.g. logging workouts from BackNine into
+     Apple Health). -->
+<!--
 <key>NSHealthUpdateUsageDescription</key>
 <string>BackNine writes workouts you log in the app back to Apple Health so all your fitness data stays in one place.</string>
 -->

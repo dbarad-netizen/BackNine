@@ -14,6 +14,7 @@ import { useState, useEffect, useCallback } from "react";
 import { api, localToday, type UserProfile, type Friend, type FriendInvite, type RelationshipType } from "@/lib/api";
 import OuraPauseToggle from "./OuraPauseToggle";
 import ConnectedAccountsCard from "./ConnectedAccountsCard";
+import HealthKitCard from "./HealthKitCard";
 
 const GOAL_OPTIONS = [
   { id: "longevity",      label: "Longevity",         icon: "🧬" },
@@ -728,6 +729,12 @@ function AccountDangerZone() {
         their linked identities at a glance without expanding a details
         section. Self-hides via internal loading state. */}
     <ConnectedAccountsCard />
+
+    {/* Apple HealthKit (David 2026-08-03, task #150) — native iOS auto-
+        sync. Self-hides on web / Android; only renders when running
+        inside the Capacitor iOS build. Replaces the XML upload flow
+        for real user onboarding. */}
+    <HealthKitCard />
 
     <details className="rounded-xl border border-gray-200 bg-gray-50/60 px-3 py-2 mt-2">
       <summary className="cursor-pointer text-xs font-semibold uppercase tracking-widest text-gray-600 select-none">
