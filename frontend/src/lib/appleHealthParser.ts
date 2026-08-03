@@ -396,25 +396,43 @@ export async function parseAppleHealthFile(
       stream.resume();
     });
   } else {
-    // Raw XML — stream via File.stream() + TextDecoderStream
-    const reader = file.stream()
-      .pipeThrough(new TextDecoderStream())
-      .getReader();
-    let bytes = 0;
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      if (value) {
-        bytes += value.length;
-        feedChunk(value, state);
-        if (onProgress) onProgress({
-          bytesProcessed: bytes,
+    // Raw XML — stream via chunked file.slice + FileReader. This is
+    // more Safari-friendly than file.stream() which hangs on multi-
+    // hundred-MB files in some Safari versions (David 2026-07-30).
+    const CHUNK = 4 * 1024 * 1024;   // 4 MB per read
+    const decoder = new TextDecoder("utf-8");
+    let offset = 0;
+    let lastProgressAt = 0;
+    console.info("[appleHealthParser] starting raw XML parse, size =", file.size, "bytes");
+
+    while (offset < file.size) {
+      const end = Math.min(offset + CHUNK, file.size);
+      const slice = file.slice(offset, end);
+      const buf   = await slice.arrayBuffer();
+      const isLast = end >= file.size;
+      // stream:true tells the decoder to hold any half-multibyte-char
+      // at the tail until the next chunk arrives. Critical for UTF-8
+      // safety when the chunk boundary lands mid-codepoint.
+      const text = decoder.decode(buf, { stream: !isLast });
+      feedChunk(text, state);
+      offset = end;
+
+      const now = performance.now();
+      if (onProgress && (now - lastProgressAt > 200 || isLast)) {
+        onProgress({
+          bytesProcessed: offset,
           recordsSeen:    state.records,
           daysAccumulated: state.agg.size(),
         });
+        lastProgressAt = now;
       }
+      // Yield to the browser so the UI can repaint the progress line.
+      // Without this the parser holds the main thread and the "spinning"
+      // never updates. setTimeout(...,0) is the standard yield.
+      await new Promise<void>(resolve => setTimeout(resolve, 0));
     }
+    console.info("[appleHealthParser] parse done:",
+      state.records, "records,", state.agg.size(), "days");
   }
 
   return fillDerived(state.agg.resolve());
