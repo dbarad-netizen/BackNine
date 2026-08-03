@@ -363,8 +363,14 @@ def import_export_file(user_id: str, file: IO[bytes], since_date: Optional[str] 
         }
 
     # Batched upsert — one Supabase round-trip per batch_size rows.
+    # Fail LOUDLY (David 2026-07-30): the previous silent-fail meant
+    # every batch could error and the user still saw "0 days imported"
+    # with no explanation. Now if a batch fails, we capture the first
+    # error verbatim and raise it out to the caller so the frontend
+    # can surface it.
     sb = ah._sb()
     written = 0
+    batch_errors: list[str] = []
     for i in range(0, len(rows), batch_size):
         chunk = rows[i:i + batch_size]
         try:
@@ -372,8 +378,21 @@ def import_export_file(user_id: str, file: IO[bytes], since_date: Optional[str] 
                 chunk, on_conflict="user_id,date"
             ).execute()
             written += len(chunk)
-        except Exception:
-            log.exception("apple_health_xml batch upsert failed [%d:%d]", i, i + batch_size)
+        except Exception as e:
+            msg = f"batch [{i}:{i + batch_size}] failed: {e}"
+            log.exception("apple_health_xml %s", msg)
+            batch_errors.append(msg[:400])
+            # If the very first batch errors, that's almost certainly a
+            # schema/type mismatch that will hit every subsequent batch.
+            # Fail fast so we don't hammer Supabase with the same bad
+            # payload 30 more times.
+            if i == 0:
+                break
+
+    if written == 0 and batch_errors:
+        # Surface the first error verbatim — makes the UI show the actual
+        # DB / schema issue instead of a generic "Import failed".
+        raise RuntimeError(f"Apple Health import wrote 0 rows. First error: {batch_errors[0]}")
 
     # Deliberately SKIP the per-day device_readings dual-write during
     # bulk import. That path is 15× write-amplification and is what
@@ -382,9 +401,10 @@ def import_export_file(user_id: str, file: IO[bytes], since_date: Optional[str] 
     # apple_health_daily where every read path already looks.
 
     return {
-        "days_imported": written,
-        "earliest_date": dates[0] if dates else None,
-        "latest_date":   dates[-1] if dates else None,
-        "metrics_seen":  sorted(metrics_seen),
-        "skipped_days":  skipped,
+        "days_imported":     written,
+        "earliest_date":     dates[0] if dates else None,
+        "latest_date":       dates[-1] if dates else None,
+        "metrics_seen":      sorted(metrics_seen),
+        "skipped_days":      skipped,
+        "batch_error_count": len(batch_errors),
     }
