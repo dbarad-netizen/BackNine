@@ -7626,49 +7626,39 @@ async def apple_health_import_xml(
     file: UploadFile = File(...),
     since_date: Optional[str] = None,
 ):
-    """Import an Apple Health "Export All Health Data" file (export.zip
-    or export.xml). Server-side streaming parser (iterparse) aggregates
-    the entire file into per-day metrics and upserts into
-    apple_health_daily via the existing sync_day path.
+    """RETIRED 2026-07-30.
 
-    David 2026-07-30: the "no third-party app, no Shortcut, no wait
-    for the native iOS HealthKit build" path. Users export from
-    Apple's built-in Health app → upload the file here → we backfill
-    everything.
+    Was: multipart upload of Apple's export.zip/xml, server-side parse.
+    Killed because Render was OOM-crashing on multi-hundred-MB uploads
+    — file.read() loads the whole payload into RAM, then iterparse
+    holds the aggregated dict, easily blowing past a 512 MB dyno.
 
-    Body: multipart/form-data with a `file` field.
-    Optional query param: since_date=YYYY-MM-DD to skip older days on
-    the write side (parse cost is the same either way — single-pass).
+    Replaced by POST /api/apple-health/import-aggregated where the
+    browser parses locally (see frontend/src/lib/appleHealthParser.ts)
+    and posts a ~200 KB pre-aggregated JSON.
 
-    Returns a summary dict:
-      { days_imported, earliest_date, latest_date, metrics_seen[], skipped_days }
+    Hard-cap the accepted file size at 5 MB so any accidental hits
+    against this endpoint fail fast without touching Render's memory
+    budget. Anyone still calling this gets a clear pointer to the
+    replacement.
     """
-    import apple_health_xml as ahx
-    session = _require_session(request)
-    user_id = session["user_id"]
-
-    contents = await file.read()
-    if len(contents) < 50:
-        raise HTTPException(status_code=400, detail="File is empty or too small.")
-    # 500 MB cap — Apple exports for multi-year power users can approach
-    # this. Render's default request body cap is high enough; if we hit
-    # OOM later we can move to signed-URL upload to Supabase Storage.
-    if len(contents) > 500 * 1024 * 1024:
+    _require_session(request)
+    # Refuse anything meaningfully large — reading the payload at all
+    # would defeat the purpose of retiring this path.
+    cl = request.headers.get("content-length")
+    if cl and int(cl) > 5 * 1024 * 1024:
         raise HTTPException(
-            status_code=413,
-            detail="File too large (500 MB max). Try re-exporting from Apple "
-                   "Health with a narrower date range."
+            status_code=410,
+            detail="This endpoint is retired. Update your client — Apple "
+                   "Health imports now parse in the browser and POST to "
+                   "/api/apple-health/import-aggregated instead."
         )
-
-    try:
-        summary = ahx.import_export_file(user_id, io.BytesIO(contents), since_date=since_date)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        log.exception("apple_health_import_xml failed for %s", user_id)
-        raise HTTPException(status_code=500, detail=f"Import failed: {e}")
-
-    return summary
+    raise HTTPException(
+        status_code=410,
+        detail="This endpoint is retired. Update your client — Apple "
+               "Health imports now parse in the browser and POST to "
+               "/api/apple-health/import-aggregated instead."
+    )
 
 
 @app.get("/api/debug/sleep")
