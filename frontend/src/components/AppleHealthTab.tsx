@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, type AppleHealthSummary } from "@/lib/api";
+import { parseAppleHealthFile } from "@/lib/appleHealthParser";
 
 const SYNC_URL = "https://backnine-hu60.onrender.com/api/apple-health/sync";
 
@@ -42,11 +43,15 @@ export default function AppleHealthTab() {
   } | null>(null);
   const [xmlError, setXmlError]       = useState<string | null>(null);
 
+  // Progress signal for the client-side parse (records seen, bytes done).
+  const [xmlProgress, setXmlProgress] = useState<string>("");
+
   const handleXmlUpload = async () => {
     if (!xmlFile) return;
     setXmlUploading(true);
     setXmlError(null);
     setXmlResult(null);
+    setXmlProgress("Reading file…");
     try {
       let sinceDate: string | undefined;
       if (xmlWindow !== "all") {
@@ -55,8 +60,19 @@ export default function AppleHealthTab() {
         d.setDate(d.getDate() - days);
         sinceDate = d.toISOString().slice(0, 10);
       }
-      const res = await api.appleHealthImportXml(xmlFile, sinceDate);
+      // Parse the whole file client-side (David 2026-07-30) — Render
+      // was 502ing on multi-hundred-MB uploads. Browser aggregates
+      // into per-day metrics; we post only the small JSON.
+      const daily = await parseAppleHealthFile(xmlFile, (p) => {
+        const mb = Math.round(p.bytesProcessed / (1024 * 1024));
+        setXmlProgress(
+          `Parsing… ${mb} MB processed · ${p.recordsSeen.toLocaleString()} records · ${p.daysAccumulated} days`
+        );
+      });
+      setXmlProgress("Uploading aggregated data…");
+      const res = await api.appleHealthImportAggregated(daily, sinceDate);
       setXmlResult(res);
+      setXmlProgress("");
       // Reload the summary so the "Connected" card flips to green
       try {
         const fresh = await api.appleHealthData(30);
@@ -64,6 +80,7 @@ export default function AppleHealthTab() {
       } catch { /* non-fatal */ }
     } catch (e: unknown) {
       setXmlError(e instanceof Error ? e.message : "Import failed");
+      setXmlProgress("");
     } finally {
       setXmlUploading(false);
     }
@@ -212,11 +229,16 @@ export default function AppleHealthTab() {
             className="w-full py-2.5 rounded-lg bg-[#1B3829] hover:bg-[#2D6A4F] text-white font-semibold text-sm transition-colors disabled:opacity-50"
           >
             {xmlUploading
-              ? (xmlWindow === "all"
-                  ? "Importing everything — this can take a minute or two…"
-                  : "Importing — should be seconds…")
-              : "Upload & import"}
+              ? (xmlProgress || "Working…")
+              : "Parse & import"}
           </button>
+          {xmlUploading && (
+            <p className="text-[11px] text-gray-600 leading-snug">
+              Your file is being parsed in this browser tab — nothing gets
+              uploaded until aggregation is complete. If this tab is closed,
+              the import stops (no partial state).
+            </p>
+          )}
 
           {xmlError && (
             <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-red-700 text-[12px]">

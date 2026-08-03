@@ -7522,6 +7522,104 @@ async def get_apple_health_data(request: Request, days: int = 30):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/apple-health/import-aggregated")
+async def apple_health_import_aggregated(request: Request):
+    """Import pre-aggregated Apple Health daily rows. The browser
+    parses the export.xml locally (see frontend/src/lib/appleHealthParser.ts)
+    and posts a small JSON blob of already-aggregated daily metrics.
+    Backend just batch-upserts.
+
+    David 2026-07-30: Render was 502ing on the 194 MB upload path
+    because request timeout < upload time. Moving the parse client-
+    side eliminates the big transfer — we now receive ~200 KB instead
+    of ~200 MB.
+
+    Body: {
+      "daily": {
+        "2026-07-15": {"steps": 8432, "hrv": 45.3, ...},
+        ...
+      },
+      "since_date": "2026-05-01"  // optional filter
+    }
+    """
+    session = _require_session(request)
+    user_id = session["user_id"]
+
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    daily: dict = body.get("daily") or {}
+    if not isinstance(daily, dict):
+        raise HTTPException(status_code=400, detail="`daily` must be an object keyed by date")
+    since_date = body.get("since_date")
+
+    if not daily:
+        return {
+            "days_imported": 0, "earliest_date": None, "latest_date": None,
+            "metrics_seen": [], "skipped_days": 0,
+        }
+
+    import apple_health as ah
+    dates_all = sorted(daily.keys())
+    dates = [d for d in dates_all if not since_date or d >= since_date]
+    skipped = len(dates_all) - len(dates)
+    metrics_seen: set = set()
+
+    from datetime import datetime as _dt
+    now_iso = _dt.utcnow().isoformat()
+    rows: list[dict] = []
+    for date_iso in dates:
+        payload = daily[date_iso] or {}
+        if not isinstance(payload, dict):
+            continue
+        metrics_seen.update(payload.keys())
+        row = {"user_id": user_id, "date": date_iso, "updated_at": now_iso}
+        for field in ah.FIELDS:
+            if field in payload and payload[field] is not None:
+                try:
+                    val = float(payload[field])
+                    row[field] = int(round(val)) if field in ah.INTEGER_FIELDS else round(val, 2)
+                except (TypeError, ValueError):
+                    pass
+        rows.append(row)
+
+    if not rows:
+        return {
+            "days_imported": 0, "earliest_date": None, "latest_date": None,
+            "metrics_seen": sorted(metrics_seen), "skipped_days": skipped,
+        }
+
+    sb = ah._sb()
+    written = 0
+    batch_errors: list[str] = []
+    BATCH = 500
+    for i in range(0, len(rows), BATCH):
+        chunk = rows[i:i + BATCH]
+        try:
+            sb.table("apple_health_daily").upsert(chunk, on_conflict="user_id,date").execute()
+            written += len(chunk)
+        except Exception as e:
+            msg = f"batch [{i}:{i+BATCH}] failed: {e}"
+            log.exception("apple_health import-aggregated %s", msg)
+            batch_errors.append(msg[:400])
+            if i == 0:
+                break
+
+    if written == 0 and batch_errors:
+        raise HTTPException(status_code=500, detail=f"Wrote 0 rows. First error: {batch_errors[0]}")
+
+    return {
+        "days_imported":     written,
+        "earliest_date":     dates[0] if dates else None,
+        "latest_date":       dates[-1] if dates else None,
+        "metrics_seen":      sorted(metrics_seen),
+        "skipped_days":      skipped,
+        "batch_error_count": len(batch_errors),
+    }
+
+
 @app.post("/api/apple-health/import-xml")
 async def apple_health_import_xml(
     request: Request,

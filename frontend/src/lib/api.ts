@@ -2615,7 +2615,10 @@ export const api = {
   /** Upload Apple's native "Export All Health Data" file (export.zip or
    *  export.xml). Streaming parser on the backend aggregates the entire
    *  file into per-day metrics and upserts them.
-   *  David 2026-07-30: "no third-party app" testing path. */
+   *  DEPRECATED (David 2026-07-30): Render 502s on multi-hundred-MB
+   *  uploads because request timeout < upload time. Use
+   *  appleHealthImportAggregated instead — parse in the browser and
+   *  post only the small aggregated JSON. */
   appleHealthImportXml(file: File, sinceDate?: string): Promise<{
     days_imported: number;
     earliest_date: string | null;
@@ -2630,6 +2633,23 @@ export const api = {
       method: "POST",
       body:   fd,
       // DO NOT set Content-Type — browser sets multipart boundary
+    });
+  },
+  /** Import pre-aggregated Apple Health daily rows. Browser has already
+   *  parsed the export.xml locally, so we post only a small (~200 KB)
+   *  JSON blob instead of the raw multi-hundred-MB file.
+   *  See frontend/src/lib/appleHealthParser.ts for the parser. */
+  appleHealthImportAggregated(daily: Record<string, Record<string, number>>, sinceDate?: string): Promise<{
+    days_imported: number;
+    earliest_date: string | null;
+    latest_date:   string | null;
+    metrics_seen:  string[];
+    skipped_days:  number;
+    batch_error_count?: number;
+  }> {
+    return request("/api/apple-health/import-aggregated", {
+      method: "POST",
+      body: JSON.stringify({ daily, since_date: sinceDate }),
     });
   },
   /** Connection + freshness status for the AH integration. Lets the setup page
