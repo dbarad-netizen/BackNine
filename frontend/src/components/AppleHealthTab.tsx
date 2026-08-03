@@ -63,12 +63,16 @@ export default function AppleHealthTab() {
       // Parse the whole file client-side (David 2026-07-30) — Render
       // was 502ing on multi-hundred-MB uploads. Browser aggregates
       // into per-day metrics; we post only the small JSON.
+      // Pass sinceDate to the parser so it can early-skip pre-window
+      // records instead of aggregating everything (huge speedup for
+      // multi-year exports where the "Last 90 days" window discards
+      // >99% of records).
       const daily = await parseAppleHealthFile(xmlFile, (p) => {
         const mb = Math.round(p.bytesProcessed / (1024 * 1024));
         setXmlProgress(
-          `Parsing… ${mb} MB processed · ${p.recordsSeen.toLocaleString()} records · ${p.daysAccumulated} days`
+          `Parsing… ${mb} MB · ${p.recordsSeen.toLocaleString()} records kept · ${p.daysAccumulated} days`
         );
-      });
+      }, sinceDate);
       setXmlProgress("Uploading aggregated data…");
       const res = await api.appleHealthImportAggregated(daily, sinceDate);
       setXmlResult(res);

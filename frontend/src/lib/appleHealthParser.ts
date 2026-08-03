@@ -208,7 +208,21 @@ function parseTsEpoch(v: string | undefined): number | null {
   return isNaN(t) ? null : t;
 }
 
-function processRecord(recordText: string, agg: Aggregator): boolean {
+// Cheap date pre-check — extract just the date portion of endDate/startDate
+// without doing the full attribute regex parse. For large exports where
+// most records fall outside the sinceDate window, this saves >90% of the
+// per-record cost by short-circuiting before we build the attrs object.
+const DATE_ONLY_RE = /(?:endDate|startDate)="(\d{4}-\d{2}-\d{2})/;
+
+function processRecord(recordText: string, agg: Aggregator, sinceDate?: string): boolean {
+  // Early-filter by date if a sinceDate window is set. Do this BEFORE
+  // full attribute parse — we're often skipping millions of pre-window
+  // records and don't want to waste cycles on them.
+  if (sinceDate) {
+    const m = DATE_ONLY_RE.exec(recordText);
+    if (m && m[1] < sinceDate) return false;
+  }
+
   const attrs = parseRecordAttrs(recordText);
   const hkType = attrs.type;
   if (!hkType) return false;
@@ -218,6 +232,9 @@ function processRecord(recordText: string, agg: Aggregator): boolean {
 
   const dateKey = parseDateLocal(attrs.endDate || attrs.startDate);
   if (!dateKey) return false;
+  // Belt-and-suspenders — the DATE_ONLY_RE regex could miss records
+  // with unusual attribute ordering; re-check the parsed dateKey.
+  if (sinceDate && dateKey < sinceDate) return false;
 
   if (strategy === "sleep") {
     const start = parseTsEpoch(attrs.startDate);
@@ -265,9 +282,11 @@ function processRecord(recordText: string, agg: Aggregator): boolean {
 // ── Streaming parser: consume text chunks, emit records ─────────────────
 
 interface StreamState {
-  buffer:  string;
-  agg:     Aggregator;
-  records: number;
+  buffer:    string;
+  agg:       Aggregator;
+  records:   number;      // records ADDED to aggregator (after filter)
+  scanned:   number;      // records SEEN in the stream (pre-filter)
+  sinceDate?: string;
 }
 
 function feedChunk(text: string, state: StreamState): void {
@@ -290,14 +309,16 @@ function feedChunk(text: string, state: StreamState): void {
     // Prefer the self-closing form if it's before the open-close
     if (selfClose !== -1 && (openClose === -1 || selfClose <= openClose)) {
       const record = state.buffer.substring(openIdx, selfClose + 2);
-      if (processRecord(record, state.agg)) state.records++;
+      state.scanned++;
+      if (processRecord(record, state.agg, state.sinceDate)) state.records++;
       searchFrom = selfClose + 2;
       continue;
     }
     // Non-self-closing Record with children — need the '</Record>'
     if (fullClose !== -1) {
       const record = state.buffer.substring(openIdx, openClose + 1);
-      if (processRecord(record, state.agg)) state.records++;
+      state.scanned++;
+      if (processRecord(record, state.agg, state.sinceDate)) state.records++;
       searchFrom = fullClose + "</Record>".length;
       continue;
     }
@@ -357,8 +378,15 @@ async function loadJSZip(): Promise<any> {
 export async function parseAppleHealthFile(
   file: File,
   onProgress?: ProgressCallback,
+  sinceDate?: string,
 ): Promise<DailyMetrics> {
-  const state: StreamState = { buffer: "", agg: new Aggregator(), records: 0 };
+  const state: StreamState = {
+    buffer:    "",
+    agg:       new Aggregator(),
+    records:   0,
+    scanned:   0,
+    sinceDate,
+  };
   const isZip = file.name.toLowerCase().endsWith(".zip") || file.type === "application/zip";
 
   if (isZip) {
