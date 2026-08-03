@@ -79,7 +79,16 @@ export default function AppleHealthTab() {
         setSummary(fresh);
       } catch { /* non-fatal */ }
     } catch (e: unknown) {
-      setXmlError(e instanceof Error ? e.message : "Import failed");
+      const raw = e instanceof Error ? e.message : "Import failed";
+      // Common JSZip zip64 failure — Apple's export.xml is often > 4 GB
+      // uncompressed which trips a known JSZip bug. Rewrite the error
+      // to something actionable.
+      const friendly = /uncompressed data size mismatch/i.test(raw)
+        ? "This zip uses Apple's zip64 format (happens when your export is very large). " +
+          "Double-click the zip on your Mac to extract it, then upload the export.xml inside " +
+          "instead of the zip."
+        : raw;
+      setXmlError(friendly);
       setXmlProgress("");
     } finally {
       setXmlUploading(false);
