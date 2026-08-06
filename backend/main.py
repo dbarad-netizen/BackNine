@@ -1506,7 +1506,15 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
 
     # ── Resolve Oura access token ─────────────────────────────────────────────
     # Supabase-auth users may not have Oura in their session cookie — look it
-    # up from wearable_connections instead.
+    # up from wearable_connections first, then fall back to oura_connections.
+    #
+    # Why two tables: wearable_connections.user_id is UUID (works for
+    # Supabase-native users), oura_connections.user_id is text (works for
+    # legacy Oura-only accounts like David's `oura_6c-...`). Text ids
+    # can never match wearable_connections' UUID column so we would
+    # miss them without the fallback. David 2026-08-06 — this was why
+    # the dashboard showed "Connect a tracker" for a fully-connected
+    # Oura user with 341 days of cached data.
     if not session.get("access_token"):
         db = get_supabase()
         if db:
@@ -1521,6 +1529,21 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
                 rows = res.data or []
                 if rows:
                     session = {**session, **rows[0]}
+            except Exception:
+                pass
+        # Fall back to oura_connections for text-typed user_ids
+        if db and not session.get("access_token"):
+            try:
+                res2 = (
+                    db.table("oura_connections")
+                    .select("access_token, refresh_token, expires_at")
+                    .eq("user_id", user_id)
+                    .limit(1)
+                    .execute()
+                )
+                rows2 = res2.data or []
+                if rows2:
+                    session = {**session, **rows2[0]}
             except Exception:
                 pass
 
@@ -4720,6 +4743,22 @@ def get_me(request: Request):
                 )
                 providers = [r["provider"] for r in (res.data or [])]
                 has_oura = "oura" in providers
+            except Exception:
+                pass
+        # Fall back to oura_connections for text-typed user_ids —
+        # wearable_connections' UUID column can't hold David's
+        # `oura_6c-...` id. Without this the "Connect a tracker"
+        # card kept nagging active Oura users. David 2026-08-06.
+        if db and not has_oura:
+            try:
+                res2 = (
+                    db.table("oura_connections")
+                    .select("user_id")
+                    .eq("user_id", user_id)
+                    .limit(1)
+                    .execute()
+                )
+                has_oura = bool(res2.data)
             except Exception:
                 pass
 
