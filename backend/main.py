@@ -3847,11 +3847,12 @@ async def log_stack_adherence(request: Request):
     try:
         row = _sa.log_adherence(
             user_id,
-            date_str  = date,
-            item_kind = (body.get("item_kind") or "").strip(),
-            item_name = (body.get("item_name") or "").strip(),
-            taken     = bool(body.get("taken", True)),
-            notes     = body.get("notes"),
+            date_str    = date,
+            item_kind   = (body.get("item_kind") or "").strip(),
+            item_name   = (body.get("item_name") or "").strip(),
+            taken       = bool(body.get("taken", True)),
+            notes       = body.get("notes"),
+            time_of_day = body.get("time_of_day"),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

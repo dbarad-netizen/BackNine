@@ -58,12 +58,13 @@ def _norm_key(name: str) -> str:
 # ── writes ──────────────────────────────────────────────────────────────
 
 def log_adherence(
-    user_id:   str,
-    date_str:  str,
-    item_kind: str,
-    item_name: str,
-    taken:     bool,
-    notes:     Optional[str] = None,
+    user_id:     str,
+    date_str:    str,
+    item_kind:   str,
+    item_name:   str,
+    taken:       bool,
+    notes:       Optional[str] = None,
+    time_of_day: Optional[str] = None,
 ) -> dict:
     if not user_id:
         raise ValueError("user_id required")
@@ -72,22 +73,29 @@ def log_adherence(
     name = (item_name or "").strip()
     if not name:
         raise ValueError("item_name required")
+    tod = (time_of_day or "anytime").strip().lower()
+    if tod not in _VALID_TIME_OF_DAY:
+        tod = "anytime"
     sb = _sb()
     if not sb:
         raise RuntimeError("Supabase unavailable")
     row = {
-        "user_id":   user_id,
-        "date":      date_str,
-        "item_kind": item_kind,
-        "item_key":  _norm_key(name),
-        "item_name": name[:120],
-        "taken":     bool(taken),
-        "notes":     (notes or "").strip()[:200] or None,
+        "user_id":     user_id,
+        "date":        date_str,
+        "item_kind":   item_kind,
+        "item_key":    _norm_key(name),
+        "item_name":   name[:120],
+        "taken":       bool(taken),
+        "notes":       (notes or "").strip()[:200] or None,
+        "time_of_day": tod,
     }
-    # Upsert on the unique key so re-tapping the same box just flips it
-    # rather than exploding rows.
+    # Upsert on the unique key (includes time_of_day so BID meds like
+    # Metformin can track morning vs. evening as SEPARATE entries).
+    # David 2026-08-06: without time_of_day in the key, checking the
+    # morning dose also flipped the evening dose because both mapped
+    # to the same row.
     res = (sb.table("stack_adherence_log")
-             .upsert(row, on_conflict="user_id,date,item_kind,item_key")
+             .upsert(row, on_conflict="user_id,date,item_kind,item_key,time_of_day")
              .execute())
     return (res.data or [row])[0]
 
@@ -298,38 +306,40 @@ def today_snapshot(user_id: str, today_iso: str, profile: dict,
                 "expected_by_now": 0, "on_pace_pct": 0,
             },
         }
-    day_rows = {(r.get("item_kind"), r.get("item_key")): r for r in get_day(user_id, today_iso)}
-    # 7-day streak lookup
+    # Key day-lookups by (kind, key, time_of_day) so BID meds (Metformin
+    # morning vs. evening) resolve independently. David 2026-08-06.
+    # Legacy rows (pre-migration) default time_of_day='anytime' — items
+    # that happen to be 'anytime' still match those correctly.
+    day_rows = {
+        (r.get("item_kind"), r.get("item_key"), r.get("time_of_day") or "anytime"): r
+        for r in get_day(user_id, today_iso)
+    }
+    # 7-day streak lookup — also keyed by time_of_day so a morning-only
+    # streak doesn't inflate the evening count and vice versa.
     start_7 = (_date.fromisoformat(today_iso) - timedelta(days=6)).isoformat()
     hist = get_range(user_id, start_7, today_iso)
-    hist_taken: dict[tuple[str, str], int] = {}
+    hist_taken: dict[tuple[str, str, str], int] = {}
     for r in hist:
         if not r.get("taken"):
             continue
-        k = (r.get("item_kind"), r.get("item_key"))
+        k = (r.get("item_kind"), r.get("item_key"), r.get("time_of_day") or "anytime")
         hist_taken[k] = hist_taken.get(k, 0) + 1
 
     enriched: list[dict] = []
     taken_today    = 0
     logged_today   = 0
     expected_by_now = 0
-    # De-dupe counter increments: with multi-time meds (Metformin BID
-    # showing in both morning + evening groups), naive summing would
-    # double-count. The adherence log has one row per (kind, name, date),
-    # so the underlying "did you take it?" is one truth per item.
-    counted_taken:  set[tuple[str, str]] = set()
-    counted_logged: set[tuple[str, str]] = set()
     for it in items:
         key = _norm_key(it["name"])
-        k   = (it["kind"], key)
+        k   = (it["kind"], key, it["time_of_day"])
         row = day_rows.get(k)
         taken = bool(row.get("taken")) if row else False
-        if row is not None and k not in counted_logged:
+        # Every (kind, key, time_of_day) is its own truth now — no
+        # de-dupe needed.
+        if row is not None:
             logged_today += 1
-            counted_logged.add(k)
-        if taken and k not in counted_taken:
+        if taken:
             taken_today += 1
-            counted_taken.add(k)
         window_open = _window_has_opened(it["time_of_day"], hour)
         if window_open:
             expected_by_now += 1

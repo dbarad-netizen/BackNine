@@ -53,12 +53,16 @@ export default function StackAdherenceCard() {
 
   const toggle = async (it: StackAdherenceItem) => {
     const nextTaken = !it.taken_today;
-    // Optimistic update — flip the item across both flat items[] and
-    // the group it belongs to.
+    // Optimistic update — flip ONLY the (kind, key, time_of_day) tuple
+    // that matches. Without time_of_day in the match, BID meds
+    // (Metformin morning + evening) would toggle both entries at
+    // once. David 2026-08-06.
     setSnap(prev => {
       if (!prev) return prev;
+      const matches = (x: StackAdherenceItem) =>
+        x.key === it.key && x.kind === it.kind && x.time_of_day === it.time_of_day;
       const mapItem = (x: StackAdherenceItem) =>
-        x.key === it.key && x.kind === it.kind
+        matches(x)
           ? { ...x, taken_today: nextTaken, logged_today: true,
               days_taken_7: nextTaken ? x.days_taken_7 + 1 : Math.max(0, x.days_taken_7 - 1) }
           : x;
@@ -79,19 +83,22 @@ export default function StackAdherenceCard() {
         },
       };
     });
-    setBusy(`${it.kind}:${it.key}`);
+    setBusy(`${it.kind}:${it.key}:${it.time_of_day}`);
     try {
       await api.logStackAdherence({
-        item_kind: it.kind,
-        item_name: it.name,
-        taken:     nextTaken,
+        item_kind:   it.kind,
+        item_name:   it.name,
+        taken:       nextTaken,
+        time_of_day: it.time_of_day,
       });
     } catch {
       // Roll back — flip it back to prior state.
       setSnap(prev => {
         if (!prev) return prev;
+        const matches = (x: StackAdherenceItem) =>
+          x.key === it.key && x.kind === it.kind && x.time_of_day === it.time_of_day;
         const rollback = (x: StackAdherenceItem) =>
-          x.key === it.key && x.kind === it.kind ? { ...x, taken_today: !nextTaken } : x;
+          matches(x) ? { ...x, taken_today: !nextTaken } : x;
         return {
           ...prev,
           items:  prev.items.map(rollback),

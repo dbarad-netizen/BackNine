@@ -2353,11 +2353,15 @@ export const api = {
     return request(`/api/stack/adherence/today?local_now=${encodeURIComponent(localNowIso())}`);
   },
   logStackAdherence(body: {
-    item_kind: "medication" | "supplement" | "peptide";
-    item_name: string;
-    taken:     boolean;
-    date?:     string;
-    notes?:    string;
+    item_kind:    "medication" | "supplement" | "peptide";
+    item_name:    string;
+    taken:        boolean;
+    date?:        string;
+    notes?:       string;
+    /** Which time-of-day window this tap corresponds to. Required for
+     *  BID meds so morning and evening doses track independently
+     *  (David 2026-08-06). */
+    time_of_day?: "morning" | "midday" | "evening" | "anytime";
   }): Promise<{ row: StackAdherenceRow }> {
     return request("/api/stack/adherence", { method: "POST", body: JSON.stringify(body) });
   },
