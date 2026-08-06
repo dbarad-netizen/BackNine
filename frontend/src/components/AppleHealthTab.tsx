@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { api, type AppleHealthSummary } from "@/lib/api";
 import { parseAppleHealthFile } from "@/lib/appleHealthParser";
+import HealthKitCard from "./HealthKitCard";
+import { isHealthKitAvailable } from "@/lib/healthkit";
 
 const SYNC_URL = "https://backnine-hu60.onrender.com/api/apple-health/sync";
 
@@ -23,6 +25,13 @@ export default function AppleHealthTab() {
   const [error, setError]         = useState<string | null>(null);
   const [showSetup, setShowSetup] = useState(false);
   const [showShortcut, setShowShortcut] = useState(false);
+  // David 2026-08-06: on native iOS, HealthKit auto-sync is the ONLY
+  // path we want users to see. Hide the XML upload + Health Auto
+  // Export sections when running in the Capacitor app.
+  const [isNativeHK, setIsNativeHK] = useState(false);
+  useEffect(() => {
+    isHealthKitAvailable().then(setIsNativeHK).catch(() => setIsNativeHK(false));
+  }, []);
 
   // Apple Health "Export All Health Data" upload — David 2026-07-30 path.
   // No third-party app, no shortcut: user exports from iPhone Health app,
@@ -169,6 +178,36 @@ export default function AppleHealthTab() {
         </button>
       </div>
 
+      {/* Native HealthKit — David 2026-08-06. On iOS native, this IS
+          the connection method. Hides the XML upload + Health Auto
+          Export sections below when it renders, so users don't see
+          three confusing "how to connect Apple Health" options. */}
+      {isNativeHK && <HealthKitCard />}
+
+      {/* Web-only "connected from your phone" note. David 2026-08-06 —
+          when the user has already connected via native HealthKit and
+          is now viewing the dashboard on desktop/laptop web, we don't
+          want to nag them to upload an XML export. Show a small
+          status card instead of the setup flow. */}
+      {!isNativeHK && connected && (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
+          <p className="text-sm font-semibold text-emerald-900">
+            Syncing from your iPhone
+          </p>
+          <p className="text-xs text-emerald-800 mt-1 leading-relaxed">
+            Your Apple Health data is flowing into BackNine automatically from the
+            BackNine iOS app on your iPhone. No upload needed. Open BackNine on
+            your phone to manage HealthKit permissions or trigger a fresh sync.
+          </p>
+        </div>
+      )}
+
+      {/* Legacy-web-only setup (XML upload + Health Auto Export). Only
+          shown when the user is on web AND has no data yet — otherwise
+          it's noise. On native iOS the HealthKitCard above owns the
+          connection flow. */}
+      {!isNativeHK && !connected && (
+      <>
       {/* ── Import from Apple's built-in export (David 2026-07-30 primary path) ── */}
       <div className="rounded-2xl border border-[#1B3829]/20 bg-gradient-to-br from-emerald-50 to-white shadow-sm p-6 space-y-4">
         <div>
@@ -405,7 +444,12 @@ export default function AppleHealthTab() {
         </div>
       )}
 
-      {/* ── Data card ──────────────────────────────────────────────────────── */}
+      </>
+      )}
+
+      {/* ── Data card ────────────────────────────────────────────────────────
+          Always render (outside the legacy-web-only fragment) so users on
+          native iOS and on desktop web both see their synced data. */}
       {connected ? (
         <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-6 space-y-5">
           <div className="flex items-center justify-between">
@@ -469,7 +513,9 @@ export default function AppleHealthTab() {
           <p className="text-4xl">📱</p>
           <p className="font-medium text-gray-700">No data synced yet</p>
           <p className="text-sm text-gray-600">
-            Set up Health Auto Export above and run it once on your iPhone — your data shows up here.
+            {isNativeHK
+              ? "Tap Connect Apple Health above to grant permission — your data shows up here after the first sync."
+              : "Set up Health Auto Export above and run it once on your iPhone — your data shows up here."}
           </p>
         </div>
       )}
