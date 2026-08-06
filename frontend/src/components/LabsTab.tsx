@@ -106,7 +106,33 @@ const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> 
   high:    { bg: "bg-red-50    border border-red-200",    text: "text-red-700",    label: "High"    },
 };
 
+// ── Range formatting helpers ──────────────────────────────────────────────────
+// A "999" ceiling or "0" floor is our sentinel for "no upper/lower bound."
+// Convert to the medical shorthand a doctor would write:
+//   low=60, high=999   → "≥60 mL/min"    (higher is fine, eGFR)
+//   low=0,  high=1.0   → "≤1.0 mg/L"     (lower is fine, hsCRP)
+//   low=70, high=99    → "70–99 mg/dL"   (bounded both sides)
+// David 2026-08-06.
+function formatRange(low: number, high: number, unit: string): string {
+  const u = unit ? ` ${unit}` : "";
+  const openUpper = high >= 990;
+  const openLower = low === 0;
+  if (openUpper && openLower) return `no cutoff${u}`;
+  if (openUpper)              return `≥${low}${u}`;
+  if (openLower)              return `≤${high}${u}`;
+  return `${low}–${high}${u}`;
+}
+
 // ── Mini spark-line for a single marker ───────────────────────────────────────
+//
+// David 2026-08-06 rewrite: the previous version rendered 4 identical
+// hidden-axis mini-charts stacked with no separators, which read as a
+// single unlabeled tangle of lines. Now each trend gets:
+//   - Header row: marker name, current value + unit, delta from prior
+//   - Visible endpoint dates left/right of the sparkline
+//   - Endpoint value labels at the leftmost + rightmost data points
+//   - Dashed optimal-range band (unchanged — was already correct)
+//
 function MarkerTrend({
   markerKey, entries,
 }: { markerKey: string; entries: LabEntry[] }) {
@@ -116,40 +142,83 @@ function MarkerTrend({
   const points = entries
     .filter(e => (e as unknown as Record<string, unknown>)[markerKey] != null)
     .map(e => ({
-      date:  e.date.slice(5),   // MM-DD
+      date:  e.date,   // full ISO so we can format
+      short: e.date.slice(5),
       value: (e as unknown as Record<string, unknown>)[markerKey] as number,
     }));
 
   if (points.length < 2) return null;
 
-  const color = statusFor(markerKey, points[points.length - 1].value) === "optimal"
-    ? "#22c55e"
-    : statusFor(markerKey, points[points.length - 1].value) === "normal"
-    ? "#6B7280"
-    : statusFor(markerKey, points[points.length - 1].value) === "low"
-    ? "#f59e0b"
-    : "#ef4444";
+  const first = points[0];
+  const last  = points[points.length - 1];
+  const delta = last.value - first.value;
+  const status = statusFor(markerKey, last.value);
+  const color =
+    status === "optimal" ? "#22c55e" :
+    status === "normal"  ? "#6B7280" :
+    status === "low"     ? "#f59e0b" : "#ef4444";
+
+  // Delta direction wording — "improved" / "worsened" depends on
+  // whether the metric is higher-is-better (like eGFR, HDL) or
+  // lower-is-better (like BUN, LDL, hsCRP). Approximate: if opt_hi
+  // is capped (<990), lower-is-better is the direction; if opt_hi is
+  // uncapped, higher-is-better.
+  const higherIsBetter = ref.opt_hi >= 990;
+  const better = higherIsBetter ? delta > 0 : delta < 0;
+  const deltaLabel =
+    Math.abs(delta) < 0.01 ? "no change" :
+    `${delta > 0 ? "+" : ""}${delta.toFixed(2)} ${better ? "↑ better" : "↓ worse"}`;
+  const deltaColor = Math.abs(delta) < 0.01 ? "text-gray-500" :
+                     better ? "text-emerald-700" : "text-red-700";
 
   return (
-    <div className="h-12 mt-1">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={points} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
-          <XAxis dataKey="date" hide />
-          <YAxis domain={["auto", "auto"]} hide />
-          <Tooltip
-            contentStyle={{ background: "#FFFFFF", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 11 }}
-            labelStyle={{ color: "#6B7280" }}
-            itemStyle={{ color: "#111827" }}
-          />
-          {ref.opt_lo > 0 && ref.opt_hi < 990 && (
-            <ReferenceLine y={ref.opt_lo} stroke="#22c55e" strokeDasharray="2 3" strokeOpacity={0.35} />
-          )}
-          {ref.opt_hi < 990 && (
-            <ReferenceLine y={ref.opt_hi} stroke="#22c55e" strokeDasharray="2 3" strokeOpacity={0.35} />
-          )}
-          <Line type="monotone" dataKey="value" stroke={color} dot={{ r: 2, fill: color }} strokeWidth={1.5} />
-        </LineChart>
-      </ResponsiveContainer>
+    <div className="mt-2 rounded-lg border border-gray-100 bg-gray-50/60 p-2">
+      {/* Header — always shows metric + latest + trend so the chart
+          below is interpretable at a glance. */}
+      <div className="flex items-baseline justify-between gap-2 px-1">
+        <span className="text-[11px] font-semibold text-gray-800">{ref.label}</span>
+        <div className="flex items-baseline gap-2">
+          <span className="text-[11px] font-semibold text-gray-900">
+            {last.value} <span className="text-[10px] font-normal text-gray-500">{ref.unit}</span>
+          </span>
+          <span className={`text-[10px] font-medium ${deltaColor}`}>{deltaLabel}</span>
+        </div>
+      </div>
+
+      {/* Chart */}
+      <div className="h-14 mt-1">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={points} margin={{ top: 8, right: 32, left: 32, bottom: 0 }}>
+            <XAxis dataKey="short" hide />
+            <YAxis domain={["auto", "auto"]} hide />
+            <Tooltip
+              contentStyle={{ background: "#FFFFFF", border: "1px solid #E5E7EB", borderRadius: 8, fontSize: 11 }}
+              labelStyle={{ color: "#6B7280" }}
+              itemStyle={{ color: "#111827" }}
+              formatter={(v: number) => [`${v} ${ref.unit}`, ref.label]}
+              labelFormatter={(l: string) => `Date: ${l}`}
+            />
+            {ref.opt_lo > 0 && ref.opt_hi < 990 && (
+              <ReferenceLine y={ref.opt_lo} stroke="#22c55e" strokeDasharray="2 3" strokeOpacity={0.5}
+                             label={{ value: `opt ≥${ref.opt_lo}`, position: "insideLeft", fill: "#22c55e", fontSize: 9 }} />
+            )}
+            {ref.opt_hi < 990 && (
+              <ReferenceLine y={ref.opt_hi} stroke="#22c55e" strokeDasharray="2 3" strokeOpacity={0.5}
+                             label={{ value: `opt ≤${ref.opt_hi}`, position: "insideLeft", fill: "#22c55e", fontSize: 9 }} />
+            )}
+            <Line type="monotone" dataKey="value" stroke={color} strokeWidth={1.75}
+                  dot={{ r: 2.5, fill: color }}
+                  label={{ position: "top", fontSize: 10, fill: "#374151",
+                           formatter: (v: React.ReactNode) => typeof v === "number" ? String(v) : "" }} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Endpoint date labels */}
+      <div className="flex justify-between text-[9px] text-gray-500 px-1 -mt-1">
+        <span>{first.date}</span>
+        <span>{last.date}</span>
+      </div>
     </div>
   );
 }
@@ -283,8 +352,13 @@ function LabEntryCard({
     const status = statusFor(m.key, v);
     scored.push({
       key: m.key, label: m.label, unit: m.unit, value: v, status,
-      range:    `${m.low}–${m.high === 999 ? "—" : m.high} ${m.unit}`,
-      optRange: `${m.opt_lo}–${m.opt_hi === 999 ? "—" : m.opt_hi} ${m.unit}`,
+      // David 2026-08-06: one-sided ranges (like eGFR where higher is
+      // always better, or hsCRP where lower is always better) used to
+      // render as "60–— mL/min" which reads as broken formatting.
+      // Now we emit "≥60 mL/min" or "≤0.5 mg/L" — the correct medical
+      // shorthand a doctor would recognize.
+      range:    formatRange(m.low,    m.high,    m.unit),
+      optRange: formatRange(m.opt_lo, m.opt_hi, m.unit),
     });
   }
 
