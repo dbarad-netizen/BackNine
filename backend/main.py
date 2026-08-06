@@ -923,12 +923,57 @@ def exchange_supabase_for_session(request: Request, response: Response):
     # For OAuth providers the actual identity id is in app_metadata.provider_id
     # (e.g. Apple's `sub`). Fall back to Supabase's own UUID for email/password
     # users, where the Supabase user IS the identity.
+    #
+    # For third-party providers (Apple, Google), the JWT's `sub` claim is
+    # the SUPABASE UUID, not the third-party's real sub. Supabase JWTs do
+    # not include the third-party sub in `app_metadata.provider_id`
+    # despite older docs suggesting they might — the real sub lives on
+    # the user's `identities[]` record and requires the admin API to
+    # fetch. If we naively use `supa_sub` as `provider_sub` for Apple,
+    # every SIWA login writes a unique (apple, supabase_uuid) row and
+    # never matches a prior link, so users get a fresh account each
+    # login. See linked_identities audit David 2026-08-06.
     provider_sub = str((claims.get("app_metadata") or {}).get("provider_id") or supa_sub)
 
     # Resolve to a canonical BackNine user_id via linked_identities.
     resolved_user_id = supa_sub
     sb = get_supabase()
     if sb:
+        # ── Step 1: pull the REAL third-party sub from Supabase's
+        # identities table via admin API. Only needed for non-supabase
+        # providers; for the plain email/password path, supa_sub already
+        # is the identity.
+        if provider != "supabase":
+            try:
+                admin_user = sb.auth.admin.get_user_by_id(supa_sub)
+                # admin_user.user.identities is a list of {provider, id/sub, ...}
+                u = getattr(admin_user, "user", None) or admin_user
+                identities = getattr(u, "identities", None) or []
+                for ident in identities:
+                    ident_provider = (getattr(ident, "provider", None)
+                                      or (ident.get("provider") if isinstance(ident, dict) else None))
+                    if ident_provider != provider:
+                        continue
+                    # Supabase names this field variously across SDK
+                    # versions: `.id`, `.identity_id`, or in
+                    # identity_data["sub"]. Try all in order.
+                    real_sub = (
+                        getattr(ident, "id", None)
+                        or (ident.get("id") if isinstance(ident, dict) else None)
+                        or getattr(ident, "identity_id", None)
+                    )
+                    if not real_sub:
+                        idata = (getattr(ident, "identity_data", None)
+                                 or (ident.get("identity_data") if isinstance(ident, dict) else None)
+                                 or {})
+                        real_sub = idata.get("sub") or idata.get("provider_id")
+                    if real_sub:
+                        provider_sub = str(real_sub)
+                        break
+            except Exception:
+                log.exception("failed to fetch real provider_sub for %s via admin API", supa_sub)
+
+        # ── Step 2: exact (provider, provider_sub) match.
         try:
             hit = (sb.table("linked_identities")
                      .select("user_id")
@@ -937,19 +982,41 @@ def exchange_supabase_for_session(request: Request, response: Response):
                      .limit(1)
                      .execute())
             if hit.data:
-                # Existing link — this identity resolves to a prior
-                # BackNine account. Route the session there.
                 resolved_user_id = hit.data[0]["user_id"]
             else:
-                # First time we've seen this identity. Record it under
-                # the Supabase UUID as the canonical user_id.
-                sb.table("linked_identities").insert({
-                    "user_id":       supa_sub,
-                    "provider":      provider,
-                    "provider_sub":  provider_sub,
-                    "email":         supa_mail,
-                    "provider_name": (claims.get("user_metadata") or {}).get("name"),
-                }).execute()
+                # ── Step 3: email fallback. If we couldn't fetch a real
+                # provider_sub (admin API blocked, SDK shape mismatch,
+                # etc.), a returning user still needs to land on their
+                # existing account. Match by verified email against any
+                # prior link for the same provider. Only trust this when
+                # the JWT's email is present + we have a unique hit.
+                emailed = None
+                if supa_mail:
+                    same_email = (sb.table("linked_identities")
+                                    .select("user_id, provider_sub")
+                                    .eq("provider", provider)
+                                    .eq("email", supa_mail)
+                                    .limit(2)
+                                    .execute())
+                    if same_email.data and len(same_email.data) == 1:
+                        emailed = same_email.data[0]["user_id"]
+
+                if emailed:
+                    resolved_user_id = emailed
+                    log.info(
+                        "linked_identities: email-fallback resolved provider=%s email=%s to user_id=%s",
+                        provider, supa_mail, emailed,
+                    )
+                else:
+                    # Genuinely first time we've seen this identity.
+                    # Record it under the Supabase UUID as canonical.
+                    sb.table("linked_identities").insert({
+                        "user_id":       supa_sub,
+                        "provider":      provider,
+                        "provider_sub":  provider_sub,
+                        "email":         supa_mail,
+                        "provider_name": (claims.get("user_metadata") or {}).get("name"),
+                    }).execute()
         except Exception:
             # Never fail auth over the link table — degrade gracefully.
             log.exception("linked_identities resolve failed for %s", supa_sub)
