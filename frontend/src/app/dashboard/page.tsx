@@ -1351,18 +1351,20 @@ export default function DashboardPage() {
           </div>
           {/* Right side */}
           <div className="flex items-center gap-3 ml-3 shrink-0">
-            {/* Signed-in name + date. Helps disambiguate accounts when
-                testing SIWA / merges (David 2026-08-06). Truncated at 14
-                chars so a long name doesn't push the buttons off-screen. */}
+            {/* Signed-in name — helps disambiguate accounts when
+                testing SIWA / merges (David 2026-08-06). Only shows at
+                lg+ because at sm/md the tab bar is tight and adding a
+                name badge was clipping "Metrics" to "Metric". Trimmed
+                to 12 chars max. */}
             {profile?.name && (
               <span
-                className="hidden sm:inline text-xs font-medium text-gray-800 truncate max-w-[10rem]"
+                className="hidden lg:inline text-xs font-medium text-gray-800 truncate max-w-[8rem]"
                 title={profile.name}
               >
-                {profile.name.length > 14 ? profile.name.slice(0, 13) + "…" : profile.name}
+                {profile.name.length > 12 ? profile.name.slice(0, 11) + "…" : profile.name}
               </span>
             )}
-            <span className="hidden sm:block text-xs text-gray-600">
+            <span className="hidden lg:block text-xs text-gray-600">
               {new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
             </span>
             <RefreshButton />
@@ -1602,7 +1604,15 @@ export default function DashboardPage() {
                 model duration for last night). If both are missing,
                 the card renders and the user has a path to log. */}
             <SleepQuickLogCard
-              hasSleepAlready={Boolean((slScore && slScore > 0) || (sm?.total && sm.total > 0))}
+              hasSleepAlready={Boolean(
+                (slScore && slScore > 0) ||
+                (sm?.total && sm.total > 0) ||
+                // Apple Health path — HealthKit sync writes sleep_hours
+                // even when there's no Oura connection. Without this the
+                // card kept nagging David (who has AH connected) to
+                // log manually. David 2026-08-06.
+                (data.apple_health?.today?.sleep_hours && data.apple_health.today.sleep_hours > 0)
+              )}
               onSaved={() => { window.location.reload(); }}
             />
 

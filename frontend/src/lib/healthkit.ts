@@ -276,7 +276,35 @@ export async function syncRecent(days = 7): Promise<SyncResult> {
       const date = dateKeyLocal(s.endDate || s.startDate);
 
       if (m.strategy === "duration") {
-        // Sleep samples: value doesn't matter, duration = end - start
+        // Sleep samples: HealthKit records overlapping intervals for the
+        // SAME night (an outer "inBed" that spans the whole session, plus
+        // sub-samples for asleepCore / asleepDeep / asleepREM / awake).
+        // Summing every duration double- or triple-counts each minute
+        // (David 2026-08-06 saw 16h 35m from a real ~7h night).
+        //
+        // Only count the actual-asleep stages. Our Swift plugin encodes
+        // the category value as a string in `s.value` for sleep, so we
+        // filter here. Everything else (inBed, awake, unknown) is
+        // treated as zero-contribution — we still want to accept the
+        // sample (so the day is recognized) but not add to the total.
+        //
+        // Notes:
+        //   • "AsleepUnspecified" is the pre-iOS-16 value when the
+        //     writing app didn't record stage detail. Count it.
+        //   • Some apps only ever write "InBed". If we see ONLY InBed
+        //     for a day (no asleep* samples at all), that day's sleep
+        //     total will be 0 — which is correct, we don't know how
+        //     much was actual sleep vs. lying in bed. In practice
+        //     Oura + Apple Watch both write asleep* stages.
+        const stage = (s as unknown as { value?: string | number }).value;
+        const stageStr = typeof stage === "string" ? stage : "";
+        const isAsleep =
+          stageStr === "HKCategoryValueSleepAnalysisAsleepCore" ||
+          stageStr === "HKCategoryValueSleepAnalysisAsleepDeep" ||
+          stageStr === "HKCategoryValueSleepAnalysisAsleepREM" ||
+          stageStr === "HKCategoryValueSleepAnalysisAsleepUnspecified";
+        if (!isAsleep) continue;
+
         const startTs = Date.parse(s.startDate);
         if (isNaN(startTs)) continue;
         const seconds = (ts - startTs) / 1000;
