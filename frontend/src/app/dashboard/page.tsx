@@ -1351,6 +1351,17 @@ export default function DashboardPage() {
           </div>
           {/* Right side */}
           <div className="flex items-center gap-3 ml-3 shrink-0">
+            {/* Signed-in name + date. Helps disambiguate accounts when
+                testing SIWA / merges (David 2026-08-06). Truncated at 14
+                chars so a long name doesn't push the buttons off-screen. */}
+            {profile?.name && (
+              <span
+                className="hidden sm:inline text-xs font-medium text-gray-800 truncate max-w-[10rem]"
+                title={profile.name}
+              >
+                {profile.name.length > 14 ? profile.name.slice(0, 13) + "…" : profile.name}
+              </span>
+            )}
             <span className="hidden sm:block text-xs text-gray-600">
               {new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
             </span>
