@@ -361,6 +361,35 @@ export interface LabResult {
   notes?:           string;
 }
 
+// ── CPAP nightly log (David 2026-08-06, task #162) ────────────────────
+export interface CpapNightlyLog {
+  id?:              string;
+  user_id?:         string;
+  date:             string;
+  usage_hours:      number;
+  mask_seal_score?: number | null;
+  events_per_hour?: number | null;
+  total_score?:     number | null;
+  notes?:           string | null;
+  created_at?:      string;
+  updated_at?:      string;
+}
+export interface CpapAdherence {
+  window_start:      string;
+  window_end:        string;
+  window_days:       number;
+  logged_nights:     number;
+  qualifying_nights: number;
+  avg_hours:         number;
+  compliance_pct:    number;
+  compliant:         boolean;
+  threshold_pct:     number;
+  threshold_hours:   number;
+  avg_ahi?:          number | null;
+  avg_mask_seal?:    number | null;
+  avg_total_score?:  number | null;
+}
+
 export interface StackAdherenceRow {
   id?:          string;
   date:         string;
@@ -2364,6 +2393,33 @@ export const api = {
     time_of_day?: "morning" | "midday" | "evening" | "anytime";
   }): Promise<{ row: StackAdherenceRow }> {
     return request("/api/stack/adherence", { method: "POST", body: JSON.stringify(body) });
+  },
+
+  // ── Capability toggles + CPAP tracking (David 2026-08-06, task #162) ────
+  getCapabilities(): Promise<{ enabled: string[] }> {
+    return request("/api/profile/capabilities");
+  },
+  setCapabilities(enabled: string[]): Promise<{ enabled: string[] }> {
+    return request("/api/profile/capabilities", {
+      method: "PUT",
+      body: JSON.stringify({ enabled }),
+    });
+  },
+  cpapToday(): Promise<{ today: CpapNightlyLog | null; yesterday: CpapNightlyLog | null }> {
+    return request("/api/cpap/today");
+  },
+  logCpap(body: {
+    date?:            string;
+    usage_hours:      number;
+    mask_seal_score?: number | null;
+    events_per_hour?: number | null;
+    total_score?:     number | null;
+    notes?:           string | null;
+  }): Promise<{ row: CpapNightlyLog }> {
+    return request("/api/cpap/log", { method: "POST", body: JSON.stringify(body) });
+  },
+  cpapAdherence(): Promise<CpapAdherence> {
+    return request("/api/cpap/adherence");
   },
 
   // ── Linked identities (David 2026-07-30, task #142) ──────────────────────

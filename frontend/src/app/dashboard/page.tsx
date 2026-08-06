@@ -67,6 +67,7 @@ import NutritionCoachCard from "@/components/NutritionCoachCard";
 import WeeklyRecapCard from "@/components/WeeklyRecapCard";
 import TodaysTagsCard from "@/components/TodaysTagsCard";
 import JournalCard from "@/components/JournalCard";
+import CpapNightlyLogCard from "@/components/CpapNightlyLogCard";
 import DailyInsightCard from "@/components/DailyInsightCard";
 import SymptomCard from "@/components/SymptomCard";
 // WeeklyInsight retired 2026-07-09 per David: content overlapped Coach Al
@@ -904,6 +905,10 @@ export default function DashboardPage() {
     try { window.localStorage.setItem("bn_goal_active", active ? "1" : "0"); } catch { /* ignore */ }
   };
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  // Enabled capability keys (cpap, cgm, migraine, cycle, rehab).
+  // Drives which optional cards render on the dashboard. Loaded once
+  // on mount; refreshed after ProfileModal closes. David 2026-08-06.
+  const [capabilities, setCapabilities] = useState<string[]>([]);
   const openChatRef = useRef<((seed?: string) => void) | null>(null);
 
   // Nutrition state
@@ -967,6 +972,12 @@ export default function DashboardPage() {
     // Profile — used to hide the "add age & sex" nudge once it's filled in
     api.getProfile()
       .then(setProfile)
+      .catch(() => {});
+    // Capability toggles — drives which optional cards render
+    // (CPAP, CGM, etc.). Silently degrades to empty on error so
+    // the rest of the dashboard is never blocked. David 2026-08-06.
+    api.getCapabilities()
+      .then(res => setCapabilities(res.enabled || []))
       .catch(() => {});
     // Check onboarding status independently of the (possibly empty) dashboard
     // payload — a brand-new user with no data still needs the welcome flow.
@@ -1754,6 +1765,12 @@ export default function DashboardPage() {
                 Al sees recent entries inside his chat with a privacy
                 directive in his system prompt. */}
             <JournalCard />
+
+            {/* CPAP nightly log — capability-gated. Only renders for
+                users who turned on 'cpap' in Profile → Devices &
+                Trackers (or who logged their first CPAP night, which
+                auto-enables). David 2026-08-06, task #162. */}
+            {capabilities.includes("cpap") && <CpapNightlyLogCard />}
 
             {/* ── Daily Greeting + Score Snapshot ── */}
             {(() => {
@@ -3025,6 +3042,9 @@ export default function DashboardPage() {
             setShowProfile(false);
             // Refresh so the "add age & sex" nudge clears once they've filled it in.
             api.getProfile().then(setProfile).catch(() => {});
+            // Also refresh capabilities so toggling CPAP / CGM / etc.
+            // in Profile immediately shows/hides the associated cards.
+            api.getCapabilities().then(res => setCapabilities(res.enabled || [])).catch(() => {});
           }}
           initialTab={profileInitialTab}
         />

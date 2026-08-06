@@ -15,6 +15,7 @@ import { api, localToday, type UserProfile, type Friend, type FriendInvite, type
 import OuraPauseToggle from "./OuraPauseToggle";
 import ConnectedAccountsCard from "./ConnectedAccountsCard";
 import HealthKitCard from "./HealthKitCard";
+import CapabilitySettings from "./CapabilitySettings";
 
 const GOAL_OPTIONS = [
   { id: "longevity",      label: "Longevity",         icon: "🧬" },
@@ -373,6 +374,11 @@ export default function ProfileModal({ onClose, initialTab = "profile" }: Props)
                   data export + account deletion controls. Lives inside a
                   <details> so it doesn't crowd the primary Profile edit
                   workflow — a user who wants it will find it in seconds. */}
+              {/* Devices & Trackers — capability toggles for optional
+                  integrations (CPAP, CGM, migraine, etc.). Sits right
+                  above the danger zone so it's easy to find without
+                  cluttering the top of the profile. David 2026-08-06. */}
+              <CapabilitySettings />
               <AccountDangerZone />
             </div>
           )

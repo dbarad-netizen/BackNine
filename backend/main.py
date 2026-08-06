@@ -3884,6 +3884,117 @@ async def log_stack_adherence(request: Request):
     return {"row": row}
 
 
+# ── Capability toggles + CPAP tracking ────────────────────────────────────
+#
+# David 2026-08-06. Optional integrations (CPAP, CGM, migraine, cycle,
+# rehab) surface only for users who turn them on in Profile → Devices
+# & Trackers. Cards check the capability flag before rendering, so a
+# user with none of these turned on sees a clean dashboard. Auto-enable
+# on first data write means new users don't have to hunt for a setting
+# to unlock a feature.
+
+@app.get("/api/profile/capabilities")
+def api_get_capabilities(request: Request):
+    import cpap as _cpap
+    session = _require_session(request)
+    user_id = session["user_id"]
+    return {"enabled": _cpap.get_enabled_capabilities(user_id)}
+
+
+@app.put("/api/profile/capabilities")
+async def api_put_capabilities(request: Request):
+    """Overwrite the user's capability list. Body: { enabled: [str, ...] }."""
+    import cpap as _cpap
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    enabled = body.get("enabled") or []
+    if not isinstance(enabled, list):
+        raise HTTPException(status_code=400, detail="`enabled` must be a list")
+    try:
+        cleaned = _cpap.set_enabled_capabilities(user_id, enabled)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"enabled": cleaned}
+
+
+@app.post("/api/cpap/log")
+async def api_cpap_log(request: Request):
+    """Log a nightly CPAP session. Body:
+    { date?, usage_hours, mask_seal_score?, events_per_hour?,
+      total_score?, notes? }.
+    Missing `date` defaults to the user's local yesterday (CPAP logs
+    describe *last* night's sleep). Auto-enables the 'cpap' capability
+    on first successful write so the card is unlocked automatically."""
+    import cpap as _cpap
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    # Default date = user's local yesterday. CPAP scoring is nightly
+    # and users typically log in the morning about the night that
+    # just ended, so anchoring to yesterday's local date is the right
+    # UX default. (If the client passes an explicit `date`, use that.)
+    from datetime import date as _d, timedelta as _td
+    _today = _user_local_today_iso(request)
+    try:
+        default_date = (_d.fromisoformat(_today) - _td(days=1)).isoformat()
+    except Exception:
+        default_date = _today
+    date = (body.get("date") or "").strip() or default_date
+    try:
+        row = _cpap.log_nightly(
+            user_id,
+            date_str        = date,
+            usage_hours     = body.get("usage_hours"),
+            mask_seal_score = body.get("mask_seal_score"),
+            events_per_hour = body.get("events_per_hour"),
+            total_score     = body.get("total_score"),
+            notes           = body.get("notes"),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"row": row}
+
+
+@app.get("/api/cpap/today")
+def api_cpap_today(request: Request):
+    """Return today's + last-night's log entries (if any). Used by the
+    Daily Check-in CPAP card to pre-fill the form on re-open."""
+    import cpap as _cpap
+    session = _require_session(request)
+    user_id = session["user_id"]
+    today  = _user_local_today_iso(request)
+    from datetime import date as _d, timedelta as _td
+    try:
+        yesterday = (_d.fromisoformat(today) - _td(days=1)).isoformat()
+    except Exception:
+        yesterday = today
+    return {
+        "today":     _cpap.get_day(user_id, today),
+        "yesterday": _cpap.get_day(user_id, yesterday),
+    }
+
+
+@app.get("/api/cpap/adherence")
+def api_cpap_adherence(request: Request):
+    """30-day insurance-compliance snapshot: >=4h on >=75% of nights.
+    Frontend renders a pill (green if compliant, amber if trending
+    low, red if already non-compliant)."""
+    import cpap as _cpap
+    session = _require_session(request)
+    user_id = session["user_id"]
+    today   = _user_local_today_iso(request)
+    return _cpap.adherence_snapshot(user_id, today)
+
+
 # ── Proven For You — n-of-1 experiment loop ───────────────────────────────
 #
 # David 2026-07-23 (Fable competitive brief): closes the loop between a
