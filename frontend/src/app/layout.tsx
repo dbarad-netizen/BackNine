@@ -28,6 +28,13 @@ export const viewport: Viewport = {
   themeColor: "#1B3829",
   width: "device-width",
   initialScale: 1,
+  // Lock zoom in the native app WebView. Accidental pinch-zoom in a
+  // hybrid app is a trap — there's no Safari-style "reset zoom" gesture
+  // to recover, so users get stuck (David 2026-08-06). Standard
+  // practice for Capacitor / Cordova / React Native apps. Users who
+  // need larger text should use iOS system Dynamic Type instead.
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: "cover",
 };
 

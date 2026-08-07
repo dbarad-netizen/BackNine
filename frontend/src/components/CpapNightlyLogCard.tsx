@@ -36,10 +36,21 @@ function complianceColor(pct: number, threshold: number): string {
   return "text-red-800 bg-red-50 border-red-200";
 }
 
+// Session-scoped dismissal key. If the user taps the ✕, we hide the
+// card for the rest of this session but bring it back on next launch.
+// For permanent hide, they can flip the capability toggle off in
+// Profile → Devices & Trackers (which we hint at in the tooltip).
+// David 2026-08-06.
+const DISMISS_KEY = "bn_cpap_card_dismissed_session";
+
 export default function CpapNightlyLogCard({ onLogged }: Props) {
   const [snap,      setSnap]      = useState<CpapAdherence | null>(null);
   const [yesterday, setYesterday] = useState<CpapNightlyLog | null>(null);
   const [loading,   setLoading]   = useState(true);
+  const [dismissed, setDismissed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return sessionStorage.getItem(DISMISS_KEY) === "1";
+  });
 
   // Form state — pre-fills from last night's log if already saved
   const [hours,      setHours]      = useState<string>("");
@@ -97,7 +108,12 @@ export default function CpapNightlyLogCard({ onLogged }: Props) {
     }
   };
 
-  if (loading) return null;
+  if (loading || dismissed) return null;
+
+  const dismiss = () => {
+    try { sessionStorage.setItem(DISMISS_KEY, "1"); } catch { /* ignore */ }
+    setDismissed(true);
+  };
 
   const showFullForm = expanded || !saved;
   const compliancePill = snap && (
@@ -127,7 +143,17 @@ export default function CpapNightlyLogCard({ onLogged }: Props) {
             correlations and Doctor Handoff.
           </p>
         </div>
-        {compliancePill}
+        <div className="flex items-start gap-2 shrink-0">
+          {compliancePill}
+          <button
+            onClick={dismiss}
+            title="Hide until next launch. To hide permanently, turn off CPAP in Profile → Devices & Trackers."
+            aria-label="Hide CPAP card"
+            className="text-gray-500 hover:text-gray-900 text-lg leading-none px-1 -mt-0.5"
+          >
+            ×
+          </button>
+        </div>
       </div>
 
       {saved && !expanded && (
