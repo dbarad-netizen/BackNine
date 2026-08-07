@@ -87,7 +87,15 @@ def _load_oura(user_id: str, since: str) -> dict:
 
 
 def _load_nutrition_daily(user_id: str, since: str) -> dict:
-    """Returns { date_str: { calories, protein, carbs, fat, meal_count } }"""
+    """Returns { date_str: { calories, protein, carbs, fat, meal_count } }.
+
+    Days that look like logging gaps (fewer than 3 meals AND total
+    calories under 500) are dropped entirely — treating them as "0
+    calorie" days pollutes correlations with false "starvation" signal.
+    David 2026-08-06 saw a "Extreme calorie swings tank HRV" pattern
+    that was really "days with 2-item partial logs vs. days with full
+    logs." A conservative threshold (drop only clearly-incomplete
+    days) keeps real low-cal days in the data."""
     sb = _sb()
     res = (
         sb.table("nutrition_meals")
@@ -106,6 +114,17 @@ def _load_nutrition_daily(user_id: str, since: str) -> dict:
         daily[d]["carbs"]      += float(r.get("carbs")   or 0)
         daily[d]["fat"]        += float(r.get("fat")     or 0)
         daily[d]["meal_count"] += 1
+
+    # Drop days that look like logging gaps. Threshold: fewer than 3
+    # meals AND under 500 kcal. A user genuinely eating an intermittent
+    # fast will typically still log those 1-2 items, but their totals
+    # will be higher (a real 500-kcal meal). A 2-meal / 200-kcal day is
+    # almost always incomplete tracking.
+    for d in list(daily.keys()):
+        v = daily[d]
+        if v["meal_count"] < 3 and v["calories"] < 500:
+            del daily[d]
+
     return daily
 
 

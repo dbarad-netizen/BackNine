@@ -293,7 +293,16 @@ def get_day(user_id: str, date_str: str) -> Optional[dict]:
 
 
 def get_data(user_id: str, days: int = 30) -> List[dict]:
-    """Return the most recent `days` rows for this user, newest first."""
+    """Return the most recent `days` rows for this user, newest first.
+
+    Applies a sanity clamp to sleep_hours: values > 14h are almost
+    certainly multi-source HealthKit overlap artifacts (Oura + Apple
+    Watch + a third sleep app all writing the same night) and are
+    dropped to null so Coach Al / longevity / patterns don't narrate
+    obviously impossible numbers as fact. David 2026-08-06.
+    Client-side dedupe in healthkit.ts is the durable fix; this clamp
+    is the safety net for rows already in the DB or from future
+    devices with new failure modes."""
     since = (date.today() - timedelta(days=days - 1)).isoformat()
     sb = _sb()
     res = (
@@ -304,7 +313,12 @@ def get_data(user_id: str, days: int = 30) -> List[dict]:
         .order("date", desc=True)
         .execute()
     )
-    return res.data or []
+    rows = res.data or []
+    for r in rows:
+        s = r.get("sleep_hours")
+        if s is not None and (s < 0 or s > 14):
+            r["sleep_hours"] = None
+    return rows
 
 
 def _get_manual_weight_by_date(user_id: str, days: int) -> dict:
