@@ -17,6 +17,7 @@ import {
   isHealthKitAvailable,
   requestAuthorization,
   syncRecent,
+  syncFull,
   markSyncedNow,
 } from "@/lib/healthkit";
 
@@ -72,7 +73,9 @@ export default function HealthKitCard() {
     setError(null);
     setLastResult(null);
     setState("syncing");
-    const res = await syncRecent(7);
+    // 30 days — was 7. Slow-cadence metrics (weight, BP, sporadic
+    // workouts) need a wider window to show up. David 2026-08-06.
+    const res = await syncRecent(30);
     if (res.error) {
       setError(res.error);
       setState("connected");
@@ -80,6 +83,20 @@ export default function HealthKitCard() {
     }
     markSyncedNow();
     setLastResult(`Synced ${res.days_synced} day${res.days_synced === 1 ? "" : "s"}.`);
+    setState("connected");
+  };
+
+  const handleFullResync = async () => {
+    setError(null);
+    setLastResult(null);
+    setState("syncing");
+    const res = await syncFull();
+    if (res.error) {
+      setError(res.error);
+      setState("connected");
+      return;
+    }
+    setLastResult(`Resynced ${res.days_synced} days of history.`);
     setState("connected");
   };
 
@@ -122,12 +139,21 @@ export default function HealthKitCard() {
             <span className="text-emerald-800 font-semibold">Connected</span>
             <span className="text-gray-500">— auto-syncs on app open</span>
           </div>
-          <button
-            onClick={handleSyncNow}
-            className="text-[11px] font-semibold text-[#1B3829] hover:text-[#2D6A4F] underline underline-offset-2"
-          >
-            Sync now
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={handleSyncNow}
+              className="text-[11px] font-semibold text-[#1B3829] hover:text-[#2D6A4F] underline underline-offset-2"
+            >
+              Sync now
+            </button>
+            <button
+              onClick={handleFullResync}
+              className="text-[11px] font-semibold text-gray-600 hover:text-[#2D6A4F] underline underline-offset-2"
+              title="Force a fresh 90-day pull from HealthKit — useful after reconnecting a device or if data looks stale"
+            >
+              Resync 90 days
+            </button>
+          </div>
         </div>
       )}
 

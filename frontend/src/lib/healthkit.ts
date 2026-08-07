@@ -368,7 +368,19 @@ export async function syncRecent(days = 7): Promise<SyncResult> {
 
 // ── Auto-sync scaffolding ───────────────────────────────────────────────
 
-const AUTO_SYNC_KEY = "bn_hk_last_sync";
+const AUTO_SYNC_KEY       = "bn_hk_last_sync";
+const FIRST_SYNC_DONE_KEY = "bn_hk_first_sync_done";
+
+// Window sizes tuned for the two cases:
+//   - First-ever sync: 90 days so a new user (or someone reconnecting
+//     after our source-dedupe fix) gets a rich baseline immediately.
+//   - Recurring auto-sync: 30 days so late-syncing slow-cadence
+//     devices (Withings scale weighed once a week, sporadic BP cuff)
+//     still get their gaps filled. Was 7 days originally, which meant
+//     any nulled or missed day older than a week was gone until the
+//     user manually forced a bigger backfill. David 2026-08-06.
+const FIRST_SYNC_DAYS = 90;
+const AUTO_SYNC_DAYS  = 30;
 
 /** Check whether we've synced in the last N hours. */
 export function isRecentSync(withinHours = 6): boolean {
@@ -384,16 +396,41 @@ export function isRecentSync(withinHours = 6): boolean {
 
 /** Marker to skip redundant syncs; call this after a successful sync. */
 export function markSyncedNow(): void {
-  try { localStorage.setItem(AUTO_SYNC_KEY, String(Date.now())); } catch { /* ignore */ }
+  try {
+    localStorage.setItem(AUTO_SYNC_KEY, String(Date.now()));
+    localStorage.setItem(FIRST_SYNC_DONE_KEY, "1");
+  } catch { /* ignore */ }
+}
+
+function hasEverSynced(): boolean {
+  try { return localStorage.getItem(FIRST_SYNC_DONE_KEY) === "1"; }
+  catch { return false; }
 }
 
 /**
  * Auto-sync entry point — call once on app open. No-ops on web, no-ops
  * if we synced recently, silent-fails on error. Never blocks render.
+ *
+ * First sync on a device pulls 90 days for a richer baseline; subsequent
+ * syncs pull 30 days so slow-cadence metrics (Withings weight, BP)
+ * fill in even when they're only measured every few days.
  */
 export async function maybeAutoSync(): Promise<void> {
   if (!(await isHealthKitAvailable())) return;
   if (isRecentSync(6)) return;
-  const res = await syncRecent(7);
+  const days = hasEverSynced() ? AUTO_SYNC_DAYS : FIRST_SYNC_DAYS;
+  const res  = await syncRecent(days);
   if (res.days_synced > 0) markSyncedNow();
+}
+
+/**
+ * Force a fresh 90-day sync. Wired to the "Resync everything" button
+ * on the HealthKit card in Profile — useful when a user reconnects a
+ * device, changes source priorities, or wants to rebuild after we
+ * clean bad data on the server side.
+ */
+export async function syncFull(): Promise<SyncResult> {
+  const res = await syncRecent(FIRST_SYNC_DAYS);
+  if (res.days_synced > 0) markSyncedNow();
+  return res;
 }
