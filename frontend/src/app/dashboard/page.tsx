@@ -1314,7 +1314,12 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#F4F1EA] text-gray-900">
+    // overflow-x-hidden + w-full guard against any child pushing content
+    // past the viewport (David 2026-08-06 saw the Coach-Al title pill
+    // + 3-ring row bleed off the right edge on iPhone). Belt-and-braces
+    // in case a future card introduces another overflow — this stops
+    // the whole page from horizontal-scrolling into oblivion.
+    <div className="min-h-screen w-full overflow-x-hidden bg-[#F4F1EA] text-gray-900">
       {/* ── Top nav ── */}
       <header
         className="sticky top-0 z-20 bg-white border-b border-gray-200 shadow-sm"
@@ -1810,9 +1815,16 @@ export default function DashboardPage() {
                       <p className="font-bold text-gray-900 text-lg leading-tight">{dayFull}</p>
                     </div>
                     {coaches.overall?.title && (
-                      <div className="text-right ml-3 shrink-0">
+                      // David 2026-08-06: was `shrink-0` with no max-w,
+                      // so long AI-generated titles ("Moderate readiness
+                      // — listen to your body") pushed the row wider
+                      // than the iPhone viewport and clipped the third
+                      // ring. Now the pill caps at ~55% of the card,
+                      // wraps to 2 lines if needed, and lets the
+                      // greeting-side compress before pushing the row.
+                      <div className="text-right ml-3 min-w-0 max-w-[55%]">
                         <span
-                          className="inline-block rounded-full px-2.5 py-1 text-[11px] font-semibold leading-tight"
+                          className="inline-block rounded-full px-2.5 py-1 text-[11px] font-semibold leading-tight break-words"
                           style={{ color: heroColor, backgroundColor: heroColor + "18" }}
                         >
                           {coaches.overall.title.replace(/[.!]$/, "")}
@@ -2108,11 +2120,15 @@ export default function DashboardPage() {
                     const [, fm, fd] = firstDate.split("-");
                     return (
                       <div className="pt-3 border-t border-gray-100">
-                        <div className="flex items-center justify-between mb-1">
-                          <p className="text-[10px] text-gray-600 uppercase tracking-widest">Score trend</p>
+                        <div className="flex items-center justify-between gap-2 mb-1 min-w-0">
+                          <p className="text-[10px] text-gray-600 uppercase tracking-widest shrink-0">Score trend</p>
                           {delta != null && (
-                            <span className={`text-[11px] font-semibold ${deltaColor}`}>
-                              {delta > 0 ? "▲" : delta < 0 ? "▼" : "—"} {Math.abs(delta)} pts vs {deltaWindow}d ago
+                            // Shorter copy so this fits on iPhone —
+                            // "30d ago" gets clipped to "30d a…" at
+                            // narrow widths. Use "vs 30d" instead.
+                            // David 2026-08-06.
+                            <span className={`text-[11px] font-semibold ${deltaColor} truncate`}>
+                              {delta > 0 ? "▲" : delta < 0 ? "▼" : "—"} {Math.abs(delta)} pts vs {deltaWindow}d
                             </span>
                           )}
                         </div>
