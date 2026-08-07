@@ -153,7 +153,14 @@ export default function AppleHealthTab() {
         </div>
       )}
 
-      {/* ── Connection status ───────────────────────────────────────────── */}
+      {/* ── Connection status ─────────────────────────────────────────────
+          David 2026-08-06: removed the "Setup / Hide setup" toggle
+          button here. It used to reveal the Health Auto Export
+          instructions inline, but those instructions are now hidden
+          in every state (native iOS = HealthKit path only; web +
+          connected = "Syncing from your iPhone" note; web +
+          disconnected = still shows the setup section below).
+          The button toggled a variable with no visible effect. */}
       <div
         className={`rounded-2xl border p-4 flex items-center gap-3 ${
           connected ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"
@@ -167,15 +174,11 @@ export default function AppleHealthTab() {
           <p className={`text-xs ${connected ? "text-green-700" : "text-amber-700"}`}>
             {connected
               ? `${summary!.days_synced} day${summary!.days_synced !== 1 ? "s" : ""} of data · most recent ${summary!.as_of}`
-              : "Set up Health Auto Export below to start pulling your Apple Health data in automatically."}
+              : isNativeHK
+              ? "Tap Connect Apple Health below to authorize BackNine."
+              : "Open BackNine on your iPhone to connect Apple Health via HealthKit."}
           </p>
         </div>
-        <button
-          onClick={() => setShowSetup(s => !s)}
-          className="shrink-0 text-xs font-medium text-gray-600 hover:text-gray-900 underline-offset-2 hover:underline"
-        >
-          {showSetup ? "Hide setup" : connected ? "Setup" : "Set up"}
-        </button>
       </div>
 
       {/* Native HealthKit — David 2026-08-06. On iOS native, this IS
