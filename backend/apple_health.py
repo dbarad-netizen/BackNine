@@ -314,10 +314,23 @@ def get_data(user_id: str, days: int = 30) -> List[dict]:
         .execute()
     )
     rows = res.data or []
+    # Sanity clamps — multi-source HealthKit overlap (iPhone + Apple
+    # Watch + third-party apps all writing the same day's activity to
+    # Apple Health) can inflate these values 2-3x. Values above the
+    # thresholds are almost certainly artifacts and get nulled here so
+    # Coach Al / longevity / patterns don't narrate them as fact.
+    # Client-side dedupe in healthkit.ts is the durable fix; these
+    # clamps are the safety net. David 2026-08-06.
     for r in rows:
         s = r.get("sleep_hours")
-        if s is not None and (s < 0 or s > 14):
+        if s is not None and (float(s) < 0 or float(s) > 14):
             r["sleep_hours"] = None
+        st = r.get("steps")
+        if st is not None and (int(st) < 0 or int(st) > 25000):
+            r["steps"] = None
+        ac = r.get("active_calories")
+        if ac is not None and (float(ac) < 0 or float(ac) > 1500):
+            r["active_calories"] = None
     return rows
 
 

@@ -176,10 +176,17 @@ async function querySampleType(
 // ── Aggregation ─────────────────────────────────────────────────────────
 
 interface Bucket {
+  // For "avg" and "duration": running total + count
   sum?:       number;
   n?:         number;
+  // For "latest": most recent value + timestamp
   latestVal?: number;
   latestTs?:  number;
+  // For "sum" (steps, active_calories): running total PER SOURCE.
+  // We de-dupe multi-source days by taking MAX(source_total) rather
+  // than adding sources together (iPhone + Watch + third app all
+  // count the same walking). David 2026-08-06.
+  perSource?: Map<string, number>;
 }
 
 class Aggregator {
@@ -193,10 +200,15 @@ class Aggregator {
     return b;
   }
 
-  add(date: string, field: string, value: number, strategy: Strategy, ts: number): void {
+  add(date: string, field: string, value: number, strategy: Strategy, ts: number, source?: string): void {
     const b = this.getBucket(date, field);
     if (strategy === "sum") {
-      b.sum = (b.sum ?? 0) + value;
+      // Per-source subtotals so we can de-dupe below. If sourceName
+      // is missing (rare), lump into "unknown" — still preferable to
+      // summing everything blind.
+      const key = source || "unknown";
+      if (!b.perSource) b.perSource = new Map();
+      b.perSource.set(key, (b.perSource.get(key) ?? 0) + value);
     } else if (strategy === "avg") {
       b.sum = (b.sum ?? 0) + value;
       b.n   = (b.n ?? 0) + 1;
@@ -220,6 +232,15 @@ class Aggregator {
           row[field] = b.latestVal;
         } else if (b.n !== undefined && b.n > 0) {
           row[field] = b.sum! / b.n;
+        } else if (b.perSource && b.perSource.size > 0) {
+          // Multi-source dedupe: iPhone + Watch + third app all wrote
+          // step samples for the same walking. Adding them together
+          // triples the count. Taking MAX(per-source total) picks
+          // whichever device recorded the most for that day (usually
+          // the one worn most consistently). David 2026-08-06.
+          let best = 0;
+          b.perSource.forEach(v => { if (v > best) best = v; });
+          row[field] = Math.round(best);
         } else if (b.sum !== undefined) {
           if (field.startsWith("sleep_") && field.endsWith("_hours")) {
             row[field] = Math.round((b.sum / 3600.0) * 100) / 100;
@@ -318,7 +339,10 @@ export async function syncRecent(days = 7): Promise<SyncResult> {
         // The plugin returns weight in kg by default; if the app locale
         // returns lb the sample's unitName will say so.
         if (m.field === "weight_kg" && s.unitName === "lb") val = val * 0.45359237;
-        agg.add(date, m.field, val, m.strategy, ts);
+        // Pass sourceName so "sum" strategy can dedupe multi-source
+        // days by taking MAX(per-source total) instead of summing
+        // (iPhone + Watch + third app all count the same walking).
+        agg.add(date, m.field, val, m.strategy, ts, s.sourceName);
       }
     }
   }
