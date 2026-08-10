@@ -20,6 +20,16 @@
 
 import { useEffect, useState } from "react";
 import { api, type CpapNightlyLog, type CpapAdherence } from "@/lib/api";
+import BackfillDatePicker from "./BackfillDatePicker";
+
+function localYesterdayIso(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
 interface Props {
   onLogged?: () => void;
@@ -62,6 +72,9 @@ export default function CpapNightlyLogCard({ onLogged }: Props) {
   const [saved,      setSaved]      = useState(false);
   const [error,      setError]      = useState<string | null>(null);
   const [expanded,   setExpanded]   = useState(false);
+  // Which night this entry counts toward. Defaults to yesterday since
+  // CPAP is a nightly stat logged the morning after. David 2026-08-07.
+  const [logDate,    setLogDate]    = useState<string>(localYesterdayIso());
 
   useEffect(() => {
     setLoading(true);
@@ -89,6 +102,7 @@ export default function CpapNightlyLogCard({ onLogged }: Props) {
     setBusy(true);
     try {
       const body = {
+        date:            logDate,
         usage_hours:     h,
         mask_seal_score: maskSeal   === "" ? null : Number(maskSeal),
         events_per_hour: ahi        === "" ? null : Number(ahi),
@@ -176,6 +190,11 @@ export default function CpapNightlyLogCard({ onLogged }: Props) {
 
       {showFullForm && (
         <>
+          <div className="flex items-center justify-between">
+            <BackfillDatePicker value={logDate} onChange={setLogDate} label="For:" />
+            <span className="text-[10px] text-gray-500">Defaults to last night</span>
+          </div>
+
           <div className="grid grid-cols-2 gap-2">
             <label className="text-[11px] text-gray-600">
               Usage hours <span className="text-red-600">*</span>

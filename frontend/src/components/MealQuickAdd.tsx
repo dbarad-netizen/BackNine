@@ -13,6 +13,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type MealDraftItem, type FoodItem } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
+import BackfillDatePicker from "./BackfillDatePicker";
+
+function localTodayIso(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
 interface Props {
   date?: string;
@@ -27,6 +36,10 @@ interface Props {
 const r1 = (n: number) => Math.round(n * 10) / 10;
 
 export default function MealQuickAdd({ date, onLogged }: Props) {
+  // The parent may pass an initial date (e.g. from a day-detail view),
+  // but the local picker is the source of truth once mounted. Defaults
+  // to today; user can backfill up to 7 days. David 2026-08-07.
+  const [logDate, setLogDate] = useState<string>(date || localTodayIso());
   const [text, setText]       = useState("");
   const [parsing, setParsing] = useState<"text" | "photo" | null>(null);
   const [draft, setDraft]     = useState<MealDraftItem[] | null>(null);
@@ -62,7 +75,7 @@ export default function MealQuickAdd({ date, onLogged }: Props) {
     if (items.length === 0 || logging) return false;
     setLogging(true); setError(null);
     try {
-      await api.logMealsBatch(items, date);
+      await api.logMealsBatch(items, logDate);
       flash(label);
       // Aggregate the batch so the Coach Al reaction has something concrete
       // to react to. For a single-item log this == the item; for multi-item
@@ -176,7 +189,10 @@ export default function MealQuickAdd({ date, onLogged }: Props) {
 
   return (
     <section className="rounded-2xl border border-gray-200 bg-white p-4 space-y-3">
-      <p className="text-sm font-semibold text-gray-900">Add a meal</p>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <p className="text-sm font-semibold text-gray-900">Add a meal</p>
+        <BackfillDatePicker value={logDate} onChange={setLogDate} />
+      </div>
 
       {/* Natural language */}
       <div className="flex items-center gap-2">

@@ -2376,10 +2376,14 @@ export const api = {
   },
 
   // ── Stack adherence (David 2026-07-09) ────────────────────────────────────
-  stackAdherenceToday(): Promise<StackAdherenceSnapshot> {
+  stackAdherenceToday(forDate?: string): Promise<StackAdherenceSnapshot> {
     // Pass user's local time so the backend can gate window_open
     // (an unchecked evening med at 9am shouldn't count as missed).
-    return request(`/api/stack/adherence/today?local_now=${encodeURIComponent(localNowIso())}`);
+    // Optional `forDate` (YYYY-MM-DD) fetches a past day's snapshot
+    // for the 7-day backfill picker. David 2026-08-07.
+    const params = new URLSearchParams({ local_now: localNowIso() });
+    if (forDate) params.set("for_date", forDate);
+    return request(`/api/stack/adherence/today?${params.toString()}`);
   },
   logStackAdherence(body: {
     item_kind:    "medication" | "supplement" | "peptide";

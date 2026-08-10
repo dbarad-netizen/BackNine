@@ -21,6 +21,7 @@ import TodayWorkoutCard from "@/components/TodayWorkoutCard";
 import LifetimePrsCard from "@/components/LifetimePrsCard";
 import ExerciseHistoryModal from "@/components/ExerciseHistoryModal";
 import TrainingLoadCards from "@/components/TrainingLoadCards";
+import BackfillDatePicker from "@/components/BackfillDatePicker";
 
 const TYPE_ICON: Record<string, string>  = { lifting: "🏋️", stretching: "🧘", mobility: "🔄", cardio: "🏃" };
 const TYPE_LABEL: Record<string, string> = { lifting: "Lifting", stretching: "Stretch", mobility: "Mobility", cardio: "Cardio" };
@@ -198,6 +199,10 @@ export function WorkoutLogger({
   const [duration, setDuration]       = useState("");
   const [notes, setNotes]             = useState("");
   const [query, setQuery]             = useState("");
+  // Which day this workout counts toward. Defaults to today; backfill
+  // picker lets users log a workout they did up to 7 days ago.
+  // David 2026-08-07.
+  const [logDate, setLogDate]         = useState<string>(localToday());
   // Cardio-only inputs. Kept in their own state so switching modes doesn't
   // clobber the user's strength session in progress (or vice versa).
   const [cardioActivity, setCardioActivity]   = useState<string>("running");
@@ -410,7 +415,7 @@ export function WorkoutLogger({
         : undefined;
 
       const w = await api.logWorkout({
-        date:         localToday(),
+        date:         logDate,
         type:         workoutType,
         exercises:    clean,
         duration_min: duration ? parseInt(duration) : undefined,
@@ -434,7 +439,10 @@ export function WorkoutLogger({
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-4">
-      <p className="text-sm font-semibold text-gray-900">Log Workout</p>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <p className="text-sm font-semibold text-gray-900">Log Workout</p>
+        <BackfillDatePicker value={logDate} onChange={setLogDate} />
+      </div>
 
       {/* Describe your workout — AI fills the list below */}
       <div>

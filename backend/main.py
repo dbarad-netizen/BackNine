@@ -3835,24 +3835,52 @@ def api_delete_training_flag(request: Request, flag_id: str):
 
 
 @app.get("/api/stack/adherence/today")
-def get_stack_adherence_today(request: Request, local_now: Optional[str] = None):
-    """Today's stack checklist — every med/supp/peptide from profile
-    grouped by time-of-day (morning/midday/evening/anytime). Summary
-    is time-window-aware (unchecked evening items at 9am aren't
-    counted as missed). `local_now` is the user's naive-local ISO —
-    powers the current-hour gate."""
+def get_stack_adherence_today(request: Request, local_now: Optional[str] = None,
+                              for_date: Optional[str] = None):
+    """Stack checklist — every med/supp/peptide from profile grouped
+    by time-of-day (morning/midday/evening/anytime). Summary is
+    time-window-aware (unchecked evening items at 9am aren't counted
+    as missed). `local_now` is the user's naive-local ISO — powers
+    the current-hour gate.
+
+    `for_date` (optional, YYYY-MM-DD): fetch the snapshot for a past
+    day instead of today. Used by the 7-day backfill picker so users
+    can log evening meds they forgot to check off last night, etc.
+    Capped at 7 days back by the frontend — server also treats
+    anything past 30 days as suspicious and falls back to today.
+    David 2026-08-07."""
     import stack_adherence as _sa
+    from datetime import date as _d, timedelta as _td
     session = _require_session(request)
     user_id = session["user_id"]
     profile = _get_profile(user_id) or {}
     today   = _user_local_today_iso(request)
+
+    target = today
+    if for_date:
+        try:
+            requested = _d.fromisoformat(for_date)
+            today_dt  = _d.fromisoformat(today)
+            delta_days = (today_dt - requested).days
+            if 0 <= delta_days <= 30:
+                target = for_date
+            # else: silently fall back to today (never trust >30d back)
+        except Exception:
+            pass
+
     hour: Optional[int] = None
     if local_now:
         try:
             hour = int(datetime.fromisoformat(local_now.replace("Z", "+00:00")).hour)
         except Exception:
             hour = None
-    return _sa.today_snapshot(user_id, today, profile, current_hour=hour)
+    # When looking at a past day, force hour=23 so ALL time windows
+    # count as "open" — the user is looking back on a completed day,
+    # not the middle of it. Prevents an evening med from showing as
+    # "not yet time" when reviewing yesterday.
+    if target != today:
+        hour = 23
+    return _sa.today_snapshot(user_id, target, profile, current_hour=hour)
 
 
 @app.post("/api/stack/adherence")

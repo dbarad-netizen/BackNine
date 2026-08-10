@@ -20,6 +20,15 @@
 
 import { useEffect, useState } from "react";
 import { api, type StackAdherenceItem, type StackAdherenceGroup, type StackAdherenceSnapshot } from "@/lib/api";
+import BackfillDatePicker from "./BackfillDatePicker";
+
+function localTodayIso(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
 const KIND_META: Record<StackAdherenceItem["kind"], { emoji: string; label: string; tint: string }> = {
   medication: { emoji: "🩹", label: "Med",  tint: "text-rose-800"    },
@@ -38,15 +47,22 @@ export default function StackAdherenceCard() {
   const [snap, setSnap]     = useState<StackAdherenceSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy]     = useState<string | null>(null);
+  // Which day this checklist represents. Defaults to today; the
+  // BackfillDatePicker lets the user pull a snapshot from up to 7
+  // days back to check off evening meds they forgot to log.
+  // David 2026-08-07.
+  const [logDate, setLogDate] = useState<string>(localTodayIso());
+  const isPast = logDate !== localTodayIso();
 
   useEffect(() => {
     let cancelled = false;
-    api.stackAdherenceToday()
+    setLoading(true);
+    api.stackAdherenceToday(isPast ? logDate : undefined)
       .then(r => { if (!cancelled) setSnap(r); })
       .catch(() => { /* silent — card just hides */ })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [logDate, isPast]);
 
   if (loading) return null;
   if (!snap || snap.groups.length === 0) return null;
@@ -90,6 +106,9 @@ export default function StackAdherenceCard() {
         item_name:   it.name,
         taken:       nextTaken,
         time_of_day: it.time_of_day,
+        // Pass the picker's date so backfilled checks land on the
+        // right day. Omit when logging today (backend defaults).
+        date:        isPast ? logDate : undefined,
       });
     } catch {
       // Roll back — flip it back to prior state.
@@ -120,14 +139,17 @@ export default function StackAdherenceCard() {
       id="stack-adherence-card"
       className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm scroll-mt-20 transition-shadow"
     >
-      <div className="flex items-baseline justify-between mb-2">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-600">
-          Today&rsquo;s stack
-        </p>
+      <div className="flex items-baseline justify-between mb-2 gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-600">
+            {isPast ? "Past stack" : "Today's stack"}
+          </p>
+          <BackfillDatePicker value={logDate} onChange={setLogDate} />
+        </div>
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-gray-500">
             {expected_by_now > 0 ? (
-              <><span className="font-semibold text-gray-900">{taken_today}</span>/{expected_by_now} due · <span className="text-gray-400">{on_pace_pct}% on pace</span></>
+              <><span className="font-semibold text-gray-900">{taken_today}</span>/{expected_by_now} {isPast ? "taken" : "due"} · <span className="text-gray-400">{on_pace_pct}%</span></>
             ) : (
               <>Waiting for morning</>
             )}
