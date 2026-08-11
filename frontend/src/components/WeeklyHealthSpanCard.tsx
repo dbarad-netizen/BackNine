@@ -77,7 +77,24 @@ export default function WeeklyHealthSpanCard({ data }: Props) {
             <p className="text-[10px] text-gray-600 uppercase tracking-widest mb-0.5">
               Weekly Health Span Score
             </p>
-            <p className="font-bold text-base" style={{ color }}>{data.grade}</p>
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <p className="font-bold text-base" style={{ color }}>{data.grade}</p>
+              {/* Trend chip vs ~7 days ago. David 2026-08-11. */}
+              {data.trend && data.trend.delta_pts !== 0 && (() => {
+                const dt = data.trend.delta_pts;
+                const isBetter = dt > 0;
+                const tone = isBetter ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                                      : "text-red-700 bg-red-50 border-red-200";
+                return (
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold border ${tone}`}
+                    title={`Compared to your score ${data.trend.days_ago} days ago`}
+                  >
+                    {isBetter ? "▲" : "▼"} {Math.abs(dt)} pts vs {data.trend.days_ago}d ago
+                  </span>
+                );
+              })()}
+            </div>
             <p className="text-[11px] text-gray-500 mt-0.5">
               {data.bands_present} habits scored this week
             </p>

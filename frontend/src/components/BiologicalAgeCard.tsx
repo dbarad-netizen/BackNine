@@ -71,7 +71,7 @@ export default function BiologicalAgeCard({ data }: Props) {
       </div>
 
       {/* Big delta */}
-      <div className="flex items-baseline gap-2 mb-2">
+      <div className="flex items-baseline gap-2 mb-2 flex-wrap">
         <span className={`text-3xl font-black ${dc.text}`}>
           {absDel < 0.5 ? "≈" : fmt(absDel)}
         </span>
@@ -79,6 +79,22 @@ export default function BiologicalAgeCard({ data }: Props) {
           {absDel < 0.5 ? "on par with" : (isYounger ? "years younger than" : "years older than")}
         </span>
         <span className="text-sm text-gray-700">chronological {data.chronological_age}</span>
+        {/* Trend chip vs ~30 days ago. Green when getting younger,
+            red when getting older, gray when flat. David 2026-08-11. */}
+        {data.trend && Math.abs(data.trend.delta_years) >= 0.1 && (() => {
+          const dt = data.trend.delta_years;
+          const isBetter = dt < 0;
+          const tone = isBetter ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                                : "text-red-700 bg-red-50 border-red-200";
+          return (
+            <span
+              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold border ${tone}`}
+              title={`Compared to your Bio Age ~${data.trend.days_ago} days ago`}
+            >
+              {isBetter ? "▼" : "▲"} {Math.abs(dt).toFixed(1)} yr vs {data.trend.days_ago}d ago
+            </span>
+          );
+        })()}
       </div>
 
       {/* One-line auto-take — surfaces the biggest driver so the user

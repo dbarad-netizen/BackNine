@@ -430,6 +430,61 @@ def _load_cpap_qualifying_nights(user_id: str, today_iso: str) -> Optional[int]:
         return None
 
 
+def persist_and_delta(user_id: str, today_iso: str, snapshot: dict) -> Optional[dict]:
+    """Upsert today's Health Span snapshot, return delta vs ~7 days ago.
+    Health Span moves weekly — 7-day delta is the right horizon.
+    Returns None when today or prior snapshot is missing.
+
+    Structure returned:
+      { delta_pts: int, days_ago: int }
+    delta_pts > 0 = improving (green), < 0 = declining (red)
+    """
+    sb = _sb()
+    if not sb or not user_id:
+        return None
+    score = snapshot.get("score")
+    if score is None:
+        return None
+    try:
+        sb.table("weekly_healthspan_history").upsert({
+            "user_id":       user_id,
+            "date":          today_iso,
+            "score":         int(score),
+            "grade":         snapshot.get("grade"),
+            "bands_present": snapshot.get("bands_present"),
+        }, on_conflict="user_id,date").execute()
+    except Exception:
+        log.exception("healthspan history upsert failed for %s", user_id)
+
+    # Lookup ~7 days ago with ±3-day tolerance
+    from datetime import date as _d, timedelta as _td
+    try:
+        today = _d.fromisoformat(today_iso)
+        lo    = (today - _td(days=10)).isoformat()
+        hi    = (today - _td(days=4)).isoformat()
+        res = (sb.table("weekly_healthspan_history")
+                 .select("date, score")
+                 .eq("user_id", user_id)
+                 .gte("date", lo)
+                 .lte("date", hi)
+                 .order("date", desc=True)
+                 .limit(1)
+                 .execute())
+        rows = res.data or []
+        if not rows:
+            return None
+        prior      = rows[0]
+        prior_date = _d.fromisoformat(prior["date"])
+        delta      = int(score) - int(prior["score"])
+        return {
+            "delta_pts": delta,
+            "days_ago":  (today - prior_date).days,
+        }
+    except Exception:
+        log.exception("healthspan history lookup failed for %s", user_id)
+        return None
+
+
 # ── Composite ───────────────────────────────────────────────────────────
 
 def compute(user_id: str, today_iso: str, oura_am: dict, oura_smm: dict,

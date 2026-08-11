@@ -683,6 +683,9 @@ export interface WeeklyHealthSpan {
   bands_present: number;
   max_possible:  number;
   caveat:        string;
+  /** 7-day trend snapshot vs prior week. Null on first-ever compute
+   *  or when no prior snapshot within ±3 days of the target window. */
+  trend?: { delta_pts: number; days_ago: number } | null;
 }
 
 // ── Biological Age (David 2026-08-07, task #172) ──────────────────────
@@ -710,6 +713,10 @@ export interface BiologicalAge {
   components:        BioAgeComponent[];
   caveat:            string;
   reason?:           string;   // when biological_age is null
+  /** ~30-day trend snapshot. Bio Age moves slowly so weekly delta
+   *  would be noise. Null on first compute or when no prior snapshot
+   *  exists within the target window. */
+  trend?: { delta_years: number; days_ago: number } | null;
 }
 
 export interface Wearable {

@@ -415,6 +415,65 @@ _CAVEAT_TEXT = (
 
 # ── Latest-labs helper ──────────────────────────────────────────────────
 
+def persist_and_delta(user_id: str, today_iso: str, snapshot: dict) -> Optional[dict]:
+    """Upsert today's Bio Age snapshot, then return trend info vs
+    ~30 days ago. Bio Age moves slowly — monthly delta is the right
+    horizon (weekly would be noise). Returns None when either today
+    or prior snapshot is missing/incomplete.
+
+    Structure returned when available:
+      { delta_years: float, days_ago: int }
+    delta_years < 0 = getting younger (green), > 0 = getting older (red)
+    """
+    sb = _sb()
+    if not sb or not user_id:
+        return None
+    bio_age = snapshot.get("biological_age")
+    if bio_age is None:
+        return None
+    try:
+        sb.table("biological_age_history").upsert({
+            "user_id":        user_id,
+            "date":           today_iso,
+            "biological_age": float(bio_age),
+            "delta_years":    snapshot.get("delta_years"),
+            "n_markers":      snapshot.get("n_markers"),
+            "confidence":     snapshot.get("confidence"),
+        }, on_conflict="user_id,date").execute()
+    except Exception:
+        log.exception("bio age history upsert failed for %s", user_id)
+
+    # Lookup a prior snapshot within [21, 45] days ago (target 30 with
+    # tolerance so a missed day doesn't kill the delta).
+    from datetime import date as _d, timedelta as _td
+    try:
+        today = _d.fromisoformat(today_iso)
+        lo    = (today - _td(days=45)).isoformat()
+        hi    = (today - _td(days=21)).isoformat()
+        res = (sb.table("biological_age_history")
+                 .select("date, biological_age")
+                 .eq("user_id", user_id)
+                 .gte("date", lo)
+                 .lte("date", hi)
+                 .order("date", desc=True)
+                 .limit(1)
+                 .execute())
+        rows = res.data or []
+        if not rows:
+            return None
+        prior      = rows[0]
+        prior_age  = float(prior["biological_age"])
+        prior_date = _d.fromisoformat(prior["date"])
+        delta      = round(float(bio_age) - prior_age, 1)
+        return {
+            "delta_years": delta,
+            "days_ago":    (today - prior_date).days,
+        }
+    except Exception:
+        log.exception("bio age history lookup failed for %s", user_id)
+        return None
+
+
 def latest_labs(user_id: str) -> dict:
     """Pull the most recent value per marker from lab_entries.
 

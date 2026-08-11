@@ -2091,12 +2091,20 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
         weekly_healthspan = hspan.compute(
             user_id, oura_today, am, smm, _profile, capabilities=_capabilities,
         )
+        # Persist today + attach 7-day trend. Never fails the payload.
+        try:
+            weekly_healthspan["trend"] = hspan.persist_and_delta(
+                user_id, oura_today, weekly_healthspan
+            )
+        except Exception:
+            weekly_healthspan["trend"] = None
     except Exception:
         log.exception("healthspan compute failed for %s", user_id)
         weekly_healthspan = {
             "score": None, "grade": "No data",
             "components": {}, "bands_present": 0,
             "max_possible": 0, "caveat": "",
+            "trend": None,
         }
 
     # ── Biological Age (David 2026-08-07) ─────────────────────────────────
@@ -2128,6 +2136,13 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
 
         _bio_labs = bioage.latest_labs(user_id)
         biological_age = bioage.compute(_bio_metrics, _profile, labs=_bio_labs)
+        # Persist today + attach 30-day trend. Never fails the payload.
+        try:
+            biological_age["trend"] = bioage.persist_and_delta(
+                user_id, oura_today, biological_age
+            )
+        except Exception:
+            biological_age["trend"] = None
     except Exception:
         log.exception("biological_age compute failed for %s", user_id)
         biological_age = {
