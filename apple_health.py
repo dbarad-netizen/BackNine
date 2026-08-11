@@ -1,0 +1,437 @@
+"""
+Apple Health integration — receives data POSTed from iOS Shortcuts.
+
+Each user gets a stable API key stored in Supabase (apple_health_keys table).
+The Shortcut reads from HealthKit and POSTs a JSON payload to:
+  POST /api/apple-health/sync
+  Headers: X-AH-Key: <user_api_key>
+
+Payload shape (all fields optional):
+{
+  "date": "2026-04-15",          # ISO date, defaults to today
+  "steps": 8432,
+  "sleep_hours": 7.2,
+  "active_calories": 512,
+  "resting_hr": 58,
+  "hrv": 45.3,
+  "weight_kg": 82.1,
+  "weight_lb": 181.0,            # either unit accepted
+  "vo2_max": 48.2,
+  "respiratory_rate": 15.0
+}
+"""
+
+import os
+import secrets
+from datetime import date, datetime, timedelta
+from typing import Optional, List, Dict, Any
+
+
+# ── Supabase helper ────────────────────────────────────────────────────────────
+
+def _sb():
+    from supabase import create_client
+    url = os.getenv("SUPABASE_URL", "")
+    key = os.getenv("SUPABASE_SERVICE_KEY", "")
+    if not url or not key:
+        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY must be set")
+    return create_client(url, key)
+
+
+# ── API key management ─────────────────────────────────────────────────────────
+
+def get_or_create_key(user_id: str) -> str:
+    """Return the existing API key for this user, or generate a new one."""
+    sb = _sb()
+    res = sb.table("apple_health_keys").select("api_key").eq("user_id", user_id).execute()
+    rows = res.data or []
+    if rows:
+        return rows[0]["api_key"]
+    # Generate a new key: ah_ prefix + 32 random hex chars
+    new_key = "ah_" + secrets.token_hex(16)
+    sb.table("apple_health_keys").insert({
+        "user_id": user_id,
+        "api_key": new_key,
+        "created_at": datetime.utcnow().isoformat(),
+    }).execute()
+    return new_key
+
+
+def resolve_user_by_key(api_key: str) -> Optional[str]:
+    """Look up user_id from an API key. Returns None if not found."""
+    sb = _sb()
+    res = (
+        sb.table("apple_health_keys")
+        .select("user_id")
+        .eq("api_key", api_key)
+        .execute()
+    )
+    rows = res.data or []
+    return rows[0]["user_id"] if rows else None
+
+
+# ── Data sync ──────────────────────────────────────────────────────────────────
+
+# Canonical field names stored in Supabase
+FIELDS = [
+    "steps",
+    "sleep_hours",
+    "sleep_deep_hours",
+    "sleep_rem_hours",
+    "sleep_core_hours",
+    "sleep_awake_hours",
+    "active_calories",
+    "resting_hr",
+    "hrv",
+    "weight_kg",
+    "vo2_max",
+    "respiratory_rate",
+    "body_fat_percentage",
+    "lean_body_mass_kg",
+    "skeletal_muscle_mass_kg",
+    "bmi",
+    "blood_pressure_systolic",
+    "blood_pressure_diastolic",
+    "spo2",
+    "visceral_fat_rating",
+    "waist_circumference_cm",
+]
+
+# Fields stored as integer in Supabase — must cast to int before insert
+INTEGER_FIELDS = {"steps", "active_calories", "resting_hr",
+                  "blood_pressure_systolic", "blood_pressure_diastolic"}
+
+
+# Health Auto Export metric name → our field name
+HAE_METRIC_MAP = {
+    "step_count":                    "steps",
+    "steps":                         "steps",
+    "resting_heart_rate":            "resting_hr",
+    "heart_rate_variability_sdnn":   "hrv",
+    "heart_rate_variability":        "hrv",
+    "active_energy":                 "active_calories",
+    "active_energy_burned":          "active_calories",
+    "body_mass":                     "weight_raw",   # unit-dependent
+    "respiratory_rate":              "respiratory_rate",
+    "vo2_max":                       "vo2_max",
+    "sleep_duration":                "sleep_hours",
+    "sleep_analysis":                "sleep_hours",
+    "sleeping":                      "sleep_hours",
+    "asleep":                        "sleep_hours",
+    # Sleep stages — sent by the BackNine iOS Shortcut
+    "sleep_deep":                    "sleep_deep_hours",
+    "asleep_deep":                   "sleep_deep_hours",
+    "sleep_rem":                     "sleep_rem_hours",
+    "asleep_rem":                    "sleep_rem_hours",
+    "sleep_core":                    "sleep_core_hours",
+    "asleep_core":                   "sleep_core_hours",
+    "sleep_unspecified":             "sleep_core_hours",
+    "sleep_awake":                   "sleep_awake_hours",
+    "in_bed_awake":                  "sleep_awake_hours",
+    # Body composition — InBody scale
+    "body_fat_percentage":           "body_fat_percentage",
+    "percent_body_fat":              "body_fat_percentage",
+    "lean_body_mass":                "lean_body_mass_kg",
+    "lean_body_mass_kg":             "lean_body_mass_kg",
+    "lean_mass":                     "lean_body_mass_kg",
+    "skeletal_muscle_mass":          "skeletal_muscle_mass_kg",
+    "skeletal_muscle_mass_kg":       "skeletal_muscle_mass_kg",
+    "skeletal_muscle":               "skeletal_muscle_mass_kg",
+    "muscle_mass":                   "skeletal_muscle_mass_kg",
+    "body_mass_index":               "bmi",
+    "bmi":                           "bmi",
+    "visceral_fat_rating":           "visceral_fat_rating",
+    "visceral_fat":                  "visceral_fat_rating",
+    "waist_circumference":           "waist_circumference_cm",
+    # Blood pressure — Withings BP monitor
+    "blood_pressure_systolic":       "blood_pressure_systolic",
+    "systolic_blood_pressure":       "blood_pressure_systolic",
+    "blood_pressure_diastolic":      "blood_pressure_diastolic",
+    "diastolic_blood_pressure":      "blood_pressure_diastolic",
+    # Blood oxygen
+    "oxygen_saturation":             "spo2",
+    "blood_oxygen_saturation":       "spo2",
+    "spo2":                          "spo2",
+}
+
+
+def parse_hae_payload(payload: dict) -> dict:
+    """
+    Convert a Health Auto Export REST payload into our flat dict format.
+    HAE format:
+      { "data": { "metrics": [ { "name": "step_count", "units": "count",
+          "data": [ { "date": "2026-04-15 ...", "qty": 8432 } ] } ] } }
+    Returns a flat dict like { "date": "2026-04-15", "steps": 8432, ... }
+    """
+    result: Dict[str, Any] = {}
+    metrics = (payload.get("data") or payload).get("metrics", [])
+
+    for metric in metrics:
+        name  = metric.get("name", "").lower().replace(" ", "_")
+        units = (metric.get("units") or "").lower()
+        data  = metric.get("data") or []
+        if not data:
+            continue
+
+        # Use the most recent data point
+        latest = data[-1]
+        qty = latest.get("qty") or latest.get("value")
+        if qty is None:
+            continue
+
+        # Extract date (HAE dates look like "2026-04-15 00:00:00 -0700")
+        raw_date = latest.get("date", "")
+        date_part = raw_date[:10] if raw_date else ""
+        if date_part and "date" not in result:
+            result["date"] = date_part
+
+        field = HAE_METRIC_MAP.get(name)
+        if not field:
+            continue
+
+        if field == "weight_raw":
+            # HAE reports body_mass in the user's preferred unit
+            if "lb" in units or "pound" in units:
+                result["weight_lb"] = float(qty)
+            else:
+                result["weight_kg"] = float(qty)
+        elif field == "sleep_hours":
+            # HAE may send minutes or hours depending on version
+            val = float(qty)
+            if units in ("min", "minutes") or val > 24:
+                val = val / 60
+            result["sleep_hours"] = round(val, 2)
+        else:
+            result[field] = float(qty)
+
+    return result
+
+
+def sync_day(user_id: str, payload: dict) -> dict:
+    """
+    Upsert a day's Apple Health data.
+    Accepts our flat format OR Health Auto Export format automatically.
+    Accepts weight_lb and converts to weight_kg automatically.
+    Returns the stored row.
+    """
+    # Detect Health Auto Export format (has nested "data" or "metrics" key)
+    if "data" in payload or "metrics" in payload:
+        payload = parse_hae_payload(payload)
+
+    date_str = payload.get("date") or date.today().isoformat()
+
+    # Convert weight_lb → weight_kg if provided
+    row: Dict[str, Any] = {
+        "user_id": user_id,
+        "date": date_str,
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+    for field in FIELDS:
+        if field in payload and payload[field] is not None:
+            try:
+                val = float(payload[field])
+                row[field] = int(round(val)) if field in INTEGER_FIELDS else round(val, 2)
+            except (TypeError, ValueError):
+                pass
+
+    if "weight_lb" in payload and payload["weight_lb"] is not None and "weight_kg" not in row:
+        try:
+            row["weight_kg"] = round(float(payload["weight_lb"]) * 0.453592, 2)
+        except (TypeError, ValueError):
+            pass
+
+    sb = _sb()
+    sb.table("apple_health_daily").upsert(
+        row, on_conflict="user_id,date"
+    ).execute()
+
+    # Dual-write to the unified device_readings table. AH stays the canonical
+    # AH-specific store for now (some queries still hit it); device_readings
+    # is the cross-source resolver table that future integrations also write
+    # into. Best-effort: failures here don't break the AH ingestion path.
+    try:
+        import device_readings as _dr
+        # Map AH field names → canonical metric names + units. The set is
+        # intentionally narrow — only metrics the resolver knows about and
+        # the dashboard reads.
+        _AH_TO_METRIC = {
+            "steps":                   ("steps",                  "count"),
+            "sleep_hours":             ("sleep_hours",            "hours"),
+            "active_calories":         ("active_calories",        "kcal"),
+            "resting_hr":              ("resting_hr",             "bpm"),
+            "hrv":                     ("hrv",                    "ms"),
+            "weight_kg":               ("weight_kg",              "kg"),
+            "vo2_max":                 ("vo2_max",                "ml/kg/min"),
+            "respiratory_rate":        ("respiratory_rate",       "breaths/min"),
+            "body_fat_percentage":     ("body_fat_pct",           "pct"),
+            "lean_body_mass_kg":       ("lean_body_mass_kg",      "kg"),
+            "skeletal_muscle_mass_kg": ("skeletal_muscle_mass_kg","kg"),
+            "spo2":                    ("spo2",                   "pct"),
+            "blood_pressure_systolic": ("blood_pressure_systolic","mmHg"),
+            "blood_pressure_diastolic":("blood_pressure_diastolic","mmHg"),
+        }
+        for ah_key, (metric, unit) in _AH_TO_METRIC.items():
+            if ah_key in row and row[ah_key] is not None:
+                _dr.upsert_reading(user_id, "apple_health", metric, date_str, row[ah_key], unit)
+    except Exception:
+        pass
+
+    return get_day(user_id, date_str) or row
+
+
+def get_day(user_id: str, date_str: str) -> Optional[dict]:
+    sb = _sb()
+    res = (
+        sb.table("apple_health_daily")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("date", date_str)
+        .execute()
+    )
+    rows = res.data or []
+    return rows[0] if rows else None
+
+
+def get_data(user_id: str, days: int = 30) -> List[dict]:
+    """Return the most recent `days` rows for this user, newest first.
+
+    Applies a sanity clamp to sleep_hours: values > 14h are almost
+    certainly multi-source HealthKit overlap artifacts (Oura + Apple
+    Watch + a third sleep app all writing the same night) and are
+    dropped to null so Coach Al / longevity / patterns don't narrate
+    obviously impossible numbers as fact. David 2026-08-06.
+    Client-side dedupe in healthkit.ts is the durable fix; this clamp
+    is the safety net for rows already in the DB or from future
+    devices with new failure modes."""
+    since = (date.today() - timedelta(days=days - 1)).isoformat()
+    sb = _sb()
+    res = (
+        sb.table("apple_health_daily")
+        .select("*")
+        .eq("user_id", user_id)
+        .gte("date", since)
+        .order("date", desc=True)
+        .execute()
+    )
+    rows = res.data or []
+    # Sanity clamps — multi-source HealthKit overlap (iPhone + Apple
+    # Watch + third-party apps all writing the same day's activity to
+    # Apple Health) can inflate these values 2-3x. Values above the
+    # thresholds are almost certainly artifacts and get nulled here so
+    # Coach Al / longevity / patterns don't narrate them as fact.
+    # Client-side dedupe in healthkit.ts is the durable fix; these
+    # clamps are the safety net. David 2026-08-06.
+    for r in rows:
+        s = r.get("sleep_hours")
+        if s is not None and (float(s) < 0 or float(s) > 14):
+            r["sleep_hours"] = None
+        st = r.get("steps")
+        if st is not None and (int(st) < 0 or int(st) > 25000):
+            r["steps"] = None
+        ac = r.get("active_calories")
+        if ac is not None and (float(ac) < 0 or float(ac) > 1500):
+            r["active_calories"] = None
+    return rows
+
+
+def _get_manual_weight_by_date(user_id: str, days: int) -> dict:
+    """
+    Pull manually logged weight from nutrition_weight as a fallback.
+    Returns { "YYYY-MM-DD": weight_kg } for dates not covered by Apple Health.
+    """
+    try:
+        since = (date.today() - timedelta(days=days - 1)).isoformat()
+        sb = _sb()
+        res = (
+            sb.table("nutrition_weight")
+            .select("date, weight_lbs")
+            .eq("user_id", user_id)
+            .gte("date", since)
+            .execute()
+        )
+        return {
+            r["date"]: round(float(r["weight_lbs"]) * 0.453592, 2)
+            for r in (res.data or [])
+            if r.get("weight_lbs")
+        }
+    except Exception:
+        return {}
+
+
+def get_summary(user_id: str, days: int = 30) -> dict:
+    """
+    Return a summary dict used by the dashboard (today + 30-day averages).
+    Weight: prefers Apple Health data, falls back to manually logged nutrition_weight.
+    """
+    rows = get_data(user_id, days)
+    manual_weight = _get_manual_weight_by_date(user_id, days)
+
+    # Merge manual weight into rows for dates missing Apple Health weight
+    rows_by_date = {r["date"]: r for r in rows}
+    for d, wkg in manual_weight.items():
+        if d in rows_by_date:
+            if rows_by_date[d].get("weight_kg") is None:
+                rows_by_date[d]["weight_kg"] = wkg
+        else:
+            rows_by_date[d] = {"date": d, "weight_kg": wkg}
+
+    rows = sorted(rows_by_date.values(), key=lambda r: r["date"], reverse=True)
+
+    if not rows:
+        return {"has_data": False}
+
+    has_ah_data = bool(get_data(user_id, days))
+
+    today_str = date.today().isoformat()
+    today_row = next((r for r in rows if r["date"] == today_str), None) or rows[0]
+
+    def avg(field: str) -> Optional[float]:
+        vals = [r[field] for r in rows if r.get(field) is not None]
+        if not vals:
+            return None
+        return round(sum(vals) / len(vals), 1)
+
+    def latest(field: str) -> Optional[float]:
+        for r in rows:
+            if r.get(field) is not None:
+                return r[field]
+        return None
+
+    return {
+        "has_data": True,
+        "as_of": today_row["date"],
+        "today": {
+            # Daily metrics: use today's value (frequently recorded)
+            "steps":                    today_row.get("steps"),
+            "sleep_hours":              today_row.get("sleep_hours"),
+            "active_calories":          today_row.get("active_calories"),
+            "resting_hr":               today_row.get("resting_hr"),
+            "hrv":                      today_row.get("hrv"),
+            "respiratory_rate":         today_row.get("respiratory_rate"),
+            # Infrequent metrics: use most recent reading, not just today
+            "weight_kg":                latest("weight_kg"),
+            "vo2_max":                  latest("vo2_max"),
+            "body_fat_percentage":      latest("body_fat_percentage"),
+            "lean_body_mass_kg":        latest("lean_body_mass_kg"),
+            "skeletal_muscle_mass_kg":  latest("skeletal_muscle_mass_kg"),
+            "bmi":                      latest("bmi"),
+            "blood_pressure_systolic":  latest("blood_pressure_systolic"),
+            "blood_pressure_diastolic": latest("blood_pressure_diastolic"),
+            "spo2":                     latest("spo2"),
+            "visceral_fat_rating":      latest("visceral_fat_rating"),
+        },
+        "averages": {
+            "steps":            avg("steps"),
+            "sleep_hours":      avg("sleep_hours"),
+            "active_calories":  avg("active_calories"),
+            "resting_hr":       avg("resting_hr"),
+            "hrv":              avg("hrv"),
+            "weight_kg":        avg("weight_kg"),
+        },
+        "latest_weight_kg":             latest("weight_kg"),
+        "latest_body_fat_pct":          latest("body_fat_percentage"),
+        "latest_lean_mass_kg":          latest("lean_body_mass_kg"),
+        "latest_skeletal_muscle_kg":    latest("skeletal_muscle_mass_kg"),
+        "latest_bmi":                   latest("bmi"),
+        "days_synced": len(rows),
+    }
