@@ -69,6 +69,7 @@ import TodaysTagsCard from "@/components/TodaysTagsCard";
 import JournalCard from "@/components/JournalCard";
 import CpapNightlyLogCard from "@/components/CpapNightlyLogCard";
 import BiologicalAgeCard from "@/components/BiologicalAgeCard";
+import WeeklyHealthSpanCard from "@/components/WeeklyHealthSpanCard";
 import DailyInsightCard from "@/components/DailyInsightCard";
 import SymptomCard from "@/components/SymptomCard";
 // WeeklyInsight retired 2026-07-09 per David: content overlapped Coach Al
@@ -2056,8 +2057,22 @@ export default function DashboardPage() {
               </section>
             )}
 
-            {/* ── Longevity Score ── */}
-            {data.longevity_score?.score != null && (() => {
+            {/* ── Weekly Health Span Score — David 2026-08-11.
+                Replaces old Longevity Score card. Behavioral/process
+                score using sleep habits, movement, adherence, protein,
+                check-in, hydration, CPAP. Zero overlap with Bio Age's
+                clinical markers. */}
+            {data.weekly_healthspan && data.weekly_healthspan.score != null && (
+              <WeeklyHealthSpanCard data={data.weekly_healthspan} />
+            )}
+
+            {/* Old Longevity Score card — retired David 2026-08-11 in
+                favor of Weekly Health Span (behavioral) + Biological
+                Age (clinical). The 6 wearable markers it scored are now
+                split: HRV/RHR/VO2/body_fat feed Bio Age; sleep/steps
+                feed Health Span. If we ever need to resurrect the old
+                composite for backfill or comparison, flip false → true.  */}
+            {false && data.longevity_score?.score != null && (() => {
               const lon = data.longevity_score!;
               const gradeColor = lon.grade === "Excellent" ? "#22c55e"
                 : lon.grade === "Good" ? "#84cc16"

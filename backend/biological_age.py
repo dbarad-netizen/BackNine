@@ -124,6 +124,24 @@ def _sleep_expected(_age: int, _sex: str) -> float:
     """Adult sleep optimum (NSF). U-shape: 7-9h is the zone."""
     return 7.75
 
+def _hdl_expected(_age: int, sex: str) -> float:
+    """HDL — higher is protective. Sex-specific optimum."""
+    return 60.0 if sex == "female" else 50.0
+
+def _triglycerides_expected(_age: int, _sex: str) -> float:
+    """Triglycerides — lower is better; independent CV risk from LDL."""
+    return 80.0
+
+def _glucose_expected(_age: int, _sex: str) -> float:
+    """Fasting glucose optimum for longevity — Roberts et al."""
+    return 85.0
+
+def _egfr_expected(age: int, _sex: str) -> float:
+    """eGFR declines with age (~1 mL/min/1.73m² per year after 40).
+    Sub-60 is CKD range regardless of age. Optimum for a healthy
+    adult at 40 is ~90+."""
+    return max(60.0, 100.0 - 0.8 * max(0, age - 30))
+
 
 _MARKERS = {
     "hrv": {
@@ -197,6 +215,39 @@ _MARKERS = {
         "sd": 1.0, "direction": "u_shape",  # both extremes are older-looking
         "years_per_sd": 2.0, "weight": 0.03,
         "min_actual": 3.0, "max_actual": 12.0,
+    },
+    # ── Additional lab markers surfaced by the JSON blob loader (David 2026-08-11) ──
+    "hdl": {
+        "label": "HDL Cholesterol",
+        "unit":  "mg/dL",
+        "expected": _hdl_expected,
+        "sd": 12.0, "direction": "lower_worse",   # higher HDL = younger
+        "years_per_sd": 2.0, "weight": 0.05,
+        "min_actual": 15.0, "max_actual": 150.0,
+    },
+    "triglycerides": {
+        "label": "Triglycerides",
+        "unit":  "mg/dL",
+        "expected": _triglycerides_expected,
+        "sd": 40.0, "direction": "higher_worse",
+        "years_per_sd": 2.0, "weight": 0.05,
+        "min_actual": 20.0, "max_actual": 800.0,
+    },
+    "glucose": {
+        "label": "Fasting Glucose",
+        "unit":  "mg/dL",
+        "expected": _glucose_expected,
+        "sd": 10.0, "direction": "higher_worse",
+        "years_per_sd": 3.0, "weight": 0.06,
+        "min_actual": 50.0, "max_actual": 300.0,
+    },
+    "egfr": {
+        "label": "eGFR (Kidney)",
+        "unit":  "mL/min",
+        "expected": _egfr_expected,
+        "sd": 15.0, "direction": "lower_worse",   # higher eGFR = younger
+        "years_per_sd": 4.0, "weight": 0.08,
+        "min_actual": 5.0, "max_actual": 150.0,
     },
 }
 
@@ -365,40 +416,58 @@ _CAVEAT_TEXT = (
 # ── Latest-labs helper ──────────────────────────────────────────────────
 
 def latest_labs(user_id: str) -> dict:
-    """Pull the most recent lab_entries values for the markers we care
-    about. Returns a flat dict keyed by lab column name, values are
-    the latest non-null reading (each column pulled independently, so
-    a user with HbA1c from one draw and LDL from a different draw
-    still gets both)."""
-    import os
+    """Pull the most recent value per marker from lab_entries.
+
+    lab_entries stores each entry as a row with `date` + a `values`
+    JSONB blob (keys are the marker names). We flatten the last 90 days
+    of entries, keeping the most recent non-null value per marker.
+
+    David 2026-08-11: previous version queried nonexistent columns and
+    silently returned {} for everyone — Bio Age was wearables-only.
+    Now every marker in the JSON blob is available to the compute.
+    """
     if not user_id:
         return {}
-    try:
-        from supabase import create_client
-        url = os.getenv("SUPABASE_URL"); key = os.getenv("SUPABASE_SERVICE_KEY")
-        if not (url and key):
-            return {}
-        sb = create_client(url, key)
-    except Exception:
+    sb = _sb()
+    if not sb:
         return {}
 
-    WANTED = ["hba1c", "ldl", "crp_hs", "blood_pressure_systolic"]
     try:
         res = (sb.table("lab_entries")
-                 .select("date," + ",".join(WANTED))
+                 .select("date, values")
                  .eq("user_id", user_id)
                  .order("date", desc=True)
                  .limit(60)
                  .execute())
         rows = res.data or []
     except Exception:
+        log.exception("latest_labs: query failed for %s", user_id)
         return {}
 
+    # Rows come in newest-first. First non-null value per marker wins.
     out: dict = {}
     for r in rows:
-        for k in WANTED:
-            if k not in out and r.get(k) is not None:
-                out[k] = r[k]
-        if len(out) == len(WANTED):
-            break
+        vals = r.get("values") or {}
+        if not isinstance(vals, dict):
+            continue
+        for k, v in vals.items():
+            if v is None:
+                continue
+            if k not in out:
+                out[k] = v
     return out
+
+
+def _sb():
+    import os
+    try:
+        from supabase import create_client
+    except Exception:
+        return None
+    url = os.getenv("SUPABASE_URL"); key = os.getenv("SUPABASE_SERVICE_KEY")
+    if not (url and key):
+        return None
+    try:
+        return create_client(url, key)
+    except Exception:
+        return None

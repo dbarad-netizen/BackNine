@@ -656,11 +656,33 @@ export interface DashboardData {
   readiness_forecast:   ReadinessForecast;
   prediction_accuracy?: PredictionAccuracy;
   longevity_score?:     LongevityScore;
+  weekly_healthspan?:   WeeklyHealthSpan;
   biological_age?:      BiologicalAge;
   /** Data freshness state — Fable IMPROVE #2. Frontend tiles read from
    *  this to render 'as of X ago' when stale instead of pretending
    *  9-day-old data is today's. */
   freshness?:           DashboardFreshness;
+}
+
+// ── Weekly Health Span Score (David 2026-08-11, task #176) ────────────
+// Behavioral / process score complementing Biological Age's clinical
+// state. Attia-style split: outcome vs process. Zero-overlap inputs
+// (sleep habits, movement, adherence, check-in, hydration, CPAP).
+export interface WeeklyHealthSpanComponent {
+  label:  string;
+  value:  string;
+  norm:   string;
+  points: number;
+  max:    number;
+  why?:   string;
+}
+export interface WeeklyHealthSpan {
+  score:         number | null;
+  grade:         string;
+  components:    Record<string, WeeklyHealthSpanComponent>;
+  bands_present: number;
+  max_possible:  number;
+  caveat:        string;
 }
 
 // ── Biological Age (David 2026-08-07, task #172) ──────────────────────

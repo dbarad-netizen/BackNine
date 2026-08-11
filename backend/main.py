@@ -64,6 +64,7 @@ import predictions as prd
 import longevity as lon
 import longevity_history as lonh
 import biological_age as bioage
+import healthspan as hspan
 import chat as ch
 import briefing as brf
 import weekly_insight as wins
@@ -1386,6 +1387,8 @@ def _empty_dashboard_payload(session: dict) -> dict:
         },
         "prediction_accuracy": None,
         "longevity_score":     {"score": None, "grade": None, "components": {}},
+        "weekly_healthspan":   {"score": None, "grade": "No data", "components": {},
+                                "bands_present": 0, "max_possible": 0, "caveat": ""},
         "biological_age":      {
             "biological_age": None, "chronological_age": None,
             "delta_years": None, "confidence": "low", "n_markers": 0,
@@ -2079,6 +2082,23 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
     except Exception:
         longevity_score = {"score": None, "grade": None, "components": {}}
 
+    # ── Weekly Health Span Score (David 2026-08-11) ──────────────────────
+    # Behavioral/process score — sleep habits, movement, adherence,
+    # check-in, hydration, CPAP. Distinct from Biological Age (which
+    # measures clinical state). See backend/healthspan.py for design.
+    try:
+        _capabilities = (_profile.get("enabled_capabilities") or []) if _profile else []
+        weekly_healthspan = hspan.compute(
+            user_id, oura_today, am, smm, _profile, capabilities=_capabilities,
+        )
+    except Exception:
+        log.exception("healthspan compute failed for %s", user_id)
+        weekly_healthspan = {
+            "score": None, "grade": "No data",
+            "components": {}, "bands_present": 0,
+            "max_possible": 0, "caveat": "",
+        }
+
     # ── Biological Age (David 2026-08-07) ─────────────────────────────────
     # Hybrid heuristic — combines wearable + lab markers into a single
     # "your body looks like a X-year-old" number. See backend/biological_age.py
@@ -2165,6 +2185,7 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
         "readiness_forecast":  readiness_forecast,
         "prediction_accuracy": pred_accuracy,
         "longevity_score":     longevity_score,
+        "weekly_healthspan":   weekly_healthspan,
         "biological_age":      biological_age,
         "trend":    trend,
         "coaches":  coaches,
