@@ -1,0 +1,3726 @@
+/**
+ * BackNine API client
+ * All requests go directly to the FastAPI backend on Render.
+ * Auth token is passed via Authorization header to avoid cross-site cookie issues.
+ */
+
+import GEAR from "./gearData";
+
+const BASE = "https://backnine-hu60.onrender.com";
+
+// The user's LOCAL calendar date as YYYY-MM-DD. Using this (instead of
+// toISOString(), which is UTC) keeps "today" aligned with the user's timezone —
+// otherwise an evening meal in the US gets the next day's UTC date and shows up
+// as "today" the following morning.
+export function localToday(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Naive local ISO datetime (no timezone suffix) — matches user's clock.
+ *  `new Date().toISOString()` returns UTC, which broke the nutrition
+ *  day-progress + chat pace-check math on 2026-07-09 (evening request
+ *  keyed to next-day UTC → 3am hour → "day just getting started"). Use
+ *  this helper whenever the backend needs the user's actual local
+ *  hour-of-day, not the wall-clock in London. */
+export function localNowIso(d: Date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+         `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+// ── Token storage ─────────────────────────────────────────────────────────────
+// On load, grab token from URL ?token= param (set by backend after OAuth),
+// persist to localStorage AND a first-party cookie, then remove from URL
+// so it's not bookmarked.
+//
+// Why both storage paths (David 2026-07-20): iOS Safari has two failure
+// modes we need to survive.
+//   1. Home-screen standalone webview has its own localStorage bucket
+//      separate from Safari's — a token in Safari doesn't carry to the
+//      home-screen icon.
+//   2. Safari's ITP can clear script-writable localStorage after 7 days
+//      without direct first-party interaction.
+// A first-party cookie on `.backnine.health` survives both cases better
+// than localStorage alone. It's not HttpOnly (we need JS access), so we
+// keep it best-effort — real security still relies on the JWT itself
+// being signed and short-scoped.
+const TOKEN_COOKIE = "bn_token_client";
+const TOKEN_TTL_S  = 60 * 60 * 24 * 30;  // 30 days matches backend JWT
+
+function _readTokenCookie(): string | null {
+  if (typeof document === "undefined") return null;
+  const m = document.cookie.match(new RegExp("(?:^|; )" + TOKEN_COOKIE + "=([^;]+)"));
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+function _writeTokenCookie(token: string): void {
+  if (typeof document === "undefined") return;
+  const isLocalhost = window.location.hostname === "localhost";
+  // Cookie deliberately set on the parent domain so www.backnine.health
+  // and backnine.health share it. Localhost gets a plain path cookie.
+  const domain = isLocalhost ? "" : "; Domain=.backnine.health";
+  const secure = isLocalhost ? "" : "; Secure";
+  document.cookie =
+    `${TOKEN_COOKIE}=${encodeURIComponent(token)}` +
+    `; Max-Age=${TOKEN_TTL_S}` +
+    `; Path=/` +
+    domain +
+    `; SameSite=Lax` +
+    secure;
+}
+
+function _clearTokenCookie(): void {
+  if (typeof document === "undefined") return;
+  const isLocalhost = window.location.hostname === "localhost";
+  const domain = isLocalhost ? "" : "; Domain=.backnine.health";
+  document.cookie = `${TOKEN_COOKIE}=; Max-Age=0; Path=/${domain}`;
+}
+
+function _initToken(): string | null {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  const urlToken = params.get("token");
+  if (urlToken) {
+    try { localStorage.setItem("bn_token", urlToken); } catch { /* private mode */ }
+    _writeTokenCookie(urlToken);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("token");
+    window.history.replaceState({}, "", url.toString());
+    return urlToken;
+  }
+  // Prefer localStorage (survives across visits when available) then
+  // fall back to the cookie (survives standalone webview + some ITP).
+  let cached: string | null = null;
+  try { cached = localStorage.getItem("bn_token"); } catch { /* private mode */ }
+  if (cached) return cached;
+  const cookieToken = _readTokenCookie();
+  if (cookieToken) {
+    // Migrate back into localStorage on the way through so future reads
+    // hit the fast path.
+    try { localStorage.setItem("bn_token", cookieToken); } catch { /* ignore */ }
+    return cookieToken;
+  }
+  return null;
+}
+
+let _token: string | null = null;
+
+export function getToken(): string | null {
+  if (!_token) _token = _initToken();
+  return _token;
+}
+
+export function clearToken(): void {
+  _token = null;
+  if (typeof window !== "undefined") {
+    try { localStorage.removeItem("bn_token"); } catch { /* private mode */ }
+    _clearTokenCookie();
+    clearDashboardCache();
+  }
+}
+
+// ── Dashboard cache (stale-while-revalidate) ───────────────────────────────
+// On every dashboard mount, we paint from this cache immediately so the user
+// sees their data instead of a spinner. Then api.dashboard() runs in the
+// background and the page updates in place when fresh data lands.
+//
+// Cache is cleared on logout (above) so a previous user's dashboard never
+// leaks into a new session.
+const DASHBOARD_CACHE_KEY = "bn_dashboard_cache";
+const DASHBOARD_CACHE_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour — older than this, don't pretend it's fresh
+
+export function readDashboardCache(): unknown {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(DASHBOARD_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    if (typeof parsed._ts !== "number") return null;
+    if (Date.now() - parsed._ts > DASHBOARD_CACHE_MAX_AGE_MS) return null;
+    return parsed.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeDashboardCache(data: unknown): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify({ _ts: Date.now(), data }));
+  } catch {
+    /* quota or serialization issue — silently skip; the network fetch still works */
+  }
+}
+
+export function clearDashboardCache(): void {
+  if (typeof window === "undefined") return;
+  try { localStorage.removeItem(DASHBOARD_CACHE_KEY); } catch { /* noop */ }
+}
+
+// ── Pending referral (shareable invite cards) ───────────────────────────────────
+// A shared card link is https://<app>/?ref=CODE. We stash the code in
+// localStorage as early as possible (before any auth redirect — e.g. the Oura
+// OAuth round trip leaves and returns to the origin), then the dashboard
+// auto-accepts it once the user is signed in. localStorage survives the redirect.
+const PENDING_REF_KEY = "bn_pending_ref";
+
+/** Read ?ref= from the URL, persist it, and strip it from the address bar. */
+export function captureReferralFromUrl(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get("ref");
+    if (ref) {
+      localStorage.setItem(PENDING_REF_KEY, ref.trim().toUpperCase());
+      const url = new URL(window.location.href);
+      url.searchParams.delete("ref");
+      window.history.replaceState({}, "", url.toString());
+    }
+  } catch { /* no-op */ }
+}
+
+export function getPendingReferral(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(PENDING_REF_KEY);
+}
+
+export function clearPendingReferral(): void {
+  if (typeof window !== "undefined") localStorage.removeItem(PENDING_REF_KEY);
+}
+
+export interface ActivityLive {
+  date:       string;
+  steps:      number | null;
+  active_cal: number | null;
+  score:      number | null;  // Oura activity score for today if already closed
+}
+
+export interface TodayData {
+  date?:               string;   // Oura anchor date (often yesterday)
+  calendar_today?:     string;   // Timezone-safe "today" from Oura max date
+  readiness:           Record<string, unknown>;
+  sleep:               Record<string, unknown>;
+  activity:            Record<string, unknown>; // Oura summary for anchor (coach card)
+  yesterday_activity?: Record<string, unknown>; // Day before anchor Oura activity
+  today_activity?:     Record<string, unknown>; // Full Oura activity for oura_today
+  activity_live?:      ActivityLive;            // AH live + today's Oura score
+  sleep_model:         Record<string, unknown>;
+}
+
+export interface TrendDay {
+  date:       string;
+  readiness:  number | null;
+  sleep:      number | null;
+  activity:   number | null;
+  hrv:        number | null;
+  rhr:        number | null;
+  steps:      number | null;
+  total_hrs:  number | null;
+  temp_dev:   number | null;
+  deep_min:   number | null;
+  rem_min:    number | null;
+  efficiency: number | null;
+  active_cal: number | null;
+}
+
+export interface CoachCard {
+  color:  string;
+  border: string;
+  icon:   string;
+  title:  string;
+  msg:    string;
+}
+
+export interface CoachItem {
+  icon:    string;
+  label:   string;
+  text:    string;
+  color:   string;
+  urgency: string;
+}
+
+export interface Coaching {
+  short: CoachItem[];
+  mid:   CoachItem[];
+  long:  CoachItem[];
+  meta:  Record<string, unknown>;
+}
+
+export interface TrainingLoad {
+  acwr:         number | null;
+  acute_avg:    number | null;
+  chronic_avg:  number | null;
+  zone:         string;
+  label:        string;
+  color:        string;
+  acute_days:   number;
+  chronic_days: number;
+}
+
+export interface ReadinessForecast {
+  score:     number;
+  label:     string;
+  color:     string;
+  hrv_adj:   number;
+  sleep_adj: number;
+  base:      number;
+}
+
+export interface PredictionDay {
+  date:      string;
+  predicted: number;
+  actual:    number;
+  diff:      number;
+  hit:       boolean;
+}
+
+export interface PredictionAccuracy {
+  resolved:       PredictionDay[];
+  accuracy_pct:   number | null;
+  streak:         number;
+  best_streak:    number;
+  total_resolved: number;
+  hit_threshold:  number;
+}
+
+export interface LongevityComponent {
+  label:  string;
+  value:  string;
+  norm:   string;
+  points: number;
+  max:    number;
+  /** Plain-English explanation of what this metric means and why the
+   *  score is what it is. Rendered as a tap-to-expand under each row —
+   *  the "transparency over black-box" moat vs. Bevel. Added
+   *  David 2026-08-07. Optional so older cached payloads still parse. */
+  why?:   string;
+}
+
+export interface LongevityScore {
+  score:                number | null;
+  grade:                string | null;
+  biological_age_delta: number | null;
+  components:           Record<string, LongevityComponent>;
+  data_coverage:        string;
+  confidence?: {
+    level:        "high" | "medium" | "low" | "unknown";
+    reason:       string;
+    coverage_pct: number;
+  };
+}
+
+export interface LongevityHistoryPoint {
+  date:                 string;
+  score:                number;
+  grade:                string | null;
+  biological_age_delta: number | null;
+}
+
+export interface LongevityHistory {
+  history: LongevityHistoryPoint[];
+  summary: {
+    current:    number | null;
+    delta_7d:   number | null;
+    delta_30d:  number | null;
+    count:      number;
+    first_date: string | null;
+  };
+}
+
+export type TimeOfDay = "morning" | "midday" | "evening" | "anytime";
+
+export interface Supplement {
+  name:         string;
+  dose?:        string;     // e.g. "400mg", "2 caps"
+  timing?:      string;     // e.g. "morning", "with dinner"
+  /** Structured time-of-day bucket (David 2026-07-09 UX fix). Adherence
+   *  card only counts unchecked items as "missed" when their window has
+   *  passed. Missing → derived from `timing` text via heuristics. */
+  time_of_day?: TimeOfDay;
+  notes?:       string;
+}
+
+/** Peptides use the exact same shape as supplements today — separate type
+ *  so future divergence (cycle info, route of administration, etc.) doesn't
+ *  break supplements call sites. */
+export type Peptide = Supplement;
+
+/** Medications — same data shape as supplements/peptides; surfaced separately
+ *  in the Doctor's Report so Rx items don't blur into OTC supplements when a
+ *  physician is scanning. */
+export type Medication = Supplement;
+
+/** Lab values — clinical lab panel results (PSA, lipid panel, A1c,
+ *  testosterone, TSH, etc.). Each entry preserves the original report
+ *  value as a string so "<0.1" style results don't lose precision. */
+export interface LabResult {
+  name:             string;     // e.g. "PSA", "LDL", "HbA1c", "Testosterone"
+  value?:           string;     // string-preserved value (e.g. "3.2", "<0.1")
+  unit?:            string;     // e.g. "ng/mL", "mg/dL", "%", "ng/dL"
+  date?:            string;     // ISO YYYY-MM-DD when drawn
+  reference_range?: string;     // e.g. "<4.0", "70-100", "Normal"
+  notes?:           string;
+}
+
+// ── CPAP nightly log (David 2026-08-06, task #162) ────────────────────
+export interface CpapNightlyLog {
+  id?:              string;
+  user_id?:         string;
+  date:             string;
+  usage_hours:      number;
+  mask_seal_score?: number | null;
+  events_per_hour?: number | null;
+  total_score?:     number | null;
+  notes?:           string | null;
+  created_at?:      string;
+  updated_at?:      string;
+}
+export interface CpapAdherence {
+  window_start:      string;
+  window_end:        string;
+  window_days:       number;
+  logged_nights:     number;
+  qualifying_nights: number;
+  avg_hours:         number;
+  compliance_pct:    number;
+  compliant:         boolean;
+  threshold_pct:     number;
+  threshold_hours:   number;
+  avg_ahi?:          number | null;
+  avg_mask_seal?:    number | null;
+  avg_total_score?:  number | null;
+}
+
+export interface StackAdherenceRow {
+  id?:          string;
+  date:         string;
+  item_kind:    "medication" | "supplement" | "peptide";
+  item_key?:    string;
+  item_name:    string;
+  taken:        boolean;
+  notes?:       string | null;
+  created_at?:  string;
+}
+
+export interface StackAdherenceItem {
+  kind:          "medication" | "supplement" | "peptide";
+  name:          string;
+  key:           string;
+  time_of_day:   TimeOfDay;
+  /** Has the item's time window opened yet for this user's local day?
+   *  Frontend uses this to visually differentiate "missed" from
+   *  "not yet time to take." */
+  window_open:   boolean;
+  taken_today:   boolean;
+  logged_today:  boolean;
+  notes?:        string | null;
+  days_taken_7:  number;
+}
+
+export interface StackAdherenceGroup {
+  time_of_day:  TimeOfDay;
+  window_open:  boolean;
+  items:        StackAdherenceItem[];
+  total:        number;
+  taken:        number;
+}
+
+export interface StackAdherenceSnapshot {
+  date:    string;
+  items:   StackAdherenceItem[];   // flat list — kept for backwards compat
+  groups:  StackAdherenceGroup[];  // primary render path
+  summary: {
+    total_items:     number;
+    taken_today:     number;
+    logged_today:    number;
+    expected_by_now: number;
+    on_pace_pct:     number;
+  };
+}
+
+// ── Linked identities (David 2026-07-30, task #142) — one BackNine user
+// can now have multiple auth methods (Oura + Apple + Google + email) all
+// resolving to the same account. Powers the Profile "Connected accounts"
+// section.
+export interface LinkedIdentity {
+  id:            string;
+  provider:      "oura" | "apple" | "google" | "email" | "supabase";
+  provider_sub:  string;
+  email:         string | null;
+  provider_name: string | null;
+  linked_at:     string;
+}
+
+// ── Proactive nudge (David 2026-07-23, Fable competitive brief)
+// One per user per day. Hard-capped at the schema level.
+export type NudgeKind =
+  | "bp_high" | "hrv_drop" | "sleep_debt" | "adherence_dip"
+  | "training_gap" | "alcohol_pattern" | "weight_trend" | "goal_stalled";
+
+export interface Nudge {
+  id:            string;
+  user_id:       string;
+  date:          string;
+  kind:          NudgeKind;
+  title:         string;
+  body:          string;
+  action_label:  string | null;
+  action_target: string | null;
+  priority:      number;
+  dismissed_at:  string | null;
+  acted_at:      string | null;
+  created_at:    string;
+}
+
+// ── Proven For You experiments (David 2026-07-23, Fable competitive brief)
+export type ExperimentMetric =
+  | "sleep_score" | "sleep_hours" | "hrv_ms" | "rhr_bpm"
+  | "weight_lb"   | "bp_systolic" | "bp_diastolic"
+  | "steps"       | "energy_score" | "mood_score"
+  | "readiness_score" | "activity_score"
+  | "protein_g"   | "calories";
+
+export type ExperimentStatus = "active" | "completed" | "abandoned" | "insufficient_data";
+export type ExperimentDirection = "better" | "worse" | "no_change";
+export type ExperimentSignificance = "noise" | "notable" | "meaningful";
+
+export interface Experiment {
+  id:                  string;
+  user_id:             string;
+  created_at:          string;
+  insight_id:          string | null;
+  hypothesis:          string;
+  action:              string;
+  metric_type:         ExperimentMetric;
+  baseline_start_date: string;
+  baseline_end_date:   string;
+  test_start_date:     string;
+  test_end_date:       string;
+  baseline_avg:        number | null;
+  baseline_stddev:     number | null;
+  baseline_n:          number | null;
+  test_avg:            number | null;
+  test_n:              number | null;
+  delta:               number | null;
+  direction:           ExperimentDirection | null;
+  significance:        ExperimentSignificance | null;
+  status:              ExperimentStatus;
+  completed_at:        string | null;
+  user_note:           string | null;
+  // Hydrated by backend for UI:
+  metric_label:        string;
+  unit:                string;
+  direction_bias:      "higher_is_better" | "lower_is_better";
+  day_index?:          number | null;
+  day_total?:          number | null;
+  progress_pct?:       number | null;
+  headline?:           string;
+  proven?:             boolean;
+}
+
+export interface TrainingFlag {
+  id:         string;
+  date:       string;
+  flag_type:  "injury" | "discomfort" | "illness" | "fatigue";
+  body_area?: string | null;
+  severity?:  number | null;
+  notes?:     string | null;
+  created_at?: string;
+}
+
+export interface NutritionVice {
+  id:         string;
+  date:       string;
+  vice_type:  "alcohol" | "nicotine" | "weed" | "edibles" | "processed" | "sugar" | "caffeine" | "other";
+  amount?:    string | null;
+  notes?:     string | null;
+  created_at?: string;
+}
+
+export interface HydrationEntry {
+  id:         string;
+  date:       string;
+  volume_oz:  number;
+  source?:    string | null;
+  notes?:     string | null;
+  created_at?: string;
+}
+
+export interface ChronicInjury {
+  area:  string;          // "right shoulder", "lower back", "left knee", etc.
+  notes?: string;
+}
+
+export interface UserProfile {
+  name?:              string | null;
+  age?:               number | null;     // derived from birthdate when set
+  birthdate?:         string | null;     // ISO YYYY-MM-DD
+  biological_sex?:    "male" | "female" | null;
+  height_cm?:         number | null;     // entered as ft/in in UI, stored as cm
+  health_goals?:      string[];
+  vo2_max?:           number | null;
+  supplements?:       Supplement[];
+  peptides?:          Peptide[];
+  medications?:       Medication[];
+  labs?:              LabResult[];
+  /** Self-reported training experience. Drives today_workout's cold-start
+   *  safety rules — beginner stays in bodyweight/dumbbell land forever
+   *  regardless of history; advanced gets the full library. */
+  training_level?:    "beginner" | "intermediate" | "advanced" | null;
+  /** Ongoing injuries or areas to protect. Feeds into workout prescription
+   *  (avoid movements loading these areas). */
+  chronic_injuries?:  ChronicInjury[];
+}
+
+export interface ChatMessage {
+  role:    "user" | "assistant";
+  content: string;
+}
+
+export interface MeResponse {
+  user_id:          string;
+  email:            string | null;
+  provider:         string;
+  has_oura:         boolean;
+  needs_onboarding: boolean;
+}
+
+export interface AppleHealthToday {
+  steps?:                    number | null;
+  sleep_hours?:              number | null;
+  active_calories?:          number | null;
+  resting_hr?:               number | null;
+  hrv?:                      number | null;
+  respiratory_rate?:         number | null;
+  weight_kg?:                number | null;
+  vo2_max?:                  number | null;
+  body_fat_percentage?:      number | null;
+  lean_body_mass_kg?:        number | null;
+  skeletal_muscle_mass_kg?:  number | null;
+  bmi?:                      number | null;
+  blood_pressure_systolic?:  number | null;
+  blood_pressure_diastolic?: number | null;
+  spo2?:                     number | null;
+  visceral_fat_rating?:      number | null;
+}
+
+export interface AppleHealthBlock {
+  as_of:        string | null;
+  today:        AppleHealthToday;
+  averages?:    Partial<AppleHealthToday>;
+  days_synced?: number;
+  last_sync_at?: string;
+}
+
+export interface DataFreshnessSource {
+  data_age_hours:  number | null;
+  last_sync?:      string | null;
+  is_stale:        boolean;
+  is_fresh:        boolean;
+}
+
+export interface DashboardFreshness {
+  oura:                    DataFreshnessSource;
+  apple_health:            DataFreshnessSource;
+  /** True when at least one source (Oura, Apple Health, or any device_readings
+   *  entry including manual) has data younger than fresh_threshold_hours. */
+  any_source_fresh?:       boolean;
+  /** True when NO source has data within stale_threshold_hours. This is the
+   *  signal the block-variant banner reads — we only nag when the user
+   *  genuinely has no current data path. */
+  all_sources_stale?:      boolean;
+  stale_threshold_hours:   number;
+  fresh_threshold_hours:   number;
+}
+
+export interface DashboardData {
+  generated:            string;
+  data_through:         string;
+  provider:             string;
+  has_oura?:            boolean;
+  has_apple_health?:    boolean;
+  apple_health?:        AppleHealthBlock | null;
+  today:                TodayData;
+  trend:                TrendDay[];
+  coaches:              { overall: CoachCard; sleep: CoachCard; activity: CoachCard };
+  coaching:             Coaching;
+  training_load:        TrainingLoad;
+  readiness_forecast:   ReadinessForecast;
+  prediction_accuracy?: PredictionAccuracy;
+  longevity_score?:     LongevityScore;
+  biological_age?:      BiologicalAge;
+  /** Data freshness state — Fable IMPROVE #2. Frontend tiles read from
+   *  this to render 'as of X ago' when stale instead of pretending
+   *  9-day-old data is today's. */
+  freshness?:           DashboardFreshness;
+}
+
+// ── Biological Age (David 2026-08-07, task #172) ──────────────────────
+// Hybrid formula combining wearable + lab markers into a single "your
+// body looks like a X-year-old" estimate. See backend/biological_age.py
+// for the math. Every component's contribution is shown for transparency
+// (Bevel's opacity is a stated user complaint — we differentiate here).
+export interface BioAgeComponent {
+  key:         string;
+  label:       string;
+  value:       number;
+  unit:        string;
+  expected:    number;
+  z:           number;
+  years_delta: number;   // positive = ages you; negative = keeps you young
+  weight:      number;
+  why:         string;
+}
+export interface BiologicalAge {
+  biological_age:    number | null;
+  chronological_age: number | null;
+  delta_years:       number | null;
+  confidence:        "high" | "medium" | "low";
+  n_markers:         number;
+  components:        BioAgeComponent[];
+  caveat:            string;
+  reason?:           string;   // when biological_age is null
+}
+
+export interface Wearable {
+  provider: string;
+  name:     string;
+  status:   "connected" | "available" | "coming_soon";
+}
+
+// ── Nutrition types ───────────────────────────────────────────────────────────
+
+export interface FoodItem {
+  name:     string;
+  calories: number;
+  protein:  number;
+  carbs:    number;
+  fat:      number;
+  serving:  number;
+  unit:     string;
+}
+
+export interface Meal {
+  id:        string;
+  name:      string;
+  calories:  number;
+  protein:   number;
+  carbs:     number;
+  fat:       number;
+  meal_type: string;
+  logged_at: string;
+}
+
+/** A draft food item (from AI parse, recents) before it's logged as a Meal. */
+export interface MealDraftItem {
+  name:     string;
+  calories: number;
+  protein:  number;
+  carbs:    number;
+  fat:      number;
+}
+
+export interface MacroTotals {
+  calories: number;
+  protein:  number;
+  carbs:    number;
+  fat:      number;
+}
+
+export interface NutritionSettings {
+  calorie_target:              number;
+  protein_g:                   number;
+  carbs_g:                     number;
+  fat_g:                       number;
+  weight_goal_lbs:             number | null;
+  weight_goal_type:            "lose" | "maintain" | "gain";
+  eating_start:                string;
+  eating_end:                  string;
+  fasting_enabled:             boolean;
+  units:                       string;
+  include_active_cal_in_budget: boolean;
+}
+
+export interface NutritionToday {
+  date:     string;
+  meals:    Meal[];
+  totals:   MacroTotals;
+  settings: NutritionSettings;
+}
+
+// ── Blood pressure ─────────────────────────────────────────────────────────
+export type BPTimeOfDay = "morning" | "midday" | "evening" | "other";
+
+export interface BPReading {
+  id:          string;
+  date:        string;        // ISO YYYY-MM-DD
+  time_of_day: BPTimeOfDay;
+  systolic:    number;
+  diastolic:   number;
+  pulse?:      number | null;
+  notes?:      string | null;
+  source:      "manual" | "apple_health" | "withings";
+  created_at:  string;
+}
+
+export interface BPSummary {
+  count:   number;
+  days:    number;
+  average?: { systolic: number | null; diastolic: number | null };
+  morning?: { systolic: number | null; diastolic: number | null; n: number };
+  evening?: { systolic: number | null; diastolic: number | null; n: number };
+  latest?:  { date: string; time: BPTimeOfDay; systolic: number; diastolic: number; pulse: number | null };
+}
+
+// ── Cardiometabolic Report (cardiology / primary care handoff) ────────────
+export interface CardiometabolicReportPayload {
+  ai_narrative?: string | null;
+  generated_at: string;
+  range:        { start: string; end: string; days: number };
+  patient: {
+    name:           string | null;
+    birthdate:      string | null;
+    age:            number | null;
+    biological_sex: "male" | "female" | null;
+    height_cm:      number | null;
+    vo2_max:        number | null;
+  };
+  blood_pressure: {
+    readings_count: number;
+    summary:        BPSummary;
+    readings:       BPReading[];
+  };
+  cardio_signals: {
+    rhr:     DoctorReportSeries;
+    hrv:     DoctorReportSeries;
+    avg_hr:  DoctorReportSeries;
+  };
+  weight: {
+    entries:   Array<{ date: string; weight_lbs: number | null; body_fat_pct: number | null; notes: string | null }>;
+    delta_lbs: number | null;
+    delta_bf:  number | null;
+  };
+}
+
+// ── Pre-Procedure Report (surgery / dental / endoscopy handoff) ───────────
+export interface PreProcedureItem {
+  name:   string;
+  dose?:  string | null;
+  timing?: string | null;
+  notes?: string | null;
+  class:  "Medication" | "Supplement" | "Peptide";
+  flag?:  { severity: "HIGH" | "NOTE"; category: string; note: string } | null;
+}
+
+export interface PreProcedureReportPayload {
+  ai_narrative?: string | null;
+  generated_at: string;
+  patient: {
+    name:           string | null;
+    birthdate:      string | null;
+    age:            number | null;
+    biological_sex: "male" | "female" | null;
+    height_cm:      number | null;
+  };
+  items: {
+    medications: PreProcedureItem[];
+    supplements: PreProcedureItem[];
+    peptides:    PreProcedureItem[];
+  };
+  flagged: {
+    high_risk: PreProcedureItem[];
+    notes:     PreProcedureItem[];
+    total:     number;
+  };
+  totals: {
+    medications: number;
+    supplements: number;
+    peptides:    number;
+  };
+  disclaimer: string;
+}
+
+// ── Training & Recovery Report (trainer / PT / coach handoff) ─────────────
+export interface TrainingRecoveryReportPayload {
+  ai_narrative?: string | null;
+  generated_at: string;
+  range:        { start: string; end: string; days: number };
+  patient: {
+    name:           string | null;
+    age:            number | null;
+    biological_sex: "male" | "female" | null;
+    height_cm:      number | null;
+    health_goals:   string[];
+  };
+  totals: {
+    sessions_total:        number;
+    strength_total:        number;
+    cardio_total:          number;
+    cardio_min_total:      number;
+    weeks:                 number;
+    avg_sessions_per_week: number;
+  };
+  weekly: Array<{
+    week:               string;
+    strength_sessions:  number;
+    cardio_sessions:    number;
+    cardio_min:         number;
+    total_sessions:     number;
+  }>;
+  recovery: {
+    readiness:        DoctorReportSeries;
+    hrv:              DoctorReportSeries;
+    sleep_efficiency: DoctorReportSeries;
+    sleep_hours:      DoctorReportSeries;
+  };
+  workouts: Array<{
+    date:         string | null;
+    type:         string | null;
+    duration_min: number | null;
+    distance_mi:  number | null;
+    intensity:    string | null;
+    notes:        string | null;
+    source:       string;
+  }>;
+}
+
+// ── Nutrition & Body Composition Report (dietitian / RDN handoff) ─────────
+export interface NutritionBodyCompReportPayload {
+  ai_narrative?: string | null;
+  generated_at: string;
+  range:        { start: string; end: string; days: number };
+  patient: {
+    name:           string | null;
+    age:            number | null;
+    biological_sex: "male" | "female" | null;
+    height_cm:      number | null;
+    health_goals:   string[];
+  };
+  averages: {
+    calories:    number | null;
+    protein_g:   number | null;
+    carbs_g:     number | null;
+    fat_g:       number | null;
+    days_logged: number;
+  };
+  daily: Array<{
+    date:       string;
+    calories:   number;
+    protein_g:  number;
+    carbs_g:    number;
+    fat_g:      number;
+    meal_count: number;
+  }>;
+  trends: {
+    calories:   DoctorReportTrendPoint[];
+    protein:    DoctorReportTrendPoint[];
+    weight_lbs: DoctorReportTrendPoint[];
+    body_fat:   DoctorReportTrendPoint[];
+  };
+  weights: Array<{
+    date:         string | null;
+    weight_lbs:   number | null;
+    body_fat_pct: number | null;
+    lean_mass:    number | null;
+    fat_mass:     number | null;
+    notes:        string | null;
+  }>;
+  inbody: {
+    date:   string | null;
+    muscle: { trunk: number | null; right_arm: number | null; left_arm: number | null; right_leg: number | null; left_leg: number | null };
+    fat:    { trunk: number | null; right_arm: number | null; left_arm: number | null; right_leg: number | null; left_leg: number | null };
+    water:  { total: number | null; intracellular: number | null; extracellular: number | null };
+  } | null;
+  stack: {
+    medications: Medication[];
+    supplements: Supplement[];
+    peptides:    Peptide[];
+  };
+}
+
+// ── Annual Physical Snapshot ──────────────────────────────────────────────
+export interface AnnualPhysicalReportPayload {
+  ai_narrative?: string | null;
+  generated_at:  string;
+  patient: {
+    name:           string | null;
+    birthdate:      string | null;
+    age:            number | null;
+    biological_sex: "male" | "female" | null;
+    height_cm:      number | null;
+  };
+  vitals: {
+    bp:     BPSummary;
+    rhr:    { avg: number | null; n: number; unit: string };
+    hrv:    { avg: number | null; n: number; unit: string };
+    breath: { avg: number | null; n: number; unit: string };
+    spo2:   { avg: number | null; n: number; unit: string };
+  };
+  body_comp: {
+    latest_weight_lbs:   number | null;
+    latest_body_fat_pct: number | null;
+    latest_lean_mass:    number | null;
+    latest_date:         string | null;
+    delta_lbs_90d:       number | null;
+    delta_bf_pct_90d:    number | null;
+    bmi:                 number | null;
+  };
+  activity: {
+    avg_steps_30d: number | null;
+    source:        string;
+  };
+  sleep: {
+    avg_hours_30d:       number | null;
+    avg_efficiency_30d:  number | null;
+    avg_waso_min_30d:    number | null;
+    nights:              number;
+  };
+  cardio_fit: {
+    vo2_max: number | null;
+  };
+  labs: LabResult[];
+  stack: {
+    medications: Medication[];
+    supplements: Supplement[];
+    peptides:    Peptide[];
+  };
+}
+
+// ── Goal Progress Report ───────────────────────────────────────────────────
+export interface GoalProgressSupportingTile {
+  label: string;
+  value: number | null;
+  unit:  string;
+  hint?: string;
+}
+
+export interface GoalProgressReportPayload {
+  active:       boolean;
+  ai_narrative?: string | null;
+  generated_at: string;
+  range:        { start: string; end: string; days: number };
+  patient: {
+    name:           string | null;
+    age:            number | null;
+    biological_sex: "male" | "female" | null;
+    height_cm:      number | null;
+    health_goals:   string[];
+  };
+  message?:        string;
+  // When active, the following are present:
+  goal?: {
+    id:              string;
+    metric:          string;
+    baseline:        number | null;
+    target:          number | null;
+    current:         number | null;
+    started_on:      string | null;
+    deadline:        string | null;
+    progress_pct:    number | null;
+    pace?:           { status: string; label: string; detail?: string } | null;
+    plan?:           unknown;
+    title?:          string | null;
+    duration_weeks?: number | null;
+    [key: string]:   unknown;
+  };
+  metric_history?: DoctorReportTrendPoint[];
+  supporting?:     GoalProgressSupportingTile[];
+}
+
+// ── Doctor's Report (Overview / comprehensive) ────────────────────────────
+// The aggregated payload behind the print-friendly clinical report. Pure data —
+// the modal renders sections + a window.print() trigger; no scoring or
+// interpretation crosses this boundary.
+export interface DoctorReportTrendPoint { date: string; value: number; }
+export interface DoctorReportSeries {
+  trend:    DoctorReportTrendPoint[];
+  average:  number | null;
+  unit?:    string;
+}
+
+export interface DoctorReportPayload {
+  ai_narrative?: string | null;
+  generated_at: string;          // ISO timestamp
+  range:        { start: string; end: string; days: number };
+  patient: {
+    name:           string | null;
+    birthdate:      string | null;
+    age:            number | null;
+    biological_sex: "male" | "female" | null;
+    height_cm:      number | null;
+  };
+  blood_pressure: {
+    readings_count: number;
+    summary:        BPSummary;
+    readings:       BPReading[];
+  };
+  sleep_cardio: {
+    sleep_hours:    DoctorReportSeries;
+    sleep_score:    DoctorReportSeries;
+    hrv:            DoctorReportSeries;
+    rhr:            DoctorReportSeries;
+    breathing_rate: DoctorReportSeries;
+    /** Overnight oxygen saturation (Oura daily_spo2). Empty trend when the
+     *  user's ring model doesn't measure SpO2. */
+    spo2:           DoctorReportSeries;
+  };
+  /** Sleep Quality & Fragmentation — what Oura's public API actually
+   *  exposes (their BDI is app-only). Per-night efficiency + awake minutes
+   *  + restless events + a Normal/Borderline/Poor label, plus the cardio
+   *  context (breath, HR, SpO₂). Designed for sleep-apnea consult prep. */
+  sleep_fragmentation: {
+    nights: Array<{
+      date:       string;
+      efficiency: number | null;
+      label:      string | null;      // Normal / Borderline / Poor / null
+      awake_min:  number | null;      // WASO in minutes
+      restless:   number | null;      // raw Oura field, kept but not rendered
+      breath:     number | null;
+      rhr:        number | null;
+      avg_hr:     number | null;
+      spo2:       number | null;
+    }>;
+    mean_efficiency: number | null;
+    mean_waso_min:   number | null;
+    classification:  Record<string, number>;
+    note:            string;
+  };
+  apple_health: {
+    as_of:       string | null;
+    today:       Record<string, number | null>;
+    averages:    Record<string, number | null>;
+    days_synced: number | null;
+  } | null;
+  weight: {
+    entries:   Array<{ date: string; weight_lbs: number | null; body_fat_pct: number | null; notes: string | null }>;
+    delta_lbs: number | null;
+  };
+  stack: {
+    medications: Medication[];
+    supplements: Supplement[];
+    peptides:    Peptide[];
+  };
+}
+
+export interface WeightEntry {
+  id:                       string;
+  date:                     string;
+  weight_lbs:               number;
+  logged_at:                string;
+  // Optional body comp
+  body_fat_pct?:             number;
+  fat_mass_lbs?:             number;
+  lean_mass_lbs?:            number;
+  muscle_mass_lbs?:          number;
+  // InBody segmental muscle
+  trunk_muscle_lbs?:         number;
+  right_arm_muscle_lbs?:     number;
+  left_arm_muscle_lbs?:      number;
+  right_leg_muscle_lbs?:     number;
+  left_leg_muscle_lbs?:      number;
+  // InBody segmental fat
+  trunk_fat_lbs?:            number;
+  right_arm_fat_lbs?:        number;
+  left_arm_fat_lbs?:         number;
+  right_leg_fat_lbs?:        number;
+  left_leg_fat_lbs?:         number;
+  // InBody water
+  total_body_water_lbs?:     number;
+  intracellular_water_lbs?:  number;
+  extracellular_water_lbs?:  number;
+  ecw_ratio?:                number;
+  // InBody other
+  visceral_fat_level?:       number;
+  bone_mineral_content_lbs?: number;
+  bmr_kcal?:                 number;
+  inbody_score?:             number;
+}
+
+export interface NutritionSummaryDay {
+  date:       string;
+  calories:   number;
+  protein:    number;
+  carbs:      number;
+  fat:        number;
+  active_cal: number;
+  net_cal:    number;
+  logged:     boolean;
+}
+
+export interface NutritionSummary {
+  daily:        NutritionSummaryDay[];
+  days_logged:  number;
+  // Number of complete days backing the averages (today is excluded so a
+  // partial day doesn't drag the trend down). Usually 0..6.
+  avg_days_count?: number;
+  avg_calories: number;
+  avg_protein:  number;
+  avg_carbs:    number;
+  avg_fat:      number;
+}
+
+// ── Training types ────────────────────────────────────────────────────────────
+
+export interface ExerciseInfo {
+  name:      string;
+  primary:   string[];
+  secondary: string[];
+  equipment: string;
+  category:  string;
+}
+
+export interface WorkoutSet {
+  weight_lbs: number;
+  reps:       number;
+  rpe?:       number;
+  done?:      boolean;   // UI-only: marked complete during the session
+}
+
+export interface WorkoutTemplate {
+  id:        string;
+  name:      string;
+  type:      "lifting" | "stretching" | "mobility";
+  exercises: WorkoutExercise[];
+  created_at?: string;
+}
+
+export interface ParsedWorkout {
+  type:         "lifting" | "stretching" | "mobility";
+  exercises:    WorkoutExercise[];
+  duration_min: number | null;
+  notes:        string;
+}
+
+/** PR / progression badge for a single lifting exercise within a workout.
+ *  Computed server-side against the user's 365d history (Epley e1RM). */
+export interface ExerciseProgression {
+  /** pr = new lifetime e1RM, up/down = vs. last session, same = within noise
+   *  band, new = first time logging this lift. */
+  kind:       "pr" | "up" | "down" | "same" | "new";
+  /** Pre-formatted label (e.g. "🏆 PR", "▲ +5 lb"). Null when the badge
+   *  should be hidden (kind="same"). */
+  label:      string | null;
+  /** Signed delta vs. comparison point in pounds of e1RM. Absent for "new". */
+  delta_lbs?: number;
+}
+
+export interface WorkoutExercise {
+  name:         string;
+  sets?:        WorkoutSet[];   // lifting
+  duration_sec?: number;        // stretching
+  /** Server-computed PR / trend badge — only present on lifting rows that
+   *  had at least one valid set. */
+  progression?: ExerciseProgression;
+  /** Server-computed estimated 1RM (Epley) for this session of the lift. */
+  e1rm_lbs?:    number;
+}
+
+/** Lifetime PR snapshot per exercise — `/api/training/lifetime-prs` payload. */
+export interface LifetimePr {
+  exercise:        string;
+  e1rm_lbs:        number;
+  top_weight_lbs:  number;
+  top_reps:        number;
+  date:            string;
+}
+
+/** One session in an exercise's history timeline. */
+export interface ExerciseHistorySession {
+  date:           string;
+  top_weight_lbs: number;
+  top_reps:       number;
+  e1rm_lbs:       number;
+  volume_lbs:     number;
+}
+
+/** Response shape of `/api/training/exercise-history?name=...`. */
+export interface ExerciseHistory {
+  exercise:             string;
+  display:              string;
+  sessions:             ExerciseHistorySession[];
+  pr:                   LifetimePr | null;
+  current_streak_weeks: number;
+}
+
+/** One ISO-week bucket in the training-load sparkline. */
+export interface WeeklyLoadBucket {
+  week:               string;   // short label like "Jun 17"
+  strength_sessions:  number;
+  cardio_sessions:    number;
+  cardio_min:         number;
+  volume_lbs:         number;
+  is_current:         boolean;
+}
+
+/** Soft 'consider a deload' nudge. `triggered=true` means show the prompt. */
+export interface DeloadRecommendation {
+  triggered:          boolean;
+  reason:             string | null;
+  volume_change_pct:  number | null;
+  hrv_change_pct:     number | null;
+  recent_sessions:    number;
+  suggestion:         string | null;
+}
+
+/** Last-7-day muscle-group coverage heatmap data. */
+export interface MuscleBalance {
+  window_days:               number;
+  groups:                    { name: string; session_days: number }[];
+  imbalance_note:            string | null;
+  total_strength_sessions:   number;
+}
+
+/** Combined `/api/training/load` payload — powers three Training-tab cards. */
+export interface TrainingLoadPayload {
+  weekly_volume:           WeeklyLoadBucket[];
+  deload_recommendation:   DeloadRecommendation;
+  muscle_balance:          MuscleBalance;
+}
+
+/** Pace status from the Nutrition Coach card. */
+export interface NutritionPace {
+  kind:    "on_pace" | "behind_protein" | "behind_calories" | "over_calories"
+         | "early" | "late_settled" | "no_targets";
+  message: string;
+}
+
+/** `/api/nutrition/today-coach` — Today's Plate / pace / streak payload. */
+export interface NutritionCoachPayload {
+  date:                 string;
+  pace:                 NutritionPace;
+  streak_days:          number;
+  streak_threshold_pct: number;
+  day_progress_pct:     number;
+  targets:              { calories: number; protein: number; carbs: number; fat: number };
+  consumed:             { calories: number; protein: number; carbs: number; fat: number };
+  remaining:            { calories: number; protein: number };
+  next_meal_hint:       string | null;
+}
+
+/** Bedtime recommendation block — null when Oura history is sparse. */
+export interface BedtimeRecommendation {
+  wind_down_start:        string;
+  lights_out:             string;
+  target_wake:            string;
+  target_hours:           number;
+  earlier_for_training:   boolean;
+}
+
+/** Last night's quick recap as shown in the Tonight's Sleep card. */
+export interface LastNightSummary {
+  date:        string;
+  hours:       number;
+  efficiency:  number | null;
+  hrv:         number | null;
+}
+
+// ── Weekly Recap (community pillar) ──────────────────────────────────────
+
+export interface WeeklyRecapTraining {
+  workouts:            number;
+  strength_sessions:   number;
+  cardio_sessions:     number;
+  lifting_volume_lbs:  number;
+  cardio_min:          number;
+  prs:                 string[];
+  pr_count:            number;
+  top_lift:            { name: string; e1rm_lbs: number } | null;
+}
+
+export interface WeeklyRecapNutrition {
+  days_logged:     number;
+  protein_days:    number;
+  avg_protein:     number | null;
+  target_protein:  number | null;
+}
+
+export interface WeeklyRecapSleep {
+  avg_hours:      number | null;
+  streak_nights:  number;
+  debt_hours:     number | null;
+  nights_logged:  number;
+}
+
+export interface WeeklyRecap {
+  week_start:        string;
+  week_end:          string;
+  is_current_week:   boolean;
+  training:          WeeklyRecapTraining;
+  nutrition:         WeeklyRecapNutrition;
+  sleep:             WeeklyRecapSleep;
+  headline:          string;
+  highlight:         string | null;
+  has_content:       boolean;
+  /** Fable v2 Sunday Scorecard ritual: next-week plan headline (one sentence) */
+  next_week_plan?:   string | null;
+  /** Fable v2 Sunday Scorecard ritual: one specific, testable experiment to try */
+  experiment?:       string | null;
+}
+
+// ── Oura tags ────────────────────────────────────────────────────────────
+
+export interface OuraTagDisplay {
+  code:     string;
+  label:    string;
+  emoji:    string;
+  category: string;
+}
+
+export interface OuraTag {
+  id:            string;
+  external_id:   string;
+  tag_type_code: string;
+  comment:       string | null;
+  start_time:    string | null;
+  end_time:      string | null;
+  start_day:     string;
+  end_day:       string | null;
+  display:       OuraTagDisplay;
+}
+
+export interface OuraTagsPayload {
+  tags:  OuraTag[];
+  today: OuraTag[];
+}
+
+export interface TagCorrelationItem {
+  tag_code:         string;
+  tag_label:        string;
+  tag_emoji:        string;
+  metric:           string;
+  metric_label:     string;
+  unit:             string;
+  positive_days:    number;
+  negative_days:    number;
+  positive_avg:     number;
+  negative_avg:     number;
+  delta:            number;
+  abs_pct:          number;
+  worse_on_tag:     boolean;
+  /** Confidence tier from the shared correlation_confidence module.
+   *  low = 5-6 tag days, medium = 7-9, high = 10+ */
+  confidence:       "low" | "medium" | "high" | null;
+  confidence_label: string;
+}
+
+export interface TagCorrelations {
+  window_days:    number;
+  items:          TagCorrelationItem[];
+  tag_day_counts: Record<string, number>;
+}
+
+// ── Doctor Handoff one-pager (Fable IMPROVE #1) ──────────────────────────
+
+export interface DoctorOnePagerSnapshot {
+  name:            string | null;
+  age:             number | null;
+  biological_sex:  string | null;
+  height:          string | null;
+  weight_lbs:      number | null;
+  report_date:     string;
+  window_days:     number;
+}
+
+export interface DoctorOnePagerVitals {
+  bp: {
+    systolic_now:    number | null;
+    diastolic_now:   number | null;
+    systolic_trend:  "↑" | "↓" | "→";
+    diastolic_trend: "↑" | "↓" | "→";
+    n_readings?:     number;
+  };
+  oura: {
+    rhr_now:      number | null;
+    hrv_now:      number | null;
+    sleep_h_now:  number | null;
+    rhr_trend:    "↑" | "↓" | "→";
+    hrv_trend:    "↑" | "↓" | "→";
+    sleep_trend:  "↑" | "↓" | "→";
+  };
+}
+
+export interface DoctorOnePagerStack {
+  medications: string[];
+  supplements: string[];
+  peptides:    string[];
+}
+
+export interface DoctorOnePagerSymptomLog {
+  date:      string;
+  symptoms:  string[];
+  severity?: string;
+  notes?:    string;
+}
+
+export interface DoctorOnePagerLab {
+  metric:  string;
+  value:   number | string;
+  unit:    string | null;
+  date:    string;
+}
+
+export interface DoctorOnePagerPayload {
+  snapshot:         DoctorOnePagerSnapshot;
+  vitals:           DoctorOnePagerVitals;
+  flags:            string[];
+  stack:            DoctorOnePagerStack;
+  patient_reported: {
+    recent_symptoms: DoctorOnePagerSymptomLog[];
+    memory_flags:    string[];
+  };
+  labs:             DoctorOnePagerLab[];
+}
+
+// ── Coach Al persistent memory ───────────────────────────────────────────
+
+export type CoachMemoryCategory =
+  | "injury" | "preference" | "goal" | "medical" | "lifestyle" | "other";
+
+export interface CoachMemoryItem {
+  id:         string;
+  category:   CoachMemoryCategory;
+  content:    string;
+  source:     "user" | "auto";
+  active:     boolean;
+  created_at: string;
+  updated_at: string;
+  display:    { label: string; emoji: string };
+}
+
+export interface CoachMemoryCategoryOption {
+  key:   CoachMemoryCategory;
+  label: string;
+  emoji: string;
+}
+
+export interface CoachMemoryPayload {
+  memories:         CoachMemoryItem[];
+  categories:       CoachMemoryCategoryOption[];
+  max_content_len:  number;
+}
+
+// ── Private Journal ──────────────────────────────────────────────────────
+
+export interface JournalEntry {
+  id:          string;
+  date:        string;
+  text:        string;
+  tags:        string[];
+  created_at:  string;
+  updated_at:  string;
+}
+
+export interface JournalTodayPayload {
+  entry:           JournalEntry | null;
+  streak_days:     number;
+  suggested_tags:  string[];
+  date:            string;
+}
+
+// ── Friend pulse strip ───────────────────────────────────────────────────
+
+export interface FriendGlance {
+  user_id:      string;
+  name:         string;
+  has_activity: boolean;
+  workouts:     number;
+  pr_count:     number;
+  sleep_streak: number;
+  protein_days: number;
+  highlight:    string | null;
+  headline:     string | null;
+}
+
+export interface FriendsGlancePayload {
+  friends:            FriendGlance[];
+  viewer_has_friends: boolean;
+}
+
+// ── Group weekly recap ──────────────────────────────────────────────────
+
+export interface GroupRecapTotals {
+  workouts:           number;
+  strength_sessions:  number;
+  cardio_sessions:    number;
+  lifting_volume_lbs: number;
+  cardio_min:         number;
+  pr_count:           number;
+  nights_logged:      number;
+  protein_days:       number;
+  active_members:     number;
+}
+
+export interface GroupRecapMember {
+  user_id:      string;
+  name:         string;
+  workouts:     number;
+  pr_count:     number;
+  sleep_streak: number;
+  protein_days: number;
+  highlight:    string | null;
+}
+
+export interface GroupRecap {
+  week_start:      string | null;
+  week_end:        string | null;
+  totals:          GroupRecapTotals;
+  leaderboard:     GroupRecapMember[];
+  top_performers: {
+    sessions:     { user_id: string; name: string | null; value: number } | null;
+    pr:           { user_id: string; name: string | null; exercise: string | null; e1rm_lbs: number } | null;
+    sleep_streak: { user_id: string; name: string | null; value: number } | null;
+  };
+  headline:        string;
+}
+
+/** One night's row in the sleep-debt debug breakdown. */
+export interface SleepDebtNight {
+  date:          string;
+  actual_h:      number;
+  need_h:        number;
+  raw_gap_h:     number;
+  capped_gap_h:  number;
+  source:        "oura" | "static";
+  raw_cache?:    {
+    total_sec:      number | null;
+    sleep_need_sec: number | null;
+    efficiency:     number | null;
+    deep_sec:       number | null;
+    rem_sec:        number | null;
+    awake_sec:      number | null;
+    bedtime_start:  string | null;
+  };
+}
+
+/** `/api/sleep/debt-debug` payload — what's actually in the cache + math. */
+export interface SleepDebtDebug {
+  today:             string;
+  version?:          string;
+  window_nights:     number;
+  static_target_h:   number;
+  per_night_caps_h:  { deficit: number; surplus: number };
+  nights:            SleepDebtNight[];
+  raw_sum_h:         number;
+  capped_sum_h:      number;
+  reported_debt_h:   number | null;
+  note:              string;
+}
+
+/** Raw Oura session record returned by /api/sleep/oura-raw-debug. */
+export interface OuraRawSession {
+  day:                  string | null;
+  type:                 string | null;
+  total_sleep_duration: number | null;
+  total_sleep_h:        number | null;
+  bedtime_start:        string | null;
+  bedtime_end:          string | null;
+  efficiency:           number | null;
+  sleep_need_raw:       unknown;
+  deep_sleep_duration:  number | null;
+  rem_sleep_duration:   number | null;
+  awake_time:           number | null;
+}
+
+export interface OuraRawDebug {
+  user_id?:        string;
+  parser_version?: string;
+  session_count?:  number;
+  sessions?:       OuraRawSession[];
+  note?:           string;
+  error?:          string;
+}
+
+/** Qualitative sleep balance indicator — sourced from Oura's
+ *  contributors.sleep_balance score. Replaces the old hours-of-debt
+ *  number that couldn't be made to agree with the Oura app. */
+export interface SleepBalance {
+  key:     "well_rested" | "running_flat" | "running_on_fumes" | "sleep_deficit" | "unknown";
+  label:   string;
+  tone:    "good" | "ok" | "warn" | "alert" | "neutral";
+  summary: string;
+}
+
+/** `/api/sleep/tonight` payload. */
+export interface TonightSleepPayload {
+  date:                 string;
+  target_hours:         number;
+  bedtime:              BedtimeRecommendation | null;
+  streak_nights:        number;
+  /** Qualitative balance indicator — the new way to communicate sleep
+   *  pressure. Replaces sleep_debt_hours. */
+  balance:              SleepBalance | null;
+  /** Raw Oura sleep_balance score (0-100) backing `balance`. Surfaced
+   *  for power users / debug viewers only. */
+  balance_score:        number | null;
+  /** Deprecated — kept for backward compat; always null on v9+. */
+  sleep_debt_hours:     number | null;
+  last_night:           LastNightSummary | null;
+  tomorrow_intensity:   "heavy" | "moderate" | "easy" | "rest" | null;
+  coach_note:           string;
+}
+
+export interface Workout {
+  id:                string;
+  date:              string;
+  type:              string;            // free-text label (e.g. "Lifting", "Running", "Sauna")
+  exercises:         WorkoutExercise[];
+  muscle_groups:     string[];
+  duration_min?:     number;
+  notes?:            string;
+  logged_at:         string;
+  total_volume_lbs?: number;
+  // Extended attributes (Oura imports + future cardio entries)
+  kind?:             "strength" | "cardio" | "session";
+  source?:           "oura" | null;     // null = manually logged
+  external_id?:      string;            // Oura workout/session id
+  activity?:         string;            // running, walking, sauna, meditation, etc.
+  distance_meters?:  number;
+  avg_hr?:           number;
+  calories_kcal?:    number;
+}
+
+export interface TrainingRecommendation {
+  level:            "full" | "moderate" | "light" | "rest";
+  label:            string;
+  color:            string;
+  title:            string;
+  detail:           string;
+  modifiers:        string[];
+  suggestion:       string;
+  readiness:        number;
+  consecutive_days: number;
+}
+
+export interface StretchExercise {
+  name:         string;
+  duration_sec: number;
+  cue:          string;
+  muscle_group: string;
+  sides:        number;
+}
+
+export interface StretchRoutine {
+  exercises:     StretchExercise[];
+  total_min:     number;
+  muscle_groups: string[];
+}
+
+export interface WeeklySession {
+  name:       string;
+  date:       string;
+  is_today:   boolean;
+  rest:       boolean;
+  optional?:  boolean;
+  focus?:     string[];
+  exercises?: Array<{ name: string; sets: number; reps: string; note: string }>;
+}
+
+export interface WeeklyPlan {
+  plan:          WeeklySession[];
+  days_per_week: number;
+}
+
+export interface TrainingSettings {
+  goal:          string;
+  days_per_week: number;
+  split_type:    string;
+  equipment:     string[];
+  units:         string;
+}
+
+// ── Today's Workout ──────────────────────────────────────────────────
+export interface TodayWorkoutExercise {
+  name:          string;
+  sets?:         number | null;
+  reps?:         string | null;
+  notes?:        string | null;
+  duration_sec?: number | null;
+}
+export interface TodayWorkout {
+  id?:            string;
+  user_id?:       string;
+  date:           string;
+  session_name:   string | null;
+  session_type:   "strength" | "cardio" | "mobility" | "rest" | null;
+  intensity:      "easy" | "moderate" | "heavy" | "rest" | null;
+  duration_min:   number | null;
+  exercises:      TodayWorkoutExercise[];
+  rationale:      string | null;
+  source:         "claude" | "template_fallback" | "rest_recommendation" | null;
+  status:         "pending" | "started" | "completed" | "skipped";
+  status_at?:     string | null;
+  feedback?:      "up" | "down" | null;
+  generated_at?:  string;
+}
+
+// ── Stack Efficacy (Insight Phase 4) ──────────────────────────────────
+export interface StackEfficacyDelta {
+  metric:         string;
+  label:          string;
+  unit:           string;
+  direction:      "higher_better" | "lower_better" | "neutral";
+  before_avg:     number;
+  after_avg:      number;
+  delta:          number;
+  abs_delta_pct:  number;
+  helpful:        boolean | null;
+}
+export interface StackEfficacyItem {
+  item_name:        string;
+  display_name:     string;
+  class:            "supplement" | "peptide" | "medication";
+  dose?:            string | null;
+  timing?:          string | null;
+  started_on:       string;
+  days_since_start: number;
+  before_window:    { start: string; end: string } | null;
+  after_window:     { start: string; end: string } | null;
+  deltas:           StackEfficacyDelta[];
+  note?:            string | null;
+}
+
+// ── Symptom journal + correlation (Insight Phase 2) ──────────────────────
+export interface SymptomLog {
+  id?:         string;
+  user_id?:    string;
+  date:        string;          // YYYY-MM-DD
+  symptoms:    string[];        // ids from SYMPTOM_CATALOG
+  severity?:   "mild" | "moderate" | "severe" | null;
+  notes?:      string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface SymptomCorrelationDelta {
+  metric:               string;
+  label:                string;
+  unit:                 string;
+  direction:            "higher_better" | "lower_better" | "neutral";
+  symptom_avg:          number;
+  symptom_free_avg:     number;
+  delta:                number;
+  abs_delta_pct:        number;
+  worse_on_symptom:     boolean | null;
+  /** Per-metric sample sizes + confidence tier (Fable IMPROVE #4).
+   *  Absent on old cached responses. */
+  positive_n?:          number;
+  negative_n?:          number;
+  confidence?:          "low" | "medium" | "high" | null;
+  confidence_label?:    string;
+}
+
+export interface SymptomCorrelation {
+  symptom:                  string | null;
+  symptom_label:            string;
+  symptom_day_count:        number;
+  symptom_free_day_count:   number;
+  deltas:                   SymptomCorrelationDelta[];
+  narrative:                string | null;
+  insufficient_data?:       boolean;
+  min_sample_size?:         number;
+}
+
+// ── Daily Insight ────────────────────────────────────────────────────────
+// Claude reads 14d cross-domain data and writes ONE pattern + ONE action.
+// Rendered as a card at the top of the Scorecard.
+export interface DailyInsight {
+  id?:         string;
+  user_id?:    string;
+  date:        string;     // YYYY-MM-DD
+  headline:    string;     // 4–8 word eyebrow
+  pattern:     string;     // 1–2 sentences w/ numbers
+  action:      string;     // 1 sentence — one thing to try this week
+  evidence?:   string;     // short numeric summary
+  confidence:  "low" | "medium" | "high";
+  category:    "sleep" | "training" | "nutrition" | "cardio" | "recovery" | "general";
+  feedback?:   "up" | "down" | "dismissed" | null;
+  feedback_at?: string | null;
+  generated_at?: string;
+}
+
+// ── System workout templates ─────────────────────────────────────────────
+// Curated strength + hybrid programs the user can browse from the
+// Training tab. Static catalog server-side; the user clicks "Start" on a
+// session and it becomes the seed for a new logged workout.
+export interface SystemTemplateSession {
+  name:      string;
+  exercises: string[];
+}
+export interface SystemWorkoutTemplate {
+  id:            string;
+  name:          string;
+  level:         string;          // "Beginner" | "Intermediate" | ...
+  days_per_week: number;
+  tag:           string;          // "Strength" | "Hypertrophy" | "Balanced" | ...
+  summary:       string;
+  why_for_50?:   string;          // why this works for 50+ adults
+  sessions:      SystemTemplateSession[];
+}
+
+// ── Labs types ─────────────────────────────────────────────────────────────────
+
+/** Response shape from the vision-first OCR endpoint. Includes a
+ *  per-marker confidence tag ("low"|"medium"|"high") and the raw line
+ *  Claude read the value from, so the review UI can call out anything
+ *  worth double-checking before saving. */
+export interface OcrLabMarker {
+  key:             string;   // canonical marker key (matches labs.REFERENCE_RANGES)
+  value:           number;
+  unit:            string;
+  reference_range: string;
+  confidence:      "low" | "medium" | "high";
+  raw_line:        string;
+}
+
+/** Onboarding welcome-card state. `show` is the composite: card is
+ *  visible only when at least one step is incomplete AND the user hasn't
+ *  dismissed. `completed` is a convenience for the celebration state. */
+/** Doctor Visit Prep Mode — a single visit + AI-drafted question list. */
+export type VisitPrepPhase =
+  | "future" | "t_minus_14" | "t_minus_3" | "t_minus_1"
+  | "visit_day" | "post_visit" | "closed";
+
+export interface VisitQuestion {
+  id:              string;
+  text:            string;
+  source_data:     string;
+  provider_scope:  string;
+  user_edited?:    boolean;
+}
+
+export interface DoctorVisit {
+  id:                string;
+  user_id?:          string;
+  visit_date:        string;
+  provider_type:     "primary_care" | "cardiology" | "urology" | "endocrinology" |
+                     "dermatology"  | "orthopedics" | "other";
+  reason?:           string | null;
+  status:            "upcoming" | "completed" | "canceled";
+  question_drafts:   VisitQuestion[];
+  post_visit_notes?: string | null;
+  outcome_summary?:  string | null;
+  created_at?:       string;
+  updated_at?:       string;
+  completed_at?:     string | null;
+  canceled_at?:      string | null;
+}
+
+export interface OnboardingStatus {
+  show:         boolean;
+  completed:    boolean;
+  dismissed_at: string | null;
+  steps: {
+    foursome_invited: boolean;
+    oura_connected:   boolean;
+    goal_set:         boolean;
+    checked_in:       boolean;
+  };
+}
+
+export interface OcrLabResult {
+  date:    string;
+  markers: OcrLabMarker[];
+  method:  "text" | "vision" | "empty" | "unsupported";
+  count:   number;
+}
+
+export interface LabEntry {
+  id:         string;
+  date:       string;
+  logged_at:  string;
+  // Metabolic panel
+  glucose?:      number;
+  hba1c?:        number;
+  insulin?:      number;
+  // Lipids
+  total_cholesterol?: number;
+  ldl?:          number;
+  hdl?:          number;
+  triglycerides?: number;
+  // Thyroid
+  tsh?:          number;
+  t3_free?:      number;
+  t4_free?:      number;
+  // Hormones
+  testosterone_total?: number;
+  testosterone_free?:  number;
+  estradiol?:    number;
+  dhea_s?:       number;
+  cortisol?:     number;
+  // Inflammation
+  crp_hs?:       number;
+  homocysteine?: number;
+  // Blood / Iron
+  ferritin?:     number;
+  hemoglobin?:   number;
+  hematocrit?:   number;
+  // Vitamins & minerals
+  vitamin_d?:    number;
+  vitamin_b12?:  number;
+  magnesium?:    number;
+  zinc?:         number;
+  // Kidney / Liver
+  creatinine?:   number;
+  egfr?:         number;
+  alt?:          number;
+  ast?:          number;
+  ggt?:          number;
+  // Longevity-focused additions (matched to REFERENCE_RANGES on backend)
+  lp_a?:         number;
+  non_hdl?:      number;
+  homa_ir?:      number;
+  uric_acid?:    number;
+  notes?:        string;
+}
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const isFormData = options?.body instanceof FormData;
+  const token = getToken();
+  const authHeader = token ? { "Authorization": `Bearer ${token}` } : {};
+  // X-User-Local-Date — pinned in ONE place so every API call carries the
+  // user's device-local "today" with it. Backend `_user_local_today(request)`
+  // helper reads this. Without this, Render (UTC) silently rolls over to
+  // tomorrow after ~4pm PT, which is the bug we kept re-introducing every
+  // time we added a new endpoint that touched "today".
+  const tzHeader = { "X-User-Local-Date": localToday() };
+  const res = await fetch(`${BASE}${path}`, {
+    credentials: "include",
+    ...options,
+    headers: isFormData ? { ...authHeader, ...tzHeader } : {
+      "Content-Type": "application/json",
+      ...authHeader,
+      ...tzHeader,
+      ...options?.headers,
+    },
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+export const api = {
+  dashboard():          Promise<DashboardData> { return request("/api/dashboard"); },
+  wearables():          Promise<{ connected: Wearable[]; available: Wearable[] }> { return request("/api/wearables"); },
+  disconnect(p: string): Promise<void> { return request(`/api/wearables/${p}`, { method: "DELETE" }); },
+  logout():             Promise<void> { clearToken(); return request("/auth/logout", { method: "POST" }); },
+  /**
+   * Full sign-out: clears BackNine JWT + Supabase Auth session + every
+   * sb-* localStorage key + dashboard cache, then hits the backend
+   * /auth/logout endpoint. This is what the "Sign out" button in the
+   * account menu should call, NOT `logout()` alone — plain logout()
+   * leaves the Supabase session intact, which is how a user got stuck
+   * in a previous account on the same browser.
+   *
+   * Explicitly returns nothing; the caller redirects to root.
+   */
+  async signOutFully(): Promise<void> {
+    // 1. Clear our own JWT + dashboard cache
+    clearToken();
+    // 2. Sign out of Supabase Auth. Import lazily so this file stays
+    // free of a supabase-js dep at module top.
+    if (typeof window !== "undefined") {
+      try {
+        const { supabase } = await import("@/lib/supabase");
+        await supabase.auth.signOut();
+      } catch { /* best-effort — proceed with cleanup */ }
+      // 3. Belt-and-suspenders: nuke any sb-* localStorage keys Supabase
+      // may have left behind (some flows leave stale rows).
+      try {
+        Object.keys(localStorage)
+          .filter(k => k.startsWith("sb-") || k === "bn_token" || k === "bn_dashboard_cache")
+          .forEach(k => localStorage.removeItem(k));
+      } catch { /* noop */ }
+    }
+    // 4. Fire the backend logout endpoint. Ignore failure — the browser
+    // state is already clean.
+    try {
+      await request("/auth/logout", { method: "POST" });
+    } catch { /* silent */ }
+  },
+  connectOura(userId?: string): void {
+    const url = userId
+      ? `https://backnine-hu60.onrender.com/auth/oura?link_user_id=${encodeURIComponent(userId)}`
+      : "https://backnine-hu60.onrender.com/auth/oura";
+    window.location.href = url;
+  },
+
+  // ── Longevity history ────────────────────────────────────────────────────────
+  longevityHistory(days = 90): Promise<LongevityHistory> {
+    return request(`/api/longevity/history?days=${days}`);
+  },
+
+  // ── Nutrition ──────────────────────────────────────────────────────────────
+  nutritionToday(date?: string): Promise<NutritionToday> {
+    return request(`/api/nutrition/today?date=${date || localToday()}`);
+  },
+  nutritionSummary(date?: string): Promise<NutritionSummary> { return request(`/api/nutrition/summary?date=${date || localToday()}`); },
+  searchFoods(q: string): Promise<{ results: FoodItem[] }> { return request(`/api/nutrition/foods/search?q=${encodeURIComponent(q)}`); },
+  logMeal(meal: Omit<Meal, "id" | "logged_at"> & { date?: string }): Promise<Meal> {
+    return request("/api/nutrition/meals", {
+      method: "POST",
+      body: JSON.stringify({ ...meal, date: meal.date || localToday() }),
+    });
+  },
+  logMealsBatch(meals: MealDraftItem[], date?: string): Promise<{ meals: Meal[] }> {
+    return request("/api/nutrition/meals/batch", {
+      method: "POST",
+      body: JSON.stringify({ meals, date: date || localToday() }),
+    });
+  },
+  recentFoods(): Promise<{ foods: MealDraftItem[] }> {
+    return request("/api/nutrition/recent");
+  },
+  parseMealText(text: string): Promise<{ items: MealDraftItem[] }> {
+    return request("/api/nutrition/parse-text", { method: "POST", body: JSON.stringify({ text }) });
+  },
+  parseMealPhoto(image: string, media_type: string): Promise<{ items: MealDraftItem[] }> {
+    return request("/api/nutrition/parse-photo", {
+      method: "POST",
+      body: JSON.stringify({ image, media_type }),
+    });
+  },
+  deleteMeal(id: string, date?: string): Promise<void> {
+    const qs = date ? `?date=${date}` : "";
+    return request(`/api/nutrition/meals/${id}${qs}`, { method: "DELETE" });
+  },
+  updateMeal(id: string, patch: Partial<Pick<Meal, "name" | "calories" | "protein" | "carbs" | "fat" | "meal_type">>): Promise<Meal> {
+    return request(`/api/nutrition/meals/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    });
+  },
+  weightEntries():      Promise<{ entries: WeightEntry[] }> { return request("/api/nutrition/weight"); },
+
+  // ── Blood pressure log ─────────────────────────────────────────────────────
+  /** List BP readings + recent-window summary stats. days=0 → all-time. */
+  bpList(days = 90): Promise<{ readings: BPReading[]; summary: BPSummary }> {
+    return request(`/api/bp?days=${days}`);
+  },
+  /** Save a single reading. Defaults `date` to today and `time_of_day` to morning. */
+  bpLog(entry: { systolic: number; diastolic: number; pulse?: number; date?: string; time_of_day?: BPTimeOfDay; notes?: string }): Promise<BPReading> {
+    return request("/api/bp", {
+      method: "POST",
+      body: JSON.stringify({ ...entry, date: entry.date || localToday() }),
+    });
+  },
+  bpDelete(id: string): Promise<{ status: string }> {
+    return request(`/api/bp/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+
+  // ── Doctor's Report (Overview tab — comprehensive) ───────────────────
+  doctorOnePager(opts: { refresh?: boolean } = {}): Promise<DoctorOnePagerPayload> {
+    return request(`/api/doctor-one-pager${opts.refresh ? "?refresh=1" : ""}`);
+  },
+  doctorReport(opts: { days?: number; end?: string; refresh?: boolean } = {}): Promise<DoctorReportPayload> {
+    const days = opts.days ?? 30;
+    const qs = new URLSearchParams({ days: String(days) });
+    // Default to the device's local today so the server's UTC clock doesn't
+    // miss/over-include the wrong night for users west of GMT. Caller can
+    // override with an explicit end date.
+    qs.set("end", opts.end || localToday());
+    if (opts.refresh) qs.set("refresh", "1");
+    return request(`/api/doctor-report?${qs.toString()}`);
+  },
+
+  // ── Focused reports (each is a separate Health Reports tab) ──────────
+  cardiometabolicReport(opts: { days?: number; end?: string } = {}): Promise<CardiometabolicReportPayload> {
+    const days = opts.days ?? 30;
+    const qs = new URLSearchParams({ days: String(days) });
+    if (opts.end) qs.set("end", opts.end);
+    return request(`/api/cardiometabolic-report?${qs.toString()}`);
+  },
+  preProcedureReport(): Promise<PreProcedureReportPayload> {
+    return request(`/api/pre-procedure-report`);
+  },
+  trainingRecoveryReport(opts: { days?: number; end?: string } = {}): Promise<TrainingRecoveryReportPayload> {
+    const days = opts.days ?? 30;
+    const qs = new URLSearchParams({ days: String(days) });
+    if (opts.end) qs.set("end", opts.end);
+    return request(`/api/training-recovery-report?${qs.toString()}`);
+  },
+  nutritionBodyCompReport(opts: { days?: number; end?: string } = {}): Promise<NutritionBodyCompReportPayload> {
+    const days = opts.days ?? 30;
+    const qs = new URLSearchParams({ days: String(days) });
+    if (opts.end) qs.set("end", opts.end);
+    return request(`/api/nutrition-body-comp-report?${qs.toString()}`);
+  },
+  goalProgressReport(opts: { days?: number; end?: string } = {}): Promise<GoalProgressReportPayload> {
+    const days = opts.days ?? 30;
+    const qs = new URLSearchParams({ days: String(days) });
+    if (opts.end) qs.set("end", opts.end);
+    return request(`/api/goal-progress-report?${qs.toString()}`);
+  },
+  annualPhysicalReport(): Promise<AnnualPhysicalReportPayload> {
+    return request(`/api/annual-physical-report`);
+  },
+
+  // ── Longevity Score per-metric history (slot pop-outs) ───────────────
+  // ── Today's Workout (Claude-prescribed daily session) ──────────────
+  todayWorkout(): Promise<TodayWorkout> {
+    return request(`/api/training/today`);
+  },
+  todayWorkoutStatus(status: "started" | "completed" | "skipped"): Promise<{ ok: boolean }> {
+    return request(`/api/training/today/status`, {
+      method: "POST",
+      body: JSON.stringify({ status }),
+    });
+  },
+  todayWorkoutFeedback(feedback: "up" | "down"): Promise<{ ok: boolean }> {
+    return request(`/api/training/today/feedback`, {
+      method: "POST",
+      body: JSON.stringify({ feedback }),
+    });
+  },
+  todayWorkoutRegenerate(): Promise<TodayWorkout> {
+    return request(`/api/training/today/regenerate`, { method: "POST" });
+  },
+
+  // ── Stack Efficacy (Insight Phase 4) ────────────────────────────────
+  stackEfficacy(): Promise<{ items: StackEfficacyItem[] }> {
+    return request(`/api/stack/efficacy`);
+  },
+
+  // ── Symptom journal + correlation (Insight Phase 2) ────────────────
+  symptomsCatalog(): Promise<{ catalog: Array<{ id: string; label: string; emoji: string }> }> {
+    return request(`/api/symptoms/catalog`);
+  },
+  symptomsList(days = 90): Promise<{ logs: SymptomLog[] }> {
+    return request(`/api/symptoms?days=${days}`);
+  },
+  symptomsLog(entry: { date?: string; symptoms: string[]; severity?: "mild" | "moderate" | "severe"; notes?: string }): Promise<SymptomLog> {
+    return request(`/api/symptoms`, { method: "POST", body: JSON.stringify(entry) });
+  },
+  symptomsDelete(date: string): Promise<{ status: string }> {
+    return request(`/api/symptoms/${encodeURIComponent(date)}`, { method: "DELETE" });
+  },
+  symptomsCorrelation(opts: { days?: number; symptom?: string } = {}): Promise<SymptomCorrelation> {
+    const days = opts.days ?? 30;
+    const qs = new URLSearchParams({ days: String(days) });
+    if (opts.symptom) qs.set("symptom", opts.symptom);
+    return request(`/api/symptoms/correlation?${qs.toString()}`);
+  },
+
+  // ── Daily Insight (Phase 1 of the Insight pillar) ──────────────────
+  dailyInsight(): Promise<{ insight: DailyInsight | null }> {
+    return request(`/api/insight/daily`);
+  },
+  dailyInsightFeedback(date: string, feedback: "up" | "down" | "dismissed"): Promise<{ ok: boolean }> {
+    return request(`/api/insight/daily/feedback`, {
+      method: "POST",
+      body: JSON.stringify({ date, feedback }),
+    });
+  },
+  insightList(opts: { days?: number; category?: string } = {}): Promise<{ insights: DailyInsight[] }> {
+    const qs = new URLSearchParams({ days: String(opts.days ?? 90) });
+    if (opts.category) qs.set("category", opts.category);
+    return request(`/api/insight/list?${qs.toString()}`);
+  },
+
+  // ── System-curated workout templates (browse library) ──────────────
+  systemTemplates(): Promise<{ templates: SystemWorkoutTemplate[] }> {
+    return request(`/api/training/system-templates`);
+  },
+  systemTemplate(id: string): Promise<SystemWorkoutTemplate> {
+    return request(`/api/training/system-templates/${encodeURIComponent(id)}`);
+  },
+
+  // ── Referral status ────────────────────────────────────────────────
+  referralStatus(): Promise<{
+    total_referrals: number;
+    months_earned:   number;
+    pending_months:  number;
+    applied_months:  number;
+    recent:          string[];
+  }> {
+    return request(`/api/referral/status`);
+  },
+
+  // ── Report sharing (tokenized links for doctor handoff) ─────────────
+  createReportShare(report_type: string, params?: Record<string, unknown>, ttl_days = 30):
+    Promise<{ url: string; token: string; expires_at: string }> {
+    return request(`/api/reports/share`, {
+      method: "POST",
+      body: JSON.stringify({ report_type, params: params ?? {}, ttl_days }),
+    });
+  },
+  // Note: the doctor-side view goes through /share/{token} on the frontend,
+  // which fetches /api/share/{token} server-side without auth.
+
+  longevityMetricHistory(metric: string, days = 90): Promise<{
+    metric:    string;
+    unit:      string;
+    threshold: number | null;
+    trend:     Array<{ date: string; value: number }>;
+  }> {
+    return request(`/api/longevity/metric-history?metric=${encodeURIComponent(metric)}&days=${days}`);
+  },
+  logWeight(entry: Partial<WeightEntry> & { weight_lbs: number }): Promise<WeightEntry> {
+    return request("/api/nutrition/weight", {
+      method: "POST",
+      body: JSON.stringify({ ...entry, date: entry.date || localToday() }),
+    });
+  },
+  deleteWeight(id: string): Promise<void> { return request(`/api/nutrition/weight/${id}`, { method: "DELETE" }); },
+  nutritionSettings():  Promise<NutritionSettings> { return request("/api/nutrition/settings"); },
+  saveNutritionSettings(s: NutritionSettings): Promise<NutritionSettings> {
+    return request("/api/nutrition/settings", { method: "POST", body: JSON.stringify(s) });
+  },
+
+  // ── Training ──────────────────────────────────────────────────────────────
+  searchExercises(q: string): Promise<{ results: ExerciseInfo[] }> {
+    return request(`/api/training/exercises/search?q=${encodeURIComponent(q)}`);
+  },
+  workouts(days?: number): Promise<{ workouts: Workout[] }> {
+    return request(`/api/training/workouts${days ? `?days=${days}` : ""}`);
+  },
+  lifetimePrs(limit = 10): Promise<{ prs: LifetimePr[] }> {
+    return request(`/api/training/lifetime-prs?limit=${limit}`);
+  },
+  exerciseHistory(name: string): Promise<ExerciseHistory> {
+    return request(`/api/training/exercise-history?name=${encodeURIComponent(name)}`);
+  },
+  trainingLoad(): Promise<TrainingLoadPayload> {
+    return request("/api/training/load");
+  },
+  nutritionTodayCoach(): Promise<NutritionCoachPayload> {
+    // Pass the client's local ISO timestamp so the server's "early / late /
+    // on-pace" math uses the user's actual hour-of-day, not the Render UTC.
+    //
+    // BUG FIX (2026-07-09): `new Date().toISOString()` ALWAYS returns UTC
+    // (e.g. "2026-07-10T03:00:00.000Z" when it's 8pm PT). The server's
+    // fromisoformat parsed the Z suffix as UTC and .hour returned 3 —
+    // giving 0% day progress and "Day's just getting started" at 8pm
+    // local. localNowIso builds a naive local ISO string so hour/minute
+    // are the user's actual clock time.
+    return request(`/api/nutrition/today-coach?local_now=${encodeURIComponent(localNowIso())}`);
+  },
+  tonightSleep(opts: { refresh?: boolean } = {}): Promise<TonightSleepPayload> {
+    return request(`/api/sleep/tonight${opts.refresh ? "?refresh=1" : ""}`);
+  },
+  sleepDebtDebug(): Promise<SleepDebtDebug> {
+    return request("/api/sleep/debt-debug");
+  },
+  ouraRawDebug(): Promise<OuraRawDebug> {
+    return request("/api/sleep/oura-raw-debug");
+  },
+  setSleepTarget(hours: number): Promise<{ ok: boolean; sleep_target_hours: number }> {
+    return request("/api/sleep/target", {
+      method: "POST",
+      body:   JSON.stringify({ hours }),
+    });
+  },
+  weeklyRecap(week?: string): Promise<WeeklyRecap> {
+    return request(`/api/community/weekly-recap${week ? `?week=${week}` : ""}`);
+  },
+  shareWeeklyRecap(week?: string): Promise<{ event: { id?: string } | null; recap: WeeklyRecap }> {
+    return request("/api/community/weekly-recap/share", {
+      method: "POST",
+      body:   JSON.stringify(week ? { week } : {}),
+    });
+  },
+  /** External share text + referral URL for Twitter/LinkedIn/text. Backend
+   *  formats the copy and embeds the user's stable referral code. */
+  shareWeeklyRecapExternal(week?: string): Promise<{ share_text: string; share_url: string; referral_code: string }> {
+    return request("/api/community/weekly-recap/share-external", {
+      method: "POST",
+      body:   JSON.stringify(week ? { week } : {}),
+    });
+  },
+  logWorkout(w: Omit<Workout, "id" | "logged_at" | "muscle_groups" | "total_volume_lbs">): Promise<Workout> {
+    return request("/api/training/workouts", { method: "POST", body: JSON.stringify(w) });
+  },
+  deleteWorkout(id: string): Promise<void> {
+    return request(`/api/training/workouts/${id}`, { method: "DELETE" });
+  },
+  updateWorkout(id: string, patch: Partial<Pick<Workout, "date" | "type" | "duration_min" | "notes" | "activity" | "distance_meters" | "avg_hr" | "calories_kcal">>): Promise<Workout> {
+    return request(`/api/training/workouts/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    });
+  },
+  parseWorkout(text: string): Promise<ParsedWorkout> {
+    return request("/api/training/parse-workout", { method: "POST", body: JSON.stringify({ text }) });
+  },
+  trainingTemplates(): Promise<{ templates: WorkoutTemplate[] }> {
+    return request("/api/training/templates");
+  },
+  saveTemplate(t: { name: string; type: string; exercises: WorkoutExercise[] }): Promise<WorkoutTemplate> {
+    return request("/api/training/templates", { method: "POST", body: JSON.stringify(t) });
+  },
+  deleteTemplate(id: string): Promise<void> {
+    return request(`/api/training/templates/${id}`, { method: "DELETE" });
+  },
+  trainingRecommendation(): Promise<TrainingRecommendation> {
+    return request("/api/training/recommendation");
+  },
+  stretchRoutine(muscleGroups: string[], durationMin?: number): Promise<StretchRoutine> {
+    return request("/api/training/stretch-routine", {
+      method: "POST",
+      body: JSON.stringify({ muscle_groups: muscleGroups, duration_min: durationMin ?? 10 }),
+    });
+  },
+  weeklyPlan(): Promise<WeeklyPlan> {
+    return request("/api/training/weekly-plan");
+  },
+  trainingSettings(): Promise<TrainingSettings> {
+    return request("/api/training/settings");
+  },
+  saveTrainingSettings(s: TrainingSettings): Promise<TrainingSettings> {
+    return request("/api/training/settings", { method: "POST", body: JSON.stringify(s) });
+  },
+
+  // ── Labs ──────────────────────────────────────────────────────────────────
+  labEntries(): Promise<{ entries: LabEntry[] }> {
+    return request("/api/labs");
+  },
+  logLab(entry: Partial<LabEntry> & { date: string }): Promise<LabEntry> {
+    return request("/api/labs", { method: "POST", body: JSON.stringify(entry) });
+  },
+  deleteLab(id: string): Promise<void> {
+    return request(`/api/labs/${id}`, { method: "DELETE" });
+  },
+  importLabPdf(file: File): Promise<{ date: string; extracted: Record<string, number>; count: number }> {
+    const form = new FormData();
+    form.append("file", file);
+    return request("/api/labs/import-pdf", { method: "POST", body: form });
+  },
+  /** Vision-first OCR path — accepts PDF or image (photo of a paper report).
+   *  Returns per-marker rows with confidence tags, so the review UI can
+   *  steer the user's eye toward anything Claude wasn't sure about. */
+  ocrLabReport(file: File): Promise<OcrLabResult> {
+    const form = new FormData();
+    form.append("file", file);
+    return request("/api/labs/ocr", { method: "POST", body: form });
+  },
+
+  // ── Onboarding ────────────────────────────────────────────────────────────
+  onboardingStatus(): Promise<OnboardingStatus> {
+    return request("/api/onboarding/status");
+  },
+  dismissOnboarding(): Promise<{ status: string }> {
+    return request("/api/onboarding/dismiss", { method: "POST" });
+  },
+
+  // ── Stack adherence (David 2026-07-09) ────────────────────────────────────
+  stackAdherenceToday(forDate?: string): Promise<StackAdherenceSnapshot> {
+    // Pass user's local time so the backend can gate window_open
+    // (an unchecked evening med at 9am shouldn't count as missed).
+    // Optional `forDate` (YYYY-MM-DD) fetches a past day's snapshot
+    // for the 7-day backfill picker. David 2026-08-07.
+    const params = new URLSearchParams({ local_now: localNowIso() });
+    if (forDate) params.set("for_date", forDate);
+    return request(`/api/stack/adherence/today?${params.toString()}`);
+  },
+  logStackAdherence(body: {
+    item_kind:    "medication" | "supplement" | "peptide";
+    item_name:    string;
+    taken:        boolean;
+    date?:        string;
+    notes?:       string;
+    /** Which time-of-day window this tap corresponds to. Required for
+     *  BID meds so morning and evening doses track independently
+     *  (David 2026-08-06). */
+    time_of_day?: "morning" | "midday" | "evening" | "anytime";
+  }): Promise<{ row: StackAdherenceRow }> {
+    return request("/api/stack/adherence", { method: "POST", body: JSON.stringify(body) });
+  },
+
+  // ── Capability toggles + CPAP tracking (David 2026-08-06, task #162) ────
+  getCapabilities(): Promise<{ enabled: string[] }> {
+    return request("/api/profile/capabilities");
+  },
+  setCapabilities(enabled: string[]): Promise<{ enabled: string[] }> {
+    return request("/api/profile/capabilities", {
+      method: "PUT",
+      body: JSON.stringify({ enabled }),
+    });
+  },
+  cpapToday(): Promise<{ today: CpapNightlyLog | null; yesterday: CpapNightlyLog | null }> {
+    return request("/api/cpap/today");
+  },
+  logCpap(body: {
+    date?:            string;
+    usage_hours:      number;
+    mask_seal_score?: number | null;
+    events_per_hour?: number | null;
+    total_score?:     number | null;
+    notes?:           string | null;
+  }): Promise<{ row: CpapNightlyLog }> {
+    return request("/api/cpap/log", { method: "POST", body: JSON.stringify(body) });
+  },
+  cpapAdherence(): Promise<CpapAdherence> {
+    return request("/api/cpap/adherence");
+  },
+
+  // ── Linked identities (David 2026-07-30, task #142) ──────────────────────
+  linkedIdentities(): Promise<{ identities: LinkedIdentity[] }> {
+    return request("/api/account/linked-identities");
+  },
+  linkAppleIdentity(supabaseAppleToken: string): Promise<{ status: string; identity?: LinkedIdentity }> {
+    // Sends the freshly-obtained Supabase Apple token as a SECOND
+    // Authorization header — the primary session cookie identifies
+    // the current user; this token proves ownership of the Apple
+    // identity being linked.
+    return request("/api/account/link/apple", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${supabaseAppleToken}` },
+    });
+  },
+  unlinkIdentity(id: string): Promise<{ status: string }> {
+    return request(`/api/account/link/${id}`, { method: "DELETE" });
+  },
+
+  // ── Proactive nudge (one per day, Fable moat 2026-07-23) ─────────────────
+  todayNudge(): Promise<{ nudge: Nudge | null }> {
+    return request("/api/nudges/today");
+  },
+  dismissNudge(id: string): Promise<{ status: string }> {
+    return request(`/api/nudges/${id}/dismiss`, { method: "POST" });
+  },
+  actedNudge(id: string): Promise<{ status: string }> {
+    return request(`/api/nudges/${id}/acted`, { method: "POST" });
+  },
+
+  // ── Proven For You experiments (Fable moat 2026-07-23) ────────────────────
+  commitExperiment(body: {
+    hypothesis:  string;
+    action:      string;
+    metric_type: ExperimentMetric;
+    insight_id?: string;
+  }): Promise<{ row: Experiment }> {
+    return request("/api/experiments/commit", { method: "POST", body: JSON.stringify(body) });
+  },
+  activeExperiments(): Promise<{ experiments: Experiment[] }> {
+    return request("/api/experiments/active");
+  },
+  provenLedger(limit = 50): Promise<{ ledger: Experiment[] }> {
+    return request(`/api/experiments/ledger?limit=${limit}`);
+  },
+  experimentHistory(limit = 100): Promise<{ experiments: Experiment[] }> {
+    return request(`/api/experiments/history?limit=${limit}`);
+  },
+  abandonExperiment(id: string): Promise<{ status: string }> {
+    return request(`/api/experiments/${id}/abandon`, { method: "POST" });
+  },
+  saveExperimentNote(id: string, note: string): Promise<{ status: string }> {
+    return request(`/api/experiments/${id}/note`, {
+      method: "POST",
+      body: JSON.stringify({ note }),
+    });
+  },
+
+  // ── Training flags (injury / discomfort / illness for the day) ────────────
+  listTrainingFlags(days = 14): Promise<{ flags: TrainingFlag[] }> {
+    return request(`/api/training-flags?days=${days}`);
+  },
+  todayTrainingFlag(): Promise<{ flag: TrainingFlag | null }> {
+    return request("/api/training-flags/today");
+  },
+  createTrainingFlag(body: {
+    flag_type: TrainingFlag["flag_type"]; body_area?: string;
+    severity?: number; notes?: string; date?: string;
+  }): Promise<{ flag: TrainingFlag }> {
+    return request("/api/training-flags", { method: "POST", body: JSON.stringify(body) });
+  },
+  deleteTrainingFlag(id: string): Promise<{ status: string }> {
+    return request(`/api/training-flags/${id}`, { method: "DELETE" });
+  },
+
+  // ── Vices (alcohol, weed, nicotine, junk food, etc.) ──────────────────────
+  listVices(days = 30): Promise<{ vices: NutritionVice[] }> {
+    return request(`/api/nutrition/vices?days=${days}`);
+  },
+  createVice(body: {
+    vice_type: NutritionVice["vice_type"]; amount?: string;
+    notes?: string; date?: string;
+  }): Promise<{ vice: NutritionVice }> {
+    return request("/api/nutrition/vices", { method: "POST", body: JSON.stringify(body) });
+  },
+  deleteVice(id: string): Promise<{ status: string }> {
+    return request(`/api/nutrition/vices/${id}`, { method: "DELETE" });
+  },
+
+  // ── Hydration (optional per David — easy to remove) ───────────────────────
+  getHydration(date?: string): Promise<{ date: string; entries: HydrationEntry[]; total_oz: number }> {
+    const q = date ? `?date=${date}` : "";
+    return request(`/api/nutrition/hydration${q}`);
+  },
+  logHydration(body: { volume_oz: number; source?: string; notes?: string; date?: string }):
+    Promise<{ entry: HydrationEntry }>
+  {
+    return request("/api/nutrition/hydration", { method: "POST", body: JSON.stringify(body) });
+  },
+  deleteHydration(id: string): Promise<{ status: string }> {
+    return request(`/api/nutrition/hydration/${id}`, { method: "DELETE" });
+  },
+
+  // ── Oura pause / resume (Chris fix — user is on break from the ring) ──────
+  ouraStatus(): Promise<{ paused: boolean; paused_at: string | null }> {
+    return request("/api/wearables/oura/status");
+  },
+  pauseOura(): Promise<{ paused: boolean; paused_at: string }> {
+    return request("/api/wearables/oura/pause", { method: "POST" });
+  },
+  resumeOura(): Promise<{ paused: boolean; paused_at: null }> {
+    return request("/api/wearables/oura/resume", { method: "POST" });
+  },
+
+  // ── Manual sleep entry (Whoop / Garmin / Fitbit / Polar bridge) ───────────
+  /** Log last night's sleep manually. Only hours + optional quality;
+   *  no HRV/RHR/scores (not cross-device comparable). */
+  logManualSleep(body: { hours: number; quality?: number; device_tag?: string; night_date?: string }):
+    Promise<{ date: string; hours: number; quality: number | null; device_tag: string | null; source: "manual" }>
+  {
+    return request("/api/sleep/manual", { method: "POST", body: JSON.stringify(body) });
+  },
+
+  // ── Doctor Visits (Prep Mode Phase 1) ─────────────────────────────────────
+  listVisits(status?: "upcoming" | "completed" | "canceled"): Promise<{ visits: DoctorVisit[] }> {
+    const q = status ? `?status=${status}` : "";
+    return request(`/api/visits${q}`);
+  },
+  activeVisit(): Promise<{ visit?: DoctorVisit; prep_phase?: VisitPrepPhase }> {
+    return request("/api/visits/active");
+  },
+  createVisit(body: { visit_date: string; provider_type: DoctorVisit["provider_type"]; reason?: string }): Promise<{ visit: DoctorVisit }> {
+    return request("/api/visits", { method: "POST", body: JSON.stringify(body) });
+  },
+  getVisit(id: string): Promise<{ visit: DoctorVisit }> {
+    return request(`/api/visits/${id}`);
+  },
+  updateVisit(id: string, patch: Partial<DoctorVisit>): Promise<{ visit: DoctorVisit }> {
+    return request(`/api/visits/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+  },
+  generateVisitQuestions(id: string): Promise<{ visit: DoctorVisit; generated: VisitQuestion[] }> {
+    return request(`/api/visits/${id}/generate-questions`, { method: "POST" });
+  },
+  completeVisit(id: string, body: { notes?: string; outcome_summary?: string }): Promise<{ visit: DoctorVisit }> {
+    return request(`/api/visits/${id}/complete`, { method: "POST", body: JSON.stringify(body) });
+  },
+  cancelVisit(id: string): Promise<{ visit: DoctorVisit }> {
+    return request(`/api/visits/${id}/cancel`, { method: "POST" });
+  },
+  deleteVisit(id: string): Promise<{ status: string }> {
+    return request(`/api/visits/${id}`, { method: "DELETE" });
+  },
+
+  // ── Account lifecycle (App Store req + GDPR/CCPA) ─────────────────────────
+  /** Full data export as a JSON blob. Downloaded client-side. */
+  exportAccount(): Promise<Record<string, unknown>> {
+    return request("/api/account/export");
+  },
+  /** Request account deletion — starts a 7-day grace window. Live tokens
+   *  are revoked immediately; the actual purge happens after grace. */
+  requestAccountDeletion(): Promise<{ deletion_scheduled_at: string; grace_days: number }> {
+    return request("/api/account/delete", { method: "POST" });
+  },
+  cancelAccountDeletion(): Promise<{ canceled_at: string }> {
+    return request("/api/account/delete/cancel", { method: "POST" });
+  },
+  accountDeletionStatus(): Promise<{ scheduled_at?: string; grace_days_remaining?: number }> {
+    return request("/api/account/deletion-status");
+  },
+
+  // ── Challenges ──────────────────────────────────────────────────────────────
+  myChallenges(): Promise<{ challenges: Challenge[]; user_id: string }> {
+    return request("/api/challenges/me");
+  },
+  createChallenge(body: {
+    name: string; type: string; target: number;
+    duration_days: number; creator_name: string; custom_unit?: string;
+  }): Promise<Challenge> {
+    return request("/api/challenges", { method: "POST", body: JSON.stringify(body) });
+  },
+  joinChallenge(challenge_id: string, display_name: string): Promise<Challenge> {
+    return request("/api/challenges/join", { method: "POST", body: JSON.stringify({ challenge_id, display_name }) });
+  },
+  getChallenge(id: string): Promise<Challenge> {
+    return request(`/api/challenges/${id}`);
+  },
+  archiveChallenge(id: string, archived: boolean): Promise<{ ok: boolean; archived_challenges: string[] }> {
+    return request(`/api/challenges/${id}/archive`, {
+      method: "POST",
+      body: JSON.stringify({ archived }),
+    });
+  },
+  logChallengeProgress(challenge_id: string, value: number, date?: string): Promise<Challenge> {
+    return request(`/api/challenges/${challenge_id}/progress`, {
+      method: "POST",
+      body: JSON.stringify({ value, date }),
+    });
+  },
+  getChallengeMessages(challenge_id: string): Promise<{ messages: ChallengeMessage[] }> {
+    return request(`/api/challenges/${challenge_id}/messages`);
+  },
+  postChallengeMessage(challenge_id: string, text: string, display_name: string): Promise<ChallengeMessage> {
+    return request(`/api/challenges/${challenge_id}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ text, display_name }),
+    });
+  },
+
+  // ── Apple Health ─────────────────────────────────────────────────────────────
+  /** Generates a one-sentence Coach Al reaction to a logged action. The text
+   *  may be null if generation failed — call sites should noop in that case. */
+  coachReact(action: "meal_logged" | "workout_logged" | "weight_logged",
+             details: Record<string, unknown>): Promise<{ text: string | null }> {
+    return request("/api/coach/react", {
+      method: "POST",
+      body: JSON.stringify({ action, details }),
+    });
+  },
+  appleHealthKey(): Promise<{ api_key: string }> {
+    return request("/api/apple-health/key");
+  },
+  /** Manual daily-stats log for users without a connected device. Any subset
+   *  of fields is valid — submit just what you know. Date defaults to today. */
+  manualLog(payload: {
+    date?:                      string;
+    steps?:                     number;
+    sleep_hours?:               number;
+    weight_lbs?:                number;
+    weight_kg?:                 number;
+    resting_hr?:                number;
+    hrv?:                       number;
+    active_calories?:           number;
+    body_fat_percentage?:       number;
+    vo2_max?:                   number;
+    respiratory_rate?:          number;
+    spo2?:                      number;
+    blood_pressure_systolic?:   number;
+    blood_pressure_diastolic?:  number;
+  }): Promise<{ status: string; date: string; fields_logged: string[] }> {
+    // Auto-attach the device-local date when the caller didn't specify one.
+    // Without this, the backend defaults to datetime.now() which is UTC on
+    // Render, causing late-evening west-coast users to log "tomorrow".
+    const withDate = { date: localToday(), ...payload };
+    return request("/api/manual-log", {
+      method: "POST",
+      body: JSON.stringify(withDate),
+    });
+  },
+  appleHealthData(days = 30): Promise<AppleHealthSummary> {
+    return request(`/api/apple-health/data?days=${days}`);
+  },
+  /** Upload Apple's native "Export All Health Data" file (export.zip or
+   *  export.xml). Streaming parser on the backend aggregates the entire
+   *  file into per-day metrics and upserts them.
+   *  DEPRECATED (David 2026-07-30): Render 502s on multi-hundred-MB
+   *  uploads because request timeout < upload time. Use
+   *  appleHealthImportAggregated instead — parse in the browser and
+   *  post only the small aggregated JSON. */
+  appleHealthImportXml(file: File, sinceDate?: string): Promise<{
+    days_imported: number;
+    earliest_date: string | null;
+    latest_date:   string | null;
+    metrics_seen:  string[];
+    skipped_days:  number;
+  }> {
+    const fd = new FormData();
+    fd.append("file", file);
+    const qs = sinceDate ? `?since_date=${encodeURIComponent(sinceDate)}` : "";
+    return request(`/api/apple-health/import-xml${qs}`, {
+      method: "POST",
+      body:   fd,
+      // DO NOT set Content-Type — browser sets multipart boundary
+    });
+  },
+  /** Import pre-aggregated Apple Health daily rows. Browser has already
+   *  parsed the export.xml locally, so we post only a small (~200 KB)
+   *  JSON blob instead of the raw multi-hundred-MB file.
+   *  See frontend/src/lib/appleHealthParser.ts for the parser. */
+  appleHealthImportAggregated(daily: Record<string, Record<string, number>>, sinceDate?: string): Promise<{
+    days_imported: number;
+    earliest_date: string | null;
+    latest_date:   string | null;
+    metrics_seen:  string[];
+    skipped_days:  number;
+    batch_error_count?: number;
+  }> {
+    return request("/api/apple-health/import-aggregated", {
+      method: "POST",
+      body: JSON.stringify({ daily, since_date: sinceDate }),
+    });
+  },
+  /** Connection + freshness status for the AH integration. Lets the setup page
+   *  show "connected · 14 days of data · last sync 2h ago" instead of leaving
+   *  the user guessing whether their iOS Shortcut is actually working. */
+  appleHealthStatus(): Promise<{
+    connected:    boolean;
+    last_sync_at: string | null;
+    latest_date:  string | null;
+    days_synced:  number;
+  }> {
+    return request("/api/apple-health/status");
+  },
+
+  // ── Insights ──────────────────────────────────────────────────────────────
+  insights(days = 60, options?: RequestInit): Promise<{ insights: Insight[]; days_analyzed: number }> {
+    return request(`/api/insights?days=${days}`, options);
+  },
+
+  // ── Progress ──────────────────────────────────────────────────────────────
+  progress(): Promise<ProgressReport> {
+    return request("/api/progress");
+  },
+
+  // ── Gear (Picked For You dismissals) ────────────────────────────────────────
+  gear: {
+    dismissed(): Promise<{ dismissed: string[] }> {
+      return request("/api/gear/dismissed");
+    },
+    dismiss(item_id: string): Promise<{ ok: boolean; dismissed: string[] }> {
+      return request("/api/gear/dismiss", {
+        method: "POST",
+        body: JSON.stringify({ item_id }),
+      });
+    },
+    // Communal reviews
+    reviewsSummary(): Promise<{ summary: Record<string, GearReviewSummary> }> {
+      return request("/api/gear/reviews/summary");
+    },
+    reviews(item_id: string): Promise<{ reviews: GearReview[] }> {
+      return request(`/api/gear/${encodeURIComponent(item_id)}/reviews`);
+    },
+    postReview(item_id: string, rating: number | null, text: string): Promise<{ ok: boolean }> {
+      return request(`/api/gear/${encodeURIComponent(item_id)}/reviews`, {
+        method: "POST",
+        body: JSON.stringify({ rating, text }),
+      });
+    },
+    deleteReview(item_id: string): Promise<{ status: string }> {
+      return request(`/api/gear/${encodeURIComponent(item_id)}/reviews`, { method: "DELETE" });
+    },
+    // Coach Al gear finder — describe what you're trying to do, get matched
+    // catalog picks + honest "what to look for" guidance for anything we don't carry.
+    ask(query: string, context?: string): Promise<GearFinderResult> {
+      const catalog = GEAR.flatMap((cat) =>
+        cat.items.map((it) => ({
+          id: it.id,
+          name: it.name,
+          brand: it.brand,
+          category: cat.label,
+          price: it.price,
+          description: it.description,
+        }))
+      );
+      return request("/api/gear/ask", {
+        method: "POST",
+        body: JSON.stringify({ query, catalog, context: context || "" }),
+      });
+    },
+    // Owner-only demand list — what people are searching for. 403s for non-admins.
+    demand(): Promise<GearDemand> {
+      return request("/api/gear/demand");
+    },
+  },
+
+  // ── Identity / onboarding ───────────────────────────────────────────────────
+  me(): Promise<MeResponse> {
+    return request("/api/me");
+  },
+  completeOnboarding(): Promise<{ ok: boolean }> {
+    return request("/api/me/complete-onboarding", { method: "POST" });
+  },
+
+  // ── Profile ───────────────────────────────────────────────────────────────
+  getProfile(): Promise<UserProfile> {
+    return request("/api/profile");
+  },
+  saveProfile(profile: UserProfile): Promise<UserProfile> {
+    return request("/api/profile", { method: "POST", body: JSON.stringify(profile) });
+  },
+
+  // ── AI Chat ───────────────────────────────────────────────────────────────
+  chat(message: string, history: ChatMessage[]): Promise<{ reply: string }> {
+    // Send the device-local date so today's macros anchor to the user's day,
+    // and the device-local current ISO so the nutrition pace-check on the
+    // backend can use the user's actual hour-of-day (not Render UTC).
+    return request("/api/chat", {
+      method: "POST",
+      body: JSON.stringify({
+        message,
+        history,
+        date:      localToday(),
+        // Naive local ISO — .toISOString() returns UTC and broke the
+        // hour-of-day math (2026-07-09 bug). See nutritionTodayCoach
+        // above for the same fix.
+        local_now: localNowIso(),
+      }),
+    });
+  },
+  chatHistory(limit = 50): Promise<{ messages: ChatMessage[] }> {
+    return request(`/api/chat/history?limit=${limit}`);
+  },
+  clearChat(): Promise<{ cleared: boolean | number }> {
+    return request("/api/chat/history", { method: "DELETE" });
+  },
+
+  // ── Notification inbox ────────────────────────────────────────────────────
+  notifications: {
+    list(): Promise<NotificationsResponse> {
+      return request("/api/notifications");
+    },
+    markRead(): Promise<{ ok: boolean }> {
+      return request("/api/notifications/mark-read", { method: "POST" });
+    },
+  },
+
+  // ── Coach Al observations ─────────────────────────────────────────────────
+  observations: {
+    list(): Promise<{ observations: CoachObservation[]; unread_count: number }> {
+      return request("/api/observations");
+    },
+    markRead(id: string): Promise<{ ok: boolean; id: string }> {
+      return request(`/api/observations/${encodeURIComponent(id)}/read`, { method: "POST" });
+    },
+    dismiss(id: string): Promise<{ ok: boolean; id: string }> {
+      return request(`/api/observations/${encodeURIComponent(id)}/dismiss`, { method: "POST" });
+    },
+  },
+
+  // ── Morning Briefing ──────────────────────────────────────────────────────
+  briefing(refresh = false, date?: string, allowNoSleep = false): Promise<BriefingResponse> {
+    const params = new URLSearchParams({ date: date || localToday() });
+    if (refresh) params.set("refresh", "1");
+    if (allowNoSleep) params.set("allow_no_sleep", "1");
+    return request(`/api/briefing/today?${params.toString()}`);
+  },
+
+  // ── Coach Al Weekly Insight ───────────────────────────────────────────────
+  weeklyInsight(refresh = false): Promise<WeeklyInsightResponse> {
+    return request(`/api/insight/weekly${refresh ? "?refresh=1" : ""}`);
+  },
+
+  // (badges / XP / level method removed — gamification layer was killed)
+
+  // ── Groups (Crews) ─────────────────────────────────────────────────────────
+  groups: {
+    list(): Promise<{ groups: Group[] }> {
+      return request("/api/groups");
+    },
+    create(name: string): Promise<Group> {
+      return request("/api/groups", { method: "POST", body: JSON.stringify({ name }) });
+    },
+    join(code: string): Promise<Group> {
+      return request("/api/groups/join", { method: "POST", body: JSON.stringify({ code }) });
+    },
+    leave(group_id: string): Promise<{ status: string }> {
+      return request(`/api/groups/${encodeURIComponent(group_id)}/leave`, { method: "POST" });
+    },
+    messages(group_id: string): Promise<{ messages: GroupMessage[] }> {
+      return request(`/api/groups/${encodeURIComponent(group_id)}/messages`);
+    },
+    postMessage(group_id: string, text: string): Promise<GroupMessage> {
+      return request(`/api/groups/${encodeURIComponent(group_id)}/messages`, {
+        method: "POST",
+        body: JSON.stringify({ text }),
+      });
+    },
+    standings(group_id: string): Promise<GroupStandings> {
+      return request(`/api/groups/${encodeURIComponent(group_id)}/standings`);
+    },
+    setGoal(group_id: string, goal: number | null): Promise<{ ok: boolean; weekly_goal: number | null }> {
+      return request(`/api/groups/${encodeURIComponent(group_id)}/goal`, {
+        method: "POST",
+        body: JSON.stringify({ goal }),
+      });
+    },
+    weeklyRecap(group_id: string, week?: string): Promise<GroupRecap> {
+      return request(`/api/groups/${encodeURIComponent(group_id)}/weekly-recap${week ? `?week=${week}` : ""}`);
+    },
+    challenges(group_id: string): Promise<{ challenges: Challenge[] }> {
+      return request(`/api/groups/${encodeURIComponent(group_id)}/challenges`);
+    },
+    createChallenge(group_id: string, body: {
+      name: string;
+      type: "steps" | "calories" | "protein" | "custom";
+      target: number;
+      duration_days: number;
+      custom_unit?: string;
+    }): Promise<Challenge> {
+      return request(`/api/groups/${encodeURIComponent(group_id)}/challenges`, {
+        method: "POST",
+        body:   JSON.stringify(body),
+      });
+    },
+  },
+
+  // ── Community ─────────────────────────────────────────────────────────────
+  community: {
+    friendsGlance(): Promise<FriendsGlancePayload> {
+      return request("/api/community/friends-glance");
+    },
+  },
+
+  // ── Oura tags + lifestyle correlations ──────────────────────────────────
+  ouraTags(days = 30): Promise<OuraTagsPayload> {
+    return request(`/api/oura/tags?days=${days}&today=${localToday()}`);
+  },
+  tagCorrelations(days = 60): Promise<TagCorrelations> {
+    return request(`/api/insights/tag-correlations?days=${days}`);
+  },
+
+  // ── Coach Al memory ─────────────────────────────────────────────────────
+  coachMemory(): Promise<CoachMemoryPayload> {
+    return request("/api/coach/memory");
+  },
+  addCoachMemory(body: { category: CoachMemoryCategory; content: string }): Promise<CoachMemoryItem> {
+    return request("/api/coach/memory", {
+      method: "POST",
+      body:   JSON.stringify(body),
+    });
+  },
+  updateCoachMemory(id: string, patch: { category?: CoachMemoryCategory; content?: string }): Promise<CoachMemoryItem> {
+    return request(`/api/coach/memory/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body:   JSON.stringify(patch),
+    });
+  },
+  deleteCoachMemory(id: string): Promise<{ status: string }> {
+    return request(`/api/coach/memory/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+
+  // ── Private journal ─────────────────────────────────────────────────────
+  // Privacy contract: text/tags here NEVER leave the user's own view.
+  // Server-side: not in PulseFeed, not in friend events, not in Weekly
+  // Recap, not in Groups. Coach Al sees recent entries inside the user's
+  // own chat with a privacy directive in his system prompt.
+  journalToday(): Promise<JournalTodayPayload> {
+    return request("/api/journal/today");
+  },
+  saveJournal(body: { text: string; tags?: string[]; date?: string }): Promise<JournalTodayPayload> {
+    return request("/api/journal", {
+      method: "POST",
+      body:   JSON.stringify({ ...body, date: body.date || localToday() }),
+    });
+  },
+
+  // ── Goals (Coach Al program) ───────────────────────────────────────────────
+  goal: {
+    active(): Promise<{ goal: Goal | null }> {
+      return request("/api/goals/active");
+    },
+    metrics(): Promise<{ metrics: GoalMetricOption[] }> {
+      return request("/api/goals/metrics");
+    },
+    create(metric: string, target: number, duration_weeks: number): Promise<Goal> {
+      return request("/api/goals", {
+        method: "POST",
+        body: JSON.stringify({ metric, target, duration_weeks }),
+      });
+    },
+    complete(id: string): Promise<{ status: string }> {
+      return request(`/api/goals/${encodeURIComponent(id)}/complete`, { method: "POST" });
+    },
+    remove(id: string): Promise<{ status: string }> {
+      return request(`/api/goals/${encodeURIComponent(id)}`, { method: "DELETE" });
+    },
+    /** Re-run goal_coach.generate_plan against the same goal parameters.
+     *  Useful when we've updated Coach Al's prompts (e.g. new voice block
+     *  rules) and existing cached plans should be refreshed. */
+    regenerate(id: string): Promise<Goal> {
+      return request(`/api/goals/${encodeURIComponent(id)}/regenerate`, { method: "POST" });
+    },
+  },
+
+  // ── Daily check-in ────────────────────────────────────────────────────────
+  getCheckinToday(date?: string): Promise<CheckinSnapshot> {
+    return request(`/api/checkin/today?date=${date || localToday()}`);
+  },
+  postCheckin(mood: Mood, date?: string): Promise<{ ok: boolean; mood: Mood; date: string }> {
+    return request("/api/checkin", {
+      method: "POST",
+      body: JSON.stringify({ mood, date: date || localToday() }),
+    });
+  },
+
+  // ── Friends ────────────────────────────────────────────────────────────────
+  friends: {
+    invite(relationship_type?: RelationshipType): Promise<FriendInvite> {
+      return request("/api/friends/invite", {
+        method: "POST",
+        body:   JSON.stringify(relationship_type ? { relationship_type } : {}),
+      });
+    },
+    accept(code: string): Promise<unknown> {
+      return request("/api/friends/accept", {
+        method: "POST",
+        body: JSON.stringify({ code }),
+      });
+    },
+    list(): Promise<{ friends: Friend[] }> {
+      return request("/api/friends");
+    },
+    remove(friend_user_id: string): Promise<{ removed: boolean }> {
+      return request(`/api/friends/${encodeURIComponent(friend_user_id)}`, { method: "DELETE" });
+    },
+    events(limit = 30): Promise<{ events: FriendActivityEvent[] }> {
+      return request(`/api/friends/events?limit=${limit}`);
+    },
+    /** Single hydrated event — for notification deep-links when the targeted
+     *  event isn't in the latest feed window. */
+    event(event_id: string): Promise<FriendActivityEvent> {
+      return request(`/api/friends/events/${encodeURIComponent(event_id)}`);
+    },
+    react(event_id: string, emoji: string): Promise<{ event_id: string; reactions: ReactionSummary[] }> {
+      return request(`/api/friends/events/${encodeURIComponent(event_id)}/react`, {
+        method: "POST",
+        body: JSON.stringify({ emoji }),
+      });
+    },
+    comments(event_id: string): Promise<{ comments: EventComment[] }> {
+      return request(`/api/friends/events/${encodeURIComponent(event_id)}/comments`);
+    },
+    postComment(event_id: string, text: string): Promise<EventComment> {
+      return request(`/api/friends/events/${encodeURIComponent(event_id)}/comments`, {
+        method: "POST",
+        body: JSON.stringify({ text }),
+      });
+    },
+    leaderboard(): Promise<LeaderboardResponse> {
+      // Send the device-local date so the leaderboard's "today" matches the
+      // user's clock, not server ET — otherwise freshness labels misfire after
+      // 9pm PT (ET has rolled to tomorrow but the user's day is still today).
+      return request(`/api/friends/leaderboard?date=${localToday()}`);
+    },
+    /** Friend detail view — 7-day sparklines, longevity, recent workouts. */
+    profile(friend_user_id: string): Promise<FriendProfile> {
+      return request(`/api/friends/${encodeURIComponent(friend_user_id)}/profile`);
+    },
+    /** This week's auto-grouped league standings (Duolingo-style). */
+    league(): Promise<LeagueResponse> {
+      return request("/api/leagues/current");
+    },
+    /** Stable, reusable referral code for shareable invite cards. */
+    referral(): Promise<ReferralCode> {
+      return request("/api/friends/referral");
+    },
+    /** Auto-connect via a referral code captured from a shared link. */
+    acceptReferral(code: string): Promise<{ ok: boolean; self?: boolean }> {
+      return request("/api/friends/referral/accept", {
+        method: "POST",
+        body: JSON.stringify({ code }),
+      });
+    },
+    dm: {
+      list(friend_user_id: string): Promise<{ messages: DirectMessage[] }> {
+        return request(`/api/friends/dm/${encodeURIComponent(friend_user_id)}`);
+      },
+      send(friend_user_id: string, text: string): Promise<DirectMessage> {
+        return request(`/api/friends/dm/${encodeURIComponent(friend_user_id)}`, {
+          method: "POST",
+          body: JSON.stringify({ text }),
+        });
+      },
+    },
+    cheer(friend_user_id: string, kind: TauntKind = "cheer"): Promise<{
+      ok: boolean;
+      cheered_user_id: string;
+      kind: TauntKind;
+    }> {
+      return request(`/api/friends/cheer/${encodeURIComponent(friend_user_id)}`, {
+        method: "POST",
+        body: JSON.stringify({ kind }),
+      });
+    },
+  },
+};
+
+// ── Briefing types ────────────────────────────────────────────────────────────
+export interface BriefingResponse {
+  date:                string;
+  narrative:           string;
+  prediction_streak:   number | null;
+  prediction_accuracy: number | null;
+  generated_at:        string | null;
+  cached:              boolean;
+  app_streak:          number;     // consecutive days the user has opened BackNine
+  has_data?:           boolean;    // false = welcome state for users with no metrics yet
+  sleep_status?:       "ok" | "pending";  // "pending" = last night's sleep hasn't synced yet
+  /** True when the sleep score is present but Oura's detailed session (duration,
+   *  HRV) hasn't published yet, AND it's past mid-morning. Signals a likely
+   *  ring-sync issue on the Oura side. Frontend renders a subtle "open Oura
+   *  app to nudge sync" hint under the narrative when true. */
+  ring_sync_hint?:     boolean;
+
+  /** Layer 2 (David 2026-07-27): which briefing "type" today is —
+   *  drives an eyebrow badge on the card so users see the variety at
+   *  a glance instead of assuming today is another generic briefing. */
+  briefing_type?:       "default" | "sunday_recap" | "monday_framing"
+                      | "experiment_progress" | "lab_focus" | "visit_prep";
+  briefing_type_label?: string;   // human-facing badge text
+}
+
+export interface WeeklyInsightStat {
+  title:         string | null;
+  magnitude:     number | null;
+  unit:          string | null;
+  direction:     "positive" | "negative" | "neutral" | null;
+  n:             number | null;
+  r:             number | null;
+  group_a_label: string | null;
+  group_a_avg:   number | null;
+  group_b_label: string | null;
+  group_b_avg:   number | null;
+}
+
+export interface WeeklyInsightResponse {
+  week_start:   string;
+  headline:     string;
+  narrative:    string;
+  experiment:   string;
+  insight_id:   string | null;
+  stat:         WeeklyInsightStat | null;
+  generated_at: string | null;
+  cached:       boolean;
+  has_data:     boolean;
+}
+
+// Badge / LevelInfo / AchievementsResponse types removed — gamification
+// layer was killed. The league + streaks + leaderboards drive behavior;
+// the badge chip was decorative.
+
+export interface GearReview {
+  id:         string;
+  user_id:    string;
+  user_name:  string;
+  rating:     number | null;
+  text:       string;
+  created_at: string;
+  is_me:      boolean;
+}
+
+export interface GearReviewSummary {
+  avg:   number | null;
+  count: number;
+}
+
+// ── Coach Al gear finder ──────────────────────────────────────────────────────
+export interface GearFinderPick {
+  id:     string;   // matches a catalog item id
+  reason: string;
+}
+
+export interface GearFinderSuggestion {
+  title:  string;   // product type to look for (not in our catalog)
+  detail: string;
+  search: string;   // search phrase to find it
+}
+
+export interface GearFinderResult {
+  intro:       string;
+  picks:       GearFinderPick[];
+  suggestions: GearFinderSuggestion[];
+}
+
+// Owner-only gear demand list (what people are searching for).
+export interface GearDemand {
+  total_searches: number;
+  match_rate: number | null;
+  gaps: { title: string; count: number }[];
+  unmatched_queries: { query: string; count: number }[];
+  recent: { query: string; had_match: boolean; created_at: string | null }[];
+}
+
+// ── Daily check-in types ──────────────────────────────────────────────────────
+export type Mood = "great" | "good" | "okay" | "tired" | "off";
+
+export interface DailyCheckin {
+  mood:       Mood;
+  date:       string;
+  created_at: string;
+}
+
+export interface CheckinSnapshot {
+  today:     DailyCheckin | null;
+  yesterday: DailyCheckin | null;
+}
+
+// ── Coach Al observations ────────────────────────────────────────────────────
+export interface CoachObservation {
+  id:         string;
+  kind:       string;     // e.g. "hrv_drop", "prediction_streak_5", "insight_<id>"
+  date:       string;     // YYYY-MM-DD
+  message:    string;     // Coach-Al-voiced opening line
+  payload:    Record<string, unknown>;
+  read:       boolean;
+  dismissed:  boolean;
+  created_at: string;
+}
+
+// ── Leaderboard types ────────────────────────────────────────────────────────
+export type LeaderboardMetric = "steps" | "sleep" | "activity";
+
+export type TauntKind = "cheer" | "catch_me" | "race_me" | "slow_today";
+
+export interface MetricValue {
+  value:  number | null;
+  anchor: string;
+}
+
+export interface HeadToHeadTally {
+  w: number;
+  l: number;
+  t: number;
+}
+
+export interface HeadToHead {
+  steps:    HeadToHeadTally;
+  sleep:    HeadToHeadTally;
+  activity: HeadToHeadTally;
+}
+
+export interface LeaderboardEntry {
+  user_id:       string;
+  name:          string;
+  is_me:         boolean;
+  steps:         MetricValue;
+  sleep:         MetricValue;
+  activity:      MetricValue;
+  /** Weekly engagement points — the inclusive ranking metric (works without a wearable). */
+  points:        number;
+  /** @deprecated Always null — badge/XP/Level layer was removed. Key kept
+   *  for response-shape backwards-compat. Safe to remove on next API revision. */
+  level?:        number | null;
+  /** Which taunt (if any) the current user has sent to this friend today. */
+  taunt_sent:    TauntKind | null;
+  /** Weekly head-to-head tally vs the current user. Null for self. */
+  head_to_head:  HeadToHead | null;
+}
+
+export interface ReferralCode {
+  code: string;
+  name: string;
+}
+
+export interface GroupMember {
+  user_id: string;
+  name:    string;
+}
+
+export interface Group {
+  id:           string;
+  name:         string;
+  join_code:    string;
+  created_by:   string;
+  member_count: number;
+  members:      GroupMember[];
+}
+
+export interface GroupMessage {
+  id:         string;
+  user_id:    string;
+  user_name:  string;
+  text:       string;
+  created_at: string;
+  is_me:      boolean;
+}
+
+export interface GroupStandingMember {
+  user_id: string;
+  name:    string;
+  points:  number;
+  rank:    number;
+  is_me:   boolean;
+}
+
+export interface GroupStandings {
+  name:       string;
+  members:    GroupStandingMember[];
+  total:      number;
+  goal:       number | null;
+  week_start: string;
+}
+
+export interface GoalPlanWeek {
+  week:    number;
+  focus:   string;
+  actions: string[];
+}
+
+export interface GoalMetricOption {
+  metric:        string;
+  label:         string;
+  unit:          string;
+  higher_better: boolean;
+  current:       number | null;
+}
+
+export type GoalPaceStatus =
+  | "no_data" | "starting" | "reached"
+  | "well_ahead" | "ahead" | "on_track" | "slightly_behind" | "behind";
+
+export interface GoalPace {
+  status:       GoalPaceStatus;
+  label:        string;                 // short chip text, e.g. "Ahead of pace"
+  message:      string;                 // one-line Coach Al nudge
+  tone:         "win" | "good" | "warn" | "neutral";
+  expected_pct: number | null;          // % of timeline elapsed
+  delta_pct:    number | null;          // progress_pct - expected_pct
+}
+
+export interface Goal {
+  id:           string;
+  metric:       string;
+  label:        string;
+  unit:         string;
+  baseline:     number | null;
+  current:      number | null;
+  target:       number;
+  progress_pct: number | null;
+  week:         number;
+  total_weeks:  number;
+  days_left:    number;
+  status:       string;
+  start_date:   string;
+  end_date:     string;
+  headline:     string | null;
+  overview:     string | null;
+  weeks:        GoalPlanWeek[];
+  this_week:    GoalPlanWeek | null;
+  pace?:        GoalPace | null;
+}
+
+export interface LeagueStanding {
+  user_id: string;
+  name:    string;
+  score:   number;   // weekly engagement points
+  rank:    number;
+  is_me:   boolean;
+  /** @deprecated Always null — gamification layer removed. */
+  level?:  number | null;
+  points_by_cat?: Record<string, number>;   // points per category key (grid)
+}
+
+/** Tiered points payload for categories whose math isn't a simple per × count.
+ *  Two shapes today:
+ *    - workouts: `{ extra_per, max_per_day }` — first/day = `per`, each
+ *      additional workout (up to `max_per_day`) = `extra_per`.
+ *    - goal_pace: `{ behind_pts }` — `per` is the on-pace bonus; users
+ *      behind pace get `behind_pts` instead. Both are optional so future
+ *      categories can opt into either pattern.
+ */
+export interface LeagueCategoryTier {
+  extra_per?:   number;
+  max_per_day?: number;
+  behind_pts?:  number;
+}
+
+export interface LeagueCategory {
+  key:      string;   // checkin | workout | meal | weighin | steps
+  label:    string;   // "Daily check-in"
+  icon:     string;   // emoji (used as the grid column header)
+  per:      number;   // points earned per unit
+  per_unit: string;   // "day" | "first/day" | "1k steps"
+  tier?:    LeagueCategoryTier; // when set, the rule is tiered (see above)
+}
+
+export interface LeagueBreakdownItem {
+  key:      string;   // checkin | workout | meal | weighin | steps
+  label:    string;   // "Daily check-in"
+  icon:     string;   // emoji
+  per:      number;   // points earned per unit
+  per_unit: string;   // "day" | "first/day" | "1k steps"
+  count:    number;   // how many units you've done this week
+  points:   number;   // count * per (or the tiered total for workouts)
+  tier?:    LeagueCategoryTier;
+}
+
+export interface LeagueBreakdown {
+  items: LeagueBreakdownItem[];
+  total: number;       // sums to your league score
+}
+
+export interface LeagueResponse {
+  league: {
+    tier:       number;
+    tier_name:  string;   // Bronze / Silver / …
+    week_start: string;
+    week_end:   string;
+  } | null;
+  standings:    LeagueStanding[];
+  me_rank:      number | null;
+  days_left:    number | null;
+  member_count: number;
+  my_breakdown?: LeagueBreakdown | null;   // current user's per-category points
+  categories?:   LeagueCategory[];         // column defs for the per-task grid
+}
+
+export interface LeaderboardResponse {
+  entries: LeaderboardEntry[];
+  /** user_id of the per-metric leader, or null if no one has a value yet. */
+  leaders: { steps: string | null; sleep: string | null; activity: string | null };
+  /** David 2026-07-09: aggregate averages across the leaderboard so a user
+   *  can see "where do I stand vs the community?" at a glance. Nulls when
+   *  no one in the group has data for that metric. */
+  community?: {
+    steps:       { value: number | null; n: number };
+    sleep:       { value: number | null; n: number };
+    activity:    { value: number | null; n: number };
+    points_avg:  number;
+    total_users: number;
+  };
+  date:    string;
+}
+
+// ── Friend detail (peer profile) ────────────────────────────────────────────
+
+export interface SparkPoint { date: string; value: number | null; }
+
+// Shared per-user snapshot shape, used for BOTH the friend and the viewer in
+// the friend detail / comparison view.
+export interface FriendHealthSnapshot {
+  series: {
+    steps: SparkPoint[];
+    sleep: SparkPoint[];
+    hrv:   SparkPoint[];
+    rhr:   SparkPoint[];
+  };
+  longevity: {
+    score: number | null;
+    grade: string | null;
+    date:  string | null;
+  };
+  recent_workouts: Workout[];
+  latest_weight: {
+    date:            string;
+    weight_lbs:      number | null;
+    body_fat_pct?:   number | null;
+    muscle_mass_lbs?: number | null;
+  } | null;
+  // Supplement stack shared between friends. Empty array if the user hasn't
+  // logged any supplements in their Nutrition tab.
+  supplements?: Array<{
+    name:    string;
+    dose?:   string | null;
+    timing?: string | null;
+  }>;
+  // Active goal — surfaced so friends can see what each other is working
+  // toward and send cheers. Null when the user has no active goal.
+  active_goal?: {
+    id:           string;
+    title:        string | null;
+    metric:       string;
+    baseline:     number | null;
+    target:       number | null;
+    current:      number | null;
+    progress_pct: number | null;
+    deadline:     string | null;
+    started_on:   string | null;
+    pace?:        { status?: string; label?: string; detail?: string } | null;
+  } | null;
+}
+
+export interface FriendProfile extends FriendHealthSnapshot {
+  user_id: string;
+  name:    string;
+  /** @deprecated Always null — gamification layer removed. */
+  level:   number | null;
+  // The viewer's own snapshot — drives the side-by-side comparison view.
+  // Optional for backwards compat with older backend deploys.
+  you?: FriendHealthSnapshot & { name: string; level: number | null };
+}
+
+// ── Notification types ──────────────────────────────────────────────────────
+export interface Notification {
+  id:         string;
+  kind:       string;   // 'dm' | 'taunt:cheer' | 'taunt:catch_me' | … | 'comment' | 'reaction'
+  actor_id:   string;
+  actor_name: string;
+  preview:    string;   // first message excerpt, emoji, etc.
+  event_id?:  string;   // for comment/reaction kinds
+  created_at: string;
+  unread:     boolean;
+}
+
+export interface NotificationsResponse {
+  notifications: Notification[];
+  unread_count:  number;
+}
+
+// ── DM types ────────────────────────────────────────────────────────────────
+export interface DirectMessage {
+  id:            string;
+  sender_id:     string;
+  recipient_id:  string;
+  text:          string;
+  created_at:    string;
+  user_name?:    string;
+  is_me:         boolean;
+}
+
+// ── Friends types ─────────────────────────────────────────────────────────────
+/** Fable-endorsed demand-signal instrumentation (2026-07-06). Purely
+ *  metadata — no user-facing behavior branches off this. Stored on the
+ *  invite row and copied to the resulting friendship so we can answer
+ *  "what fraction of invites are spouses?" post-launch. */
+export type RelationshipType =
+  | "partner" | "parent" | "adult_child" | "sibling"
+  | "friend"  | "colleague" | "other";
+
+export interface FriendInvite {
+  code:               string;
+  inviter_name:       string;
+  expires_at:         string;
+  relationship_type?: RelationshipType | null;
+}
+
+export interface Friend {
+  user_id: string;
+  name:    string;
+  since:   string | null;
+}
+
+export interface ReactionSummary {
+  emoji:      string;
+  count:      number;
+  i_reacted:  boolean;
+}
+
+export interface FriendActivityEvent {
+  id:             string;
+  user_id:        string;
+  user_name:      string | null;
+  event_type:     string;
+  payload:        Record<string, unknown>;
+  created_at:     string;
+  is_me:          boolean;
+  summary:        string;
+  reactions:      ReactionSummary[];
+  comment_count:  number;
+}
+
+export interface EventComment {
+  id:         string;
+  event_id:   string;
+  user_id:    string;
+  user_name:  string | null;
+  text:       string;
+  created_at: string;
+  is_me:      boolean;
+}
+
+// ── Insight types ─────────────────────────────────────────────────────────────
+export interface Insight {
+  id:             string;
+  title:          string;
+  finding:        string;
+  detail:         string;
+  direction:      "positive" | "negative" | "neutral";
+  magnitude:      number;
+  unit:           string;
+  n:              number;
+  r:              number;
+  group_a_label:  string;
+  group_b_label:  string;
+  group_a_avg:    number;
+  group_b_avg:    number;
+}
+
+// ── Progress types ────────────────────────────────────────────────────────────
+export interface ProgressItem {
+  id:               string;
+  title:            string;
+  icon:             string;
+  current_avg:      number | null;
+  previous_avg:     number | null;
+  current_on:       number | null;
+  previous_on:      number | null;
+  period_days:          number;   // days with actual ring data in window
+  previous_period_days: number;
+  window_days:          number;   // calendar window size (always 30)
+  target:           number | null;
+  target_label:     string | null;
+  unit:             string;
+  delta_avg:        number | null;
+  delta_on:         number | null;
+  direction:        "positive" | "negative" | "neutral";
+  personal_best:    number | null;
+  summary:          string;
+}
+
+export interface ProgressReport {
+  items:        ProgressItem[];
+  period_label: string;
+  cur_start:    string;
+  cur_end:      string;
+  prev_start:   string;
+  prev_end:     string;
+}
+
+// ── Challenge types ───────────────────────────────────────────────────────────
+export interface ChallengeMessage {
+  id:           string;
+  user_id:      string;
+  display_name: string;
+  text:         string;
+  created_at:   string;
+}
+
+export interface ChallengeParticipant {
+  user_id:      string;
+  display_name: string;
+  is_me:        boolean;
+  total_value:  number;
+  days_hit:     number;
+  today_value:  number;
+  streak:       number;
+  daily:        Record<string, number>;
+}
+
+export interface AppleHealthDay {
+  steps?:                   number;
+  sleep_hours?:             number;
+  active_calories?:         number;
+  resting_hr?:              number;
+  hrv?:                     number;
+  weight_kg?:               number;
+  vo2_max?:                 number;
+  respiratory_rate?:        number;
+  body_fat_percentage?:     number;
+  lean_body_mass_kg?:       number;
+  skeletal_muscle_mass_kg?: number;
+  bmi?:                     number;
+}
+
+export interface AppleHealthSummary {
+  has_data:                  boolean;
+  as_of?:                    string;
+  today?:                    AppleHealthDay;
+  averages?:                 AppleHealthDay;
+  latest_weight_kg?:         number;
+  latest_body_fat_pct?:      number;
+  latest_lean_mass_kg?:      number;
+  latest_skeletal_muscle_kg?: number;
+  latest_bmi?:               number;
+  days_synced?:              number;
+}
+
+export interface Challenge {
+  id:            string;
+  name:          string;
+  type:          string;
+  metric:        string;
+  target:        number;
+  duration_days: number;
+  start_date:    string;
+  end_date:      string;
+  creator_id:    string;
+  creator_name:  string;
+  elapsed_days:  number;
+  days_left:     number;
+  total_days:    number;
+  is_active:     boolean;
+  is_mine:       boolean;
+  archived?:     boolean;
+  participants:  ChallengeParticipant[];
+  type_info:     { label: string; unit: string; icon: string };
+}
