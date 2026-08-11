@@ -434,6 +434,19 @@ def _recent_nudges(user_id: str, days: int = 7) -> str:
         return ""
 
 
+def _med_lab_ctx(user_id: str, profile: Optional[dict]) -> str:
+    """Medication ↔ lab-shift attribution block. Empty string when no
+    shifts or no attributions — safe to concatenate."""
+    try:
+        import med_lab_effects as mle
+        meds = (profile or {}).get("medications") or []
+        block = mle.med_lab_context(user_id, meds)
+        return block or ""
+    except Exception:
+        log.exception("med_lab_ctx failed for %s", user_id)
+        return ""
+
+
 def build(user_id: str, profile: Optional[dict] = None) -> dict:
     """Assemble the shared AI context bundle. Every AI surface (chat,
     briefing, today_workout, daily_insight) reads from this — one
@@ -468,6 +481,14 @@ def build(user_id: str, profile: Optional[dict] = None) -> dict:
         "recent_briefings_ctx":   _recent_briefings(user_id),
         "experiments_ctx":        _experiments_ctx(user_id),
         "recent_nudges_ctx":      _recent_nudges(user_id),
+        # Medication ↔ lab-shift attribution (David 2026-08-11, #177).
+        # When labs shift between draws AND the shift is consistent with
+        # a known effect of a current med, this block tells every AI
+        # surface to frame it as medication-related ("consistent with"),
+        # not as disease progression — and to suggest doctor follow-up.
+        # The HCTZ → eGFR case: eGFR 65→55 after starting a thiazide is
+        # expected pharmacology, not kidney aging.
+        "med_lab_ctx":            _med_lab_ctx(user_id, profile),
     }
 
 

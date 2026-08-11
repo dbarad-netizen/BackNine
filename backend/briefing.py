@@ -128,7 +128,10 @@ def _build_system_prompt(
                 # These MUST make it into the prompt or the model can't
                 # vary its output and can't reference the user's Proven
                 # For You / active experiments.
-                "recent_briefings_ctx", "experiments_ctx", "recent_nudges_ctx"):
+                "recent_briefings_ctx", "experiments_ctx", "recent_nudges_ctx",
+                # Med ↔ lab attribution (David 2026-08-11, #177) — makes
+                # the briefing frame med-consistent lab shifts correctly.
+                "med_lab_ctx"):
         block = health_context.get(key)
         if isinstance(block, str) and block:
             parts.append(block)

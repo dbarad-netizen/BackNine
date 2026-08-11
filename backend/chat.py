@@ -67,7 +67,10 @@ def _build_system_prompt(health_context: dict, profile: dict) -> str:
     # key crashed the briefing when the join() saw a dict).
     for key in ("data_quality_flags", "training_flag_ctx", "manual_readings_ctx",
                 "active_visit_ctx", "active_goal_ctx",
-                "recent_insights_ctx", "weekly_recap_ctx"):
+                "recent_insights_ctx", "weekly_recap_ctx",
+                # Med ↔ lab attribution (David 2026-08-11, #177) — chat must
+                # frame med-consistent lab shifts as pharmacology, not aging.
+                "med_lab_ctx"):
         block = health_context.get(key)
         if isinstance(block, str) and block:
             prompt_parts.append(block)

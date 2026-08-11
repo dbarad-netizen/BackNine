@@ -353,6 +353,31 @@ def build_report(user_id: str, profile: dict, *, days: int = 30, end_iso: Option
     except Exception:
         slm, smm = {}, {}
 
+    # Lab shifts + medication attribution (David 2026-08-11, #177).
+    # Compares the two most recent draws; flags shifts consistent with
+    # known effects of current meds. The doctor sees both the shift AND
+    # the "consistent with" note — e.g. eGFR 65→55 after starting HCTZ
+    # is expected pharmacology, worth confirming with a recheck rather
+    # than a CKD workup. Never fails the report.
+    lab_shifts_section = None
+    try:
+        import med_lab_effects as mle
+        shifts = mle.detect_lab_shifts(user_id)
+        if shifts:
+            meds  = (profile or {}).get("medications") or []
+            notes = mle.attribute_shifts(shifts, meds)
+            lab_shifts_section = {
+                "shifts":       shifts,
+                "attributions": notes,
+                "note": (
+                    "Attributions flag shifts consistent with known "
+                    "medication effects — for clinician confirmation, "
+                    "not a diagnosis."
+                ),
+            }
+    except Exception:
+        pass
+
     return {
         "generated_at":     datetime.utcnow().isoformat() + "Z",
         "range":            {"start": start, "end": end, "days": days},
@@ -363,4 +388,5 @@ def build_report(user_id: str, profile: dict, *, days: int = 30, end_iso: Option
         "apple_health":     _apple_health_section(user_id, days),
         "weight":           _weight_section(user_id, start, end),
         "stack":            _stack_section(profile),
+        "lab_shifts":       lab_shifts_section,
     }
