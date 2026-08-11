@@ -123,6 +123,24 @@ export default function WeeklyHealthSpanCard({ data }: Props) {
         )}
       </div>
 
+      {/* One-line auto-take — David 2026-08-11 polish. Names the top
+          strength + top gap so the user gets an actionable insight
+          without expanding. Uses the same wins/misses arrays built
+          above. */}
+      {(wins.length > 0 || misses.length > 0) && (
+        <p className="text-[11px] text-gray-700 leading-snug -mt-2">
+          {wins.length > 0 && misses.length > 0 ? (
+            <>
+              <span className="font-semibold">{wins[0].label}</span> is a strength — <span className="font-semibold">{misses[0].label}</span> is where the score can move most.
+            </>
+          ) : wins.length > 0 ? (
+            <><span className="font-semibold">{wins[0].label}</span> is carrying the score — keep it up.</>
+          ) : (
+            <><span className="font-semibold">{misses[0].label}</span> is the biggest lever this week.</>
+          )}
+        </p>
+      )}
+
       {/* Expandable full breakdown */}
       <button
         onClick={() => setExpanded(e => !e)}
@@ -130,7 +148,7 @@ export default function WeeklyHealthSpanCard({ data }: Props) {
       >
         {expanded
           ? "▲ Hide breakdown"
-          : `▼ See full breakdown (${comps.length} habits)`}
+          : `▼ See what's moving your score (${comps.length} habits)`}
       </button>
 
       {expanded && (

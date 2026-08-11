@@ -81,12 +81,33 @@ export default function BiologicalAgeCard({ data }: Props) {
         <span className="text-sm text-gray-700">chronological {data.chronological_age}</span>
       </div>
 
+      {/* One-line auto-take — surfaces the biggest driver so the user
+          gets an insight without expanding. David 2026-08-11 polish. */}
+      {(() => {
+        const best  = data.components[data.components.length - 1]; // smallest |years_delta| — best-in-class
+        const worst = data.components[0]; // largest |years_delta| — biggest mover (positive or negative)
+        // Components come pre-sorted by |years_delta| desc from the backend.
+        if (!worst) return null;
+        const worstBad = worst.years_delta > 0.3;
+        const worstGood = worst.years_delta < -0.3;
+        if (!worstBad && !worstGood) return null;
+        return (
+          <p className="text-[11px] text-gray-700 leading-snug mb-2">
+            {worstGood ? (
+              <><span className="font-semibold">{worst.label}</span> is carrying you — takes ~{Math.abs(worst.years_delta).toFixed(1)} years off.</>
+            ) : (
+              <><span className="font-semibold">{worst.label}</span> is the biggest lever right now — adds ~{worst.years_delta.toFixed(1)} years. {best && best.years_delta < -0.3 ? `${best.label} is a bright spot.` : ""}</>
+            )}
+          </p>
+        );
+      })()}
+
       {/* Expand */}
       <button
         onClick={() => setExpanded(e => !e)}
         className="text-[11px] font-medium text-gray-600 hover:text-gray-900 underline-offset-2 hover:underline"
       >
-        {expanded ? "▲ Hide markers" : `▼ See what's moving the number (${data.components.length} markers)`}
+        {expanded ? "▲ Hide markers" : `▼ See what's moving your score (${data.components.length} markers)`}
       </button>
 
       {expanded && (
