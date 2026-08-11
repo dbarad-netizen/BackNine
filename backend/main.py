@@ -63,6 +63,7 @@ import progress as prog
 import predictions as prd
 import longevity as lon
 import longevity_history as lonh
+import biological_age as bioage
 import chat as ch
 import briefing as brf
 import weekly_insight as wins
@@ -1385,6 +1386,11 @@ def _empty_dashboard_payload(session: dict) -> dict:
         },
         "prediction_accuracy": None,
         "longevity_score":     {"score": None, "grade": None, "components": {}},
+        "biological_age":      {
+            "biological_age": None, "chronological_age": None,
+            "delta_years": None, "confidence": "low", "n_markers": 0,
+            "components": [], "caveat": "",
+        },
         "trend":    [],
         "coaches":  {"overall": _empty_coach, "sleep": _empty_coach, "activity": _empty_coach},
         "coaching": {"short": [], "mid": [], "long": [], "meta": {}},
@@ -1960,11 +1966,19 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
                     return _v
             return None
 
+        # Pull latest lab markers for the new cardiometabolic band.
+        # Same source biological_age uses — one round-trip either way.
+        try:
+            _cardio_labs = bioage.latest_labs(user_id)
+        except Exception:
+            _cardio_labs = {}
+
         _lon_metrics = {
             "hrv":                 t_sm.get("hrv") if t_sm.get("hrv") is not None else _most_recent_smm("hrv"),
             "rhr":                 t_sm.get("rhr") if t_sm.get("rhr") is not None else _most_recent_smm("rhr"),
             "vo2_max":             _vo2,
             "body_fat_percentage": _ah_body_fat,
+            "cardio_labs":         _cardio_labs,
             # True 7-day average of the most recent nights that have sleep data.
             # (The previous expression accidentally returned a single night — the
             # earliest in the window — which is why the Longevity sleep average
@@ -1989,6 +2003,43 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
         )
     except Exception:
         longevity_score = {"score": None, "grade": None, "components": {}}
+
+    # ── Biological Age (David 2026-08-07) ─────────────────────────────────
+    # Hybrid heuristic — combines wearable + lab markers into a single
+    # "your body looks like a X-year-old" number. See backend/biological_age.py
+    # for the formula and rationale. Never breaks the dashboard on
+    # compute error — degrades to null and the frontend hides the card.
+    try:
+        # Pull latest BP from apple_health_daily (Withings, manual, or
+        # HealthKit BP samples). Latest non-null wins.
+        _latest_bp = None
+        try:
+            for _d in sorted(am, reverse=True):
+                _bp = am.get(_d, {}).get("blood_pressure_systolic")
+                if _bp is not None:
+                    _latest_bp = _bp
+                    break
+        except Exception:
+            pass
+
+        _bio_metrics = {
+            "hrv":                     _lon_metrics.get("hrv"),
+            "rhr":                     _lon_metrics.get("rhr"),
+            "vo2_max":                 _lon_metrics.get("vo2_max"),
+            "body_fat_percentage":     _lon_metrics.get("body_fat_percentage"),
+            "sleep_hours":             _lon_metrics.get("sleep_hours"),
+            "blood_pressure_systolic": _latest_bp,
+        }
+
+        _bio_labs = bioage.latest_labs(user_id)
+        biological_age = bioage.compute(_bio_metrics, _profile, labs=_bio_labs)
+    except Exception:
+        log.exception("biological_age compute failed for %s", user_id)
+        biological_age = {
+            "biological_age": None, "chronological_age": None,
+            "delta_years": None, "confidence": "low", "n_markers": 0,
+            "components": [], "caveat": "",
+        }
 
     # ── Prediction tracking ───────────────────────────────────────────────────
     # Save today's forecast as tomorrow's prediction, fill in any past actuals,
@@ -2039,6 +2090,7 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
         "readiness_forecast":  readiness_forecast,
         "prediction_accuracy": pred_accuracy,
         "longevity_score":     longevity_score,
+        "biological_age":      biological_age,
         "trend":    trend,
         "coaches":  coaches,
         "coaching": coaching,

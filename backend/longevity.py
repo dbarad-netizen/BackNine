@@ -40,72 +40,74 @@ def compute(metrics: dict, profile: dict) -> dict:
         # an above-norm HRV earns the component max (25) and never overflows it.
         hrv_points = round(min(1.0, hrv / hrv_norm) * 25)
         has_hrv = True
+        _hrv_pct = round((hrv / hrv_norm) * 100) if hrv_norm else None
         components["hrv"] = {
             "label": "Heart Rate Variability",
             "value": f"{hrv} ms",
             "norm": f"~{round(hrv_norm)} ms for your age",
             "points": hrv_points,
             "max": 25,
+            # Per-component "why" for the transparency-vs-Bevel push.
+            # David 2026-08-07 — Bevel's opacity is a stated user
+            # complaint; every score we show should be defensible.
+            "why": (f"Your {hrv} ms is {_hrv_pct}% of the age-adjusted "
+                    f"norm (~{round(hrv_norm)} ms for age {age}). "
+                    f"Higher HRV signals stronger autonomic nervous system "
+                    f"and better cardiovascular fitness."),
         }
         total_points += hrv_points
         max_possible += 25
 
-    # Resting HR: 20 pts — <=50:20, <=60:17, <=70:13, <=80:9, else:5
+    # Resting HR: 20 pts — age-adjusted. Was fixed cutoffs, which
+    # over-penalized older users whose 68 bpm is genuinely normal.
+    # New: use age-appropriate percentile (approximation of ACSM norms).
+    # David 2026-08-07.
     if "rhr" in metrics and metrics["rhr"] is not None:
         rhr = metrics["rhr"]
-        if rhr <= 50:
-            rhr_points = 20
-        elif rhr <= 60:
-            rhr_points = 17
-        elif rhr <= 70:
-            rhr_points = 13
-        elif rhr <= 80:
-            rhr_points = 9
-        else:
-            rhr_points = 5
+        # Optimum shifts up ~1 bpm/decade after 30
+        rhr_optimum = 55 + max(0, (age - 30) // 10)
+        # Score: 20 if <= optimum, then step down by ~2.5 per 5 bpm above
+        delta_above = max(0, rhr - rhr_optimum)
+        rhr_points  = max(5, round(20 - (delta_above / 5) * 3))
+        rhr_points  = min(20, rhr_points)
         components["rhr"] = {
             "label": "Resting Heart Rate",
             "value": f"{rhr} bpm",
-            "norm": "<=60 bpm ideal",
+            "norm": f"~{rhr_optimum} bpm ideal for age {age}",
             "points": rhr_points,
             "max": 20,
+            "why": (f"Your {rhr} bpm is {'at or below' if rhr <= rhr_optimum else f'{rhr - rhr_optimum} bpm above'} "
+                    f"the ~{rhr_optimum} bpm optimum for age {age}. Lower RHR "
+                    f"typically means better cardiovascular efficiency."),
         }
         total_points += rhr_points
         max_possible += 20
 
-    # VO2 Max: 20 pts
+    # VO2 Max: 20 pts — age- and sex-adjusted. Was fixed cutoffs which
+    # over-penalized older users. New: percentile within age/sex band.
+    # David 2026-08-07.
     if "vo2_max" in metrics and metrics["vo2_max"] is not None:
         vo2 = metrics["vo2_max"]
-        if sex == "male":
-            if vo2 >= 50:
-                vo2_points = 20
-            elif vo2 >= 42:
-                vo2_points = 16
-            elif vo2 >= 35:
-                vo2_points = 12
-            elif vo2 >= 28:
-                vo2_points = 8
-            else:
-                vo2_points = 4
-            vo2_norm = ">=50 ml/kg/min (excellent)"
-        else:  # female
-            if vo2 >= 42:
-                vo2_points = 20
-            elif vo2 >= 35:
-                vo2_points = 16
-            elif vo2 >= 28:
-                vo2_points = 12
-            elif vo2 >= 22:
-                vo2_points = 8
-            else:
-                vo2_points = 4
-            vo2_norm = ">=42 ml/kg/min (excellent)"
+        # Age-adjusted "excellent" threshold (ACSM percentile ~90).
+        # Baseline peaks ~30, declines ~10%/decade.
+        if sex == "female":
+            vo2_excellent = max(20, 42 - 0.28 * max(0, age - 30))
+        else:
+            vo2_excellent = max(24, 50 - 0.35 * max(0, age - 30))
+        # Score: linear 0-100% of excellent maps to 4-20 points
+        ratio = vo2 / vo2_excellent if vo2_excellent > 0 else 0
+        vo2_points = round(4 + min(1.0, ratio) * 16)
+        vo2_points = max(4, min(20, vo2_points))
         components["vo2_max"] = {
             "label": "VO2 Max",
             "value": f"{vo2} ml/kg/min",
-            "norm": vo2_norm,
+            "norm": f">= {round(vo2_excellent)} ml/kg/min (excellent for age {age} {sex})",
             "points": vo2_points,
             "max": 20,
+            "why": (f"Your {vo2} ml/kg/min is {round(ratio * 100)}% of "
+                    f"the excellent-for-your-age threshold (~{round(vo2_excellent)}). "
+                    f"VO₂ max is one of the strongest predictors of all-cause "
+                    f"mortality — every 1 ml/kg/min gain is meaningful."),
         }
         total_points += vo2_points
         max_possible += 20
@@ -129,6 +131,10 @@ def compute(metrics: dict, profile: dict) -> dict:
             "norm": "7–9 hrs optimal (NSF / AAoSM)",
             "points": sleep_points,
             "max": 15,
+            "why": (f"Your 7-day sleep average of {sleep:.1f} hours "
+                    f"{'is in' if 7 <= sleep <= 9 else 'falls outside'} the "
+                    f"7-9 hour optimal range. Consistently short or long sleep "
+                    f"is associated with cardiovascular and metabolic risk."),
         }
         total_points += sleep_points
         max_possible += 15
@@ -162,6 +168,10 @@ def compute(metrics: dict, profile: dict) -> dict:
             "norm": bf_norm,
             "points": bf_points,
             "max": 10,
+            "why": (f"Body fat of {bf}% — {bf_norm.split(' ')[0]} range for "
+                    f"{sex}. Lower body fat reduces metabolic and "
+                    f"cardiovascular risk, though extremely low levels "
+                    f"can indicate other issues."),
         }
         total_points += bf_points
         max_possible += 10
@@ -188,9 +198,96 @@ def compute(metrics: dict, profile: dict) -> dict:
             "norm": "7,000–8,000 optimal (research-backed)",
             "points": steps_points,
             "max": 10,
+            "why": (f"Your 7-day average of {int(steps):,} steps. Mortality "
+                    f"benefits plateau around 7-8k steps/day per 2020 JAMA "
+                    f"meta-analysis — 10k is a marketing figure, not a "
+                    f"clinical target."),
         }
         total_points += steps_points
         max_possible += 10
+
+    # ── Cardiometabolic band (David 2026-08-07) ─────────────────────────
+    # Adds up to 25 points when lab markers exist. For 50+ users, BP +
+    # HbA1c + LDL + hsCRP are higher-signal for mortality than the
+    # wearable-only bands above. When ANY of these are present, we
+    # include them and rescale the final composite so the total still
+    # normalizes to 0-100. Users without labs simply don't see this
+    # band and their score is unchanged.
+    cardio_labs = metrics.get("cardio_labs") or {}
+    # Systolic BP: 8 pts. <=120:8, <=130:6, <=140:4, <=160:2, else:0
+    bp_sys = cardio_labs.get("blood_pressure_systolic")
+    if bp_sys is not None:
+        if bp_sys <= 120:   bp_points = 8
+        elif bp_sys <= 130: bp_points = 6
+        elif bp_sys <= 140: bp_points = 4
+        elif bp_sys <= 160: bp_points = 2
+        else:               bp_points = 0
+        components["bp_systolic"] = {
+            "label": "Systolic BP",
+            "value": f"{int(bp_sys)} mmHg",
+            "norm":  "<=120 optimal",
+            "points": bp_points, "max": 8,
+            "why": (f"Systolic BP of {int(bp_sys)} mmHg. Every 10 mmHg "
+                    f"reduction from elevated levels cuts cardiovascular "
+                    f"risk ~20% (SPRINT trial)."),
+        }
+        total_points += bp_points; max_possible += 8
+
+    # HbA1c: 7 pts. <=5.4:7, <=5.6:5, <=6.0:3, <=6.4:1, else:0
+    hba1c = cardio_labs.get("hba1c")
+    if hba1c is not None:
+        if hba1c <= 5.4:   hba_points = 7
+        elif hba1c <= 5.6: hba_points = 5
+        elif hba1c <= 6.0: hba_points = 3
+        elif hba1c <= 6.4: hba_points = 1
+        else:              hba_points = 0
+        components["hba1c"] = {
+            "label": "HbA1c",
+            "value": f"{hba1c}%",
+            "norm":  "<=5.4% optimal for longevity",
+            "points": hba_points, "max": 7,
+            "why": (f"HbA1c of {hba1c}% reflects 3-month average blood "
+                    f"glucose. Below 5.4% associates with lowest "
+                    f"all-cause mortality in cohort studies."),
+        }
+        total_points += hba_points; max_possible += 7
+
+    # LDL: 6 pts. <=70:6, <=100:4, <=130:2, <=160:1, else:0
+    ldl = cardio_labs.get("ldl")
+    if ldl is not None:
+        if ldl <= 70:    ldl_points = 6
+        elif ldl <= 100: ldl_points = 4
+        elif ldl <= 130: ldl_points = 2
+        elif ldl <= 160: ldl_points = 1
+        else:            ldl_points = 0
+        components["ldl"] = {
+            "label": "LDL",
+            "value": f"{int(ldl)} mg/dL",
+            "norm":  "<=70 aggressive optimum",
+            "points": ldl_points, "max": 6,
+            "why": (f"LDL of {int(ldl)} mg/dL. Contemporary lipidology "
+                    f"targets sub-70 for anyone with elevated ASCVD risk "
+                    f"(ACC 2018)."),
+        }
+        total_points += ldl_points; max_possible += 6
+
+    # hsCRP: 4 pts. <=0.5:4, <=1.0:3, <=3.0:2, else:0
+    hscrp = cardio_labs.get("crp_hs")
+    if hscrp is not None:
+        if hscrp <= 0.5:   crp_points = 4
+        elif hscrp <= 1.0: crp_points = 3
+        elif hscrp <= 3.0: crp_points = 2
+        else:              crp_points = 0
+        components["hscrp"] = {
+            "label": "hsCRP",
+            "value": f"{hscrp} mg/L",
+            "norm":  "<0.5 low inflammation",
+            "points": crp_points, "max": 4,
+            "why": (f"hsCRP of {hscrp} mg/L. Elevated inflammation "
+                    f"independently predicts cardiovascular events even "
+                    f"with normal cholesterol (JUPITER trial)."),
+        }
+        total_points += crp_points; max_possible += 4
 
     # Compute final score
     score = None
