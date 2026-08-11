@@ -293,6 +293,11 @@ export interface LongevityComponent {
   norm:   string;
   points: number;
   max:    number;
+  /** Plain-English explanation of what this metric means and why the
+   *  score is what it is. Rendered as a tap-to-expand under each row —
+   *  the "transparency over black-box" moat vs. Bevel. Added
+   *  David 2026-08-07. Optional so older cached payloads still parse. */
+  why?:   string;
 }
 
 export interface LongevityScore {
@@ -647,10 +652,38 @@ export interface DashboardData {
   readiness_forecast:   ReadinessForecast;
   prediction_accuracy?: PredictionAccuracy;
   longevity_score?:     LongevityScore;
+  biological_age?:      BiologicalAge;
   /** Data freshness state — Fable IMPROVE #2. Frontend tiles read from
    *  this to render 'as of X ago' when stale instead of pretending
    *  9-day-old data is today's. */
   freshness?:           DashboardFreshness;
+}
+
+// ── Biological Age (David 2026-08-07, task #172) ──────────────────────
+// Hybrid formula combining wearable + lab markers into a single "your
+// body looks like a X-year-old" estimate. See backend/biological_age.py
+// for the math. Every component's contribution is shown for transparency
+// (Bevel's opacity is a stated user complaint — we differentiate here).
+export interface BioAgeComponent {
+  key:         string;
+  label:       string;
+  value:       number;
+  unit:        string;
+  expected:    number;
+  z:           number;
+  years_delta: number;   // positive = ages you; negative = keeps you young
+  weight:      number;
+  why:         string;
+}
+export interface BiologicalAge {
+  biological_age:    number | null;
+  chronological_age: number | null;
+  delta_years:       number | null;
+  confidence:        "high" | "medium" | "low";
+  n_markers:         number;
+  components:        BioAgeComponent[];
+  caveat:            string;
+  reason?:           string;   // when biological_age is null
 }
 
 export interface Wearable {

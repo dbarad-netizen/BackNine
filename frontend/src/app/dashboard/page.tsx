@@ -68,6 +68,7 @@ import WeeklyRecapCard from "@/components/WeeklyRecapCard";
 import TodaysTagsCard from "@/components/TodaysTagsCard";
 import JournalCard from "@/components/JournalCard";
 import CpapNightlyLogCard from "@/components/CpapNightlyLogCard";
+import BiologicalAgeCard from "@/components/BiologicalAgeCard";
 import DailyInsightCard from "@/components/DailyInsightCard";
 import SymptomCard from "@/components/SymptomCard";
 // WeeklyInsight retired 2026-07-09 per David: content overlapped Coach Al
@@ -2009,6 +2010,13 @@ export default function DashboardPage() {
               );
             })()}
 
+            {/* ── Biological Age — headline vitality metric (David 2026-08-07)
+                Renders above Longevity Score. Self-hides when we have
+                fewer than 3 markers. The "your body reads as X" hook +
+                per-marker transparency is our answer to Bevel's opaque
+                Biological Age. */}
+            {data.biological_age && <BiologicalAgeCard data={data.biological_age} />}
+
             {/* ── Longevity Score teaser — shown when no score is computable yet ── */}
             {data.longevity_score?.score == null && (
               <section className="rounded-2xl border border-dashed border-gray-300 bg-white p-5">
@@ -2207,7 +2215,13 @@ export default function DashboardPage() {
                               if ((e.target as HTMLElement).tagName === "BUTTON") return;
                               setLonMetricOpen({ key: slotKey, label: comp.label });
                             }}
-                            title={`Tap for 90-day ${comp.label} history`}
+                            // Show the per-component "why" explanation on hover
+                            // (desktop) and long-press (mobile). Full modal
+                            // reveals it too. David 2026-08-07 — transparency
+                            // vs Bevel's black-box scoring.
+                            title={comp.why
+                              ? `${comp.why}\n\nTap for 90-day ${comp.label} history`
+                              : `Tap for 90-day ${comp.label} history`}
                           >
                             <div className="flex justify-between text-[10px]">
                               <span className="text-gray-600 truncate pr-1">{comp.label}</span>
