@@ -3359,6 +3359,142 @@ def get_workouts(request: Request, days: int = 30):
     return {"workouts": workouts}
 
 
+@app.get("/api/activity/timeline")
+def get_activity_timeline(request: Request, days: int = 7):
+    """Unified chronological activity feed (David 2026-08-11, #184):
+    everything the user DID in the window — manual workouts, Oura-
+    detected workouts (walks, runs, Pilates, strength), Oura sessions
+    (meditation, breathing), naps, and lifestyle tags (sauna, ice bath,
+    cryotherapy, hot bath, CPAP…). One list, newest first.
+
+    This is the 'surface everything from Oura' ask — the data was
+    already collected in training_workouts + oura_tags but never shown
+    in one place."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    days    = max(1, min(31, days))
+    since   = (datetime.now(timezone.utc).date() - timedelta(days=days - 1)).isoformat()
+
+    items: list[dict] = []
+    db = get_supabase()
+    if db:
+        # Workouts / sessions / naps (manual + Oura-imported)
+        try:
+            res = (db.table("training_workouts")
+                     .select("date, type, kind, source, activity, duration_min, "
+                             "avg_hr, calories_kcal, distance_meters, notes, logged_at")
+                     .eq("user_id", user_id)
+                     .gte("date", since)
+                     .order("date", desc=True)
+                     .limit(100)
+                     .execute())
+            for r in (res.data or []):
+                kind = r.get("kind") or "workout"
+                activity = (r.get("activity") or r.get("type") or "workout")
+                emoji = {
+                    "nap": "🛌", "sauna": "🧖", "meditation": "🧘",
+                    "breathing": "😮‍💨", "walking": "🚶", "running": "🏃",
+                    "cycling": "🚴", "swimming": "🏊", "pilates": "🤸",
+                    "strength_training": "🏋️", "yoga": "🧘",
+                }.get(str(activity).lower(), "💪" if kind != "session" else "✨")
+                items.append({
+                    "date":       r.get("date"),
+                    "kind":       "session" if kind == "session" else "workout",
+                    "source":     r.get("source") or "manual",
+                    "label":      r.get("type") or "Workout",
+                    "emoji":      emoji,
+                    "duration_min":    r.get("duration_min"),
+                    "avg_hr":          r.get("avg_hr"),
+                    "calories_kcal":   r.get("calories_kcal"),
+                    "distance_meters": r.get("distance_meters"),
+                    "notes":      r.get("notes") or None,
+                    "ts":         r.get("logged_at"),
+                })
+        except Exception:
+            pass
+
+        # Lifestyle tags from Oura (sauna, cryo, hot bath, CPAP, alcohol…)
+        try:
+            res_t = (db.table("oura_tags")
+                       .select("tag_type_code, comment, start_day, start_time")
+                       .eq("user_id", user_id)
+                       .gte("start_day", since)
+                       .order("start_day", desc=True)
+                       .limit(100)
+                       .execute())
+            TAG_META = {
+                "tag_sleep_sauna":         ("🧖", "Sauna"),
+                "tag_generic_sauna":       ("🧖", "Sauna"),
+                "tag_generic_cryotherapy": ("🧊", "Cryotherapy"),
+                "tag_sleep_late_hotbath":  ("🛁", "Hot bath"),
+                "tag_generic_icebath":     ("🧊", "Ice bath"),
+                "tag_generic_cpap":        ("😴", "CPAP"),
+                "tag_generic_alcohol":     ("🍷", "Alcohol"),
+                "tag_generic_caffeine":    ("☕", "Caffeine"),
+                "tag_generic_meditation":  ("🧘", "Meditation"),
+                "tag_generic_travel":      ("✈️", "Travel"),
+                "tag_generic_sick":        ("🤒", "Sick day"),
+                "tag_generic_stress":      ("😣", "Stressful day"),
+            }
+            for r in (res_t.data or []):
+                code = r.get("tag_type_code") or ""
+                emoji, label = TAG_META.get(code, ("🏷️",
+                    code.replace("tag_generic_", "").replace("tag_sleep_", "")
+                        .replace("_", " ").title() or "Tag"))
+                items.append({
+                    "date":   r.get("start_day"),
+                    "kind":   "tag",
+                    "source": "oura",
+                    "label":  label,
+                    "emoji":  emoji,
+                    "notes":  r.get("comment") or None,
+                    "ts":     r.get("start_time"),
+                })
+        except Exception:
+            pass
+
+    items.sort(key=lambda i: (i.get("date") or "", i.get("ts") or ""), reverse=True)
+    return {"days": days, "items": items}
+
+
+@app.get("/api/oura/events-debug")
+async def oura_events_debug(request: Request):
+    """Diagnostic (David 2026-08-11): live-fetch Oura workouts/sessions/
+    naps/tags with the user's token and report counts + samples. Used to
+    debug why workout imports stalled after July 6 while tags kept
+    flowing. Safe to leave in — auth-gated, read-only."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    access_token = session.get("access_token")
+    if not access_token:
+        db = get_supabase()
+        if db:
+            try:
+                r = (db.table("oura_connections").select("access_token")
+                       .eq("user_id", user_id).limit(1).execute())
+                if r.data:
+                    access_token = r.data[0].get("access_token")
+            except Exception:
+                pass
+    if not access_token:
+        return {"error": "no oura token for this user"}
+
+    out: dict = {}
+    for name, fn in (("workouts", oura_fetch_workouts),
+                     ("sessions", oura_fetch_sessions),
+                     ("naps",     oura_fetch_naps),
+                     ("tags",     oura_fetch_tags)):
+        try:
+            data = await fn(access_token, days=30)
+            out[name] = {
+                "count":  len(data or []),
+                "sample": (data or [])[:3],
+            }
+        except Exception as exc:
+            out[name] = {"error": str(exc)[:200]}
+    return out
+
+
 @app.get("/api/training/lifetime-prs")
 def get_lifetime_prs(request: Request, limit: int = 10):
     """User's current lifetime PR per exercise (recency-sorted). Surfaced for a

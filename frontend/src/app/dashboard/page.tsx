@@ -70,6 +70,7 @@ import JournalCard from "@/components/JournalCard";
 import CpapNightlyLogCard from "@/components/CpapNightlyLogCard";
 import BiologicalAgeCard from "@/components/BiologicalAgeCard";
 import WeeklyHealthSpanCard from "@/components/WeeklyHealthSpanCard";
+import ActivityTimelineCard from "@/components/ActivityTimelineCard";
 import DailyInsightCard from "@/components/DailyInsightCard";
 import SymptomCard from "@/components/SymptomCard";
 // WeeklyInsight retired 2026-07-09 per David: content overlapped Coach Al
@@ -1769,6 +1770,13 @@ export default function DashboardPage() {
               onInvite={() => setShowShare(true)}
               onSeeMore={() => { setSection("challenges"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
             />
+
+            {/* ── This Week's Activity — unified Oura + manual event
+                feed (David 2026-08-11, #184). Sauna, cryo, naps,
+                detected workouts, Pilates, meditation — everything the
+                user DID, in one chronological view. Self-hides when
+                empty. */}
+            <ActivityTimelineCard />
 
             {/* Private Journal — daily reflection log. Pairs with the
                 Daily Check-in above (mood + symptoms = the quick log;

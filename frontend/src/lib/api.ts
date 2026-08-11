@@ -370,6 +370,24 @@ export interface LabResult {
   notes?:           string;
 }
 
+// ── Activity timeline (David 2026-08-11, task #184) ───────────────────
+// Unified feed of everything the user DID: workouts (manual + Oura-
+// detected), sessions (meditation, breathing), naps, and Oura lifestyle
+// tags (sauna, cryo, hot bath, CPAP…).
+export interface ActivityTimelineItem {
+  date:   string;
+  kind:   "workout" | "session" | "tag";
+  source: string;              // "manual" | "oura"
+  label:  string;
+  emoji:  string;
+  duration_min?:    number | null;
+  avg_hr?:          number | null;
+  calories_kcal?:   number | null;
+  distance_meters?: number | null;
+  notes?:           string | null;
+  ts?:              string | null;
+}
+
 // ── CPAP nightly log (David 2026-08-06, task #162) ────────────────────
 export interface CpapNightlyLog {
   id?:              string;
@@ -2473,6 +2491,11 @@ export const api = {
     time_of_day?: "morning" | "midday" | "evening" | "anytime";
   }): Promise<{ row: StackAdherenceRow }> {
     return request("/api/stack/adherence", { method: "POST", body: JSON.stringify(body) });
+  },
+
+  // ── Unified activity timeline (David 2026-08-11, task #184) ─────────────
+  activityTimeline(days = 7): Promise<{ days: number; items: ActivityTimelineItem[] }> {
+    return request(`/api/activity/timeline?days=${days}`);
   },
 
   // ── Capability toggles + CPAP tracking (David 2026-08-06, task #162) ────
