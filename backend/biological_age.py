@@ -415,6 +415,55 @@ _CAVEAT_TEXT = (
 
 # ── Latest-labs helper ──────────────────────────────────────────────────
 
+def project(snapshot: dict, healthspan_score: Optional[int],
+            horizon_days: int = 90) -> Optional[dict]:
+    """Project Bio Age `horizon_days` forward based on the user's current
+    Weekly Health Span Score (the behavioral/process score).
+
+    Model: behavioral consistency drives the wearable-derived markers
+    (HRV, RHR, VO2 max, body fat, sleep) over months. We map the Health
+    Span score to a monthly drift rate:
+
+        rate_per_month = -(healthspan - 65) / 100   (years/month)
+
+      Health Span 100 → -0.35 yr/month  (aggressive improvement)
+      Health Span  85 → -0.20 yr/month
+      Health Span  65 →  0.00           (holding steady)
+      Health Span  50 → +0.15 yr/month  (drifting older)
+
+    Quarterly projection capped at ±1.5 years for plausibility — a
+    wearable-derived Bio Age genuinely can move ~1 yr in a quarter from
+    consistent behavior change (HRV/RHR/body fat all respond), but more
+    than that would over-promise.
+
+    This is the effort→outcome loop: Bio Age (outcome) projected from
+    Health Span (process). Bevel shows an age projection but has no
+    separated behavior score to drive it — that's the moat.
+    David 2026-08-11.
+
+    Returns None when either input is missing.
+    """
+    bio_age = snapshot.get("biological_age")
+    if bio_age is None or healthspan_score is None:
+        return None
+    months = horizon_days / 30.0
+    rate   = -(healthspan_score - 65) / 100.0     # yr per month
+    drift  = rate * months
+    drift  = max(-1.5, min(1.5, drift))
+    projected = round(float(bio_age) + drift, 1)
+    return {
+        "horizon_days":     horizon_days,
+        "projected_age":    projected,
+        "delta_from_now":   round(drift, 1),
+        "healthspan_score": healthspan_score,
+        "caveat": (
+            "Projection assumes your current weekly habits continue. "
+            "Based on how behavior moves wearable markers over months — "
+            "an estimate, not a guarantee."
+        ),
+    }
+
+
 def persist_and_delta(user_id: str, today_iso: str, snapshot: dict) -> Optional[dict]:
     """Upsert today's Bio Age snapshot, then return trend info vs
     ~30 days ago. Bio Age moves slowly — monthly delta is the right

@@ -121,6 +121,38 @@ export default function BiologicalAgeCard({ data, onShare }: Props) {
         );
       })()}
 
+      {/* Age Projection — the effort→outcome loop. Bio Age projected
+          90 days forward at the user's current Health Span pace.
+          David 2026-08-11. Only shows when meaningful (≥0.2 yr move). */}
+      {data.projection && Math.abs(data.projection.delta_from_now) >= 0.2 && (() => {
+        const p = data.projection;
+        const improving = p.delta_from_now < 0;
+        const when = new Date(Date.now() + p.horizon_days * 24 * 60 * 60 * 1000)
+          .toLocaleDateString("en-US", { month: "long" });
+        return (
+          <div
+            className={`rounded-lg border px-3 py-2 mb-2 ${
+              improving
+                ? "border-emerald-200 bg-emerald-50/70"
+                : "border-amber-200 bg-amber-50/70"
+            }`}
+            title={p.caveat}
+          >
+            <p className="text-[11px] leading-snug text-gray-800">
+              <span className="font-semibold">
+                {improving ? "📈 On your current pace" : "📉 At your current pace"}
+              </span>{" "}
+              (Health Span {p.healthspan_score}), your Bio Age projects to{" "}
+              <span className={`font-bold ${improving ? "text-emerald-800" : "text-amber-800"}`}>
+                {p.projected_age}
+              </span>{" "}
+              by {when} — {Math.abs(p.delta_from_now).toFixed(1)} years{" "}
+              {improving ? "younger" : "older"} than today.
+            </p>
+          </div>
+        );
+      })()}
+
       {/* Expand + share actions */}
       <div className="flex items-center justify-between gap-2">
         <button

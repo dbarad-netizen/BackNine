@@ -2143,6 +2143,15 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
             )
         except Exception:
             biological_age["trend"] = None
+        # Age Projection — Bio Age (outcome) projected 90 days forward
+        # from the Weekly Health Span Score (process). The effort→
+        # outcome loop. David 2026-08-11.
+        try:
+            biological_age["projection"] = bioage.project(
+                biological_age, weekly_healthspan.get("score")
+            )
+        except Exception:
+            biological_age["projection"] = None
     except Exception:
         log.exception("biological_age compute failed for %s", user_id)
         biological_age = {

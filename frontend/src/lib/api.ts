@@ -717,6 +717,16 @@ export interface BiologicalAge {
    *  would be noise. Null on first compute or when no prior snapshot
    *  exists within the target window. */
   trend?: { delta_years: number; days_ago: number } | null;
+  /** 90-day forward projection driven by the Weekly Health Span Score.
+   *  The effort→outcome loop: process score projects the outcome
+   *  metric. Null when either input is missing. David 2026-08-11. */
+  projection?: {
+    horizon_days:     number;
+    projected_age:    number;
+    delta_from_now:   number;
+    healthspan_score: number;
+    caveat:           string;
+  } | null;
 }
 
 export interface Wearable {
