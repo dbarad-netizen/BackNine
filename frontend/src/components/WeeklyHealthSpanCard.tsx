@@ -58,7 +58,7 @@ export default function WeeklyHealthSpanCard({ data }: Props) {
       {/* Header row — ring + title on left, highlights on right */}
       <div className="flex items-start gap-4 flex-wrap">
         <div className="flex items-center gap-4 min-w-0">
-          <div className="relative w-16 h-16 shrink-0">
+          <div className="relative w-20 h-20 shrink-0">
             <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
               <circle cx="50" cy="50" r="42" fill="none" stroke="#E5E7EB" strokeWidth="10" />
               <circle
@@ -69,8 +69,8 @@ export default function WeeklyHealthSpanCard({ data }: Props) {
               />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-lg font-bold text-gray-900 leading-none">{data.score}</span>
-              <span className="text-[9px] text-gray-600 uppercase tracking-wide">Health Span</span>
+              <span className="text-2xl font-bold text-gray-900 leading-none">{data.score}</span>
+              <span className="text-[9px] text-gray-500 leading-none mt-0.5">/100</span>
             </div>
           </div>
           <div className="min-w-0">
