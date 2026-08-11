@@ -2025,7 +2025,12 @@ export default function DashboardPage() {
                 fewer than 3 markers. The "your body reads as X" hook +
                 per-marker transparency is our answer to Bevel's opaque
                 Biological Age. */}
-            {data.biological_age && <BiologicalAgeCard data={data.biological_age} />}
+            {data.biological_age && (
+              <BiologicalAgeCard
+                data={data.biological_age}
+                onShare={() => setShowShare(true)}
+              />
+            )}
 
             {/* WeeklyLeague moved higher — now sits right after Daily
                 Check-in (David 2026-08-11). Was here after Bio Age. */}
@@ -3112,6 +3117,15 @@ export default function DashboardPage() {
                 score: data.longevity_score.score ?? null,
                 grade: data.longevity_score.grade ?? null,
                 biological_age_delta: data.longevity_score.biological_age_delta ?? null,
+              }
+            : null}
+          bioAge={data?.biological_age
+            ? {
+                biological_age:    data.biological_age.biological_age,
+                chronological_age: data.biological_age.chronological_age,
+                delta_years:       data.biological_age.delta_years,
+                confidence:        data.biological_age.confidence,
+                n_markers:         data.biological_age.n_markers,
               }
             : null}
         />

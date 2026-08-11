@@ -14,7 +14,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type ReferralCode } from "@/lib/api";
 
-type CardKey = "longevity" | "streak" | "h2h" | "generic";
+type CardKey = "bioage" | "longevity" | "streak" | "h2h" | "generic";
 
 interface LongevityLite {
   score: number | null;
@@ -22,9 +22,20 @@ interface LongevityLite {
   biological_age_delta: number | null;
 }
 
+/** Bio Age share payload — David 2026-08-11 (Bevel-parity share card,
+ *  the single most viral artifact a longevity app produces). */
+interface BioAgeLite {
+  biological_age:    number | null;
+  chronological_age: number | null;
+  delta_years:       number | null;
+  confidence:        string;
+  n_markers:         number;
+}
+
 interface Props {
   onClose: () => void;
   longevity?: LongevityLite | null;
+  bioAge?:    BioAgeLite | null;
 }
 
 interface CardContent {
@@ -35,6 +46,7 @@ interface CardContent {
 }
 
 const TAB_LABEL: Record<CardKey, string> = {
+  bioage:    "Bio Age",
   longevity: "Longevity",
   streak:    "Streak",
   h2h:       "Matchup",
@@ -165,7 +177,27 @@ function buildCard(
   longevity: LongevityLite | null | undefined,
   appStreak: number | null,
   h2h: H2HWin | null,
+  bioAge?: BioAgeLite | null,
 ): CardContent {
+  if (tab === "bioage" && bioAge?.biological_age != null && bioAge.delta_years != null) {
+    const d       = bioAge.delta_years;
+    const absDel  = Math.abs(d);
+    const younger = d < 0;
+    const big     = absDel < 0.5
+      ? String(bioAge.biological_age)
+      : `${absDel.toFixed(1)} yrs`;
+    const sub     = absDel < 0.5
+      ? `Biological age — on par with my ${bioAge.chronological_age}`
+      : `${younger ? "younger" : "older"} than my ${bioAge.chronological_age} years — biological age ${bioAge.biological_age}`;
+    return {
+      eyebrow:   "🧬 Biological Age",
+      big,
+      sub,
+      shareText: absDel < 0.5
+        ? `My biological age matches my calendar age (${bioAge.biological_age}) on BackNine. See how your body reads 👇`
+        : `My body reads ${absDel.toFixed(1)} years ${younger ? "younger" : "older"} than my age on BackNine (${bioAge.n_markers} markers). See how yours reads 👇`,
+    };
+  }
   if (tab === "longevity" && longevity?.score != null) {
     const d = longevity.biological_age_delta;
     const sub =
@@ -210,7 +242,7 @@ function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
 
 // ── Component ───────────────────────────────────────────────────────────────────
 
-export default function ShareCardModal({ onClose, longevity }: Props) {
+export default function ShareCardModal({ onClose, longevity, bioAge }: Props) {
   const [referral, setReferral]   = useState<ReferralCode | null>(null);
   const [appStreak, setAppStreak] = useState<number | null>(null);
   const [h2h, setH2h]             = useState<H2HWin | null>(null);
@@ -251,18 +283,24 @@ export default function ShareCardModal({ onClose, longevity }: Props) {
     return () => { cancelled = true; };
   }, []);
 
-  // For now we ship invite-only. The Longevity / Streak / Matchup brag cards
-  // are still wired up (data fetches above), but hidden behind a feature flag
-  // until we revisit how brag cards fit into the social IA (Clubhouse work).
-  // Re-enable by adding `longevity`, `streak`, `h2h` back to this list.
-  const available = useMemo<CardKey[]>(() => ["generic"], []);
+  // Bio Age share card enabled David 2026-08-11 — the "I'm X years
+  // younger" screenshot is the most viral artifact a longevity app
+  // produces (Bevel ships this; now we do too, with more transparency).
+  // Longevity / Streak / Matchup remain gated pending the social IA
+  // rethink; re-enable by adding them back to this list.
+  const available = useMemo<CardKey[]>(() => {
+    const keys: CardKey[] = [];
+    if (bioAge?.biological_age != null) keys.push("bioage");
+    keys.push("generic");
+    return keys;
+  }, [bioAge]);
 
   // Default to the most brag-worthy available card once data settles.
   useEffect(() => {
     if (!loading) setTab(available[0]);
   }, [loading, available]);
 
-  const card = useMemo(() => buildCard(tab, longevity, appStreak, h2h), [tab, longevity, appStreak, h2h]);
+  const card = useMemo(() => buildCard(tab, longevity, appStreak, h2h, bioAge), [tab, longevity, appStreak, h2h, bioAge]);
 
   const inviteLink = useMemo(() => {
     const origin = typeof window !== "undefined" ? window.location.origin : "";

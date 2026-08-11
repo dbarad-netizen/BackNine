@@ -19,6 +19,9 @@ import type { BiologicalAge, BioAgeComponent } from "@/lib/api";
 
 interface Props {
   data: BiologicalAge;
+  /** Optional — opens the ShareCardModal pre-set to the Bio Age card.
+   *  When omitted the share button is hidden. David 2026-08-11. */
+  onShare?: () => void;
 }
 
 function fmt(n: number, decimals = 1): string {
@@ -39,7 +42,7 @@ function confidencePill(conf: BiologicalAge["confidence"], n: number): { color: 
   return                        { color: "bg-gray-100 text-gray-600",       label: `Low confidence · ${n} markers` };
 }
 
-export default function BiologicalAgeCard({ data }: Props) {
+export default function BiologicalAgeCard({ data, onShare }: Props) {
   const [expanded, setExpanded] = useState(false);
 
   if (data.biological_age == null || data.delta_years == null || data.chronological_age == null) {
@@ -118,13 +121,24 @@ export default function BiologicalAgeCard({ data }: Props) {
         );
       })()}
 
-      {/* Expand */}
-      <button
-        onClick={() => setExpanded(e => !e)}
-        className="text-[11px] font-medium text-gray-600 hover:text-gray-900 underline-offset-2 hover:underline"
-      >
-        {expanded ? "▲ Hide markers" : `▼ See what's moving your score (${data.components.length} markers)`}
-      </button>
+      {/* Expand + share actions */}
+      <div className="flex items-center justify-between gap-2">
+        <button
+          onClick={() => setExpanded(e => !e)}
+          className="text-[11px] font-medium text-gray-600 hover:text-gray-900 underline-offset-2 hover:underline"
+        >
+          {expanded ? "▲ Hide markers" : `▼ See what's moving your score (${data.components.length} markers)`}
+        </button>
+        {onShare && (
+          <button
+            onClick={onShare}
+            className="shrink-0 text-[11px] font-semibold text-[#1B3829] border border-[#1B3829]/30 rounded-lg px-2.5 py-1 hover:bg-[#1B3829]/5 transition-colors"
+            title="Share your Biological Age"
+          >
+            📣 Share
+          </button>
+        )}
+      </div>
 
       {expanded && (
         <div className="mt-2 space-y-1.5">
