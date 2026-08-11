@@ -1760,6 +1760,15 @@ export default function DashboardPage() {
                 5.8h vs 7.1h" once 3+ symptom days exist. */}
             <SymptomCard />
 
+            {/* ── Weekly Leaderboard — hero social slot, right after
+                Daily Check-in. David 2026-08-11 — moved here from after
+                Bio Age because check-in + social create a natural
+                "how am I today, how am I doing this week" pairing. */}
+            <WeeklyLeague
+              onInvite={() => setShowShare(true)}
+              onSeeMore={() => { setSection("challenges"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+            />
+
             {/* Private Journal — daily reflection log. Pairs with the
                 Daily Check-in above (mood + symptoms = the quick log;
                 journal = the deeper one). Privacy contract enforced
@@ -2017,16 +2026,8 @@ export default function DashboardPage() {
                 Biological Age. */}
             {data.biological_age && <BiologicalAgeCard data={data.biological_age} />}
 
-            {/* ── Weekly Leaderboard — promoted to hero position
-                David 2026-08-11. Social layer is a core differentiator
-                for BackNine (Bevel is solo); the league belongs among
-                the hero metrics, not buried below 300 lines of
-                Longevity Score components. Duplicate render at the
-                bottom was removed at the same time. */}
-            <WeeklyLeague
-              onInvite={() => setShowShare(true)}
-              onSeeMore={() => { setSection("challenges"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-            />
+            {/* WeeklyLeague moved higher — now sits right after Daily
+                Check-in (David 2026-08-11). Was here after Bio Age. */}
 
             {/* ── Longevity Score teaser — shown when no score is computable yet ── */}
             {data.longevity_score?.score == null && (
