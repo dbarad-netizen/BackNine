@@ -509,23 +509,54 @@ def parse_pdf(file_bytes: bytes) -> Tuple[Optional[str], Dict[str, float]]:
     lines = full_text.splitlines()
 
     # ── Extract date ───────────────────────────────────────────────────────────
-    found_date: Optional[str] = None
-    for line in lines:
-        for pat in date_pats:
+    # Two-pass strategy (David 2026-08-11 — stress test caught the parser
+    # grabbing "DOB: 09/03/1968" as the collection date on Quest-style
+    # reports because DOB appears before Collected in the header):
+    #   Pass 1: only look at lines containing collection keywords.
+    #   Pass 2: fall back to any line EXCEPT ones with DOB/birth keywords.
+    _dob_pat     = re.compile(r"\bdob\b|\bdate\s+of\s+birth\b|\bbirth\b", re.I)
+    _collect_pat = re.compile(r"\bcollect|\bspecimen\b|\bdrawn\b", re.I)
+    # Also accept DD-Mon-YYYY ("12-Mar-2026") — common on hospital reports.
+    _date_fmts = ("%B %d %Y", "%b %d %Y", "%b. %d %Y", "%m/%d/%Y", "%m-%d-%Y",
+                  "%m/%d/%y", "%Y-%m-%d", "%d/%m/%Y", "%d-%b-%Y", "%d-%B-%Y")
+    _extra_date_pat = re.compile(r"(\d{1,2}-(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*-\d{4})", re.I)
+
+    def _try_parse_date(raw: str) -> Optional[str]:
+        raw = raw.strip().rstrip(",")
+        for fmt in _date_fmts:
+            try:
+                return datetime.strptime(raw, fmt).strftime("%Y-%m-%d")
+            except ValueError:
+                pass
+        return None
+
+    def _scan_line_for_date(line: str) -> Optional[str]:
+        for pat in [*date_pats, _extra_date_pat]:
             m = pat.search(line)
             if m:
-                raw = m.group(1).strip().rstrip(",")
-                for fmt in ("%B %d %Y", "%b %d %Y", "%b. %d %Y", "%m/%d/%Y", "%m-%d-%Y",
-                            "%m/%d/%y", "%Y-%m-%d", "%d/%m/%Y"):
-                    try:
-                        found_date = datetime.strptime(raw, fmt).strftime("%Y-%m-%d")
-                        break
-                    except ValueError:
-                        pass
-                if found_date:
-                    break
+                parsed = _try_parse_date(m.group(1))
+                if parsed:
+                    return parsed
+        return None
+
+    found_date: Optional[str] = None
+    # Pass 1 — collection-keyword lines only (never DOB lines)
+    for line in lines:
+        if _dob_pat.search(line):
+            continue
+        if not _collect_pat.search(line):
+            continue
+        found_date = _scan_line_for_date(line)
         if found_date:
             break
+    # Pass 2 — any non-DOB line
+    if not found_date:
+        for line in lines:
+            if _dob_pat.search(line):
+                continue
+            found_date = _scan_line_for_date(line)
+            if found_date:
+                break
 
     # ── Extract marker values ──────────────────────────────────────────────────
     # Sort aliases longest-first so more specific phrases match before short ones
