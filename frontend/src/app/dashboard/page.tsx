@@ -2084,21 +2084,14 @@ export default function DashboardPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-[10px] text-gray-600 uppercase tracking-widest mb-0.5">Longevity Score</p>
                       <p className="font-bold text-gray-900 text-base" style={{ color: gradeColor }}>{lon.grade}</p>
-                      {lon.biological_age_delta != null && (
-                        <p className="text-xs text-gray-600 mt-0.5">
-                          {lon.biological_age_delta === 0 ? (
-                            <span className="font-semibold text-gray-600">On par with your chronological age</span>
-                          ) : (
-                            <>
-                              Biologically{" "}
-                              <span className={`font-semibold ${lon.biological_age_delta < 0 ? "text-green-600" : "text-red-500"}`}>
-                                {Math.abs(lon.biological_age_delta)} yr {lon.biological_age_delta < 0 ? "younger" : "older"}
-                              </span>{" "}
-                              than your age suggests
-                            </>
-                          )}
-                        </p>
-                      )}
+                      {/* Biological age framing removed David 2026-08-11 —
+                          it conflicted with the dedicated Biological Age
+                          card above (two different formulas, two different
+                          numbers). Bio Age card is now the single
+                          authoritative "how old does your body look"
+                          answer. Longevity Score just reports its 0-100
+                          vitality score without also claiming a
+                          biological age delta. */}
                       <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                         <p className="text-[10px] text-gray-500">{lon.data_coverage} available</p>
                         {lon.confidence && lon.confidence.level !== "unknown" && (() => {
