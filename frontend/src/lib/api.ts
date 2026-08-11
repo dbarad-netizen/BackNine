@@ -3435,7 +3435,11 @@ export interface Goal {
 export interface LeagueStanding {
   user_id: string;
   name:    string;
-  score:   number;   // weekly engagement points
+  score:   number;   // weekly engagement points (secondary metric)
+  /** Weekly Health Span Score — the PRIMARY ranking metric as of
+   *  David 2026-08-11. Null when the member has no snapshot this week
+   *  (hasn't opened the app); they rank at the bottom. */
+  healthspan?: number | null;
   rank:    number;
   is_me:   boolean;
   /** @deprecated Always null — gamification layer removed. */

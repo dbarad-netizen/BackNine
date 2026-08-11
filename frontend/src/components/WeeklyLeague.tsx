@@ -167,10 +167,29 @@ export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
                 <span className="truncate">{s.is_me ? "You" : s.name}</span>
                 {/* Level chip removed — gamification layer was killed. */}
               </span>
-              <span className="text-sm font-semibold text-gray-900 shrink-0">
-                {s.score.toLocaleString()}
+              {/* Primary metric: Weekly Health Span Score (David
+                  2026-08-11). Engagement points demoted to a small
+                  secondary chip. Members without a snapshot this week
+                  show an em-dash. */}
+              {s.healthspan != null ? (
+                <span
+                  className="text-sm font-semibold text-gray-900 shrink-0"
+                  title="Weekly Health Span Score — sleep, movement, adherence & consistency this week"
+                >
+                  {s.healthspan}
+                </span>
+              ) : (
+                <span className="text-sm font-semibold text-gray-400 shrink-0" title="No Health Span Score yet this week">
+                  —
+                </span>
+              )}
+              <span className="text-[11px] text-gray-600 shrink-0">HS</span>
+              <span
+                className="text-[10px] text-gray-500 shrink-0 w-12 text-right"
+                title="Weekly engagement points (secondary)"
+              >
+                {s.score.toLocaleString()} pts
               </span>
-              <span className="text-[11px] text-gray-600 shrink-0">pts</span>
             </div>
           );
         })}
@@ -182,8 +201,8 @@ export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
           {me_rank != null
             ? soloOrTiny
               ? "You're first in — invite friends to make it a race"
-              : `You're #${me_rank} of ${member_count} · check in & log to earn points`
-            : "Earn points: check in, log workouts, meals & weigh-ins"}
+              : `You're #${me_rank} of ${member_count} · ranked by Weekly Health Span Score`
+            : "Ranked by Weekly Health Span Score — sleep, movement, adherence & consistency"}
         </p>
         {onInvite && soloOrTiny && (
           <button

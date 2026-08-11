@@ -37,6 +37,7 @@ This module is a thin Supabase wrapper. Callers (main.py) handle auth.
 
 import os
 from datetime import date, timedelta
+from typing import Optional
 
 import goals as gl
 
@@ -363,6 +364,27 @@ def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
     scores = {uid: _score_from_maps(maps, uid) for uid in ids}
     my_breakdown = _breakdown_from_maps(maps, user_id)
     names = _names_for(sb, ids)
+
+    # Weekly Health Span Score per member (David 2026-08-11 — leaderboard
+    # now ranks by the same behavior score users see on their own
+    # Scorecard, replacing opaque engagement points as the primary
+    # metric). Read the latest snapshot from weekly_healthspan_history
+    # within this league week; members who haven't opened the app this
+    # week have no snapshot → healthspan None → rank at the bottom.
+    healthspan: dict[str, Optional[int]] = {uid: None for uid in ids}
+    try:
+        res_hs = (sb.table("weekly_healthspan_history")
+                    .select("user_id, date, score")
+                    .in_("user_id", ids)
+                    .gte("date", week_start)
+                    .order("date", desc=True)
+                    .execute())
+        for r in (res_hs.data or []):
+            uid = r.get("user_id")
+            if uid in healthspan and healthspan[uid] is None and r.get("score") is not None:
+                healthspan[uid] = int(r["score"])
+    except Exception:
+        pass
     # Refresh cached scores (best-effort) so other surfaces can read them cheaply.
     for uid in ids:
         try:
@@ -376,6 +398,9 @@ def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
             "user_id": uid,
             "name":    names.get(uid, "Friend"),
             "score":   scores.get(uid, 0),
+            # Primary ranking metric (David 2026-08-11): the member's
+            # Weekly Health Span Score. None = no snapshot this week.
+            "healthspan": healthspan.get(uid),
             "is_me":   uid == user_id,
             # `level` retained as null for client backwards-compat — the
             # badge/XP/Level layer was removed.
@@ -384,7 +409,13 @@ def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
         }
         for uid in ids
     ]
-    standings.sort(key=lambda s: (-s["score"], s["name"].lower()))
+    # Rank: Health Span first (None sorts last), engagement points as
+    # tiebreaker, then name for stability.
+    standings.sort(key=lambda s: (
+        -(s["healthspan"] if s["healthspan"] is not None else -1),
+        -s["score"],
+        s["name"].lower(),
+    ))
     for i, s in enumerate(standings):
         s["rank"] = i + 1
 
