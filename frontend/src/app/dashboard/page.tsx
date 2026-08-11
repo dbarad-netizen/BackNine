@@ -68,6 +68,7 @@ import WeeklyRecapCard from "@/components/WeeklyRecapCard";
 import TodaysTagsCard from "@/components/TodaysTagsCard";
 import JournalCard from "@/components/JournalCard";
 import CpapNightlyLogCard from "@/components/CpapNightlyLogCard";
+import BiologicalAgeCard from "@/components/BiologicalAgeCard";
 import DailyInsightCard from "@/components/DailyInsightCard";
 import SymptomCard from "@/components/SymptomCard";
 // WeeklyInsight retired 2026-07-09 per David: content overlapped Coach Al
@@ -1602,10 +1603,9 @@ export default function DashboardPage() {
                 "Do this first" before any empty-state cards. */}
             <OnboardingCard />
 
-            {/* Doctor Visit Prep — appears when a visit is within 14 days
-                or was within the last 21 days (post-visit capture window).
-                Self-hides otherwise. Tap → opens the VisitDetailModal. */}
-            <VisitPrepCard onOpen={(id) => setActiveVisitId(id)} />
+            {/* VisitPrepCard moved off Scorecard David 2026-08-11 —
+                will get its own dedicated home. Component is still
+                available; just not on the daily Scorecard. */}
 
             {/* Manual sleep quick-log — empty-state card for users on
                 Whoop / Garmin / Fitbit / Polar with no Oura or Apple
@@ -1632,12 +1632,12 @@ export default function DashboardPage() {
               onSaved={() => { window.location.reload(); }}
             />
 
-            {/* Apple Health card — for users without Oura who are syncing AH.
-                Surfaces the metrics AH actually provides (steps, sleep duration,
-                HRV, RHR, weight, body fat, VO2 max) instead of leaving the
-                dashboard empty. Sits above the Getting Started card so the
-                user sees their numbers first. */}
-            {data.has_apple_health && data.apple_health && (
+            {/* Apple Health card — Scorecard hero ONLY when AH is the
+                primary source (no Oura). Oura users don't need a
+                duplicate metric grid — the rings + Longevity Score
+                cover the same numbers. AH data is always visible on
+                the Metrics tab regardless. David 2026-08-11. */}
+            {data.has_oura === false && data.has_apple_health && data.apple_health && (
               <AppleHealthCard data={data.apple_health} />
             )}
 
@@ -1744,18 +1744,15 @@ export default function DashboardPage() {
                 generic 'aim for Xh' — neither of which earned its space
                 on the Scorecard. Reintroduce if we find a sharper hook. */}
 
-            {/* Today's Oura tags — sauna, ice bath, alcohol, caffeine,
-                etc. Pulled from Oura's enhanced_tag endpoint. Renders
-                nothing when no tags exist for today; minimal noise when
-                they do. */}
-            <TodaysTagsCard />
+            {/* TodaysTagsCard removed from Scorecard David 2026-08-11 —
+                low daily signal for most users; belongs on Sleep tab
+                if we resurrect it. Component file untouched. */}
 
 
-            {/* Weekly Recap — end-of-week celebration card. Only visible
-                Sat-Tue of the current ISO week (the celebration window).
-                One tap shares into the PulseFeed, seeding the community
-                pillar with content from every active user weekly. */}
-            <WeeklyRecapCard onAsk={(seed) => openChatRef.current?.(seed)} />
+            {/* Weekly Recap removed from Scorecard David 2026-08-11 —
+                didn't feel meaningful in daily use. Component file
+                stays around in case we resurrect it as a Sunday-only
+                ritual or move it into the Clubhouse tab. */}
 
             {/* Symptom Card — Phase 2 of the Insight pillar.
                 Quick tag-based "how do you feel today?" log + correlation
@@ -1769,13 +1766,17 @@ export default function DashboardPage() {
                 end-to-end: text never leaves the user's own view. Coach
                 Al sees recent entries inside his chat with a privacy
                 directive in his system prompt. */}
-            <JournalCard />
+            {/* Journal — removed from Scorecard David 2026-08-11.
+                Still available as a separate surface elsewhere in
+                the app if we bring it back. */}
 
-            {/* CPAP nightly log — capability-gated. Only renders for
-                users who turned on 'cpap' in Profile → Devices &
-                Trackers (or who logged their first CPAP night, which
-                auto-enables). David 2026-08-06, task #162. */}
-            {capabilities.includes("cpap") && <CpapNightlyLogCard />}
+            {/* CPAP nightly log — moved lower (was above Score Snapshot).
+                Now renders next to Stack Adherence — the other daily
+                logging card — since both are "log what happened last
+                night / this morning" surfaces. David 2026-08-11.
+                Original position pushed the Longevity Score below the
+                fold on iPhone. Placement in the Nutrition section is
+                intentional: nightly meds + CPAP + supplements cluster. */}
 
             {/* ── Daily Greeting + Score Snapshot ── */}
             {(() => {
@@ -2009,6 +2010,24 @@ export default function DashboardPage() {
               );
             })()}
 
+            {/* ── Biological Age — headline vitality metric (David 2026-08-07)
+                Renders above Longevity Score. Self-hides when we have
+                fewer than 3 markers. The "your body reads as X" hook +
+                per-marker transparency is our answer to Bevel's opaque
+                Biological Age. */}
+            {data.biological_age && <BiologicalAgeCard data={data.biological_age} />}
+
+            {/* ── Weekly Leaderboard — promoted to hero position
+                David 2026-08-11. Social layer is a core differentiator
+                for BackNine (Bevel is solo); the league belongs among
+                the hero metrics, not buried below 300 lines of
+                Longevity Score components. Duplicate render at the
+                bottom was removed at the same time. */}
+            <WeeklyLeague
+              onInvite={() => setShowShare(true)}
+              onSeeMore={() => { setSection("challenges"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+            />
+
             {/* ── Longevity Score teaser — shown when no score is computable yet ── */}
             {data.longevity_score?.score == null && (
               <section className="rounded-2xl border border-dashed border-gray-300 bg-white p-5">
@@ -2207,7 +2226,13 @@ export default function DashboardPage() {
                               if ((e.target as HTMLElement).tagName === "BUTTON") return;
                               setLonMetricOpen({ key: slotKey, label: comp.label });
                             }}
-                            title={`Tap for 90-day ${comp.label} history`}
+                            // Show the per-component "why" explanation on hover
+                            // (desktop) and long-press (mobile). Full modal
+                            // reveals it too. David 2026-08-07 — transparency
+                            // vs Bevel's black-box scoring.
+                            title={comp.why
+                              ? `${comp.why}\n\nTap for 90-day ${comp.label} history`
+                              : `Tap for 90-day ${comp.label} history`}
                           >
                             <div className="flex justify-between text-[10px]">
                               <span className="text-gray-600 truncate pr-1">{comp.label}</span>
@@ -2312,18 +2337,10 @@ export default function DashboardPage() {
               );
             })()}
 
-            {/* ── Weekly Leaderboard ──
-                The engagement-points standings (check-ins, workouts, meals,
-                weigh-ins, steps) on the Scorecard top. Same component used in
-                Clubhouse; here it gets a "Clubhouse →" header link so users
-                still have a one-tap path to Pulse, groups, and challenges.
-                The daily-matchup FriendLeaderboard ("Today's Matchup") lives
-                only in the Clubhouse — kept off the Scorecard so we have
-                one leaderboard at a time, not two competing ones. */}
-            <WeeklyLeague
-              onInvite={() => setShowShare(true)}
-              onSeeMore={() => { setSection("challenges"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-            />
+            {/* WeeklyLeague promoted to hero slot above (David 2026-08-11).
+                Was here originally, now sits right after Biological Age
+                so social is treated as a hero metric alongside Bio Age
+                and Longevity Score. */}
 
             {/* ── Quick action: enter a meal / macros (logs inline — no tab switch) ──
                 Collapsed summary matches the Body & Weight pill below: a one-line
@@ -2531,29 +2548,10 @@ export default function DashboardPage() {
                 no stack. */}
             <StackAdherencePill onJump={() => setSection("nutrition")} />
 
-            {/* Today's Coach Al nudge — Fable moat 2026-07-23. Hard-
-                capped at one per user per day so we can be proactive
-                without becoming noisy. Rule dispatch runs in priority
-                order (BP high > HRV drop > sleep debt > training gap
-                > adherence dip > alcohol pattern) — first to fire
-                wins the day. */}
-            <NudgeCard onJump={(target) => {
-              // Nudge action_targets come from the backend rule set —
-              // map any that don't line up 1:1 with our Section type
-              // to the closest existing tab. Sleep + insights + visits
-              // don't have dedicated tabs today; route them to the
-              // Scorecard where their surfaces live.
-              const MAP: Record<string, Section> = {
-                nutrition: "nutrition", training: "training",
-                gear: "gear", labs: "labs",
-                challenges: "challenges", "apple-health": "apple-health",
-                sleep: "coaching", insights: "coaching", visits: "coaching",
-                coaching: "coaching",
-              };
-              const next = MAP[target] || "coaching";
-              setSection(next);
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }} />
+            {/* NudgeCard removed from Scorecard David 2026-08-11 —
+                didn't add value; Coach Al brief covers proactive
+                signal at the top of the page. Backend nudge rules
+                still run for other surfaces if we resurrect. */}
 
             {/* Active experiments — Fable moat 2026-07-23. Shows any
                 in-flight 1-week tests spawned by tapping "Test for a
@@ -2578,12 +2576,10 @@ export default function DashboardPage() {
                 for affiliate revenue, so this earns persistent placement. */}
             <GearPicks signals={gearSignals} onJump={() => setSection("gear")} />
 
-            {/* Proven for you — Fable competitive moat. Every completed
-                experiment becomes a permanent evidence row. Anchored at
-                the bottom of the Scorecard so users see it every day
-                and it grows into a personal proof ledger. Empty state
-                educates. */}
-            <ProvenLedgerCard />
+            {/* ProvenLedgerCard moved off Scorecard David 2026-08-11 —
+                lives on the Insights/Metrics tab going forward. Kept
+                ActiveExperimentsCard on Scorecard since in-flight tests
+                are a daily-relevant surface. */}
 
           </div>
           );
@@ -2613,6 +2609,14 @@ export default function DashboardPage() {
                 added windows. Also drives points. Self-hides when the
                 user has no stack. */}
             {!nutLoading && <StackAdherenceCard />}
+
+            {/* CPAP nightly log — capability-gated. Only renders for
+                users who turned on 'cpap' in Profile → Devices &
+                Trackers (or who logged their first CPAP night, which
+                auto-enables). Sits next to Stack Adherence as a
+                nightly-logging companion. David 2026-08-11 moved
+                from the top of Scorecard to here. */}
+            {capabilities.includes("cpap") && <CpapNightlyLogCard />}
 
             {!nutLoading && <NutritionExtrasCard />}
 
