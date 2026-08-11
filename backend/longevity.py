@@ -23,6 +23,11 @@ def compute(metrics: dict, profile: dict) -> dict:
     """
     age = profile.get("age", 0)
     sex = profile.get("biological_sex", "male").lower()
+    # Source metadata per component. Frontend renders a small badge
+    # (Oura ring / Apple Watch / lab entry / manual) so users always
+    # know where each number came from. Transparency positioning
+    # vs Bevel. David 2026-08-11.
+    sources: dict = (metrics or {}).get("sources") or {}
 
     components = {}
     total_points = 0
@@ -47,6 +52,7 @@ def compute(metrics: dict, profile: dict) -> dict:
             "norm": f"~{round(hrv_norm)} ms for your age",
             "points": hrv_points,
             "max": 25,
+            "source": sources.get("hrv"),
             # Per-component "why" for the transparency-vs-Bevel push.
             # David 2026-08-07 — Bevel's opacity is a stated user
             # complaint; every score we show should be defensible.
@@ -76,6 +82,7 @@ def compute(metrics: dict, profile: dict) -> dict:
             "norm": f"~{rhr_optimum} bpm ideal for age {age}",
             "points": rhr_points,
             "max": 20,
+            "source": sources.get("rhr"),
             "why": (f"Your {rhr} bpm is {'at or below' if rhr <= rhr_optimum else f'{rhr - rhr_optimum} bpm above'} "
                     f"the ~{rhr_optimum} bpm optimum for age {age}. Lower RHR "
                     f"typically means better cardiovascular efficiency."),
@@ -104,6 +111,7 @@ def compute(metrics: dict, profile: dict) -> dict:
             "norm": f">= {round(vo2_excellent)} ml/kg/min (excellent for age {age} {sex})",
             "points": vo2_points,
             "max": 20,
+            "source": sources.get("vo2_max"),
             "why": (f"Your {vo2} ml/kg/min is {round(ratio * 100)}% of "
                     f"the excellent-for-your-age threshold (~{round(vo2_excellent)}). "
                     f"VO₂ max is one of the strongest predictors of all-cause "
@@ -131,6 +139,7 @@ def compute(metrics: dict, profile: dict) -> dict:
             "norm": "7–9 hrs optimal (NSF / AAoSM)",
             "points": sleep_points,
             "max": 15,
+            "source": sources.get("sleep"),
             "why": (f"Your 7-day sleep average of {sleep:.1f} hours "
                     f"{'is in' if 7 <= sleep <= 9 else 'falls outside'} the "
                     f"7-9 hour optimal range. Consistently short or long sleep "
@@ -168,6 +177,7 @@ def compute(metrics: dict, profile: dict) -> dict:
             "norm": bf_norm,
             "points": bf_points,
             "max": 10,
+            "source": sources.get("body_fat"),
             "why": (f"Body fat of {bf}% — {bf_norm.split(' ')[0]} range for "
                     f"{sex}. Lower body fat reduces metabolic and "
                     f"cardiovascular risk, though extremely low levels "
@@ -198,6 +208,7 @@ def compute(metrics: dict, profile: dict) -> dict:
             "norm": "7,000–8,000 optimal (research-backed)",
             "points": steps_points,
             "max": 10,
+            "source": sources.get("steps"),
             "why": (f"Your 7-day average of {int(steps):,} steps. Mortality "
                     f"benefits plateau around 7-8k steps/day per 2020 JAMA "
                     f"meta-analysis — 10k is a marketing figure, not a "
@@ -226,7 +237,7 @@ def compute(metrics: dict, profile: dict) -> dict:
             "label": "Systolic BP",
             "value": f"{int(bp_sys)} mmHg",
             "norm":  "<=120 optimal",
-            "points": bp_points, "max": 8,
+            "points": bp_points, "max": 8, "source": "labs",
             "why": (f"Systolic BP of {int(bp_sys)} mmHg. Every 10 mmHg "
                     f"reduction from elevated levels cuts cardiovascular "
                     f"risk ~20% (SPRINT trial)."),
@@ -245,7 +256,7 @@ def compute(metrics: dict, profile: dict) -> dict:
             "label": "HbA1c",
             "value": f"{hba1c}%",
             "norm":  "<=5.4% optimal for longevity",
-            "points": hba_points, "max": 7,
+            "points": hba_points, "max": 7, "source": "labs",
             "why": (f"HbA1c of {hba1c}% reflects 3-month average blood "
                     f"glucose. Below 5.4% associates with lowest "
                     f"all-cause mortality in cohort studies."),
@@ -264,7 +275,7 @@ def compute(metrics: dict, profile: dict) -> dict:
             "label": "LDL",
             "value": f"{int(ldl)} mg/dL",
             "norm":  "<=70 aggressive optimum",
-            "points": ldl_points, "max": 6,
+            "points": ldl_points, "max": 6, "source": "labs",
             "why": (f"LDL of {int(ldl)} mg/dL. Contemporary lipidology "
                     f"targets sub-70 for anyone with elevated ASCVD risk "
                     f"(ACC 2018)."),
@@ -282,7 +293,7 @@ def compute(metrics: dict, profile: dict) -> dict:
             "label": "hsCRP",
             "value": f"{hscrp} mg/L",
             "norm":  "<0.5 low inflammation",
-            "points": crp_points, "max": 4,
+            "points": crp_points, "max": 4, "source": "labs",
             "why": (f"hsCRP of {hscrp} mg/L. Elevated inflammation "
                     f"independently predicts cardiovascular events even "
                     f"with normal cholesterol (JUPITER trial)."),

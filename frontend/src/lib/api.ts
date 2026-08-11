@@ -298,6 +298,10 @@ export interface LongevityComponent {
    *  the "transparency over black-box" moat vs. Bevel. Added
    *  David 2026-08-07. Optional so older cached payloads still parse. */
   why?:   string;
+  /** Which data source produced this metric. Frontend renders a small
+   *  badge (💍 Oura, ⌚ Apple, 🧪 Labs, ✍️ Manual). Added David 2026-08-11
+   *  for the source-priority transparency system. */
+  source?: "oura" | "apple_health" | "labs" | "manual";
 }
 
 export interface LongevityScore {

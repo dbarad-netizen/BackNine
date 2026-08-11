@@ -2235,7 +2235,27 @@ export default function DashboardPage() {
                               : `Tap for 90-day ${comp.label} history`}
                           >
                             <div className="flex justify-between text-[10px]">
-                              <span className="text-gray-600 truncate pr-1">{comp.label}</span>
+                              <span className="text-gray-600 truncate pr-1 flex items-center gap-1">
+                                {comp.label}
+                                {/* Source badge — David 2026-08-11.
+                                    Transparency vs Bevel: user always
+                                    knows which device fed this number. */}
+                                {comp.source && (
+                                  <span
+                                    className="text-[9px] opacity-70"
+                                    title={
+                                      comp.source === "oura" ? "From your Oura Ring" :
+                                      comp.source === "apple_health" ? "From Apple Health / Apple Watch" :
+                                      comp.source === "labs" ? "From your uploaded labs" :
+                                      "Manually logged"
+                                    }
+                                  >
+                                    {comp.source === "oura" ? "💍" :
+                                     comp.source === "apple_health" ? "⌚" :
+                                     comp.source === "labs" ? "🧪" : "✍️"}
+                                  </span>
+                                )}
+                              </span>
                               <div className="flex items-center gap-1 shrink-0">
                                 <span className="text-gray-700 font-medium">{comp.points}/{comp.max}</span>
                                 {isVo2 && !vo2Editing && (

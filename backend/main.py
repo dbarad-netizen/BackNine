@@ -1973,23 +1973,98 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
         except Exception:
             _cardio_labs = {}
 
+        # Source-priority resolver (David 2026-08-11).
+        # Oura wins where Oura measures. Apple Health fills in for
+        # metrics Oura can't measure (VO2 max, body fat, BP) AND for
+        # sleep/HRV/RHR/steps when the user doesn't have Oura at all
+        # (Apple Watch users get the same Longevity Score coverage).
+        # Records the source per metric so the frontend can badge it.
+        _lon_sources: dict[str, str] = {}
+
+        # HRV — Oura preferred, AH fallback
+        _hrv = t_sm.get("hrv") if t_sm.get("hrv") is not None else _most_recent_smm("hrv")
+        if _hrv is None:
+            # Fall back to Apple Health overnight HRV
+            for _d in sorted(am, reverse=True)[:7]:
+                _ah_hrv = am.get(_d, {}).get("hrv")
+                if _ah_hrv is not None:
+                    _hrv = _ah_hrv
+                    _lon_sources["hrv"] = "apple_health"
+                    break
+        else:
+            _lon_sources["hrv"] = "oura"
+
+        # RHR — Oura preferred, AH fallback
+        _rhr = t_sm.get("rhr") if t_sm.get("rhr") is not None else _most_recent_smm("rhr")
+        if _rhr is None:
+            for _d in sorted(am, reverse=True)[:7]:
+                _ah_rhr = am.get(_d, {}).get("resting_hr")
+                if _ah_rhr is not None:
+                    _rhr = _ah_rhr
+                    _lon_sources["rhr"] = "apple_health"
+                    break
+        else:
+            _lon_sources["rhr"] = "oura"
+
+        # Sleep hours — Oura preferred (7-day avg of nightly totals in seconds),
+        # AH fallback (uses apple_health_daily.sleep_hours)
+        _oura_sleep_vals = [smm[d]["total"] / 3600 for d in sorted(smm, reverse=True)[:7]
+                            if smm.get(d, {}).get("total")]
+        if _oura_sleep_vals:
+            _sleep_hours = round(sum(_oura_sleep_vals) / len(_oura_sleep_vals), 1)
+            _lon_sources["sleep"] = "oura"
+        else:
+            _ah_sleep_vals = [am[d]["sleep_hours"] for d in sorted(am, reverse=True)[:7]
+                              if am.get(d, {}).get("sleep_hours")]
+            _sleep_hours = round(sum(_ah_sleep_vals) / len(_ah_sleep_vals), 1) if _ah_sleep_vals else None
+            if _sleep_hours is not None:
+                _lon_sources["sleep"] = "apple_health"
+
+        # Steps — Oura preferred (David's explicit call). Oura's `am` cache
+        # includes daily step counts from the ring. Fall back to Apple Health
+        # daily steps for non-Oura users.
+        _oura_steps_vals = [am[d]["steps"] for d in sorted(am, reverse=True)[:7]
+                            if am.get(d, {}).get("steps")]
+        if _oura_steps_vals:
+            _steps = round(sum(_oura_steps_vals) / len(_oura_steps_vals))
+            _lon_sources["steps"] = "oura"
+        else:
+            _ah_steps_vals: list[int] = []
+            # For AH-only users, `am` here is empty. The apple_health_daily
+            # equivalent is loaded elsewhere — pull via ah.get_data quickly.
+            try:
+                _ah_recent = ah.get_data(user_id, days=7)
+                _ah_steps_vals = [int(r["steps"]) for r in _ah_recent
+                                  if r.get("steps") is not None]
+            except Exception:
+                pass
+            _steps = round(sum(_ah_steps_vals) / len(_ah_steps_vals)) if _ah_steps_vals else None
+            if _steps is not None:
+                _lon_sources["steps"] = "apple_health"
+
+        # VO2 max, body fat — Apple Health only (Oura doesn't measure)
+        if _vo2 is not None:
+            _lon_sources["vo2_max"] = "apple_health"
+        if _ah_body_fat is not None:
+            _lon_sources["body_fat"] = "apple_health"
+
+        # Cardio labs are lab entries (manual or OCR uploaded)
+        for _lab_key, _sc_key in [("blood_pressure_systolic", "bp_systolic"),
+                                   ("hba1c", "hba1c"),
+                                   ("ldl", "ldl"),
+                                   ("crp_hs", "hscrp")]:
+            if _cardio_labs.get(_lab_key) is not None:
+                _lon_sources[_sc_key] = "labs"
+
         _lon_metrics = {
-            "hrv":                 t_sm.get("hrv") if t_sm.get("hrv") is not None else _most_recent_smm("hrv"),
-            "rhr":                 t_sm.get("rhr") if t_sm.get("rhr") is not None else _most_recent_smm("rhr"),
+            "hrv":                 _hrv,
+            "rhr":                 _rhr,
             "vo2_max":             _vo2,
             "body_fat_percentage": _ah_body_fat,
             "cardio_labs":         _cardio_labs,
-            # True 7-day average of the most recent nights that have sleep data.
-            # (The previous expression accidentally returned a single night — the
-            # earliest in the window — which is why the Longevity sleep average
-            # read ~8.3h instead of the real ~6.8h.)
-            "sleep_hours": (lambda vals: round(sum(vals) / len(vals), 1) if vals else None)(
-                [smm[d]["total"] / 3600 for d in sorted(smm, reverse=True)[:7]
-                 if smm.get(d, {}).get("total")]
-            ),
-            "steps": (lambda vals: round(sum(vals) / len(vals)) if vals else None)(
-                [am[d]["steps"] for d in sorted(am, reverse=True)[:7] if am[d].get("steps")]
-            ),
+            "sleep_hours":         _sleep_hours,
+            "steps":               _steps,
+            "sources":             _lon_sources,
         }
         longevity_score = lon.compute(_lon_metrics, _profile)
 
