@@ -2082,6 +2082,35 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
     except Exception:
         longevity_score = {"score": None, "grade": None, "components": {}}
 
+    # ── Manual sleep (David 2026-08-12, #185 — the Julie bug) ────────────
+    # Manual sleep entries land in device_readings but nothing read them
+    # back, so the SleepQuickLogCard kept re-prompting after a successful
+    # save ("it wouldn't save"). Surface the latest manual sleep within
+    # the past 2 days so the card can see it and downstream consumers
+    # can use it.
+    manual_sleep = None
+    try:
+        _db_ms = get_supabase()
+        if _db_ms:
+            _since_ms = (datetime.now(timezone.utc).date() - timedelta(days=2)).isoformat()
+            _res_ms = (_db_ms.table("device_readings")
+                         .select("date, value, metadata")
+                         .eq("user_id", user_id)
+                         .eq("source", "manual")
+                         .eq("metric", "sleep_hours")
+                         .gte("date", _since_ms)
+                         .order("date", desc=True)
+                         .limit(1)
+                         .execute())
+            if _res_ms.data:
+                _row_ms = _res_ms.data[0]
+                manual_sleep = {
+                    "date":  _row_ms.get("date"),
+                    "hours": float(_row_ms.get("value")),
+                }
+    except Exception:
+        manual_sleep = None
+
     # ── Weekly Health Span Score (David 2026-08-11) ──────────────────────
     # Behavioral/process score — sleep habits, movement, adherence,
     # check-in, hydration, CPAP. Distinct from Biological Age (which
@@ -2211,6 +2240,7 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
         "longevity_score":     longevity_score,
         "weekly_healthspan":   weekly_healthspan,
         "biological_age":      biological_age,
+        "manual_sleep":        manual_sleep,
         "trend":    trend,
         "coaches":  coaches,
         "coaching": coaching,

@@ -217,8 +217,11 @@ def _score_cpap(qualifying_nights: int) -> dict:
 # ── Data loaders ────────────────────────────────────────────────────────
 
 def _load_sleep_avg(user_id: str, oura_smm: dict) -> Optional[float]:
-    """Prefer Oura (nightly total seconds), fall back to AH sleep_hours
-    fetched from apple_health_daily. Self-contained — no map to pass."""
+    """Source chain: Oura (nightly total seconds) → Apple Health
+    (apple_health_daily.sleep_hours) → manual entries in device_readings
+    (source='manual', metric='sleep_hours'). The manual fallback is the
+    Julie fix (2026-08-12, #185) — manual-only users were getting no
+    sleep band at all despite diligently logging."""
     vals = [oura_smm[d]["total"] / 3600 for d in sorted(oura_smm, reverse=True)[:7]
             if oura_smm.get(d, {}).get("total")]
     if vals:
@@ -227,7 +230,25 @@ def _load_sleep_avg(user_id: str, oura_smm: dict) -> Optional[float]:
         import apple_health as ah
         rows = ah.get_data(user_id, days=7)
         ah_vals = [float(r["sleep_hours"]) for r in rows if r.get("sleep_hours") is not None]
-        return round(sum(ah_vals) / len(ah_vals), 2) if ah_vals else None
+        if ah_vals:
+            return round(sum(ah_vals) / len(ah_vals), 2)
+    except Exception:
+        pass
+    # Manual fallback
+    sb = _sb()
+    if not sb:
+        return None
+    try:
+        since = (_date.today() - timedelta(days=6)).isoformat()
+        res = (sb.table("device_readings")
+                 .select("date, value")
+                 .eq("user_id", user_id)
+                 .eq("source", "manual")
+                 .eq("metric", "sleep_hours")
+                 .gte("date", since)
+                 .execute())
+        m_vals = [float(r["value"]) for r in (res.data or []) if r.get("value") is not None]
+        return round(sum(m_vals) / len(m_vals), 2) if m_vals else None
     except Exception:
         return None
 

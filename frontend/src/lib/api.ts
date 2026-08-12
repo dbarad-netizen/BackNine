@@ -676,6 +676,10 @@ export interface DashboardData {
   longevity_score?:     LongevityScore;
   weekly_healthspan?:   WeeklyHealthSpan;
   biological_age?:      BiologicalAge;
+  /** Latest manual sleep entry within the last 2 days (Julie fix,
+   *  2026-08-12 #185). SleepQuickLogCard checks this so it stops
+   *  re-prompting after a successful manual save. */
+  manual_sleep?:        { date: string; hours: number } | null;
   /** Data freshness state — Fable IMPROVE #2. Frontend tiles read from
    *  this to render 'as of X ago' when stale instead of pretending
    *  9-day-old data is today's. */

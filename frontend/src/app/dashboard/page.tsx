@@ -1629,7 +1629,12 @@ export default function DashboardPage() {
                 // even when there's no Oura connection. Without this the
                 // card kept nagging David (who has AH connected) to
                 // log manually. David 2026-08-06.
-                (data.apple_health?.today?.sleep_hours && data.apple_health.today.sleep_hours > 0)
+                (data.apple_health?.today?.sleep_hours && data.apple_health.today.sleep_hours > 0) ||
+                // Manual path — the Julie fix (2026-08-12 #185). Her
+                // manual save WORKED but this check never looked at
+                // device_readings, so the card re-prompted every reload
+                // and read as "it wouldn't save."
+                (data.manual_sleep?.hours && data.manual_sleep.hours > 0)
               )}
               onSaved={() => { window.location.reload(); }}
             />
@@ -2062,10 +2067,16 @@ export default function DashboardPage() {
                     className="text-[11px] font-semibold text-[#1B3829] border border-[#1B3829]/30 rounded-lg px-2.5 py-1 hover:bg-[#1B3829]/5 transition-colors">
                     Connect a tracker
                   </a>
-                  <button onClick={() => setShowProfile(true)}
-                    className="text-[11px] font-semibold text-[#1B3829] border border-[#1B3829]/30 rounded-lg px-2.5 py-1 hover:bg-[#1B3829]/5 transition-colors">
-                    Add age &amp; sex
-                  </button>
+                  {/* Only prompt for age & sex when they're actually
+                      missing — the Julie fix (2026-08-12, #185). She
+                      saved both and this button kept showing anyway,
+                      which read as "my profile didn't save." */}
+                  {profile != null && (profile.age == null || !profile.biological_sex) && (
+                    <button onClick={() => setShowProfile(true)}
+                      className="text-[11px] font-semibold text-[#1B3829] border border-[#1B3829]/30 rounded-lg px-2.5 py-1 hover:bg-[#1B3829]/5 transition-colors">
+                      Add age &amp; sex
+                    </button>
+                  )}
                 </div>
               </section>
             )}
