@@ -172,6 +172,82 @@ async function querySampleType(
   }
 }
 
+/** Let the webview main thread breathe between heavy bridge calls. */
+function yieldToMain(ms = 50): Promise<void> {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+// Sample-heavy types where the raw-sample count explodes with window
+// size. An Apple Watch writes an activeEnergyBurned sample every few
+// seconds during activity — 30 days is easily 50k–200k samples, all
+// serialized to JSON in Swift, marshaled across the Capacitor bridge
+// in ONE message, then parsed + looped in JS on the webview's main
+// thread. That was freezing app startup for multiple seconds
+// (David 2026-08-18, task #186).
+//
+// Two mitigations, both here:
+//   1. AUTO_SYNC_CAPS: on the recurring auto-sync, high-frequency
+//      metrics don't need the full 30-day window. Steps and active
+//      energy are written promptly and never revised weeks later —
+//      7 days catches every late-syncing device. The 30-day window
+//      only ever mattered for slow-cadence "latest" metrics (Withings
+//      weight, BP cuff, VO2 max), whose sample counts are tiny.
+//   2. CHUNKED_TYPES: when a big window IS requested (first sync,
+//      Resync 90 days), query these types in 7-day slices with a
+//      main-thread yield between each, so no single bridge message
+//      is huge and the UI stays responsive throughout.
+const AUTO_SYNC_CAPS: Record<string, number> = {
+  stepCount:            7,
+  activeEnergyBurned:   7,
+  sleepAnalysis:        14,
+  heartRateVariability: 14,
+  restingHeartRate:     14,
+  respiratoryRate:      14,
+  oxygenSaturation:     14,
+};
+
+const CHUNKED_TYPES = new Set([
+  "stepCount",
+  "activeEnergyBurned",
+  "sleepAnalysis",
+  "heartRateVariability",
+  "oxygenSaturation",
+  "respiratoryRate",
+]);
+
+const CHUNK_DAYS = 7;
+
+/**
+ * Query a sample type over [start, end], slicing sample-heavy types
+ * into CHUNK_DAYS windows so each bridge message stays bounded.
+ * Yields to the main thread between slices.
+ */
+async function querySampleTypeChunked(
+  sampleName: string,
+  start: Date,
+  end:   Date,
+): Promise<HKSample[]> {
+  const windowDays = (end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000);
+  if (!CHUNKED_TYPES.has(sampleName) || windowDays <= CHUNK_DAYS + 1) {
+    return querySampleType(sampleName, start.toISOString(), end.toISOString());
+  }
+  const out: HKSample[] = [];
+  let sliceEnd = end;
+  while (sliceEnd > start) {
+    const sliceStart = new Date(Math.max(
+      start.getTime(),
+      sliceEnd.getTime() - CHUNK_DAYS * 24 * 60 * 60 * 1000,
+    ));
+    const samples = await querySampleType(
+      sampleName, sliceStart.toISOString(), sliceEnd.toISOString(),
+    );
+    out.push(...samples);
+    sliceEnd = sliceStart;
+    await yieldToMain();
+  }
+  return out;
+}
+
 
 // ── Aggregation ─────────────────────────────────────────────────────────
 
@@ -276,21 +352,28 @@ export interface SyncResult {
  * /api/apple-health/import-aggregated. Returns a summary.
  *
  * Safe to call repeatedly — the backend upserts on (user_id, date).
+ *
+ * `quick` (used by the recurring auto-sync): clamp sample-heavy
+ * metrics to their AUTO_SYNC_CAPS window so the bridge payload stays
+ * small on every app open. Slow-cadence metrics (weight, BP, VO2)
+ * still get the full window — their sample counts are trivial.
  */
-export async function syncRecent(days = 7): Promise<SyncResult> {
+export async function syncRecent(days = 7, quick = false): Promise<SyncResult> {
   if (!(await isHealthKitAvailable())) {
     return { days_synced: 0, error: "HealthKit unavailable" };
   }
 
   const now = new Date();
-  const start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-  const endISO   = now.toISOString();
-  const startISO = start.toISOString();
 
   const agg = new Aggregator();
 
   for (const m of METRICS) {
-    const samples = await querySampleType(m.plugin, startISO, endISO);
+    const mDays = quick ? Math.min(days, AUTO_SYNC_CAPS[m.plugin] ?? days) : days;
+    const start = new Date(now.getTime() - mDays * 24 * 60 * 60 * 1000);
+    const samples = await querySampleTypeChunked(m.plugin, start, now);
+    // Yield between metric types too — 12 back-to-back bridge calls
+    // with zero gaps is exactly the startup jank we're fixing.
+    await yieldToMain();
     for (const s of samples) {
       const ts   = Date.parse(s.endDate || s.startDate);
       if (isNaN(ts)) continue;
@@ -418,8 +501,12 @@ function hasEverSynced(): boolean {
 export async function maybeAutoSync(): Promise<void> {
   if (!(await isHealthKitAvailable())) return;
   if (isRecentSync(6)) return;
-  const days = hasEverSynced() ? AUTO_SYNC_DAYS : FIRST_SYNC_DAYS;
-  const res  = await syncRecent(days);
+  const first = !hasEverSynced();
+  const days  = first ? FIRST_SYNC_DAYS : AUTO_SYNC_DAYS;
+  // Recurring syncs run in quick mode (per-metric caps). The first-ever
+  // sync keeps full windows for a proper baseline — it's a one-time
+  // cost, and chunking + yields keep the UI responsive while it runs.
+  const res = await syncRecent(days, !first);
   if (res.days_synced > 0) markSyncedNow();
 }
 

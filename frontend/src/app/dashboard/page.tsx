@@ -961,13 +961,20 @@ export default function DashboardPage() {
       .finally(() => setLoading(false));
 
     // Native HealthKit auto-sync (David 2026-08-03, task #150).
-    // On iOS with HealthKit granted, pulls a 7-day rolling window and
-    // upserts into apple_health_daily. No-ops on web, no-ops if we
-    // already synced in the last 6 hours (isRecentSync guard),
-    // silent-fails on errors. Never blocks the dashboard.
-    import("@/lib/healthkit").then(({ maybeAutoSync }) => {
-      maybeAutoSync().catch(() => { /* silent */ });
-    });
+    // On iOS with HealthKit granted, upserts into apple_health_daily.
+    // No-ops on web, no-ops if we already synced in the last 6 hours
+    // (isRecentSync guard), silent-fails on errors.
+    //
+    // DELAYED 5s after mount (task #186): the sync marshals large
+    // HealthKit sample sets across the Capacitor bridge, and firing it
+    // immediately competed with the JS bundle load + dashboard fetch +
+    // first render — the app felt frozen at startup. Idempotent
+    // upserts mean starting late costs nothing.
+    const hkTimer = setTimeout(() => {
+      import("@/lib/healthkit").then(({ maybeAutoSync }) => {
+        maybeAutoSync().catch(() => { /* silent */ });
+      });
+    }, 5000);
     // Pre-load weight entries so Body Composition card is ready on Scorecard
     api.weightEntries()
       .then(w => setWeightLog(w.entries))
@@ -1001,6 +1008,8 @@ export default function DashboardPage() {
         }
       })
       .catch(() => {});
+
+    return () => clearTimeout(hkTimer);
   }, []);
 
   // ── Foreground refetch loop ────────────────────────────────────────────────
