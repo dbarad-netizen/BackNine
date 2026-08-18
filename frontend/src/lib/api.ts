@@ -3355,8 +3355,12 @@ export interface LeaderboardEntry {
   steps:         MetricValue;
   sleep:         MetricValue;
   activity:      MetricValue;
-  /** Weekly engagement points — the inclusive ranking metric (works without a wearable). */
+  /** Weekly engagement points — now a tiebreaker (works without a wearable). */
   points:        number;
+  /** Weekly Health Span Score — the PRIMARY ranking metric (task #187),
+   *  matching the Weekly League. Null when the person has no snapshot
+   *  this week (hasn't opened the app); they rank at the bottom. */
+  healthspan?:   number | null;
   /** @deprecated Always null — badge/XP/Level layer was removed. Key kept
    *  for response-shape backwards-compat. Safe to remove on next API revision. */
   level?:        number | null;

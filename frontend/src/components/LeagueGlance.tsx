@@ -31,17 +31,23 @@ export default function LeagueGlance({ onOpen }: Props) {
 
   const me   = data.standings.find(s => s.is_me);
   const top  = data.standings[0];
-  const ptsBehind = top && me && me.user_id !== top.user_id ? top.score - me.score : 0;
+  // Gap to 1st in Health Span points — the primary ranking metric
+  // (task #187). Only meaningful when both have a snapshot this week.
+  const hsBehind =
+    top && me && me.user_id !== top.user_id &&
+    top.healthspan != null && me.healthspan != null
+      ? top.healthspan - me.healthspan
+      : 0;
 
-  // Standings line. The leaderboard ranks everyone on BackNine this week by
-  // engagement points. Honest framing when the field is small.
+  // Standings line. The leaderboard ranks everyone on BackNine this week
+  // by Weekly Health Span Score. Honest framing when the field is small.
   let stand: string;
   if (data.member_count <= 1) {
-    stand = "You're the only player ranked so far — more join in as they earn points";
+    stand = "You're the only player ranked so far — more join in as they score";
   } else if (me?.user_id === top?.user_id) {
     stand = `You're #1 of ${data.member_count} this week`;
   } else if (me) {
-    stand = `You're #${data.me_rank ?? "?"} of ${data.member_count}${ptsBehind > 0 ? ` · ${ptsBehind} pts behind 1st` : ""}`;
+    stand = `You're #${data.me_rank ?? "?"} of ${data.member_count}${hsBehind > 0 ? ` · ${hsBehind} behind 1st` : ""}`;
   } else {
     stand = `${data.member_count} competing this week`;
   }
@@ -72,7 +78,7 @@ export default function LeagueGlance({ onOpen }: Props) {
           <div className="flex items-baseline justify-between gap-2">
             <p className="text-sm font-bold text-gray-900 truncate">
               Weekly Leaderboard
-              <span className="text-[10px] font-normal text-gray-500 ml-1.5">engagement points</span>
+              <span className="text-[10px] font-normal text-gray-500 ml-1.5">Health Span Score</span>
             </p>
             {daysLeftLine && (
               <p className="text-[10px] text-gray-600 shrink-0">{daysLeftLine}</p>

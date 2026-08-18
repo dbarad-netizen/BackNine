@@ -7556,6 +7556,11 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
             # (check-in, workouts, meals, weigh-ins + step bonus). Non-wearable
             # users still rank here instead of showing all-zero.
             "points":   int(points_map.get(uid, 0)),
+            # Weekly Health Span Score — the PRIMARY ranking metric
+            # (David 2026-08-18, task #187), matching the Weekly League
+            # so the two social surfaces never disagree. None = no
+            # snapshot this week (user hasn't opened the app).
+            "healthspan": healthspan_map.get(uid),
             "level":    None,  # gamification layer removed; key kept for backwards-compat
             # If you've taunted this friend today, surface which kind (else None).
             "taunt_sent":   None if is_me else taunts_today.get(uid),
@@ -7575,6 +7580,33 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
         points_map = lg.weekly_points(all_uids, today_str)
     except Exception:
         points_map = {}
+
+    # Weekly Health Span Score per person — latest snapshot from
+    # weekly_healthspan_history within this week (Mon-anchored, same
+    # convention as leagues.py). Batched: one query for everyone.
+    # David 2026-08-18, task #187.
+    try:
+        _today_d = datetime.strptime(today_str, "%Y-%m-%d").date()
+    except Exception:
+        _today_d = datetime.now().date()
+    _week_start = (_today_d - timedelta(days=_today_d.weekday())).isoformat()
+    healthspan_map: dict[str, Optional[int]] = {uid: None for uid in all_uids}
+    try:
+        _db_hs = get_supabase()
+        if _db_hs:
+            _res_hs = (_db_hs.table("weekly_healthspan_history")
+                         .select("user_id, date, score")
+                         .in_("user_id", all_uids)
+                         .gte("date", _week_start)
+                         .order("date", desc=True)
+                         .execute())
+            for r in (_res_hs.data or []):
+                uid_hs = r.get("user_id")
+                if uid_hs in healthspan_map and healthspan_map[uid_hs] is None and r.get("score") is not None:
+                    healthspan_map[uid_hs] = int(r["score"])
+    except Exception:
+        pass
+
     entries: list[dict] = [_entry_for(user_id, _display_name_for(user_id), True)]
     for f in friends:
         entries.append(_entry_for(f["user_id"], f.get("name") or "Friend", False))
@@ -7593,9 +7625,11 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
         "activity": _leader_id("activity"),
     }
 
-    # Default sort: weekly engagement points desc (the inclusive ranking),
-    # then steps as a tiebreaker. Frontend can re-sort.
+    # Default sort (task #187): Weekly Health Span Score first — the same
+    # primary ranking the Weekly League uses (None sorts last). Engagement
+    # points then steps as tiebreakers. Frontend can re-sort.
     entries.sort(key=lambda e: (
+        -(e["healthspan"] if e.get("healthspan") is not None else -1),
         -(e.get("points") or 0),
         -(e["steps"].get("value") or 0),
     ))

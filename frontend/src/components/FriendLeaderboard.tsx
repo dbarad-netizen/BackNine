@@ -185,9 +185,10 @@ export default function FriendLeaderboard({ onInvite, onSeeMore }: Props = {}) {
   }
 
   const tally = leaderTally(data.leaders);
-  // Top weekly-points total — used to crown the points leader (the inclusive
-  // ranking everyone earns, wearable or not).
-  const maxPoints = Math.max(0, ...data.entries.map(e => e.points || 0));
+  // Top Health Span Score — used to crown the leader. Same primary
+  // metric as the Weekly League (task #187); engagement points are
+  // now a tiebreaker only.
+  const maxHs = Math.max(0, ...data.entries.map(e => e.healthspan ?? 0));
 
   // ── Header line: how many metrics am I leading? ──
   const me = data.entries.find(e => e.is_me);
@@ -195,8 +196,8 @@ export default function FriendLeaderboard({ onInvite, onSeeMore }: Props = {}) {
   const totalContested = Object.values(data.leaders).filter(Boolean).length;
   const headerLine = totalContested > 0
     ? `You're leading in ${myWins} of ${totalContested} today`
-    : maxPoints > 0
-    ? "Ranked by weekly engagement points"
+    : maxHs > 0
+    ? "Ranked by Weekly Health Span Score"
     : "Waiting on data — check back later";
 
   return (
@@ -297,17 +298,36 @@ export default function FriendLeaderboard({ onInvite, onSeeMore }: Props = {}) {
                     </button>
                   )}
                   {/* Level chip removed — gamification layer was killed. */}
-                  {/* Weekly engagement points — the headline ranking everyone earns */}
-                  <span
-                    title="Engagement points this week"
-                    className={`text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 ${
-                      (e.points || 0) > 0 && e.points === maxPoints
-                        ? "bg-amber-100 border border-amber-300 text-amber-800"
-                        : "bg-[#1B3829]/8 text-[#1B3829]"
-                    }`}
-                  >
-                    {(e.points || 0) > 0 && e.points === maxPoints ? "👑 " : ""}{e.points} pts
-                  </span>
+                  {/* Weekly Health Span Score — the headline ranking, same
+                      as the Weekly League (task #187). Engagement points
+                      demoted to a small secondary chip below. */}
+                  {e.healthspan != null ? (
+                    <span
+                      title="Weekly Health Span Score — sleep, movement, adherence & consistency this week"
+                      className={`text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 ${
+                        e.healthspan > 0 && e.healthspan === maxHs
+                          ? "bg-amber-100 border border-amber-300 text-amber-800"
+                          : "bg-[#1B3829]/8 text-[#1B3829]"
+                      }`}
+                    >
+                      {e.healthspan > 0 && e.healthspan === maxHs ? "👑 " : ""}{e.healthspan} HS
+                    </span>
+                  ) : (
+                    <span
+                      title="No Health Span Score yet this week"
+                      className="text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 bg-gray-100 text-gray-400"
+                    >
+                      — HS
+                    </span>
+                  )}
+                  {(e.points || 0) > 0 && (
+                    <span
+                      title="Weekly engagement points (tiebreaker)"
+                      className="text-[10px] text-gray-500 whitespace-nowrap shrink-0"
+                    >
+                      {e.points} pts
+                    </span>
+                  )}
                   {e.is_me && (
                     <span className="text-[9px] bg-[#1B3829]/10 border border-[#1B3829]/20 text-[#1B3829] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full">
                       You
