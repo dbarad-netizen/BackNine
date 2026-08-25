@@ -24,6 +24,12 @@ function ConnectContent() {
     connected: boolean; last_sync_at: string | null; latest_date: string | null; days_synced: number;
   } | null>(null);
   const [checkingStatus, setCheckingStatus] = useState(false);
+  // Whether the signed-in user already has a working Oura connection.
+  // null = unknown (still checking / no session). This page used to
+  // render an unconditional "Connect →" which told already-connected
+  // users they were disconnected — David hit exactly that on
+  // 2026-08-25 after a day of transient Oura refresh failures.
+  const [ouraConnected, setOuraConnected] = useState<boolean | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -41,6 +47,19 @@ function ConnectContent() {
       setAuthChecked(true);
     });
   }, [router]);
+
+  // Reflect ACTUAL connection state on load — both tiles were static
+  // before, so a connected user landing here saw "Connect →"/"Setup →"
+  // and reasonably concluded nothing was connected.
+  useEffect(() => {
+    if (!authChecked) return;
+    api.me()
+      .then(me => setOuraConnected(!!me.has_oura))
+      .catch(() => { /* leave null — show the default Connect CTA */ });
+    api.appleHealthStatus()
+      .then(setAhStatus)
+      .catch(() => { /* leave null — user can tap Check sync */ });
+  }, [authChecked]);
 
   const handleConnectOura = () => {
     const url = userId
@@ -130,16 +149,31 @@ function ConnectContent() {
           {/* Oura Ring */}
           <button
             onClick={handleConnectOura}
-            className="w-full flex items-center gap-4 rounded-xl border border-zinc-700 bg-zinc-900 hover:border-green-600 hover:bg-zinc-800 px-5 py-4 transition-colors text-left group"
+            className={`w-full flex items-center gap-4 rounded-xl border px-5 py-4 transition-colors text-left group ${
+              ouraConnected
+                ? "border-green-700 bg-green-950/30 hover:bg-green-950/50"
+                : "border-zinc-700 bg-zinc-900 hover:border-green-600 hover:bg-zinc-800"
+            }`}
           >
             <span className="text-2xl">💍</span>
             <div className="flex-1">
               <p className="font-semibold text-white text-sm">Oura Ring</p>
-              <p className="text-xs text-zinc-400">Sleep, readiness & recovery</p>
+              <p className="text-xs text-zinc-400">
+                {ouraConnected ? "Syncing sleep, readiness & recovery" : "Sleep, readiness & recovery"}
+              </p>
             </div>
-            <span className="text-green-400 text-xs font-medium group-hover:translate-x-0.5 transition-transform">
-              Connect →
-            </span>
+            {ouraConnected ? (
+              <span className="text-right">
+                <span className="block text-green-300 text-xs font-semibold">✓ Connected</span>
+                <span className="block text-[10px] text-zinc-500 group-hover:text-zinc-400">
+                  Tap to reconnect
+                </span>
+              </span>
+            ) : (
+              <span className="text-green-400 text-xs font-medium group-hover:translate-x-0.5 transition-transform">
+                Connect →
+              </span>
+            )}
           </button>
 
           {/* Apple Health */}
@@ -151,11 +185,24 @@ function ConnectContent() {
               <span className="text-2xl">🍎</span>
               <div className="flex-1">
                 <p className="font-semibold text-white text-sm">Apple Health</p>
-                <p className="text-xs text-zinc-400">Steps, heart rate & sleep</p>
+                <p className="text-xs text-zinc-400">
+                  {ahStatus?.connected
+                    ? `Syncing — ${ahStatus.days_synced} day${ahStatus.days_synced === 1 ? "" : "s"} of data`
+                    : "Steps, heart rate & sleep"}
+                </p>
               </div>
-              <span className="text-green-400 text-xs font-medium group-hover:translate-x-0.5 transition-transform">
-                Setup →
-              </span>
+              {ahStatus?.connected ? (
+                <span className="text-right">
+                  <span className="block text-green-300 text-xs font-semibold">✓ Connected</span>
+                  <span className="block text-[10px] text-zinc-500 group-hover:text-zinc-400">
+                    Details
+                  </span>
+                </span>
+              ) : (
+                <span className="text-green-400 text-xs font-medium group-hover:translate-x-0.5 transition-transform">
+                  Setup →
+                </span>
+              )}
             </button>
 
             {/* Apple Health setup panel */}
