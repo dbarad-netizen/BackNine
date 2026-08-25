@@ -311,7 +311,11 @@ def generate_coaching(
     # ── 3-day training load ───────────────────────────────────────────────────
     last3 = [d for d in sorted(am) if d >= (now - timedelta(days=3)).strftime("%Y-%m-%d")]
     load_3d = sum(am.get(d, {}).get("active_cal", 0) or 0 for d in last3)
-    if load_3d > 1500 and today_rdy < 75:
+    # today_rdy can be None when Oura's daily_readiness endpoint fails
+    # while sleep/activity still return (2026-08-25: exactly that happened
+    # and this unguarded comparison 500'd the ENTIRE dashboard for any
+    # user with activity data but no readiness). Guard explicitly.
+    if load_3d > 1500 and today_rdy is not None and today_rdy < 75:
         mid_items.append(_ins("⚖️", "High training load — consider a deload",
             f"{load_3d} active kcal over 3 days with readiness at {today_rdy}. "
             "A 2–3 day deload (50% volume reduction) will accelerate adaptation.", "warn"))

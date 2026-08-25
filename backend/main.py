@@ -3522,6 +3522,38 @@ async def oura_events_debug(request: Request):
             }
         except Exception as exc:
             out[name] = {"error": str(exc)[:200]}
+
+    # Core daily endpoints — raw status codes + body snippets on failure.
+    # Added 2026-08-25: daily_readiness silently stopped returning data
+    # (all-null readiness since ~Aug 11) while daily_sleep/daily_activity
+    # kept working, and the swallowed error left us blind. This shows
+    # exactly what Oura says for each endpoint.
+    import httpx as _httpx
+    _end   = datetime.now().strftime("%Y-%m-%d")
+    _start = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+    _hdrs  = {"Authorization": f"Bearer {access_token}"}
+    core = {}
+    async with _httpx.AsyncClient(timeout=20) as _c:
+        for _name, _path in (("daily_readiness", "daily_readiness"),
+                             ("daily_sleep",     "daily_sleep"),
+                             ("daily_activity",  "daily_activity")):
+            try:
+                _r = await _c.get(
+                    f"https://api.ouraring.com/v2/usercollection/{_path}"
+                    f"?start_date={_start}&end_date={_end}", headers=_hdrs)
+                _n = None
+                try:
+                    _n = len((_r.json() or {}).get("data", []))
+                except Exception:
+                    pass
+                core[_name] = {
+                    "status": _r.status_code,
+                    "count":  _n,
+                    "body_snippet": None if _r.status_code == 200 else _r.text[:300],
+                }
+            except Exception as exc:
+                core[_name] = {"error": str(exc)[:200]}
+    out["core_endpoints"] = core
     return out
 
 
