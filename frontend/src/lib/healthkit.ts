@@ -294,8 +294,15 @@ class Aggregator {
         b.latestTs  = ts;
       }
     } else if (strategy === "duration") {
-      // value is duration in seconds (we compute at add time)
-      b.sum = (b.sum ?? 0) + value;
+      // value is duration in seconds (we compute at add time).
+      // PER-SOURCE totals, same dedupe as "sum" (2026-08-25): if both
+      // an Apple Watch and a third-party sleep app write stages for
+      // the same night, summing across sources double-counts the
+      // night (Chris saw exactly 2x). MAX(per-source total) picks the
+      // most complete single source instead.
+      const key = source || "unknown";
+      if (!b.perSource) b.perSource = new Map();
+      b.perSource.set(key, (b.perSource.get(key) ?? 0) + value);
     }
   }
 
@@ -310,13 +317,19 @@ class Aggregator {
           row[field] = b.sum! / b.n;
         } else if (b.perSource && b.perSource.size > 0) {
           // Multi-source dedupe: iPhone + Watch + third app all wrote
-          // step samples for the same walking. Adding them together
-          // triples the count. Taking MAX(per-source total) picks
-          // whichever device recorded the most for that day (usually
-          // the one worn most consistently). David 2026-08-06.
+          // samples for the same walking (or the same night's sleep).
+          // Adding sources together double/triple-counts. Taking
+          // MAX(per-source total) picks whichever device recorded the
+          // most for that day. David 2026-08-06; extended to sleep
+          // durations 2026-08-25 (Chris's 2x sleep).
           let best = 0;
           b.perSource.forEach(v => { if (v > best) best = v; });
-          row[field] = Math.round(best);
+          if (field.startsWith("sleep_") && field.endsWith("_hours")) {
+            // duration strategy stores seconds — convert to hours
+            row[field] = Math.round((best / 3600.0) * 100) / 100;
+          } else {
+            row[field] = Math.round(best);
+          }
         } else if (b.sum !== undefined) {
           if (field.startsWith("sleep_") && field.endsWith("_hours")) {
             row[field] = Math.round((b.sum / 3600.0) * 100) / 100;
@@ -413,7 +426,9 @@ export async function syncRecent(days = 7, quick = false): Promise<SyncResult> {
         if (isNaN(startTs)) continue;
         const seconds = (ts - startTs) / 1000;
         if (seconds <= 0) continue;
-        agg.add(date, m.field, seconds, "duration", ts);
+        // sourceName passed so duration gets per-source dedupe
+        // (Watch + sleep app both writing the same night → MAX, not sum)
+        agg.add(date, m.field, seconds, "duration", ts, s.sourceName);
       } else {
         let val = s.value;
         // Unit normalization mirrors the XML parser
