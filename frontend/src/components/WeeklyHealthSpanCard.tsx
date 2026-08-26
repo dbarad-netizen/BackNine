@@ -3,11 +3,16 @@
 /**
  * WeeklyHealthSpanCard — Attia-style "process" score.
  *
- * Complements Biological Age (clinical/outcome). Behavioral inputs
- * only: sleep habits, movement, adherence, check-in, hydration, CPAP.
- * Zero overlap with Bio Age markers.
+ * Complements Biological Age (clinical/outcome). v2 (2026-08-25) is
+ * SENSOR-ONLY: sleep hours, sleep timing, steps, active days — all
+ * fed automatically by Oura / Apple Health. Logged behaviors (meds,
+ * meals, check-ins, CPAP) were removed from the score because they
+ * measured logging diligence, not health. Zero overlap with Bio Age.
  *
- * David 2026-08-11.
+ * Components render generically from the API payload — no band names
+ * are hardcoded here, so backend band changes flow through untouched.
+ *
+ * David 2026-08-11, v2 2026-08-25.
  */
 
 import { useState } from "react";
