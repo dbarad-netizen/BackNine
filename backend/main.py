@@ -8260,6 +8260,25 @@ async def apple_health_import_aggregated(request: Request):
     if written == 0 and batch_errors:
         raise HTTPException(status_code=500, detail=f"Wrote 0 rows. First error: {batch_errors[0]}")
 
+    # ── Mirror BP days into blood_pressure_log (David 2026-08-25) ────────
+    # Withings cuff → Apple Health → HealthKit sync now carries BP, but
+    # the BP card / Doctor's Report / escalation rules read
+    # blood_pressure_log, not apple_health_daily. Copy any day that has
+    # both values; bp.upsert_apple_health_reading dedupes per (user, day)
+    # and never touches manual entries. Best-effort — BP mirroring must
+    # never fail the import.
+    bp_mirrored = 0
+    try:
+        import bp as _bp
+        for row in rows:
+            _s = row.get("blood_pressure_systolic")
+            _d = row.get("blood_pressure_diastolic")
+            if _s is not None and _d is not None:
+                if _bp.upsert_apple_health_reading(user_id, row["date"], _s, _d):
+                    bp_mirrored += 1
+    except Exception:
+        log.exception("BP mirror from apple_health import failed for %s", user_id)
+
     return {
         "days_imported":     written,
         "earliest_date":     dates[0] if dates else None,
@@ -8267,6 +8286,7 @@ async def apple_health_import_aggregated(request: Request):
         "metrics_seen":      sorted(metrics_seen),
         "skipped_days":      skipped,
         "batch_error_count": len(batch_errors),
+        "bp_days_mirrored":  bp_mirrored,
     }
 
 

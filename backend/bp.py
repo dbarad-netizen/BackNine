@@ -72,6 +72,62 @@ def log_reading(
         return {}
 
 
+def upsert_apple_health_reading(
+    user_id: str,
+    date_iso: str,
+    systolic: int,
+    diastolic: int,
+) -> bool:
+    """Mirror an Apple-Health-sourced BP value (Withings cuff → Apple
+    Health → HealthKit sync) into blood_pressure_log so the BP card,
+    Doctor's Report, and escalation rules all see it.
+
+    One row per (user, date) with source='apple_health' — the HealthKit
+    daily aggregate is a "latest reading that day", so a same-day
+    re-sync updates in place rather than stacking duplicates. Manual
+    entries are untouched (different source). David 2026-08-25.
+
+    Returns True if a row was written/updated.
+    """
+    try:
+        s, d = int(round(float(systolic))), int(round(float(diastolic)))
+    except (TypeError, ValueError):
+        return False
+    # Same sanity window as log_reading's validation.
+    if not (50 <= s <= 300 and 30 <= d <= 200):
+        return False
+    sb = _sb()
+    if not sb:
+        return False
+    try:
+        existing = (sb.table("blood_pressure_log")
+                      .select("id, systolic, diastolic")
+                      .eq("user_id", user_id)
+                      .eq("date", date_iso)
+                      .eq("source", "apple_health")
+                      .limit(1)
+                      .execute())
+        rows = existing.data or []
+        if rows:
+            if rows[0].get("systolic") == s and rows[0].get("diastolic") == d:
+                return False  # unchanged — nothing to do
+            sb.table("blood_pressure_log").update(
+                {"systolic": s, "diastolic": d}
+            ).eq("id", rows[0]["id"]).execute()
+            return True
+        sb.table("blood_pressure_log").insert({
+            "user_id":     user_id,
+            "date":        date_iso,
+            "time_of_day": "other",   # daily aggregate — time unknown
+            "systolic":    s,
+            "diastolic":   d,
+            "source":      "apple_health",
+        }).execute()
+        return True
+    except Exception:
+        return False
+
+
 def list_readings(user_id: str, days: int = 90, limit: int = 500) -> list[dict]:
     """Return the user's BP readings over the last `days` (newest first).
     `days=0` returns everything (capped at `limit`)."""
