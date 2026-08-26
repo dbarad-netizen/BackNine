@@ -58,8 +58,11 @@ const config: CapacitorConfig = {
     // hides the awkward white flash on cold start.
     backgroundColor: "#0f1a15",
     // Enable web-inspector in debug builds so we can Safari-devtool
-    // the running app on device. Off in release automatically.
-    webContentsDebuggingEnabled: false,
+    // the running app on device. On for now while we're testing —
+    // flip back to false before App Store submission if you don't
+    // want production users' WebViews to be inspectable via a
+    // paired Mac.
+    webContentsDebuggingEnabled: true,
     // Standard WKWebView. Do not switch to UIWebView.
     scheme: "BackNine",
     // App-bound domains for shared cookies + universal links. Match the
