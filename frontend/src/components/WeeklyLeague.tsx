@@ -202,7 +202,7 @@ export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
             ? soloOrTiny
               ? "You're first in — invite friends to make it a race"
               : `You're #${me_rank} of ${member_count} · ranked by Weekly Health Span Score`
-            : "Ranked by Weekly Health Span Score — sleep, movement, adherence & consistency"}
+            : "Ranked by Weekly Health Span Score — sleep, steps & movement, straight from your wearable"}
         </p>
         {onInvite && soloOrTiny && (
           <button
@@ -228,9 +228,41 @@ export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
 
       {showScoring && (
         <div className="px-4 pb-4 pt-1 bg-gray-50/60 border-t border-gray-100">
-          {/* Rules legend — decodes the grid's emoji columns */}
+          {/* ── Primary: Health Span Score (updated for v2 sensor-only,
+              David 2026-08-28 — the old explainer described engagement
+              points as "how scoring works", which stopped being true
+              when ranking moved to Health Span). ── */}
           <p className="text-[11px] text-gray-600 mb-2 leading-relaxed">
-            Earn points every day this week for these habits:
+            <span className="font-semibold text-gray-800">Ranked by Weekly Health Span Score</span> —
+            built automatically from your wearable. Nothing you log (or forget to log) changes it:
+          </p>
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {[
+              { icon: "😴", label: "Sleep hours",  rule: "7–9 h avg · up to 15" },
+              { icon: "🕐", label: "Sleep timing", rule: "±30 min bedtime · up to 10" },
+              { icon: "👟", label: "Daily steps",  rule: "7–8k avg · up to 10" },
+              { icon: "🏃", label: "Active days",  rule: "4+ days moving · up to 15" },
+            ].map(b => (
+              <span
+                key={b.label}
+                className="inline-flex items-center gap-1 rounded-full bg-white border border-gray-200 px-2 py-0.5 text-[10px]"
+              >
+                <span>{b.icon}</span>
+                <span className="font-medium text-gray-700">{b.label}</span>
+                <span className="font-semibold text-[#1B3829]">{b.rule}</span>
+              </span>
+            ))}
+          </div>
+          <p className="text-[10px] text-gray-500 mb-3 leading-relaxed">
+            Normalized to 100 across whichever bands your devices provide — Oura and
+            Apple Health users compete on equal footing. Walks, classes, and detected
+            activity all count toward active days.
+          </p>
+
+          {/* ── Secondary: engagement points (tiebreaker only) ── */}
+          <p className="text-[11px] text-gray-600 mb-2 leading-relaxed border-t border-gray-200 pt-3">
+            <span className="font-semibold text-gray-800">Tiebreaker — engagement points.</span>{" "}
+            When Health Span Scores tie, weekly points break it:
           </p>
           <div className="flex flex-wrap gap-1.5 mb-3">
             {cats.map(c => (
@@ -247,7 +279,7 @@ export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
 
           {hasGrid ? (
             <>
-              <p className="text-[11px] font-semibold text-gray-600 mb-1.5">This week, by task — you vs. the league</p>
+              <p className="text-[11px] font-semibold text-gray-600 mb-1.5">Tiebreaker points this week — you vs. the league</p>
               <div className="overflow-x-auto -mx-1 px-1">
                 <table className="w-full border-collapse">
                   <thead>
@@ -329,14 +361,16 @@ export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
           {win && (
             <div className="mt-3 rounded-lg bg-[#1B3829]/5 border border-[#1B3829]/10 px-3 py-2.5">
               <p className="text-[11px] text-[#1B3829] leading-relaxed">
-                <span className="font-semibold">💡 Your quickest win:</span> {win.label.toLowerCase()} today for{" "}
-                <span className="font-semibold">+{win.per} pts</span>.
+                <span className="font-semibold">💡 Quickest tiebreaker win:</span> {win.label.toLowerCase()} today for{" "}
+                <span className="font-semibold">+{win.per} pts</span>. To move your Health Span
+                Score itself: sleep, steps, and movement.
               </p>
             </div>
           )}
           {breakdown && !win && (
             <p className="mt-3 text-[11px] text-[#1B3829] leading-relaxed">
-              🔥 You&apos;re earning in every category this week — keep the streak alive to hold your spot.
+              🔥 You&apos;re earning tiebreaker points in every category this week — sleep, steps,
+              and movement are what move the score itself.
             </p>
           )}
         </div>
