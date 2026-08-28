@@ -23,7 +23,6 @@ import ScoreRing from "@/components/ScoreRing";
 import SupplementsCard from "@/components/SupplementsCard";
 import PeptidesCard from "@/components/PeptidesCard";
 import MedicationsCard from "@/components/MedicationsCard";
-import StackEfficacyCard from "@/components/StackEfficacyCard";
 // LabsCard removed — labs are managed in the Metrics tab (LabsTab) instead.
 // The Annual Physical report reads from that canonical source.
 import LongevityMetricModal from "@/components/LongevityMetricModal";
@@ -39,8 +38,6 @@ import NutritionExtrasCard from "@/components/NutritionExtrasCard";
 import StackAdherenceCard from "@/components/StackAdherenceCard";
 import StackAdherencePill from "@/components/StackAdherencePill";
 import ActiveExperimentsCard from "@/components/ActiveExperimentsCard";
-import ProvenLedgerCard from "@/components/ProvenLedgerCard";
-import NudgeCard from "@/components/NudgeCard";
 import BloodPressureCard from "@/components/BloodPressureCard";
 import DoctorReportModal from "@/components/DoctorReportModal";
 import DayMealsDrawer from "@/components/DayMealsDrawer";
@@ -62,11 +59,8 @@ import MorningBriefing from "@/components/MorningBriefing";
 // lives inside Coach Al chat (chat still has full balance + bedtime
 // context). Component + backend endpoint kept in the repo so we can
 // revive cleanly if/when we find a clear value-add for the surface.
-// import TonightSleepCard from "@/components/TonightSleepCard";
 import NutritionCoachCard from "@/components/NutritionCoachCard";
 import WeeklyRecapCard from "@/components/WeeklyRecapCard";
-import TodaysTagsCard from "@/components/TodaysTagsCard";
-import JournalCard from "@/components/JournalCard";
 import CpapNightlyLogCard from "@/components/CpapNightlyLogCard";
 import BiologicalAgeCard from "@/components/BiologicalAgeCard";
 import WeeklyHealthSpanCard from "@/components/WeeklyHealthSpanCard";
@@ -1321,8 +1315,11 @@ export default function DashboardPage() {
     { id: "nutrition",    label: "Nutrition", icon: "🥗" },
     { id: "training",     label: "Training",  icon: "🏋️" },
     { id: "challenges",   label: "Clubhouse", icon: "🏛️" },
-    { id: "gear",         label: "Gear",      icon: "🛒" },
-    { id: "apple-health", label: "Metrics",   icon: "📊" },
+    // Gear hidden from nav (audit 2026-08-25 — frozen; code + section
+    // remain, restore by re-adding the entry). Metrics moved to the
+    // utility area as "Data & Devices" — it's an admin panel for
+    // connections/sync/charts, not a destination competing with the
+    // Scorecard.
   ];
 
   return (
@@ -1413,6 +1410,18 @@ export default function DashboardPage() {
               }}
             />
             {/* Desktop-only utility icons — mobile uses the ☰ menu */}
+            {/* Data & Devices — the old Metrics tab, demoted to a
+                settings-style entry (audit 2026-08-25): connections,
+                sync, charts. Admin panel, not a destination. */}
+            <button
+              onClick={() => setSection("apple-health")}
+              title="Data & Devices — connections, sync & metrics"
+              className={`hidden sm:block transition-colors text-base leading-none ${
+                section === "apple-health" ? "text-[#1B3829]" : "text-gray-600 hover:text-[#1B3829]"
+              }`}
+            >
+              ⚙️
+            </button>
             <button
               onClick={() => setShowShare(true)}
               title="Invite friends"
@@ -1514,6 +1523,14 @@ export default function DashboardPage() {
                 className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 text-left"
               >
                 <span className="text-lg leading-none">👤</span>Profile
+              </button>
+              <button
+                onClick={() => { setSection("apple-health"); setNavOpen(false); window.scrollTo({ top: 0 }); }}
+                className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors ${
+                  section === "apple-health" ? "bg-[#1B3829]/5 text-[#1B3829] font-medium" : "text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                <span className="text-lg leading-none">⚙️</span>Data &amp; Devices
               </button>
               <button
                 onClick={async () => {
@@ -2099,305 +2116,6 @@ export default function DashboardPage() {
               <WeeklyHealthSpanCard data={data.weekly_healthspan} />
             )}
 
-            {/* Old Longevity Score card — retired David 2026-08-11 in
-                favor of Weekly Health Span (behavioral) + Biological
-                Age (clinical). The 6 wearable markers it scored are now
-                split: HRV/RHR/VO2/body_fat feed Bio Age; sleep/steps
-                feed Health Span. If we ever need to resurrect the old
-                composite for backfill or comparison, flip false → true.  */}
-            {false && data.longevity_score?.score != null && (() => {
-              const lon = data.longevity_score!;
-              const gradeColor = lon.grade === "Excellent" ? "#22c55e"
-                : lon.grade === "Good" ? "#84cc16"
-                : lon.grade === "Fair" ? "#f59e0b" : "#ef4444";
-              const circ = 2 * Math.PI * 42;
-              return (
-                <section className="rounded-2xl border bg-white p-5 space-y-4" style={{ borderColor: gradeColor + "66" }}>
-                  <div className="flex items-center gap-4">
-                    {/* Score ring */}
-                    <div className="relative w-16 h-16 shrink-0">
-                      <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                        <circle cx="50" cy="50" r="42" fill="none" stroke="#E5E7EB" strokeWidth="10"/>
-                        <circle cx="50" cy="50" r="42" fill="none"
-                          stroke={gradeColor} strokeWidth="10" strokeLinecap="round"
-                          strokeDasharray={circ}
-                          strokeDashoffset={circ * (1 - lon.score! / 100)}
-                        />
-                      </svg>
-                      <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-lg font-bold text-gray-900 leading-none">{lon.score}</span>
-                        <span className="text-[9px] text-gray-600 uppercase tracking-wide">Vitality</span>
-                      </div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10px] text-gray-600 uppercase tracking-widest mb-0.5">Longevity Score</p>
-                      <p className="font-bold text-gray-900 text-base" style={{ color: gradeColor }}>{lon.grade}</p>
-                      {/* Biological age framing removed David 2026-08-11 —
-                          it conflicted with the dedicated Biological Age
-                          card above (two different formulas, two different
-                          numbers). Bio Age card is now the single
-                          authoritative "how old does your body look"
-                          answer. Longevity Score just reports its 0-100
-                          vitality score without also claiming a
-                          biological age delta. */}
-                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                        <p className="text-[10px] text-gray-500">{lon.data_coverage} available</p>
-                        {lon.confidence && lon.confidence.level !== "unknown" && (() => {
-                          // Confidence chip — Fable moat 2026-07-23. Bevel shows a
-                          // confidence label on their bio-age but hides the inputs.
-                          // Ours is strictly better because tapping the score already
-                          // itemizes markers; this chip just quantifies the picture.
-                          const styleFor = {
-                            high:   "bg-emerald-100 text-emerald-800 border-emerald-300",
-                            medium: "bg-amber-100  text-amber-800  border-amber-300",
-                            low:    "bg-gray-100   text-gray-700   border-gray-300",
-                          } as const;
-                          const label = {
-                            high:   "High confidence",
-                            medium: "Moderate confidence",
-                            low:    "Low confidence",
-                          } as const;
-                          return (
-                            <span
-                              className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${styleFor[lon.confidence.level]}`}
-                              title={lon.confidence.reason}
-                            >
-                              {label[lon.confidence.level]}
-                            </span>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* ── Score trend over time ── */}
-                  {lonHistory && lonHistory.history.length >= 2 ? (() => {
-                    const delta = lonHistory.summary.delta_30d ?? lonHistory.summary.delta_7d;
-                    const deltaWindow = lonHistory.summary.delta_30d != null ? 30 : 7;
-                    const deltaColor = delta == null ? "text-gray-600"
-                      : delta > 0 ? "text-green-600"
-                      : delta < 0 ? "text-red-500" : "text-gray-600";
-                    const firstDate = lonHistory.history[0].date;
-                    const [, fm, fd] = firstDate.split("-");
-                    return (
-                      <div className="pt-3 border-t border-gray-100">
-                        <div className="flex items-center justify-between gap-2 mb-1 min-w-0">
-                          <p className="text-[10px] text-gray-600 uppercase tracking-widest shrink-0">Score trend</p>
-                          {delta != null && (
-                            // Shorter copy so this fits on iPhone —
-                            // "30d ago" gets clipped to "30d a…" at
-                            // narrow widths. Use "vs 30d" instead.
-                            // David 2026-08-06.
-                            <span className={`text-[11px] font-semibold ${deltaColor} truncate`}>
-                              {delta > 0 ? "▲" : delta < 0 ? "▼" : "—"} {Math.abs(delta)} pts vs {deltaWindow}d
-                            </span>
-                          )}
-                        </div>
-                        <LongevitySparkline points={lonHistory.history} color={gradeColor} />
-                        <div className="flex justify-between text-[9px] text-gray-500 mt-0.5">
-                          <span>{parseInt(fm)}/{parseInt(fd)}</span>
-                          <span>Today</span>
-                        </div>
-                      </div>
-                    );
-                  })() : lonHistory && lonHistory.history.length === 1 ? (
-                    <div className="pt-3 border-t border-gray-100">
-                      <p className="text-[10px] text-gray-600 leading-snug">
-                        📈 Now tracking your Longevity Score — a trend line appears here as your history builds.
-                      </p>
-                    </div>
-                  ) : null}
-
-                  {/* Component breakdown — ALL 6 canonical slots, stable order.
-                      Missing components render as "—" with an inline How-to-unlock
-                      hint instead of being silently dropped, so the card has the
-                      same shape every day. Caption below honestly counts how
-                      many of the 6 are contributing. (Non-Oura UX rethink, Slice 1.) */}
-                  {(() => {
-                    // Canonical 6 — must match backend/longevity.py components dict.
-                    const CANONICAL: { key: string; label: string; max: number; hint: string }[] = [
-                      { key: "hrv",      label: "Heart Rate Variability", max: 25, hint: "Connect Apple Health or Oura" },
-                      { key: "rhr",      label: "Resting Heart Rate",     max: 20, hint: "Connect Apple Health or Oura" },
-                      { key: "vo2_max",  label: "VO2 Max",                max: 20, hint: "Tap edit to enter manually" },
-                      { key: "sleep",    label: "Sleep (7-day avg)",      max: 15, hint: "Connect Apple Health or Oura" },
-                      { key: "body_fat", label: "Body Fat %",             max: 10, hint: "Enter via the Log Weigh-In card" },
-                      { key: "steps",    label: "Daily Steps (avg)",      max: 10, hint: "Connect Apple Health or Oura" },
-                    ];
-                    const present = lon.components;
-                    return (
-                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">
-                      {CANONICAL.map(slot => {
-                        const comp  = present[slot.key];
-                        if (!comp) {
-                          // Empty slot — honest "—" with action affordance and
-                          // a stable visual presence so the grid never changes shape.
-                          const isVo2 = slot.key === "vo2_max";
-                          return (
-                            <div key={slot.key} className="space-y-1 opacity-60">
-                              <div className="flex justify-between text-[10px]">
-                                <span className="text-gray-600 truncate pr-1">{slot.label}</span>
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <span className="text-gray-500">—/{slot.max}</span>
-                                  {isVo2 && !vo2Editing && (
-                                    <button
-                                      onClick={() => { setVo2Editing(true); setVo2Input(""); setVo2Saved(false); }}
-                                      className="text-[9px] text-blue-400 hover:text-blue-600 underline leading-none"
-                                      title="Update VO2 Max"
-                                    >edit</button>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="h-1.5 w-full bg-gray-100 rounded-full" />
-                              <p className="text-[9px] text-gray-500 italic leading-tight">{slot.hint}</p>
-                            </div>
-                          );
-                        }
-                        const pct = Math.round((comp.points / comp.max) * 100);
-                        const barColor = pct >= 80 ? "#22c55e" : pct >= 60 ? "#84cc16" : pct >= 40 ? "#f59e0b" : "#ef4444";
-                        const isVo2 = comp.label === "VO2 Max";
-                        // Wire each slot to open the 90-day per-metric history
-                        // pop-out. The slot key matches the backend metric-history
-                        // endpoint (hrv, rhr, sleep, steps, body_fat, vo2_max).
-                        const slotKey = slot.key;
-                        return (
-                          <div
-                            key={comp.label}
-                            className="space-y-1 cursor-pointer hover:bg-gray-50 rounded p-1 -m-1 transition-colors"
-                            onClick={(e) => {
-                              // Don't open if user clicked the inline VO2 edit affordance
-                              if ((e.target as HTMLElement).tagName === "BUTTON") return;
-                              setLonMetricOpen({ key: slotKey, label: comp.label });
-                            }}
-                            // Show the per-component "why" explanation on hover
-                            // (desktop) and long-press (mobile). Full modal
-                            // reveals it too. David 2026-08-07 — transparency
-                            // vs Bevel's black-box scoring.
-                            title={comp.why
-                              ? `${comp.why}\n\nTap for 90-day ${comp.label} history`
-                              : `Tap for 90-day ${comp.label} history`}
-                          >
-                            <div className="flex justify-between text-[10px]">
-                              <span className="text-gray-600 truncate pr-1 flex items-center gap-1">
-                                {comp.label}
-                                {/* Source badge — David 2026-08-11.
-                                    Transparency vs Bevel: user always
-                                    knows which device fed this number. */}
-                                {comp.source && (
-                                  <span
-                                    className="text-[9px] opacity-70"
-                                    title={
-                                      comp.source === "oura" ? "From your Oura Ring" :
-                                      comp.source === "apple_health" ? "From Apple Health / Apple Watch" :
-                                      comp.source === "labs" ? "From your uploaded labs" :
-                                      "Manually logged"
-                                    }
-                                  >
-                                    {comp.source === "oura" ? "💍" :
-                                     comp.source === "apple_health" ? "⌚" :
-                                     comp.source === "labs" ? "🧪" : "✍️"}
-                                  </span>
-                                )}
-                              </span>
-                              <div className="flex items-center gap-1 shrink-0">
-                                <span className="text-gray-700 font-medium">{comp.points}/{comp.max}</span>
-                                {isVo2 && !vo2Editing && (
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); setVo2Editing(true); setVo2Input(""); setVo2Saved(false); }}
-                                    className="text-[9px] text-blue-400 hover:text-blue-600 underline leading-none"
-                                    title="Update VO2 Max"
-                                  >edit</button>
-                                )}
-                              </div>
-                            </div>
-                            <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                              <div className="h-full rounded-full transition-all duration-500"
-                                style={{ width: `${pct}%`, backgroundColor: barColor }} />
-                            </div>
-                            <p className="text-[9px] text-gray-600">{comp.value} · {comp.norm}</p>
-                            {/* Inline edit form — shown when user clicks "edit" */}
-                            {isVo2 && vo2Editing && (
-                              <div className="flex items-center gap-1.5 pt-0.5">
-                                <input
-                                  type="number" min={10} max={90} step={0.1}
-                                  placeholder="ml/kg/min"
-                                  value={vo2Input}
-                                  onChange={e => setVo2Input(e.target.value)}
-                                  className="w-20 rounded border border-gray-200 bg-gray-50 px-2 py-1 text-[10px] text-gray-900 focus:outline-none focus:border-green-400"
-                                />
-                                <Button
-                                  variant="accent"
-                                  size="sm"
-                                  onClick={handleSaveVo2}
-                                  disabled={vo2Saving || !vo2Input}
-                                  className="!h-auto !px-2 !py-1 !text-[10px]"
-                                >
-                                  {vo2Saved ? "✓" : vo2Saving ? "…" : "Save"}
-                                </Button>
-                                <button
-                                  onClick={() => { setVo2Editing(false); setVo2Input(""); }}
-                                  className="text-[10px] text-gray-600 hover:text-gray-600"
-                                >✕</button>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                    );
-                  })()}
-
-                  {/* Honest "N of 6 contributing" caption — replaces the old
-                      `data_coverage` line which used variable wording depending
-                      on what was present. Always says the same thing. */}
-                  {(() => {
-                    const total = 6;
-                    const contributing = Object.keys(lon.components).length;
-                    if (contributing >= total) return null;
-                    return (
-                      <p className="text-[10px] text-gray-600 italic">
-                        {contributing} of {total} metrics contributing — connect Apple Health to unlock the rest.
-                      </p>
-                    );
-                  })()}
-
-                  {/* (The old "Unlock more points" section was removed —
-                      each empty slot now carries its own hint inline.) */}
-
-                  {/* Top improvement tip — highlight the lowest-scoring component */}
-                  {(() => {
-                    const comps = Object.values(lon.components);
-                    if (!comps.length) return null;
-                    const worst = comps.reduce((a, b) => (a.points / a.max < b.points / b.max ? a : b));
-                    const pct = Math.round((worst.points / worst.max) * 100);
-                    if (pct >= 80) return null; // no tip needed if everything is good
-                    const tips: Record<string, string> = {
-                      "Heart Rate Variability": "Prioritize 7–9h sleep and reduce evening alcohol — HRV is highly sensitive to both.",
-                      "Resting Heart Rate":     "Add 20–30 min of Zone 2 cardio 3×/week. Consistent aerobic work lowers resting HR over weeks.",
-                      "VO2 Max":                "Include one interval session per week (e.g. 4×4 min at hard effort) — the strongest driver of VO2 max.",
-                      "Sleep (7-day avg)":      "Set a consistent bedtime alarm. Even 30 min more sleep per night compounds quickly.",
-                      "Body Fat %":             "Modest calorie deficit (200–300 kcal/day) plus resistance training 2–3×/week drives the best body composition change.",
-                      "Daily Steps (avg)":      "Aim for 7,000–8,000 steps — a short 15-min walk after each meal gets you there without dedicated workout time.",
-                    };
-                    const tip = tips[worst.label];
-                    if (!tip) return null;
-                    return (
-                      <div className="rounded-xl bg-amber-50 border border-amber-100 px-3 py-2.5">
-                        <p className="text-[10px] text-amber-700 font-semibold uppercase tracking-wide mb-1">
-                          Biggest opportunity · {worst.label}
-                        </p>
-                        <p className="text-xs text-amber-800 leading-snug">{tip}</p>
-                      </div>
-                    );
-                  })()}
-
-                  {profile != null && (profile.age == null || !profile.biological_sex) && (
-                    <p className="text-[10px] text-gray-600 border-t border-gray-50 pt-2">
-                      💡 Add your age &amp; sex in <button onClick={() => setShowProfile(true)} className="underline hover:text-gray-600">Profile</button> for more accurate norms.
-                    </p>
-                  )}
-                </section>
-              );
-            })()}
 
             {/* WeeklyLeague promoted to hero slot above (David 2026-08-11).
                 Was here originally, now sits right after Biological Age
@@ -2887,11 +2605,8 @@ export default function DashboardPage() {
                     not here. The Annual Physical Snapshot reads from that
                     canonical source. */}
 
-                {/* Stack Efficacy — Phase 4 of the Insight pillar. For every
-                    active supplement/peptide/medication with 14+ days of
-                    post-start data, shows before-vs-after deltas across
-                    sleep, HRV, RHR, etc. Renders nothing if no items yet. */}
-                <StackEfficacyCard />
+                {/* StackEfficacyCard retired (task #144 / audit 2026-08-25):
+                    superseded by Proven For You, itself now frozen. */}
 
                 {/* ─ Settings ─ */}
                 <div>
