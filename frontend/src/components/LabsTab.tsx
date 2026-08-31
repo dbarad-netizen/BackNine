@@ -15,7 +15,7 @@ const GROUPS: Record<string, { label: string; unit: string; low: number; high: n
   ],
   Lipids: [
     { key: "total_cholesterol", label: "Total Cholesterol", unit: "mg/dL", low: 100,  high: 199,  opt_lo: 150, opt_hi: 180 },
-    { key: "ldl",               label: "LDL",               unit: "mg/dL", low: 0,    high: 99,   opt_lo: 50,  opt_hi: 80  },
+    { key: "ldl",               label: "LDL",               unit: "mg/dL", low: 0,    high: 129,   opt_lo: 50,  opt_hi: 80  },
     { key: "hdl",               label: "HDL",               unit: "mg/dL", low: 40,   high: 999,  opt_lo: 60,  opt_hi: 999 },
     { key: "triglycerides",     label: "Triglycerides",     unit: "mg/dL", low: 0,    high: 149,  opt_lo: 0,   opt_hi: 100 },
   ],
@@ -28,12 +28,12 @@ const GROUPS: Record<string, { label: string; unit: string; low: number; high: n
     { key: "testosterone_total",label: "Total Testosterone",unit: "ng/dL", low: 300,  high: 1000, opt_lo: 550, opt_hi: 900 },
     { key: "testosterone_free", label: "Free Testosterone", unit: "pg/mL", low: 9.0,  high: 30.0, opt_lo: 15,  opt_hi: 25  },
     { key: "estradiol",         label: "Estradiol (E2)",    unit: "pg/mL", low: 10,   high: 40,   opt_lo: 20,  opt_hi: 30  },
-    { key: "dhea_s",            label: "DHEA-S",            unit: "µg/dL", low: 100,  high: 500,  opt_lo: 200, opt_hi: 400 },
+    { key: "dhea_s",            label: "DHEA-S",            unit: "µg/dL", low: 40,  high: 500,  opt_lo: 200, opt_hi: 400 },
     { key: "cortisol",          label: "AM Cortisol",       unit: "µg/dL", low: 6.0,  high: 23.0, opt_lo: 10,  opt_hi: 18  },
   ],
   Inflammation: [
-    { key: "crp_hs",            label: "hsCRP",             unit: "mg/L",  low: 0,    high: 1.0,  opt_lo: 0,   opt_hi: 0.5 },
-    { key: "homocysteine",      label: "Homocysteine",      unit: "µmol/L",low: 0,    high: 10.4, opt_lo: 0,   opt_hi: 7.0 },
+    { key: "crp_hs",            label: "hsCRP",             unit: "mg/L",  low: 0,    high: 3.0,  opt_lo: 0,   opt_hi: 0.5 },
+    { key: "homocysteine",      label: "Homocysteine",      unit: "µmol/L",low: 0,    high: 11.4, opt_lo: 0,   opt_hi: 7.0 },
   ],
   Blood: [
     { key: "ferritin",          label: "Ferritin",          unit: "ng/mL", low: 30,   high: 400,  opt_lo: 70,  opt_hi: 200 },
@@ -42,8 +42,8 @@ const GROUPS: Record<string, { label: string; unit: string; low: number; high: n
   ],
   Vitamins: [
     { key: "vitamin_d",         label: "Vitamin D (25-OH)", unit: "ng/mL", low: 30,   high: 100,  opt_lo: 50,  opt_hi: 80  },
-    { key: "vitamin_b12",       label: "Vitamin B12",       unit: "pg/mL", low: 200,  high: 900,  opt_lo: 500, opt_hi: 900 },
-    { key: "magnesium",         label: "Magnesium",         unit: "mg/dL", low: 1.7,  high: 2.2,  opt_lo: 2.0, opt_hi: 2.2 },
+    { key: "vitamin_b12",       label: "Vitamin B12",       unit: "pg/mL", low: 200,  high: 1100,  opt_lo: 500, opt_hi: 900 },
+    { key: "magnesium",         label: "Magnesium",         unit: "mg/dL", low: 1.6,  high: 2.3,  opt_lo: 2.0, opt_hi: 2.2 },
     { key: "zinc",              label: "Zinc",              unit: "µg/dL", low: 60,   high: 120,  opt_lo: 80,  opt_hi: 110 },
   ],
   "Kidney/Liver": [
@@ -51,7 +51,7 @@ const GROUPS: Record<string, { label: string; unit: string; low: number; high: n
     { key: "egfr",              label: "eGFR",              unit: "mL/min",low: 60,   high: 999,  opt_lo: 90,   opt_hi: 999  },
     { key: "bun",               label: "BUN",               unit: "mg/dL", low: 6,    high: 24,   opt_lo: 10,   opt_hi: 18   },
     { key: "bun_creatinine_ratio", label: "BUN/Creat Ratio",unit: "",      low: 9,    high: 20,   opt_lo: 10,   opt_hi: 16   },
-    { key: "alt",               label: "ALT",               unit: "U/L",   low: 0,    high: 40,   opt_lo: 0,    opt_hi: 25   },
+    { key: "alt",               label: "ALT",               unit: "U/L",   low: 0,    high: 46,   opt_lo: 0,    opt_hi: 25   },
     { key: "ast",               label: "AST",               unit: "U/L",   low: 0,    high: 40,   opt_lo: 0,    opt_hi: 25   },
     { key: "alkaline_phosphatase", label: "Alk Phosphatase",unit: "IU/L",  low: 44,   high: 123,  opt_lo: 50,   opt_hi: 80   },
     { key: "bilirubin_total",   label: "Bilirubin, Total",  unit: "mg/dL", low: 0,    high: 1.2,  opt_lo: 0.4,  opt_hi: 0.9  },
@@ -83,7 +83,7 @@ const GROUPS: Record<string, { label: string; unit: string; low: number; high: n
   ],
   "Other": [
     { key: "psa",               label: "PSA",               unit: "ng/mL", low: 0,    high: 4.0,  opt_lo: 0,    opt_hi: 2.0  },
-    { key: "apolipoprotein_b",  label: "Apolipoprotein B",  unit: "mg/dL", low: 0,    high: 90,   opt_lo: 0,    opt_hi: 80   },
+    { key: "apolipoprotein_b",  label: "Apolipoprotein B",  unit: "mg/dL", low: 0,    high: 119,   opt_lo: 0,    opt_hi: 80   },
     { key: "vldl",              label: "VLDL Cholesterol",  unit: "mg/dL", low: 5,    high: 40,   opt_lo: 5,    opt_hi: 20   },
   ],
 };

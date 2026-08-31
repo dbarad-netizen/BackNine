@@ -32,7 +32,7 @@ REFERENCE_RANGES: Dict[str, dict] = {
     "insulin":              {"unit": "µIU/mL", "low": 2.0,  "high": 19.6, "optimal_low": 2.0, "optimal_high": 6.0, "label": "Fasting Insulin",        "group": "Metabolic"},
     # Lipids
     "total_cholesterol":    {"unit": "mg/dL",  "low": 100,  "high": 199,  "optimal_low": 150, "optimal_high": 180, "label": "Total Cholesterol",      "group": "Lipids"},
-    "ldl":                  {"unit": "mg/dL",  "low": 0,    "high": 99,   "optimal_low": 50,  "optimal_high": 80,  "label": "LDL",                    "group": "Lipids"},
+    "ldl":                  {"unit": "mg/dL",  "low": 0,    "high": 129,   "optimal_low": 50,  "optimal_high": 80,  "label": "LDL",                    "group": "Lipids"},
     "hdl":                  {"unit": "mg/dL",  "low": 40,   "high": 999,  "optimal_low": 60,  "optimal_high": 999, "label": "HDL",                    "group": "Lipids"},
     "triglycerides":        {"unit": "mg/dL",  "low": 0,    "high": 149,  "optimal_low": 0,   "optimal_high": 100, "label": "Triglycerides",          "group": "Lipids"},
     # Thyroid
@@ -43,26 +43,26 @@ REFERENCE_RANGES: Dict[str, dict] = {
     "testosterone_total":   {"unit": "ng/dL",  "low": 300,  "high": 1000, "optimal_low": 550, "optimal_high": 900, "label": "Total Testosterone",     "group": "Hormones"},
     "testosterone_free":    {"unit": "pg/mL",  "low": 9.0,  "high": 30.0, "optimal_low": 15,  "optimal_high": 25,  "label": "Free Testosterone",      "group": "Hormones"},
     "estradiol":            {"unit": "pg/mL",  "low": 10,   "high": 40,   "optimal_low": 20,  "optimal_high": 30,  "label": "Estradiol (E2)",         "group": "Hormones"},
-    "dhea_s":               {"unit": "µg/dL",  "low": 100,  "high": 500,  "optimal_low": 200, "optimal_high": 400, "label": "DHEA-S",                 "group": "Hormones"},
+    "dhea_s":               {"unit": "µg/dL",  "low": 40,  "high": 500,  "optimal_low": 200, "optimal_high": 400, "label": "DHEA-S",                 "group": "Hormones"},
     "cortisol":             {"unit": "µg/dL",  "low": 6.0,  "high": 23.0, "optimal_low": 10,  "optimal_high": 18,  "label": "AM Cortisol",            "group": "Hormones"},
     # Inflammation
-    "crp_hs":               {"unit": "mg/L",   "low": 0,    "high": 1.0,  "optimal_low": 0,   "optimal_high": 0.5, "label": "hsCRP",                  "group": "Inflammation"},
-    "homocysteine":         {"unit": "µmol/L", "low": 0,    "high": 10.4, "optimal_low": 0,   "optimal_high": 7.0, "label": "Homocysteine",           "group": "Inflammation"},
+    "crp_hs":               {"unit": "mg/L",   "low": 0,    "high": 3.0,  "optimal_low": 0,   "optimal_high": 0.5, "label": "hsCRP",                  "group": "Inflammation"},
+    "homocysteine":         {"unit": "µmol/L", "low": 0,    "high": 11.4, "optimal_low": 0,   "optimal_high": 7.0, "label": "Homocysteine",           "group": "Inflammation"},
     # Blood / Iron
     "ferritin":             {"unit": "ng/mL",  "low": 30,   "high": 400,  "optimal_low": 70,  "optimal_high": 200, "label": "Ferritin",               "group": "Blood"},
     "hemoglobin":           {"unit": "g/dL",   "low": 13.5, "high": 17.5, "optimal_low": 14,  "optimal_high": 17,  "label": "Hemoglobin",             "group": "Blood"},
     "hematocrit":           {"unit": "%",      "low": 38.3, "high": 50.3, "optimal_low": 42,  "optimal_high": 48,  "label": "Hematocrit",             "group": "Blood"},
     # Vitamins
     "vitamin_d":            {"unit": "ng/mL",  "low": 30,   "high": 100,  "optimal_low": 50,  "optimal_high": 80,  "label": "Vitamin D (25-OH)",       "group": "Vitamins"},
-    "vitamin_b12":          {"unit": "pg/mL",  "low": 200,  "high": 900,  "optimal_low": 500, "optimal_high": 900, "label": "Vitamin B12",             "group": "Vitamins"},
-    "magnesium":            {"unit": "mg/dL",  "low": 1.7,  "high": 2.2,  "optimal_low": 2.0, "optimal_high": 2.2, "label": "Magnesium",              "group": "Vitamins"},
+    "vitamin_b12":          {"unit": "pg/mL",  "low": 200,  "high": 1100,  "optimal_low": 500, "optimal_high": 900, "label": "Vitamin B12",             "group": "Vitamins"},
+    "magnesium":            {"unit": "mg/dL",  "low": 1.6,  "high": 2.3,  "optimal_low": 2.0, "optimal_high": 2.2, "label": "Magnesium",              "group": "Vitamins"},
     "zinc":                 {"unit": "µg/dL",  "low": 60,   "high": 120,  "optimal_low": 80,  "optimal_high": 110, "label": "Zinc",                   "group": "Vitamins"},
     # Kidney / Liver
     "creatinine":           {"unit": "mg/dL",  "low": 0.74, "high": 1.35, "optimal_low": 0.9,  "optimal_high": 1.2,  "label": "Creatinine",             "group": "Kidney/Liver"},
     "egfr":                 {"unit": "mL/min", "low": 60,   "high": 999,  "optimal_low": 90,   "optimal_high": 999,  "label": "eGFR",                   "group": "Kidney/Liver"},
     "bun":                  {"unit": "mg/dL",  "low": 6,    "high": 24,   "optimal_low": 10,   "optimal_high": 18,   "label": "BUN",                    "group": "Kidney/Liver"},
     "bun_creatinine_ratio": {"unit": "",       "low": 9,    "high": 20,   "optimal_low": 10,   "optimal_high": 16,   "label": "BUN/Creatinine Ratio",   "group": "Kidney/Liver"},
-    "alt":                  {"unit": "U/L",    "low": 0,    "high": 40,   "optimal_low": 0,    "optimal_high": 25,   "label": "ALT",                    "group": "Kidney/Liver"},
+    "alt":                  {"unit": "U/L",    "low": 0,    "high": 46,   "optimal_low": 0,    "optimal_high": 25,   "label": "ALT",                    "group": "Kidney/Liver"},
     "ast":                  {"unit": "U/L",    "low": 0,    "high": 40,   "optimal_low": 0,    "optimal_high": 25,   "label": "AST",                    "group": "Kidney/Liver"},
     "alkaline_phosphatase": {"unit": "IU/L",   "low": 44,   "high": 123,  "optimal_low": 50,   "optimal_high": 80,   "label": "Alkaline Phosphatase",   "group": "Kidney/Liver"},
     "bilirubin_total":      {"unit": "mg/dL",  "low": 0.0,  "high": 1.2,  "optimal_low": 0.4,  "optimal_high": 0.9,  "label": "Bilirubin, Total",       "group": "Kidney/Liver"},
@@ -90,7 +90,7 @@ REFERENCE_RANGES: Dict[str, dict] = {
     "iron_saturation":      {"unit": "%",      "low": 15,   "high": 55,   "optimal_low": 25,   "optimal_high": 35,   "label": "Iron Saturation",        "group": "Iron"},
     # Other markers
     "psa":                  {"unit": "ng/mL",  "low": 0.0,  "high": 4.0,  "optimal_low": 0.0,  "optimal_high": 2.0,  "label": "PSA",                    "group": "Other"},
-    "apolipoprotein_b":     {"unit": "mg/dL",  "low": 0,    "high": 90,   "optimal_low": 0,    "optimal_high": 80,   "label": "Apolipoprotein B",       "group": "Other"},
+    "apolipoprotein_b":     {"unit": "mg/dL",  "low": 0,    "high": 119,   "optimal_low": 0,    "optimal_high": 80,   "label": "Apolipoprotein B",       "group": "Other"},
     "vldl":                 {"unit": "mg/dL",  "low": 5,    "high": 40,   "optimal_low": 5,    "optimal_high": 20,   "label": "VLDL Cholesterol",       "group": "Other"},
     # High-signal longevity markers men-50+ actually track. Ranges are
     # standard clinical + tighter optimal targets from longevity
