@@ -60,6 +60,7 @@ REFERENCE_RANGES: Dict[str, dict] = {
     # Kidney / Liver
     "creatinine":           {"unit": "mg/dL",  "low": 0.74, "high": 1.35, "optimal_low": 0.9,  "optimal_high": 1.2,  "label": "Creatinine",             "group": "Kidney/Liver"},
     "egfr":                 {"unit": "mL/min", "low": 60,   "high": 999,  "optimal_low": 90,   "optimal_high": 999,  "label": "eGFR",                   "group": "Kidney/Liver"},
+    "aldosterone_renin_ratio": {"unit": "", "low": 0, "high": 30, "optimal_low": 0, "optimal_high": 30, "label": "Aldosterone/Renin Ratio", "group": "Kidney/Liver"},
     "bun":                  {"unit": "mg/dL",  "low": 6,    "high": 24,   "optimal_low": 10,   "optimal_high": 18,   "label": "BUN",                    "group": "Kidney/Liver"},
     "bun_creatinine_ratio": {"unit": "",       "low": 9,    "high": 20,   "optimal_low": 10,   "optimal_high": 16,   "label": "BUN/Creatinine Ratio",   "group": "Kidney/Liver"},
     "alt":                  {"unit": "U/L",    "low": 0,    "high": 46,   "optimal_low": 0,    "optimal_high": 25,   "label": "ALT",                    "group": "Kidney/Liver"},
@@ -278,6 +279,11 @@ def parse_pdf(file_bytes: bytes) -> Tuple[Optional[str], Dict[str, float]]:
         "creatinine":         [
             "creatinine", "creatinine, serum", "serum creatinine",
             "creatinine, blood",
+        ],
+        "aldosterone_renin_ratio": [
+            "aldosterone/renin ratio", "aldosterone renin ratio",
+            "aldosterone:renin ratio", "ald/renin ratio", "arr",
+            "aldosterone-renin activity ratio",
         ],
         "egfr":               [
             "egfr", "gfr", "estimated gfr", "glomerular filtration",
