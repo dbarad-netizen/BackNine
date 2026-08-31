@@ -134,6 +134,41 @@ HOSPITAL_EXPECT = {
 
 # ── Runner ──────────────────────────────────────────────────────────────
 
+
+
+# Real-world layout from David's Labcorp patient-portal download
+# (2026-08-31): performing-lab superscript footnotes render inline
+# ("Glucose 01"), each row carries CURRENT + PREVIOUS + PREV-DATE, and
+# comparator results ("<0.167", ">56.3") are legitimate values.
+LABCORP_ENTERPRISE_STYLE = [
+    "Barad, Test DOB: 01/01/1970 Patient Report",
+    "Date Collected: 08/24/2026 Date Received: 08/25/2026 Date Reported: 08/29/2026 Fasting: Not Given",
+    "Ordered Items: Basic Metabolic Panel (8); Aldosterone/Renin Ratio; eGFR Creatinine-Cystatin C Cal",
+    "Basic Metabolic Panel (8)",
+    "Test Current Result and Flag Previous Result and Date Units Reference Interval",
+    "Glucose 01 93 90 08/04/2026 mg/dL 70-99",
+    "BUN 01 24 26 08/04/2026 mg/dL 6-24",
+    "Creatinine 01 1.23 1.48 08/04/2026 mg/dL 0.76-1.27",
+    "eGFR 68 55 08/04/2026 mL/min/1.73 >59",
+    "BUN/Creatinine Ratio 20 18 08/04/2026 9-20",
+    "Sodium 01 143 143 08/04/2026 mmol/L 134-144",
+    "Potassium 01 4.0 3.9 08/04/2026 mmol/L 3.5-5.2",
+    "Chloride 01 104 103 08/04/2026 mmol/L 96-106",
+    "Carbon Dioxide, Total 01 27 26 08/04/2026 mmol/L 20-29",
+    "Calcium 01 9.6 9.8 08/04/2026 mg/dL 8.7-10.2",
+    "Aldosterone/Renin Ratio",
+    "Aldosterone 02 9.4 10 07/07/2026 ng/dL",
+    "Renin Activity, Plasma 02 <0.167 Low 0.178 07/07/2026 ng/mL/hr",
+    "Aldos/Renin Ratio 02 >56.3 High 56.2 07/07/2026",
+]
+
+LABCORP_ENTERPRISE_EXPECT = {
+    "glucose": 93, "bun": 24, "creatinine": 1.23, "egfr": 68,
+    "bun_creatinine_ratio": 20, "sodium": 143, "potassium": 4.0,
+    "chloride": 104, "co2": 27, "calcium": 9.6,
+    "aldosterone_renin_ratio": 56.3,
+}
+
 def run_fixture(name: str, lines: list[str], expect: dict) -> tuple[int, int, list[str]]:
     pdf = _build_pdf(lines)
     date_str, extracted = labs.parse_pdf(pdf)
@@ -167,6 +202,7 @@ def main() -> int:
         ("QUEST", QUEST_STYLE, QUEST_EXPECT),
         ("LABCORP", LABCORP_STYLE, LABCORP_EXPECT),
         ("HOSPITAL", HOSPITAL_STYLE, HOSPITAL_EXPECT),
+        ("LABCORP_ENTERPRISE", LABCORP_ENTERPRISE_STYLE, LABCORP_ENTERPRISE_EXPECT),
     ]:
         hits, n, misses = run_fixture(name, lines, expect)
         total_hits += hits
