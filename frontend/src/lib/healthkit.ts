@@ -22,11 +22,12 @@
  *   - Silent-fail: if HealthKit permissions are revoked or the sync
  *     errors out, we log and move on. Never blocks app render.
  *
- * Plugin choice: @perfood/capacitor-healthkit. Actively maintained,
- * TypeScript-native, supports every metric we need. Alternatives
- * considered:
- *   - capacitor-health (react-native, wrong framework)
- *   - Hand-rolled Swift plugin (too much maintenance for v1)
+ * Plugin choice: our hand-rolled Swift plugin (HealthKitPlugin.swift,
+ * task #153), registered as JS name "CapacitorHealthkit". We
+ * originally used @perfood/capacitor-healthkit but it has no
+ * Package.swift (won't link on Capacitor 8's SPM path) and pins
+ * @capacitor/core@^4 as a peer — which silently broke every Vercel
+ * build when it landed in package.json (2026-08-31). Do NOT re-add it.
  *
  * See docs/app-store/README.md for the Xcode + Info.plist setup.
  */
