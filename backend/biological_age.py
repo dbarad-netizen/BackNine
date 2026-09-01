@@ -93,48 +93,67 @@ def _vo2_expected(age: int, sex: str) -> float:
         return max(15.0, 42.0 - 0.28 * max(0, age - 25))
     return max(18.0, 50.0 - 0.35 * max(0, age - 25))
 
-def _bp_expected(_age: int, _sex: str) -> float:
-    """Optimal systolic. Note: this is the CLINICAL optimum, not
-    'average for age' — average creeps up with age but that's the
-    hypertension epidemic, not healthy aging. Aim = 115."""
-    return 115.0
+def _bp_expected(age: int, _sex: str) -> float:
+    """Typical systolic for a NON-HYPERTENSIVE adult of this age —
+    ~117 at 40, ~120 mid-50s, capped at 125. We deliberately exclude
+    the hypertension epidemic from 'typical' (that's pathology, not
+    aging), but v1's flat 115 was the clinical optimum, which read
+    every normal 55+ BP as 'older.'"""
+    return min(125.0, 110.0 + 0.18 * age)
 
-def _hba1c_expected(_age: int, _sex: str) -> float:
-    """Non-diabetic optimum. Diabetic cutoff is 6.5; below 5.4 is
-    the goldilocks zone for longevity per Roberts et al."""
-    return 5.2
+def _hba1c_expected(age: int, _sex: str) -> float:
+    """Non-diabetic HbA1c drifts up ~0.1 per decade: typical ~5.3 at
+    40, ~5.4-5.5 mid-50s (capped 5.6, the prediabetes line). v1 used
+    the flat 5.2 longevity optimum."""
+    return min(5.6, 5.1 + 0.008 * max(0, age - 20))
 
 def _ldl_expected(_age: int, _sex: str) -> float:
-    """Aggressive optimum per contemporary lipidology (Attia, ACC
-    2018 guidelines for high-risk). Population mean is much higher,
-    but that reflects prevalence of undiagnosed ASCVD risk."""
-    return 80.0
+    """Population-typical LDL ~110 mg/dL (US adult mean, roughly flat
+    with age after 40). v1 used the 80 'aggressive optimum' per
+    contemporary lipidology — a fine TARGET, but the card claims
+    'typical' and the math needs typical."""
+    return 110.0
+
+# ── "Expected" means POPULATION-TYPICAL for age/sex, not optimal ────────
+# The card's copy reads "better/worse than the ~X typical for age N" and
+# the math converts deviation-from-expected into years vs chronological
+# age — so expected MUST be what a typical person of that age actually
+# measures. v1 used longevity optima for several markers (body fat 15%,
+# glucose 85, hsCRP 0.5, LDL 80), which compared users to an ideal while
+# claiming "typical" and biased everyone older. David caught it via body
+# fat on 2026-08-31: "Most 57-year-olds I know are well above 20%."
+# Optimal targets live in labs.py optimal_* ranges — not here.
 
 def _hscrp_expected(_age: int, _sex: str) -> float:
-    """<1 mg/L = low inflammation. AHA cutoffs: <1 low, 1-3 mid,
-    >3 high risk. Optimum for longevity ~0.5."""
-    return 0.5
+    """Population median hsCRP is ~1.5 mg/L (AHA: <1 low, 1-3 average,
+    >3 high risk). v1 used the 0.5 longevity optimum."""
+    return 1.5
 
-def _body_fat_expected(_age: int, sex: str) -> float:
-    """Healthy adult body fat by sex. Some age creep is expected but
-    we hold the optimum stable — target isn't 'average for age.'"""
-    return 22.0 if sex == "female" else 15.0
+def _body_fat_expected(age: int, sex: str) -> float:
+    """Population-typical body fat rises ~1%/decade. Men in their 50s
+    typically measure ~25-26% (bioimpedance-class methods); women ~+8.
+    v1 used the 15% fitness optimum."""
+    base = 28.0 if sex == "female" else 20.0
+    return min(base + 10.0, base + 0.2 * max(0, age - 30))  # male: 20@30 → ~25.4@57 → capped 30
 
 def _sleep_expected(_age: int, _sex: str) -> float:
-    """Adult sleep optimum (NSF). U-shape: 7-9h is the zone."""
+    """Adult sleep norm (NSF). U-shape: 7-9h is the zone. 7.75 is both
+    typical-healthy and optimal, so no change needed here."""
     return 7.75
 
 def _hdl_expected(_age: int, sex: str) -> float:
-    """HDL — higher is protective. Sex-specific optimum."""
-    return 60.0 if sex == "female" else 50.0
+    """HDL — higher is protective. Population-typical: ~48 men, ~58 women."""
+    return 58.0 if sex == "female" else 48.0
 
 def _triglycerides_expected(_age: int, _sex: str) -> float:
-    """Triglycerides — lower is better; independent CV risk from LDL."""
-    return 80.0
+    """Population median triglycerides ~105 mg/dL. v1 used the 80 optimum."""
+    return 105.0
 
-def _glucose_expected(_age: int, _sex: str) -> float:
-    """Fasting glucose optimum for longevity — Roberts et al."""
-    return 85.0
+def _glucose_expected(age: int, _sex: str) -> float:
+    """Fasting glucose drifts up with age even in non-diabetics:
+    ~85 at 40 → ~90 mid-50s → ~95+ by 70 (capped at 97, the top of
+    'typical non-diabetic'). v1 used the flat 85 longevity optimum."""
+    return min(97.0, 85.0 + 0.2 * max(0, age - 40))
 
 def _egfr_expected(age: int, _sex: str) -> float:
     """eGFR declines with age (~1 mL/min/1.73m² per year after 40).
@@ -180,8 +199,10 @@ _MARKERS = {
         "label": "HbA1c",
         "unit":  "%",
         "expected": _hba1c_expected,
-        "sd": 0.3, "direction": "higher_worse",
-        "years_per_sd": 5.0, "weight": 0.14,
+        "sd": 0.4, "direction": "higher_worse",   # sd 0.3→0.4 (2026-08-31):
+        # 0.2% below typical was scoring -3.3yr — HbA1c matters but not
+        # THAT much per tenth of a percent.
+        "years_per_sd": 4.0, "weight": 0.14,
         "min_actual": 4.0, "max_actual": 12.0,
     },
     "ldl": {
@@ -283,8 +304,10 @@ def _score_marker(key: str, actual: float, age: int, sex: str) -> Optional[dict]
         signed_z = z
 
     years_delta = signed_z * spec["years_per_sd"]
-    # Per-marker cap so one extreme reading doesn't dominate
-    years_delta = max(-10.0, min(10.0, years_delta))
+    # Per-marker cap so one extreme reading doesn't dominate.
+    # ±6 (was ±10): with 10 markers, one outlier at the cap moves the
+    # weighted average ~1yr max — influential, not dominant.
+    years_delta = max(-6.0, min(6.0, years_delta))
 
     # Human-readable explanation
     if spec["direction"] == "u_shape":
