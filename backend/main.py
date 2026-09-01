@@ -2142,15 +2142,24 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
     # for the formula and rationale. Never breaks the dashboard on
     # compute error — degrades to null and the frontend hides the card.
     try:
-        # Pull latest BP from apple_health_daily (Withings, manual, or
-        # HealthKit BP samples). Latest non-null wins.
+        # BP for Bio Age (fixed 2026-08-31): this used to iterate `am` —
+        # the OURA activity map, which never carries BP — so _latest_bp
+        # was always None and BP silently never reached Bio Age despite
+        # Withings readings flowing in. Now: 7-day average systolic from
+        # blood_pressure_log (fed by manual entries AND the Withings →
+        # Apple Health mirror), falling back to the latest single
+        # reading in the last 30 days. Averaging beats a single reading
+        # — BP is the noisiest marker we score.
         _latest_bp = None
         try:
-            for _d in sorted(am, reverse=True):
-                _bp = am.get(_d, {}).get("blood_pressure_systolic")
-                if _bp is not None:
-                    _latest_bp = _bp
-                    break
+            _bp_rows = bp.list_readings(user_id, days=7)
+            _sys_vals = [r["systolic"] for r in _bp_rows if r.get("systolic") is not None]
+            if _sys_vals:
+                _latest_bp = round(sum(_sys_vals) / len(_sys_vals))
+            else:
+                _bp_rows30 = bp.list_readings(user_id, days=30, limit=1)
+                if _bp_rows30 and _bp_rows30[0].get("systolic") is not None:
+                    _latest_bp = _bp_rows30[0]["systolic"]
         except Exception:
             pass
 
