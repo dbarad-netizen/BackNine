@@ -1608,6 +1608,32 @@ export default function DashboardPage() {
 
           return (
           <div className="space-y-6">
+            {/* ── Birthday banner (David 2026-09-01) ──────────────────
+                Shows on the user's birthday (local time, from
+                profile.birthdate month/day). Age auto-rolls the same
+                day since _get_profile derives it from birthdate. */}
+            {(() => {
+              if (!profile?.birthdate) return null;
+              const now = new Date();
+              const [, bm, bd] = profile.birthdate.split("-").map(Number);
+              if (now.getMonth() + 1 !== bm || now.getDate() !== bd) return null;
+              const firstName = (profile.name || "").split(" ")[0];
+              const bioAge = data.biological_age?.biological_age;
+              return (
+                <section className="rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 via-yellow-50 to-amber-50 px-5 py-4">
+                  <p className="text-base font-bold text-gray-900">
+                    🎂 Happy Birthday{firstName ? `, ${firstName}` : ""}!
+                    {profile.age != null && ` ${profile.age} today.`}
+                  </p>
+                  <p className="text-[13px] text-gray-700 mt-0.5">
+                    {bioAge != null && profile.age != null && bioAge < profile.age
+                      ? `Officially ${profile.age} — but your body reads as ${Number(bioAge).toFixed(1)}. Keep playing the back nine your way.`
+                      : "Another lap around the sun — keep playing the back nine your way."}
+                  </p>
+                </section>
+              );
+            })()}
+
             {/* Stale-data warning — surfaces at the top of the Scorecard
                 only when NO source is producing current data. Chris fix
                 (July 6): a former Oura user who's now on Apple Watch +
