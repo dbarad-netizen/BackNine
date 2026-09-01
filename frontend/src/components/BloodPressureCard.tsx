@@ -281,7 +281,19 @@ export default function BloodPressureCard() {
                     )}
                   </p>
                   <p className="text-[11px] text-gray-600 capitalize">
-                    {r.time_of_day} · {fmtMMM(r.date)}
+                    {/* Synced readings (Withings cuff → Apple Health →
+                        BackNine) carry no time-of-day, so "other" was
+                        rendering — which read as a manual entry with a
+                        missing time. Label the source instead so the
+                        automated pipeline is visible. David 2026-08-31. */}
+                    {r.source === "apple_health" ? (
+                      <span className="normal-case">🍎 Synced</span>
+                    ) : r.source === "withings" ? (
+                      <span className="normal-case">Withings</span>
+                    ) : (
+                      r.time_of_day
+                    )}
+                    {" · "}{fmtMMM(r.date)}
                     {r.notes && <span className="ml-1.5 italic">— {r.notes}</span>}
                   </p>
                 </div>
