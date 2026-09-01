@@ -49,6 +49,7 @@ const GROUPS: Record<string, { label: string; unit: string; low: number; high: n
   "Kidney/Liver": [
     { key: "creatinine",        label: "Creatinine",        unit: "mg/dL", low: 0.74, high: 1.35, opt_lo: 0.9,  opt_hi: 1.2  },
     { key: "egfr",              label: "eGFR",              unit: "mL/min",low: 60,   high: 999,  opt_lo: 90,   opt_hi: 999  },
+    { key: "egfr_cystatin", label: "eGFR (Creat-Cystatin C)", unit: "mL/min", low: 60, high: 999, opt_lo: 90, opt_hi: 999 },
     { key: "aldosterone_renin_ratio", label: "Aldosterone/Renin Ratio", unit: "", low: 0, high: 30, opt_lo: 0, opt_hi: 30 },
     { key: "bun",               label: "BUN",               unit: "mg/dL", low: 6,    high: 24,   opt_lo: 10,   opt_hi: 18   },
     { key: "bun_creatinine_ratio", label: "BUN/Creat Ratio",unit: "",      low: 9,    high: 20,   opt_lo: 10,   opt_hi: 16   },

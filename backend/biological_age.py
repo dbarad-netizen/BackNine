@@ -563,6 +563,14 @@ def latest_labs(user_id: str) -> dict:
                 continue
             if k not in out:
                 out[k] = v
+    # eGFR source preference (David 2026-08-31): the creatinine-
+    # cystatin C eGFR is the more accurate estimate (KDIGO-preferred
+    # for confirmation; creatinine-only is skewed by muscle mass and
+    # several meds). When both were drawn, score kidney age on the
+    # better one. David's 8/24 draw: creatinine eGFR 68 vs Cr-CysC 75
+    # — a 2.8yr Bio Age swing riding on the weaker assay.
+    if out.get("egfr_cystatin") is not None:
+        out["egfr"] = out["egfr_cystatin"]
     return out
 
 

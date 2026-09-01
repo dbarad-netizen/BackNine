@@ -61,6 +61,7 @@ REFERENCE_RANGES: Dict[str, dict] = {
     "creatinine":           {"unit": "mg/dL",  "low": 0.74, "high": 1.35, "optimal_low": 0.9,  "optimal_high": 1.2,  "label": "Creatinine",             "group": "Kidney/Liver"},
     "egfr":                 {"unit": "mL/min", "low": 60,   "high": 999,  "optimal_low": 90,   "optimal_high": 999,  "label": "eGFR",                   "group": "Kidney/Liver"},
     "aldosterone_renin_ratio": {"unit": "", "low": 0, "high": 30, "optimal_low": 0, "optimal_high": 30, "label": "Aldosterone/Renin Ratio", "group": "Kidney/Liver"},
+    "egfr_cystatin": {"unit": "mL/min", "low": 60, "high": 999, "optimal_low": 90, "optimal_high": 999, "label": "eGFR (Creatinine-Cystatin C)", "group": "Kidney/Liver"},
     "bun":                  {"unit": "mg/dL",  "low": 6,    "high": 24,   "optimal_low": 10,   "optimal_high": 18,   "label": "BUN",                    "group": "Kidney/Liver"},
     "bun_creatinine_ratio": {"unit": "",       "low": 9,    "high": 20,   "optimal_low": 10,   "optimal_high": 16,   "label": "BUN/Creatinine Ratio",   "group": "Kidney/Liver"},
     "alt":                  {"unit": "U/L",    "low": 0,    "high": 46,   "optimal_low": 0,    "optimal_high": 25,   "label": "ALT",                    "group": "Kidney/Liver"},
@@ -280,8 +281,13 @@ def parse_pdf(file_bytes: bytes) -> Tuple[Optional[str], Dict[str, float]]:
             "creatinine", "creatinine, serum", "serum creatinine",
             "creatinine, blood",
         ],
+        "egfr_cystatin": [
+            "egfr creat-cyst c", "egfr creatinine-cystatin c",
+            "egfr cr-cys", "egfr creat cyst c", "egfr cystatin",
+        ],
         "aldosterone_renin_ratio": [
             "aldosterone/renin ratio", "aldosterone renin ratio",
+            "aldos/renin ratio", "aldos renin ratio",
             "aldosterone:renin ratio", "ald/renin ratio", "arr",
             "aldosterone-renin activity ratio",
         ],
@@ -448,19 +454,39 @@ def parse_pdf(file_bytes: bytes) -> Tuple[Optional[str], Dict[str, float]]:
         Extract the most likely result value from a single line.
         Strategy:
           1. Strip % glued to numbers (e.g. "5.4%" → "5.4 ").
-          2. Find reference-range spans (N-N).  Numbers that appear BEFORE
-             the first range are strong candidates for the result.
-          3. If nothing before the range, try numbers after it (some formats
-             put result last).
-          4. Apply per-marker plausibility bounds to reject ref-range numbers,
-             page numbers, years, etc.
-          5. Use standalone_num pattern to avoid digits inside words (A1c → 1).
+          2. Remove DATE tokens and performing-lab footnote markers
+             BEFORE number extraction. Labcorp Enterprise reports put
+             "Current Previous PrevDate Units Range" on one line
+             ("Glucose 01 93 90 08/04/2026 mg/dL 70-99") — without this
+             cleaning, date fragments ("04") and footnotes ("01") were
+             extracted as results (David's glucose read 4.0/193 on
+             2026-08-31).
+          3. Find reference-range spans (N-N). The FIRST plausible number
+             before the range is the current result (previous results,
+             if present, come after it).
+          4. If a comparator value ("<0.167", ">56.3") appears before any
+             plausible standalone number, it IS the result (assay
+             floor/ceiling) — use its numeric part.
+          5. Apply per-marker plausibility bounds to reject ref-range
+             numbers, page numbers, years, etc.
         """
         lo_bound, hi_bound = BOUNDS.get(key, (0.0, 10000.0))
 
         # Normalise: detach % from digits, convert en-dash to hyphen
         clean = re.sub(r"(\d)%", r"\1 ", line)
         clean = clean.replace("–", "-")
+
+        # Remove full date tokens so their fragments can't be mistaken
+        # for results ("08/04/2026" → glucose 4.0 bug).
+        for dp in date_pats:
+            clean = dp.sub(" ", clean)
+        # Remove performing-lab footnote markers: a standalone zero-led
+        # two-digit token ("01".."09"). Real results are never printed
+        # with a leading zero integer.
+        clean = re.sub(r"(?<![\d.])\b0\d\b(?![\d.])", " ", clean)
+        # Remove numeric fragments of test NAMES ("Vitamin D, 25-Hydroxy",
+        # "25-OH") so first-plausible doesn't grab the 25 as the result.
+        clean = re.sub(r"\b25[- ]?(?:hydroxy|oh)\b", " ", clean, flags=re.IGNORECASE)
 
         ranges = list(range_pair_pat.finditer(clean))
 
@@ -470,12 +496,32 @@ def parse_pdf(file_bytes: bytes) -> Tuple[Optional[str], Dict[str, float]]:
         def find_standalone(text: str) -> List[float]:
             return [float(m.group(1)) for m in standalone_num.finditer(text)]
 
+        # Comparator RESULT (assay floor/ceiling, e.g. renin "<0.167",
+        # ARR ">56.3"): if the first comparator appears before the first
+        # plausible standalone number, treat it as the result.
+        cmp_m = cmp_ref_pat.search(clean[:ranges[0].start()] if ranges else clean)
+        if cmp_m:
+            first_plain = None
+            for m in standalone_num.finditer(clean):
+                if plausible(float(m.group(1))) and not (cmp_m.start() <= m.start() < cmp_m.end()):
+                    first_plain = m
+                    break
+            if first_plain is None or cmp_m.start() < first_plain.start():
+                try:
+                    cv = float(re.search(r"\d+\.?\d*", cmp_m.group(0)).group(0))
+                    if plausible(cv):
+                        return cv
+                except Exception:
+                    pass
+
         if ranges:
             # Numbers strictly before the first range span
             before = clean[:ranges[0].start()]
             before_nums = find_standalone(before)
-            # Take the last plausible number before the range (closest to it)
-            for v in reversed(before_nums):
+            # FIRST plausible number before the range = current result.
+            # (Was "last before range"; Labcorp Enterprise lines carry
+            # current THEN previous, so last grabbed the previous draw.)
+            for v in before_nums:
                 if plausible(v):
                     return v
             # Fallback: numbers after the last range span
@@ -582,6 +628,8 @@ def parse_pdf(file_bytes: bytes) -> Tuple[Optional[str], Dict[str, float]]:
             continue
 
         # Skip pure header/column-label lines
+        if re.search(r"^\s*ordered\s+items?\b|^\s*tests?\s+ordered\b|^\s*ordering\b", lower):
+            continue  # order-summary lines list test NAMES, never results
         if re.search(r"\breference\s+interval\b|\bref\s+range\b|\bstandard\s+range\b", lower):
             continue
 
@@ -596,8 +644,14 @@ def parse_pdf(file_bytes: bytes) -> Tuple[Optional[str], Dict[str, float]]:
         if not matched_key or matched_key in extracted:
             continue
 
-        # Try the matched line, then next 4 lines (multi-line PDF formats)
-        for candidate_line in [line] + lines[i + 1: i + 5]:
+        # Try the matched line, then next 4 lines (multi-line PDF formats).
+        # Follow-up lines must START with a value (number or comparator) —
+        # otherwise a bare SECTION header ("Aldosterone/Renin Ratio")
+        # matched the alias and the lookahead stole the next TEST's value
+        # ("Aldosterone 02 9.4 ..." → ARR=9.4, David 2026-08-31).
+        for j, candidate_line in enumerate([line] + lines[i + 1: i + 5]):
+            if j > 0 and not re.match(r"\s*[<>]?=?\s*\d", candidate_line):
+                continue
             val = _pick_result(candidate_line, matched_key)
             if val is not None:
                 extracted[matched_key] = val
