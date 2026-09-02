@@ -1453,6 +1453,42 @@ def _emit_tag_friend_events(user_id: str, new_safe_tags: list[dict]) -> None:
             continue
 
 
+async def _import_oura_events_bg(user_id: str, access_token: str) -> None:
+    """Import Oura workouts/sessions/naps/tags off the request path.
+
+    Runs on every dashboard load (idempotent inserts — unique index on
+    (user_id, source, external_id); tag storage dedupes on tag id).
+    Extracted 2026-09-02 from the dashboard's cache-miss branch, where
+    it silently stopped running once the cache got reliable — David's
+    "workouts stopped importing July 6" mystery. Best-effort: any
+    failure is swallowed; the next load retries.
+    """
+    try:
+        _ow = await oura_fetch_workouts(access_token, days=30)
+        _os = await oura_fetch_sessions(access_token, days=30)
+        _on = await oura_fetch_naps(access_token, days=30)
+        _on_norm = [{
+            "id":             f"nap_{n.get('id')}",
+            "type":           "nap",
+            "day":            n.get("day"),
+            "start_datetime": n.get("bedtime_start"),
+            "end_datetime":   n.get("bedtime_end"),
+        } for n in (_on or []) if n.get("id") and n.get("day")]
+        if _ow or _os or _on_norm:
+            trn.import_oura_events(user_id, _ow, (_os or []) + _on_norm)
+    except Exception:
+        log.exception("oura events import failed for %s", user_id)
+    try:
+        _ot = await oura_fetch_tags(access_token, days=60)
+        if _ot:
+            _new_safe_tags = _diff_new_safe_tags(user_id, _ot)
+            otags.store_tags(user_id, _ot)
+            if _new_safe_tags:
+                _emit_tag_friend_events(user_id, _new_safe_tags)
+    except Exception:
+        log.exception("oura tags import failed for %s", user_id)
+
+
 async def _refresh_oura_cache_bg(user_id: str, access_token: str, days: int) -> None:
     """Background-task: refresh Oura day summaries + import workouts.
 
@@ -1555,6 +1591,14 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
                     session = {**session, **rows2[0]}
             except Exception:
                 pass
+
+    if session.get("access_token"):
+        # Import Oura events (workouts, naps, tags) in the background on
+        # EVERY load — cheap, idempotent, and no longer tied to cache
+        # misses (see _import_oura_events_bg).
+        background_tasks.add_task(
+            _import_oura_events_bg, user_id, session["access_token"]
+        )
 
     if not session.get("access_token"):
         # User is authenticated but hasn't connected Oura yet. Build the empty
@@ -1692,35 +1736,12 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
                 except Exception:
                     pass
 
-            # Import Oura-logged workouts (runs, walks, cycling, etc.) and
-            # sessions (sauna, meditation, breathing) as training_workouts rows.
-            # Idempotent via the (user_id, source, external_id) unique index, so
-            # re-running on every cache miss is harmless. Best-effort: a flaky
-            # call here must never block the dashboard.
-            try:
-                _ow = await oura_fetch_workouts(access_token, days=30)
-                _os = await oura_fetch_sessions(access_token, days=30)
-                _on = await oura_fetch_naps(access_token, days=30)
-                _on_norm = [{
-                    "id":             f"nap_{n.get('id')}",
-                    "type":           "nap",
-                    "day":            n.get("day"),
-                    "start_datetime": n.get("bedtime_start"),
-                    "end_datetime":   n.get("bedtime_end"),
-                } for n in (_on or []) if n.get("id") and n.get("day")]
-                if _ow or _os or _on_norm:
-                    trn.import_oura_events(user_id, _ow, (_os or []) + _on_norm)
-            except Exception:
-                pass
-            try:
-                _ot = await oura_fetch_tags(access_token, days=60)
-                if _ot:
-                    _new_safe_tags = _diff_new_safe_tags(user_id, _ot)
-                    otags.store_tags(user_id, _ot)
-                    if _new_safe_tags:
-                        _emit_tag_friend_events(user_id, _new_safe_tags)
-            except Exception:
-                pass
+            # Workouts/sessions/naps/tags import moved to
+            # _import_oura_events_bg, scheduled on EVERY dashboard load
+            # below (2026-09-02). Living only in this cache-miss branch
+            # was why workout imports "stalled after July 6" — once the
+            # cache started hitting reliably, this code simply never ran
+            # again. The Oura API was fine the whole time.
         except Exception as exc:
             exc_str = str(exc).lower()
             if "401" in exc_str or "403" in exc_str or "token" in exc_str or "expired" in exc_str:

@@ -39,24 +39,29 @@ def store_days(user_id: str, rm: dict, slm: dict, am: dict, smm: dict) -> int:
         return 0
 
     now = datetime.now(timezone.utc).isoformat()
-    rows = []
+    # OMIT None metric fields instead of writing them (2026-09-02):
+    # PostgREST upserts only touch provided columns, so a partial fetch
+    # (e.g. Oura's daily_readiness failing on long ranges while
+    # sleep/activity succeed — the August readiness blackout) can no
+    # longer clobber good cached values with nulls. Rows are grouped
+    # by key-set because PostgREST requires uniform columns per batch.
+    from collections import defaultdict
+    by_shape: dict = defaultdict(list)
     for d in all_dates:
-        rows.append({
-            "user_id":     user_id,
-            "date":        d,
-            "readiness":   rm.get(d),
-            "sleep_score": slm.get(d),
-            "activity":    am.get(d),
-            "sleep_model": smm.get(d),
-            "fetched_at":  now,
-        })
+        row = {"user_id": user_id, "date": d, "fetched_at": now}
+        if rm.get(d)  is not None: row["readiness"]   = rm[d]
+        if slm.get(d) is not None: row["sleep_score"] = slm[d]
+        if am.get(d)  is not None: row["activity"]    = am[d]
+        if smm.get(d) is not None: row["sleep_model"] = smm[d]
+        by_shape[tuple(sorted(row.keys()))].append(row)
 
     sb = _sb()
-    # Upsert in batches of 100 to stay within request limits
-    for i in range(0, len(rows), 100):
-        sb.table("oura_daily_cache").upsert(
-            rows[i : i + 100], on_conflict="user_id,date"
-        ).execute()
+    # Upsert in batches of 100 per column-shape to stay within limits
+    for shaped_rows in by_shape.values():
+        for i in range(0, len(shaped_rows), 100):
+            sb.table("oura_daily_cache").upsert(
+                shaped_rows[i : i + 100], on_conflict="user_id,date"
+            ).execute()
 
     # Dual-write to the unified device_readings table. oura_daily_cache stays
     # the canonical Oura-specific store (it holds JSON blobs that downstream
