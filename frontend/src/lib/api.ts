@@ -2122,6 +2122,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   dashboard():          Promise<DashboardData> { return request("/api/dashboard"); },
+  ouraEventsDebug():    Promise<Record<string, unknown>> { return request("/api/oura/events-debug"); },
   wearables():          Promise<{ connected: Wearable[]; available: Wearable[] }> { return request("/api/wearables"); },
   disconnect(p: string): Promise<void> { return request(`/api/wearables/${p}`, { method: "DELETE" }); },
   logout():             Promise<void> { clearToken(); return request("/auth/logout", { method: "POST" }); },

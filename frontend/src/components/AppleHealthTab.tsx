@@ -29,6 +29,13 @@ export default function AppleHealthTab() {
   // path we want users to see. Hide the XML upload + Health Auto
   // Export sections when running in the Capacitor app.
   const [isNativeHK, setIsNativeHK] = useState(false);
+  // Oura API diagnostic (task #189): runs the events-debug endpoint
+  // with the signed-in session and shows raw per-endpoint status codes.
+  // Added because the standalone URL requires a backend-domain cookie
+  // most browsers don't have.
+  const [diagOut, setDiagOut]         = useState<string | null>(null);
+  const [diagRunning, setDiagRunning] = useState(false);
+  const [diagCopied, setDiagCopied]   = useState(false);
   useEffect(() => {
     isHealthKitAvailable().then(setIsNativeHK).catch(() => setIsNativeHK(false));
   }, []);
@@ -152,6 +159,53 @@ export default function AppleHealthTab() {
           {error}
         </div>
       )}
+
+      {/* ── Oura API diagnostic (#189) ── */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold text-gray-900">Oura diagnostic</p>
+            <p className="text-xs text-gray-600">
+              Checks each Oura data feed and reports what their API returns.
+            </p>
+          </div>
+          <button
+            onClick={async () => {
+              setDiagRunning(true); setDiagOut(null); setDiagCopied(false);
+              try {
+                const r = await api.ouraEventsDebug();
+                setDiagOut(JSON.stringify(r, null, 2));
+              } catch (e) {
+                setDiagOut(`Diagnostic failed: ${e instanceof Error ? e.message : "unknown error"}`);
+              } finally {
+                setDiagRunning(false);
+              }
+            }}
+            disabled={diagRunning}
+            className="shrink-0 px-3 py-1.5 rounded-lg border border-gray-300 text-xs font-semibold text-gray-700 hover:border-[#1B3829] hover:text-[#1B3829] transition-colors disabled:opacity-50"
+          >
+            {diagRunning ? "Running…" : "Run diagnostic"}
+          </button>
+        </div>
+        {diagOut && (
+          <div className="space-y-2">
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(diagOut).then(() => {
+                  setDiagCopied(true);
+                  setTimeout(() => setDiagCopied(false), 2000);
+                }).catch(() => {});
+              }}
+              className="px-3 py-1.5 rounded-lg bg-[#1B3829] text-white text-xs font-semibold hover:bg-[#2D6A4F] transition-colors"
+            >
+              {diagCopied ? "✓ Copied" : "Copy results"}
+            </button>
+            <pre className="text-[10px] leading-relaxed text-gray-700 bg-gray-50 border border-gray-100 rounded-xl p-3 overflow-x-auto max-h-72 overflow-y-auto whitespace-pre-wrap break-all">
+              {diagOut}
+            </pre>
+          </div>
+        )}
+      </div>
 
       {/* ── Connection status ─────────────────────────────────────────────
           David 2026-08-06: removed the "Setup / Hide setup" toggle
