@@ -1642,7 +1642,14 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
     if not cache_hit and have_cache:
         swr_ok = False
         try:
-            swr_ok = oc.is_fresh(user_id, max_age_hours=2.0)
+            # 24h window (was 2h — David 2026-09-01): the 2h cliff meant
+            # every FIRST open of the day missed SWR and fell into the
+            # slow inline live fetch below. With Oura's API degraded
+            # (readiness/workouts endpoints failing), that fetch could
+            # hang for minutes while the app showed him as a non-Oura
+            # user. Yesterday's data NOW + background refresh beats
+            # perfect data after a multi-minute spinner, every time.
+            swr_ok = oc.is_fresh(user_id, max_age_hours=24.0)
         except Exception:
             pass
         if swr_ok:
@@ -1653,16 +1660,35 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
 
     if not cache_hit:
         try:
-            raw = await fetch_all(access_token, days=days)
+            # Inline fetch pulls a SMALL window (14d) — the user is
+            # waiting on this request, and the interactive dashboard
+            # only renders recent data. The full-history refresh (365d)
+            # runs as a background task below. Before this (2026-09-01),
+            # a cold cache meant six 365-day Oura calls inline; with
+            # Oura's API degraded that was a multi-minute spinner while
+            # the app claimed the user had no Oura at all.
+            raw = await fetch_all(access_token, days=min(days, 14))
             live_rm, live_slm, live_am, live_smm = parse_oura_data(raw)
             # Only adopt live data when it actually came back with something;
-            # otherwise keep whatever the cache gave us above.
+            # otherwise keep whatever the cache gave us above. MERGE the
+            # 14-day live window over the cached history (don't replace —
+            # that would wipe a year of trend data from this request).
             if live_rm or live_slm or live_am or live_smm:
-                rm, slm, am, smm = live_rm, live_slm, live_am, live_smm
+                rm  = {**rm,  **live_rm}
+                slm = {**slm, **live_slm}
+                am  = {**am,  **live_am}
+                smm = {**smm, **live_smm}
                 oura_vo2_max = parse_oura_vo2_max(raw)
-                # Only overwrite the cache with non-empty live data.
+                # Upsert only the freshly-fetched days into the cache.
                 try:
-                    oc.store_days(user_id, rm, slm, am, smm)
+                    oc.store_days(user_id, live_rm, live_slm, live_am, live_smm)
+                except Exception:
+                    pass
+                # Deep history refresh happens off the request path.
+                try:
+                    background_tasks.add_task(
+                        _refresh_oura_cache_bg, user_id, access_token, days
+                    )
                 except Exception:
                     pass
 
