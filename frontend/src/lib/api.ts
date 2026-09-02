@@ -108,8 +108,56 @@ function _initToken(): string | null {
 
 let _token: string | null = null;
 
+// ── Native token vault (task #119, finished 2026-09-02) ────────────────
+// On iOS, WebKit's tracking prevention caps script-written cookies at
+// ~7 days and can purge localStorage — which is why David got dumped
+// to the login screen roughly weekly ("the app keeps asking me to log
+// in to Oura"). The Capacitor Preferences plugin stores the token in
+// NATIVE storage (UserDefaults), which the webview can never evict.
+// Accessed via window.Capacitor.Plugins (same runtime-registration
+// pattern as our HealthKit plugin) so the web bundle needs no import.
+// No-ops silently on web and on app builds without the plugin.
+interface _PreferencesPlugin {
+  get(o: { key: string }): Promise<{ value: string | null }>;
+  set(o: { key: string; value: string }): Promise<void>;
+  remove(o: { key: string }): Promise<void>;
+}
+function _nativePrefs(): _PreferencesPlugin | null {
+  if (typeof window === "undefined") return null;
+  const plugins = (window as unknown as {
+    Capacitor?: { Plugins?: { Preferences?: _PreferencesPlugin } }
+  }).Capacitor?.Plugins;
+  return plugins?.Preferences ?? null;
+}
+
+/** Fire-and-forget mirror of the session token into native storage. */
+export function mirrorTokenToNative(token: string): void {
+  const p = _nativePrefs();
+  if (p) p.set({ key: "bn_token", value: token }).catch(() => { /* best-effort */ });
+}
+
+/** Restore the token from native storage after a webview-storage purge.
+ *  Returns true if a token was recovered. Call before deciding a user
+ *  is signed out. */
+export async function restoreTokenFromNative(): Promise<boolean> {
+  if (getToken()) return true;             // web storage survived — nothing to do
+  const p = _nativePrefs();
+  if (!p) return false;
+  try {
+    const { value } = await p.get({ key: "bn_token" });
+    if (!value) return false;
+    try { localStorage.setItem("bn_token", value); } catch { /* private mode */ }
+    _writeTokenCookie(value);
+    _token = value;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function getToken(): string | null {
   if (!_token) _token = _initToken();
+  if (_token) mirrorTokenToNative(_token);  // keep the vault current
   return _token;
 }
 
@@ -119,6 +167,8 @@ export function clearToken(): void {
     try { localStorage.removeItem("bn_token"); } catch { /* private mode */ }
     _clearTokenCookie();
     clearDashboardCache();
+    const p = _nativePrefs();
+    if (p) p.remove({ key: "bn_token" }).catch(() => { /* best-effort */ });
   }
 }
 

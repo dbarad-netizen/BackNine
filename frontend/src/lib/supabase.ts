@@ -44,6 +44,16 @@ export async function establishSession(supabaseAccessToken: string): Promise<voi
     // webview and Safari share persistence. See api.ts::_writeTokenCookie
     // for the reasoning; duplicated here to avoid a circular import.
     _writeBackNineTokenCookie(data.token);
+    // And the native token vault (task #119): iOS tracking prevention
+    // purges webview storage ~weekly; the Capacitor Preferences copy
+    // survives and is restored on boot. Inline (not imported from
+    // api.ts) to keep this module dependency-free.
+    try {
+      const prefs = (window as unknown as {
+        Capacitor?: { Plugins?: { Preferences?: { set(o: { key: string; value: string }): Promise<void> } } }
+      }).Capacitor?.Plugins?.Preferences;
+      prefs?.set({ key: "bn_token", value: data.token }).catch(() => {});
+    } catch { /* web / plugin absent */ }
   }
 }
 

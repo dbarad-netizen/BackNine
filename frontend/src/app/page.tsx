@@ -25,13 +25,23 @@ export default function LandingPage() {
   // If user is already signed in, take them straight to the dashboard.
   // Marketing pages shouldn't gate returning users.
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       if (data.session) {
         router.replace("/dashboard");
         return;
       }
       const existing = typeof window !== "undefined" && localStorage.getItem("bn_token");
-      if (existing) router.replace("/dashboard");
+      if (existing) {
+        router.replace("/dashboard");
+        return;
+      }
+      // Last resort before showing the login page: the native token
+      // vault (task #119). iOS tracking prevention purges webview
+      // storage ~weekly, which dumped signed-in users here — the
+      // "keeps asking me to log in to Oura" bug. The native copy
+      // survives every purge.
+      const { restoreTokenFromNative } = await import("@/lib/api");
+      if (await restoreTokenFromNative()) router.replace("/dashboard");
     });
   }, [router]);
 
