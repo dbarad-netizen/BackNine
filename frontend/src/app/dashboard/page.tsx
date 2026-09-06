@@ -63,6 +63,7 @@ import NutritionCoachCard from "@/components/NutritionCoachCard";
 import WeeklyRecapCard from "@/components/WeeklyRecapCard";
 import CpapNightlyLogCard from "@/components/CpapNightlyLogCard";
 import BiologicalAgeCard from "@/components/BiologicalAgeCard";
+import HealthyYearsCard from "@/components/HealthyYearsCard";
 import WeeklyHealthSpanCard from "@/components/WeeklyHealthSpanCard";
 import ActivityTimelineCard from "@/components/ActivityTimelineCard";
 import DailyInsightCard from "@/components/DailyInsightCard";
@@ -2095,6 +2096,12 @@ export default function DashboardPage() {
                 data={data.biological_age}
                 onShare={() => setShowShare(true)}
               />
+            )}
+
+            {/* Healthy Years Ahead — the forward-looking hero (David
+                2026-09-06). Renders only when Bio Age has a projection. */}
+            {data.biological_age?.healthy_years && (
+              <HealthyYearsCard bio={data.biological_age} />
             )}
 
             {/* WeeklyLeague moved higher — now sits right after Daily

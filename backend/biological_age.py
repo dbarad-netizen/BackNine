@@ -335,6 +335,67 @@ def _score_marker(key: str, actual: float, age: int, sex: str) -> Optional[dict]
     }
 
 
+
+
+# ── Healthy Years Ahead (David 2026-09-06) ──────────────────────────────
+# The forward-looking companion to Bio Age: how many ACTIVE, healthy
+# years the actuarial tables project — evaluated at your biological age
+# rather than your birthday age, so improving your markers visibly buys
+# time. Framed as healthspan, not a death date: the tables honestly
+# support "about N years, give or take," never a calendar date.
+#
+# Method: SSA-style period life table (remaining life expectancy by
+# age/sex, linearly interpolated) × a healthy-years fraction (~70% of
+# remaining years are disability-free for US adults in this age band —
+# CDC HALE). Bonus = healthy years at bio age minus at chronological.
+
+_REMAINING_YEARS_MALE = [
+    (40, 38.1), (45, 33.5), (50, 28.9), (55, 24.8), (60, 21.2),
+    (65, 17.4), (70, 13.9), (75, 10.7), (80, 7.9), (85, 5.6),
+    (90, 3.9), (95, 2.8),
+]
+_FEMALE_BONUS = 2.6      #female remaining-years advantage, roughly constant 40-85
+_HEALTHY_FRACTION = 0.70
+
+
+def _remaining_years(age: float, sex: str) -> float:
+    a = max(40.0, min(95.0, float(age)))
+    pts = _REMAINING_YEARS_MALE
+    for (a0, y0), (a1, y1) in zip(pts, pts[1:]):
+        if a0 <= a <= a1:
+            frac = (a - a0) / (a1 - a0)
+            base = y0 + frac * (y1 - y0)
+            break
+    else:
+        base = pts[-1][1]
+    if sex == "female":
+        base += _FEMALE_BONUS
+    return base
+
+
+def healthy_years(chron_age: int, sex: str, bio_age: Optional[float]) -> Optional[dict]:
+    """Project active/healthy years ahead. Returns None without an age."""
+    if not chron_age:
+        return None
+    eff = float(bio_age) if bio_age is not None else float(chron_age)
+    healthy   = _remaining_years(eff, sex) * _HEALTHY_FRACTION
+    baseline  = _remaining_years(chron_age, sex) * _HEALTHY_FRACTION
+    bonus     = healthy - baseline
+    return {
+        "years":       round(healthy, 1),
+        # Honest band: population variance dwarfs model precision.
+        "low":         int(healthy * 0.75),
+        "high":        int(healthy * 1.25) + 1,
+        "bonus_years": round(bonus, 1),   # vs. an average person your age; + = your markers buy time
+        "caveat": (
+            "Population statistics adjusted by your biological age — an "
+            "estimate with a wide honest range, not a prediction or a "
+            "medical assessment. The point isn't the number; it's which "
+            "way it moves."
+        ),
+    }
+
+
 def compute(metrics: dict, profile: dict, labs: Optional[dict] = None) -> dict:
     """Compute Biological Age from available markers.
 
@@ -413,6 +474,7 @@ def compute(metrics: dict, profile: dict, labs: Optional[dict] = None) -> dict:
         "confidence":        confidence,
         "n_markers":         n,
         "components":        components,
+        "healthy_years":     healthy_years(age, sex, biological_age),
         "caveat":            _CAVEAT_TEXT,
     }
 

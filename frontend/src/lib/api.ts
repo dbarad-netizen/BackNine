@@ -783,6 +783,15 @@ export interface BiologicalAge {
   confidence:        "high" | "medium" | "low";
   n_markers:         number;
   components:        BioAgeComponent[];
+  /** Healthy Years Ahead projection (2026-09-06) — actuarial remaining
+   *  years × healthy fraction, evaluated at biological age. */
+  healthy_years?: {
+    years: number | null;
+    low: number;
+    high: number;
+    bonus_years: number;
+    caveat: string;
+  } | null;
   caveat:            string;
   reason?:           string;   // when biological_age is null
   /** ~30-day trend snapshot. Bio Age moves slowly so weekly delta
