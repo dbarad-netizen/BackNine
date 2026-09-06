@@ -70,7 +70,10 @@ def _build_system_prompt(health_context: dict, profile: dict) -> str:
                 "recent_insights_ctx", "weekly_recap_ctx",
                 # Med ↔ lab attribution (David 2026-08-11, #177) — chat must
                 # frame med-consistent lab shifts as pharmacology, not aging.
-                "med_lab_ctx"):
+                "med_lab_ctx",
+                # Family history (David 2026-09-06) — screening topics
+                # only; interpretation guardrails live in the block.
+                "family_history_ctx"):
         block = health_context.get(key)
         if isinstance(block, str) and block:
             prompt_parts.append(block)

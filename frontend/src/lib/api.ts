@@ -622,6 +622,13 @@ export interface HydrationEntry {
   created_at?: string;
 }
 
+export interface FamilyMember {
+  status?: "living" | "deceased" | null;
+  age?: number | null;          // age at death, or current age if living
+  smoker?: boolean | null;
+  conditions?: string | null;   // free text: "heart disease, T2 diabetes"
+}
+
 export interface ChronicInjury {
   area:  string;          // "right shoulder", "lower back", "left knee", etc.
   notes?: string;
@@ -646,6 +653,14 @@ export interface UserProfile {
   /** Ongoing injuries or areas to protect. Feeds into workout prescription
    *  (avoid movements loading these areas). */
   chronic_injuries?:  ChronicInjury[];
+  /** Family history for the doctor layer (2026-09-06). Deliberately
+   *  NOT used in Healthy Years math — weak heritability, and measured
+   *  markers already express genetics. */
+  family_history?: {
+    father?: FamilyMember | null;
+    mother?: FamilyMember | null;
+    notes?: string | null;
+  } | null;
 }
 
 export interface ChatMessage {
@@ -1597,6 +1612,8 @@ export interface DoctorOnePagerPayload {
     memory_flags:    string[];
   };
   labs:             DoctorOnePagerLab[];
+  /** Clinician-ready family history lines (2026-09-06). */
+  family_history?:  string[];
 }
 
 // ── Coach Al persistent memory ───────────────────────────────────────────

@@ -447,6 +447,42 @@ def _med_lab_ctx(user_id: str, profile: Optional[dict]) -> str:
         return ""
 
 
+def _family_history_ctx(profile: Optional[dict]) -> str:
+    """Family history block for AI surfaces (David 2026-09-06).
+    Includes the interpretation guardrails: heritability of lifespan is
+    weak (~10-25%), parental smoking is a ~10-year confounder, and the
+    user's measured markers already express their genetics — so family
+    history informs SCREENING conversations, never doom about the
+    projection numbers."""
+    fh = (profile or {}).get("family_history") or {}
+    if not isinstance(fh, dict) or not any(fh.get(r) for r in ("father", "mother")):
+        return ""
+    lines = ["FAMILY HISTORY (user-reported):"]
+    for rel in ("father", "mother"):
+        p = fh.get(rel) or {}
+        if not isinstance(p, dict) or not (p.get("age") or p.get("conditions")):
+            continue
+        desc = f"- {rel.capitalize()}: "
+        desc += (f"died at {p.get('age')}" if p.get("status") == "deceased" and p.get("age")
+                 else f"living, age {p.get('age')}" if p.get("age") else "recorded")
+        if p.get("smoker"):
+            desc += ", smoker"
+        if p.get("conditions"):
+            desc += f"; conditions: {str(p['conditions'])[:150]}"
+        lines.append(desc)
+    if fh.get("notes"):
+        lines.append(f"- Notes: {str(fh['notes'])[:200]}")
+    lines.append(
+        "Interpretation rules: lifespan heritability is weak (~10-25%); "
+        "parental smoking shortens life ~10 years, so smoker-parent ages "
+        "understate the genetic hand. The user's own measured markers "
+        "already express their genetics. Use family history ONLY to "
+        "suggest relevant screening topics for their doctor — never to "
+        "predict their lifespan or contradict their projections."
+    )
+    return chr(10).join(lines)
+
+
 def build(user_id: str, profile: Optional[dict] = None) -> dict:
     """Assemble the shared AI context bundle. Every AI surface (chat,
     briefing, today_workout, daily_insight) reads from this — one
@@ -466,6 +502,7 @@ def build(user_id: str, profile: Optional[dict] = None) -> dict:
     return {
         "freshness_advisory":     _freshness(user_id),
         "clinical_escalation":    _clinical(user_id, profile),
+        "family_history_ctx":     _family_history_ctx(profile),
         "active_visit_ctx":       _active_visit(user_id),
         "training_flag_ctx":      _training_flag(user_id),
         "active_goal_ctx":        _active_goal(user_id),

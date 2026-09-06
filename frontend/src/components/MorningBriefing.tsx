@@ -11,7 +11,6 @@
 import { useEffect, useState } from "react";
 import { api, type BriefingResponse, type Mood } from "@/lib/api";
 import CoachAlAvatar from "@/components/CoachAlAvatar";
-import DailyInsightCard from "@/components/DailyInsightCard";
 
 const MOODS: { value: Mood; emoji: string; label: string }[] = [
   { value: "great", emoji: "😊", label: "Great" },
@@ -370,14 +369,13 @@ export default function MorningBriefing({ onOpenChat }: Props) {
         )}
       </div>
 
-      {/* Pattern of the week — Coach Al's multi-day synthesis. Embedded in
-          the same outer card as the briefing so the two messages read as
-          one coach voice instead of two competing cards on the Scorecard.
-          Light background creates a clear visual divide from the dark
-          briefing above without breaking the card frame. */}
-      <div className="bg-white px-5 py-4">
-        <DailyInsightCard embedded />
-      </div>
+      {/* Pattern of the week removed (David 2026-09-06): its
+          correlations were built on manual logs (meals, vices,
+          adherence), so it measured logging diligence — the same
+          disease Health Span v2 cured. Anything worth saying about
+          multi-day patterns comes through the briefing itself, which
+          reads sensor data. DailyInsightCard stays in the repo,
+          frozen per the audit. */}
     </section>
   );
 }

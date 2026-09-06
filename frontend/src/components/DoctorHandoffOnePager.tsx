@@ -193,6 +193,18 @@ export default function DoctorHandoffOnePager() {
         </div>
       </section>
 
+      {/* Family history (2026-09-06) — the first thing a new doctor asks. */}
+      {(data.family_history?.length ?? 0) > 0 && (
+        <section className="mb-2">
+          <p className="text-[10px] uppercase tracking-wide font-semibold text-gray-700 mb-1">Family history</p>
+          <ul className="text-xs text-gray-800 space-y-0.5">
+            {(data.family_history ?? []).map((line, i) => (
+              <li key={i}>{line}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {/* Latest labs */}
       {labs.length > 0 && (
         <section className="mb-2">

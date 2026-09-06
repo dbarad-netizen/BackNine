@@ -131,7 +131,10 @@ def _build_system_prompt(
                 "recent_briefings_ctx", "experiments_ctx", "recent_nudges_ctx",
                 # Med ↔ lab attribution (David 2026-08-11, #177) — makes
                 # the briefing frame med-consistent lab shifts correctly.
-                "med_lab_ctx"):
+                "med_lab_ctx",
+                # Family history (David 2026-09-06) — screening topics
+                # only; interpretation guardrails live in the block.
+                "family_history_ctx"):
         block = health_context.get(key)
         if isinstance(block, str) and block:
             parts.append(block)

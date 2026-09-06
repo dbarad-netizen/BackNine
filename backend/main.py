@@ -5738,7 +5738,7 @@ async def save_profile(request: Request):
     session = _require_session(request)
     user_id = session["user_id"]
     body = await request.json()
-    allowed = {"name", "age", "biological_sex", "height_cm", "health_goals", "vo2_max", "birthdate", "supplements", "peptides", "medications", "training_level", "chronic_injuries"}
+    allowed = {"name", "age", "biological_sex", "height_cm", "health_goals", "vo2_max", "birthdate", "supplements", "peptides", "medications", "training_level", "chronic_injuries", "family_history"}
     data = {k: v for k, v in body.items() if k in allowed}
     # Empty birthdate string clears it (Postgres date column rejects "").
     if "birthdate" in data and not data["birthdate"]:

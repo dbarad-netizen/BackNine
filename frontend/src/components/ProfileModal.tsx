@@ -354,6 +354,68 @@ export default function ProfileModal({ onClose, initialTab = "profile" }: Props)
                 </p>
               </div>
 
+              {/* Family history — doctor-layer field (2026-09-06).
+                  First thing a new doctor asks. Feeds the Doctor
+                  Handoff + Coach Al screening context; intentionally
+                  NOT part of the Healthy Years projection. */}
+              <div className="space-y-3">
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-widest">
+                  Family history
+                </label>
+                {(["father", "mother"] as const).map(rel => {
+                  const fh = profile.family_history ?? {};
+                  const p  = fh[rel] ?? {};
+                  const setMember = (patch: Partial<NonNullable<typeof p>>) =>
+                    setProfile(prev => ({
+                      ...prev,
+                      family_history: { ...(prev.family_history ?? {}), [rel]: { ...p, ...patch } },
+                    }));
+                  return (
+                    <div key={rel} className="rounded-xl border border-gray-200 bg-gray-50 p-3 space-y-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-semibold text-gray-800 capitalize w-14">{rel}</span>
+                        <select
+                          value={p.status ?? ""}
+                          onChange={e => setMember({ status: (e.target.value || null) as "living" | "deceased" | null })}
+                          className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900"
+                        >
+                          <option value="">—</option>
+                          <option value="living">Living</option>
+                          <option value="deceased">Deceased</option>
+                        </select>
+                        <input
+                          type="number" min={1} max={120}
+                          value={p.age ?? ""}
+                          onChange={e => setMember({ age: e.target.value ? parseInt(e.target.value, 10) : null })}
+                          placeholder={p.status === "deceased" ? "age at death" : "age"}
+                          className="w-24 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900"
+                        />
+                        <label className="flex items-center gap-1.5 text-xs text-gray-700">
+                          <input
+                            type="checkbox"
+                            checked={!!p.smoker}
+                            onChange={e => setMember({ smoker: e.target.checked })}
+                          />
+                          Smoker
+                        </label>
+                      </div>
+                      <input
+                        type="text"
+                        value={p.conditions ?? ""}
+                        onChange={e => setMember({ conditions: e.target.value || null })}
+                        placeholder="major conditions — e.g. heart disease, diabetes, cancer type"
+                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-900 focus:outline-none focus:border-[#1B3829]"
+                      />
+                    </div>
+                  );
+                })}
+                <p className="text-[10px] text-gray-500 leading-snug">
+                  Shared with your Doctor Handoff and used by Coach Al to suggest
+                  screening topics. It does not change your scores or projections —
+                  your measured markers already reflect your genetics.
+                </p>
+              </div>
+
               {error && (
                 <p className="text-xs text-red-500 bg-red-50 rounded-xl px-3 py-2">{error}</p>
               )}

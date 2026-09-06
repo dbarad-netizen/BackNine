@@ -450,6 +450,34 @@ def _labs(user_id: str, limit: int = 10) -> list[dict]:
 
 # ── public ───────────────────────────────────────────────────────────────
 
+def _family_history(profile: dict) -> list[str]:
+    """Render family history as clinician-ready lines (David 2026-09-06).
+    First thing a new doctor asks; the thing patients half-remember in
+    the exam room. Shape: profile.family_history = {father: {...},
+    mother: {...}, notes}. Empty list when nothing recorded."""
+    fh = (profile or {}).get("family_history") or {}
+    if not isinstance(fh, dict):
+        return []
+    out: list[str] = []
+    for rel in ("father", "mother"):
+        p = fh.get(rel) or {}
+        if not isinstance(p, dict) or not (p.get("age") or p.get("conditions")):
+            continue
+        bits = [rel.capitalize()]
+        if p.get("status") == "deceased":
+            bits.append(f"died at {p['age']}" if p.get("age") else "deceased")
+        elif p.get("age"):
+            bits.append(f"living, age {p['age']}")
+        if p.get("smoker"):
+            bits.append("smoker")
+        if p.get("conditions"):
+            bits.append(str(p["conditions"])[:200])
+        out.append(" — ".join([bits[0], ", ".join(bits[1:])]) if len(bits) > 1 else bits[0])
+    if fh.get("notes"):
+        out.append(f"Notes: {str(fh['notes'])[:300]}")
+    return out
+
+
 def build_one_pager(user_id: str, profile: dict,
                     today_iso: Optional[str] = None) -> dict:
     """Assemble the full one-pager payload. Best-effort throughout — a
@@ -484,4 +512,5 @@ def build_one_pager(user_id: str, profile: dict,
         "labs":              labs_list,
         "escalation_pin":    handoff_pin_row,   # None when no flags
         "escalation_flags":  escalation_flags,  # full list for optional expansion
+        "family_history":    _family_history(profile),
     }
