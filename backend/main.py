@@ -1636,6 +1636,81 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
                         payload["apple_health"]["last_sync_at"] = last_res.data[0].get("updated_at")
             except Exception:
                 pass
+
+        # ── Scores for non-Oura users (David 2026-09-10) ─────────────
+        # "Why does Chris not have a longevity score when Apple is
+        # connected?" Because this early-return branch skipped ALL
+        # score computation — AH-only users got raw sleep/steps but
+        # never Bio Age, Health Span, or QYL, regardless of data
+        # quality. Every AH fallback we built (healthspan #190,
+        # bioage labs) sat in code this path never called. Compute
+        # the same stack here from Apple Health + labs + BP log.
+        _today_ah   = _user_local_today_iso(request)
+        _profile_ah = _get_profile(user_id)
+        try:
+            _rows_ah = sorted(
+                (ah.get_data(user_id, days=14) or []),
+                key=lambda r: str(r.get("date") or ""), reverse=True,
+            )
+
+            def _ah_latest(field: str):
+                for r in _rows_ah:
+                    if r.get(field) is not None:
+                        return float(r[field])
+                return None
+
+            def _ah_avg(field: str, n: int = 7):
+                vals = [float(r[field]) for r in _rows_ah[:n] if r.get(field) is not None]
+                return (sum(vals) / len(vals)) if vals else None
+
+            _bp_sys_ah = None
+            try:
+                _bp_rows_ah = bp.list_readings(user_id, days=7)
+                _sys_vals_ah = [r["systolic"] for r in _bp_rows_ah if r.get("systolic") is not None]
+                if _sys_vals_ah:
+                    _bp_sys_ah = round(sum(_sys_vals_ah) / len(_sys_vals_ah))
+            except Exception:
+                pass
+
+            _bio_metrics_ah = {
+                "hrv":                     _ah_avg("hrv"),
+                "rhr":                     _ah_avg("resting_hr"),
+                "vo2_max":                 _ah_latest("vo2_max") or (_profile_ah or {}).get("vo2_max"),
+                "body_fat_percentage":     _ah_latest("body_fat_percentage"),
+                "sleep_hours":             _ah_avg("sleep_hours"),
+                "blood_pressure_systolic": _bp_sys_ah,
+            }
+            _bio_ah = bioage.compute(_bio_metrics_ah, _profile_ah or {},
+                                     labs=bioage.latest_labs(user_id))
+            try:
+                _bio_ah["trend"] = bioage.persist_and_delta(user_id, _today_ah, _bio_ah)
+            except Exception:
+                _bio_ah["trend"] = None
+            payload["biological_age"] = _bio_ah
+        except Exception:
+            log.exception("AH-only bio age failed for %s", user_id)
+
+        try:
+            _caps_ah = (_profile_ah.get("enabled_capabilities") or []) if _profile_ah else []
+            _hs_ah = hspan.compute(user_id, _today_ah, {}, {}, _profile_ah or {},
+                                   capabilities=_caps_ah)
+            try:
+                _hs_ah["trend"] = hspan.persist_and_delta(user_id, _today_ah, _hs_ah)
+            except Exception:
+                _hs_ah["trend"] = None
+            payload["weekly_healthspan"] = _hs_ah
+        except Exception:
+            log.exception("AH-only healthspan failed for %s", user_id)
+
+        try:
+            if payload.get("biological_age"):
+                payload["biological_age"]["projection"] = bioage.project(
+                    payload["biological_age"],
+                    (payload.get("weekly_healthspan") or {}).get("score"),
+                )
+        except Exception:
+            pass
+
         return payload
 
     access_token, refreshed_session = await _ensure_valid_token(session)
