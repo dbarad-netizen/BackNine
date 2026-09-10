@@ -1,11 +1,14 @@
 "use client";
 
 /**
- * HealthyYearsCard — "Healthy Years Ahead", the Scorecard hero that
+ * HealthyYearsCard — the QYL Index ("Quality Years Left"), the
+ * Scorecard hero that
  * answers the question the whole app orbits: how much good time is
  * left, and is it growing?
  *
- * David 2026-09-06 ("could we add a death date?"). Deliberately NOT a
+ * David 2026-09-06 ("could we add a death date?"); named by Chris
+ * 2026-09-10 — QYL deliberately echoes QALY, the health-economics
+ * term, which fits the doctor-layer positioning. Deliberately NOT a
  * death date: framed as projected ACTIVE years (actuarial baseline ×
  * healthy fraction, evaluated at biological age), with an honest range
  * and a bonus line showing what the user's markers buy them. The name
@@ -29,8 +32,11 @@ export default function HealthyYearsCard({ bio }: Props) {
   return (
     <section className="rounded-2xl border border-[#1B3829]/20 bg-gradient-to-br from-white via-white to-[#1B3829]/[0.04] p-5 space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-600">
-          ⛳ Healthy years ahead
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-600 flex items-center gap-1.5">
+          ⛳ Quality years left
+          <span className="normal-case tracking-normal text-[9px] font-bold text-[#1B3829] bg-[#1B3829]/10 rounded px-1.5 py-0.5">
+            QYL Index
+          </span>
         </p>
         <span className="text-[10px] text-gray-500">likely {hy.low}–{hy.high}</span>
       </div>
@@ -41,7 +47,7 @@ export default function HealthyYearsCard({ bio }: Props) {
         </span>
         <div className="min-w-0">
           <p className="text-sm font-semibold text-gray-900 leading-tight">
-            active, independent years projected
+            quality years projected — active and independent
           </p>
           <p className="text-[12px] text-gray-600 leading-tight mt-0.5">
             {bonus > 0.05 ? (
