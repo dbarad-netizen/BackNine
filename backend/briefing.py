@@ -433,7 +433,7 @@ def generate(
     # The "user" turn is a meta-instruction — Claude treats it as the prompt to
     # respond to. We don't have anything user-typed; this is a generation task.
     response = client.messages.create(
-        model="claude-haiku-4-5-20251001",
+        model="claude-sonnet-5",
         max_tokens=400,
         system=system,
         messages=[

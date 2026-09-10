@@ -212,7 +212,7 @@ def _vision_extract(file_bytes: bytes, filename: str) -> Optional[dict]:
         response = client.messages.create(
             # Vision + document understanding requires a Sonnet-tier
             # model. Haiku doesn't accept documents in the current API.
-            model="claude-sonnet-4-6",
+            model="claude-sonnet-5",
             max_tokens=4000,
             system=system,
             messages=[{
