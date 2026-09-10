@@ -14,7 +14,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type ReferralCode } from "@/lib/api";
 
-type CardKey = "bioage" | "longevity" | "streak" | "h2h" | "generic";
+type CardKey = "qyl" | "bioage" | "longevity" | "streak" | "h2h" | "generic";
 
 interface LongevityLite {
   score: number | null;
@@ -30,6 +30,12 @@ interface BioAgeLite {
   delta_years:       number | null;
   confidence:        string;
   n_markers:         number;
+  healthy_years?: {
+    years: number | null;
+    low: number;
+    high: number;
+    bonus_years: number;
+  } | null;
 }
 
 interface Props {
@@ -46,6 +52,7 @@ interface CardContent {
 }
 
 const TAB_LABEL: Record<CardKey, string> = {
+  qyl:       "QYL Index",
   bioage:    "Bio Age",
   longevity: "Longevity",
   streak:    "Streak",
@@ -179,6 +186,19 @@ function buildCard(
   h2h: H2HWin | null,
   bioAge?: BioAgeLite | null,
 ): CardContent {
+  if (tab === "qyl" && bioAge?.healthy_years?.years != null) {
+    const hy    = bioAge.healthy_years;
+    const yrs   = Math.round(hy.years!);
+    const bonus = hy.bonus_years ?? 0;
+    return {
+      eyebrow:   "⛳ QYL Index",
+      big:       `~${yrs}`,
+      sub:       `quality years left · likely ${hy.low}–${hy.high}`,
+      shareText: bonus > 0.05
+        ? `My QYL Index: ~${yrs} quality years left — and my habits just bought me +${bonus.toFixed(1)} of them. What's your QYL? 👇`
+        : `My QYL Index: ~${yrs} quality years left, and I'm working on more. What's your QYL? 👇`,
+    };
+  }
   if (tab === "bioage" && bioAge?.biological_age != null && bioAge.delta_years != null) {
     const d       = bioAge.delta_years;
     const absDel  = Math.abs(d);
@@ -290,6 +310,7 @@ export default function ShareCardModal({ onClose, longevity, bioAge }: Props) {
   // rethink; re-enable by adding them back to this list.
   const available = useMemo<CardKey[]>(() => {
     const keys: CardKey[] = [];
+    if (bioAge?.healthy_years?.years != null) keys.push("qyl");
     if (bioAge?.biological_age != null) keys.push("bioage");
     keys.push("generic");
     return keys;
