@@ -430,6 +430,14 @@ export async function syncRecent(days = 7, quick = false): Promise<SyncResult> {
         // sourceName passed so duration gets per-source dedupe
         // (Watch + sleep app both writing the same night → MAX, not sum)
         agg.add(date, m.field, seconds, "duration", ts, s.sourceName);
+        // Stage detail (2026-09-10): deep + REM tracked separately so
+        // the sleep ring can score QUALITY. Chris slept 8h of light
+        // sleep and our duration-only ring gave him a perfect 100.
+        if (stageStr === "HKCategoryValueSleepAnalysisAsleepDeep") {
+          agg.add(date, "sleep_deep_hours", seconds, "duration", ts, s.sourceName);
+        } else if (stageStr === "HKCategoryValueSleepAnalysisAsleepREM") {
+          agg.add(date, "sleep_rem_hours", seconds, "duration", ts, s.sourceName);
+        }
       } else {
         let val = s.value;
         // Unit normalization mirrors the XML parser

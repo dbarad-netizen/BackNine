@@ -78,6 +78,8 @@ FIELDS = [
     "sleep_hours",
     "sleep_deep_hours",
     "sleep_rem_hours",
+    "sleep_deep_hours",
+    "sleep_rem_hours",
     "sleep_core_hours",
     "sleep_awake_hours",
     "active_calories",
@@ -463,7 +465,12 @@ def estimate_ring_scores(rows: list) -> dict:
         vals = [float(r[field]) for r in base if r.get(field) is not None]
         return (sum(vals) / len(vals)) if vals else None
 
-    # Sleep: piecewise around the 7-9h band
+    # Sleep: duration (7-9h band) × quality (deep+REM fraction).
+    # 2026-09-10 (Chris): 8h of LIGHT sleep scored a perfect 100 when
+    # this was duration-only. Now: if stage data exists, restorative
+    # fraction (deep+REM of total; healthy ≈ 35-45%) scales the score.
+    # Without stage data the score caps at 90 — we can't certify a
+    # perfect night we didn't see.
     sleep: dict = {}
     if today.get("sleep_hours") is not None:
         h = float(today["sleep_hours"])
@@ -475,7 +482,16 @@ def estimate_ring_scores(rows: list) -> dict:
             s = 65 + 20 * (10.0 - h)
         else:
             s = max(40.0, 65 - 8 * abs(h - 8.0))
-        sleep = {"score": round(s)}
+        deep = today.get("sleep_deep_hours")
+        rem  = today.get("sleep_rem_hours")
+        if h > 0 and (deep is not None or rem is not None):
+            restorative = (float(deep or 0) + float(rem or 0)) / h
+            # 0 quality at ≤15% restorative, full at ≥45%
+            quality = max(0.0, min(1.0, (restorative - 0.15) / 0.30))
+            s = s * (0.70 + 0.30 * quality)
+        else:
+            s = min(s, 90.0)
+        sleep = {"score": round(max(30.0, s))}
 
     # Activity: steps + active calories vs targets
     activity: dict = {}
