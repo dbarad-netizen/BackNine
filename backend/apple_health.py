@@ -435,3 +435,71 @@ def get_summary(user_id: str, days: int = 30) -> dict:
         "latest_bmi":                   latest("bmi"),
         "days_synced": len(rows),
     }
+
+
+# ── BackNine-computed ring scores (David 2026-09-10: "we should
+# compute our own") ─────────────────────────────────────────────────
+# Apple Health carries raw metrics but no Readiness/Sleep/Activity
+# scores, so AH-only users had no rings. These are OUR transparent
+# 0-100 equivalents — unlike Oura's proprietary models, every formula
+# here is inspectable and documented in-app as "BackNine-computed."
+#
+#   Sleep    — hours vs the 7-9h band (8h center). Duration-only by
+#              design: stages/efficiency aren't reliably present.
+#   Activity — steps (70%, target 10k) + active calories (30%, 600).
+#   Recovery — today's HRV and RHR vs the user's OWN 14-day baseline,
+#              centered at 75 (baseline day = 75, like Oura's anchor).
+
+def estimate_ring_scores(rows: list) -> dict:
+    """rows: apple_health_daily dicts sorted date-DESC. Returns
+    {date, readiness, sleep, activity} where each score dict is {} when
+    its inputs are missing (frontend treats {} as no-data)."""
+    if not rows:
+        return {"date": None, "readiness": {}, "sleep": {}, "activity": {}}
+    today = rows[0]
+    base  = rows[1:15]
+
+    def _avg(field):
+        vals = [float(r[field]) for r in base if r.get(field) is not None]
+        return (sum(vals) / len(vals)) if vals else None
+
+    # Sleep: piecewise around the 7-9h band
+    sleep: dict = {}
+    if today.get("sleep_hours") is not None:
+        h = float(today["sleep_hours"])
+        if 7.0 <= h <= 9.0:
+            s = 85 + 15 * (1 - min(1.0, abs(h - 8.0)))
+        elif 6.0 <= h < 7.0:
+            s = 65 + 20 * (h - 6.0)
+        elif 9.0 < h <= 10.0:
+            s = 65 + 20 * (10.0 - h)
+        else:
+            s = max(40.0, 65 - 8 * abs(h - 8.0))
+        sleep = {"score": round(s)}
+
+    # Activity: steps + active calories vs targets
+    activity: dict = {}
+    st, cal = today.get("steps"), today.get("active_calories")
+    if st is not None or cal is not None:
+        s_part = min(1.0, float(st or 0) / 10000.0) * 70
+        c_part = min(1.0, float(cal or 0) / 600.0) * 30
+        activity = {"score": round(min(100.0, s_part + c_part))}
+
+    # Recovery: HRV up = good, RHR down = good, vs own baseline
+    readiness: dict = {}
+    hrv_t, rhr_t = today.get("hrv"), today.get("resting_hr")
+    hrv_b, rhr_b = _avg("hrv"), _avg("resting_hr")
+    parts = []
+    if hrv_t is not None and hrv_b:
+        parts.append(((float(hrv_t) - hrv_b) / hrv_b) * 60)
+    if rhr_t is not None and rhr_b:
+        parts.append(-((float(rhr_t) - rhr_b) / rhr_b) * 60)
+    if parts:
+        readiness = {"score": round(max(35.0, min(98.0, 75 + sum(parts) / len(parts))))}
+
+    return {
+        "date":      today.get("date"),
+        "readiness": readiness,
+        "sleep":     sleep,
+        "activity":  activity,
+    }

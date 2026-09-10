@@ -250,6 +250,9 @@ export interface ActivityLive {
 }
 
 export interface TodayData {
+  /** True when ring scores are BackNine-computed from Apple Health
+   *  raw metrics (non-Oura users, 2026-09-10) rather than Oura's. */
+  estimated?: boolean;
   date?:               string;   // Oura anchor date (often yesterday)
   calendar_today?:     string;   // Timezone-safe "today" from Oura max date
   readiness:           Record<string, unknown>;

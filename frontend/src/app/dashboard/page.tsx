@@ -1924,8 +1924,13 @@ export default function DashboardPage() {
                     const hasOura = data.has_oura !== false;
                     const hasAH   = data.has_apple_health === true;
                     const ah      = data.apple_health;
+                    // BackNine-computed rings (David 2026-09-10): AH-only
+                    // users get OUR transparent ring scores in the same
+                    // slots, flagged estimated by the backend.
+                    const estimatedRings = data.today?.estimated === true &&
+                      (displayRdy != null || displaySl != null || actScore != null);
 
-                    if (hasOura) {
+                    if (hasOura || estimatedRings) {
                       // STATE C — original ring grid, unchanged behavior.
                       return (
                         <div className="grid grid-cols-3 gap-2 px-4 pb-4">
@@ -1959,6 +1964,11 @@ export default function DashboardPage() {
                               <p className="text-[11px] font-medium" style={{ color: syncingToday ? "#9ca3af" : stale ? "#9ca3af" : color }}>{syncingToday ? "Updating…" : stale ? "Last known" : scoreLabel(score)}</p>
                             </div>
                           ))}
+                          {estimatedRings && (
+                            <p className="col-span-3 text-center text-[10px] text-gray-500 -mt-1">
+                              ≈ computed by BackNine from your Apple Health data
+                            </p>
+                          )}
                         </div>
                       );
                     }
@@ -2107,38 +2117,10 @@ export default function DashboardPage() {
             {/* WeeklyLeague moved higher — now sits right after Daily
                 Check-in (David 2026-08-11). Was here after Bio Age. */}
 
-            {/* ── Longevity Score teaser — shown when no score is computable yet ── */}
-            {data.longevity_score?.score == null && (
-              <section className="rounded-2xl border border-dashed border-gray-300 bg-white p-5">
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="text-2xl">🧬</span>
-                  <div>
-                    <p className="text-sm font-bold text-gray-900">Longevity Score</p>
-                    <p className="text-[11px] text-gray-600">Your vitality, scored against age &amp; sex norms</p>
-                  </div>
-                </div>
-                <p className="text-xs text-gray-600 leading-relaxed mb-3">
-                  We compute this from six markers — HRV, resting heart rate, VO2 max, sleep,
-                  body fat, and daily steps. Connect a tracker or add a couple of numbers manually to unlock it.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <a href="/connect"
-                    className="text-[11px] font-semibold text-[#1B3829] border border-[#1B3829]/30 rounded-lg px-2.5 py-1 hover:bg-[#1B3829]/5 transition-colors">
-                    Connect a tracker
-                  </a>
-                  {/* Only prompt for age & sex when they're actually
-                      missing — the Julie fix (2026-08-12, #185). She
-                      saved both and this button kept showing anyway,
-                      which read as "my profile didn't save." */}
-                  {profile != null && (profile.age == null || !profile.biological_sex) && (
-                    <button onClick={() => setShowProfile(true)}
-                      className="text-[11px] font-semibold text-[#1B3829] border border-[#1B3829]/30 rounded-lg px-2.5 py-1 hover:bg-[#1B3829]/5 transition-colors">
-                      Add age &amp; sex
-                    </button>
-                  )}
-                </div>
-              </section>
-            )}
+            {/* Longevity Score teaser removed (David 2026-09-10): the
+                metric itself was retired for Bio Age + Health Span, but
+                this null-score teaser lived on — telling Chris, a fully
+                connected Apple Health user, to "connect a tracker." */}
 
             {/* ── Weekly Health Span Score — David 2026-08-11.
                 Replaces old Longevity Score card. Behavioral/process

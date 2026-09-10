@@ -1711,6 +1711,37 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
         except Exception:
             pass
 
+        # ── BackNine-computed rings (David 2026-09-10) ───────────────
+        # AH users had scores but no rings — Oura's Readiness/Sleep/
+        # Activity are proprietary, so we compute our own transparent
+        # equivalents (see apple_health.estimate_ring_scores). Same
+        # payload slots the Oura path fills, plus estimated=True so the
+        # UI can badge them as BackNine-computed.
+        try:
+            if _rows_ah:
+                _ring = ah.estimate_ring_scores(_rows_ah)
+                payload["today"].update({
+                    "date":           _ring.get("date"),
+                    "calendar_today": _today_ah,
+                    "readiness":      _ring.get("readiness") or {},
+                    "sleep":          _ring.get("sleep") or {},
+                    "activity":       _ring.get("activity") or {},
+                    "estimated":      True,
+                })
+                # Per-day trend (ascending) so ring fallbacks + charts work.
+                _trend_ah = []
+                for _i in range(min(len(_rows_ah), 14) - 1, -1, -1):
+                    _r = ah.estimate_ring_scores(_rows_ah[_i:])
+                    _trend_ah.append({
+                        "date":      _r.get("date"),
+                        "readiness": (_r.get("readiness") or {}).get("score"),
+                        "sleep":     (_r.get("sleep") or {}).get("score"),
+                        "activity":  (_r.get("activity") or {}).get("score"),
+                    })
+                payload["trend"] = _trend_ah
+        except Exception:
+            log.exception("AH ring estimation failed for %s", user_id)
+
         return payload
 
     access_token, refreshed_session = await _ensure_valid_token(session)
