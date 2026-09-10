@@ -65,6 +65,7 @@ import CpapNightlyLogCard from "@/components/CpapNightlyLogCard";
 import BiologicalAgeCard from "@/components/BiologicalAgeCard";
 import HealthyYearsCard from "@/components/HealthyYearsCard";
 import WeeklyHealthSpanCard from "@/components/WeeklyHealthSpanCard";
+import SpineBreakdown from "@/components/SpineBreakdown";
 import ActivityTimelineCard from "@/components/ActivityTimelineCard";
 import DailyInsightCard from "@/components/DailyInsightCard";
 import SymptomCard from "@/components/SymptomCard";
@@ -1854,6 +1855,25 @@ export default function DashboardPage() {
                 fold on iPhone. Placement in the Nutrition section is
                 intentional: nightly meds + CPAP + supplements cluster. */}
 
+            {/* ═══ The Scorecard Spine — Option B (David 2026-09-10,
+                "Let's do B") ═══
+                One causal chain, read top to bottom on a vertical
+                connector: TODAY (rings) → THIS WEEK (Health Span) →
+                YOUR BODY (Bio Age) → HORIZON (QYL, the only accent).
+                Connective copy between stops narrates the chain; the
+                four old per-card expanders are consolidated into ONE
+                SpineBreakdown drawer at the end. Cards themselves were
+                slimmed to one number + one phrase (see each component's
+                header comment). */}
+            <div className="relative">
+              <div
+                className="absolute left-[7px] top-2 bottom-4 w-px bg-gradient-to-b from-[#1B3829]/25 via-[#1B3829]/25 to-transparent"
+                aria-hidden
+              />
+
+              <SpineKicker label="Today" first />
+              <div className="pl-5">
+
             {/* ── Daily Greeting + Score Snapshot ── */}
             {(() => {
               const hour = new Date().getHours();
@@ -1878,8 +1898,6 @@ export default function DashboardPage() {
                 { label: "Sleep",     score: displaySl,  color: scoreColor(displaySl),  stale: slFallback  },
                 { label: "Activity",  score: actScore,   color: scoreColor(actScore),   stale: false       },
               ];
-
-              const circ = 2 * Math.PI * 40;
 
               return (
                 <section className="rounded-2xl border-2 bg-white overflow-hidden"
@@ -1931,41 +1949,37 @@ export default function DashboardPage() {
                       (displayRdy != null || displaySl != null || actScore != null);
 
                     if (hasOura || estimatedRings) {
-                      // STATE C — original ring grid, unchanged behavior.
+                      // STATE C — compact number row (Option B spine,
+                      // David 2026-09-10). The three donuts are now three
+                      // plain colored digits: same data, quarter the ink.
+                      // Serves both Oura scores and BackNine-estimated AH
+                      // scores unchanged — syncing/stale states preserved.
                       return (
-                        <div className="grid grid-cols-3 gap-2 px-4 pb-4">
-                          {rings.map(({ label, score, color, stale }) => (
-                            <div key={label} className="flex flex-col items-center gap-1.5">
-                              <div className="relative w-20 h-20">
-                                <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                                  <circle cx="50" cy="50" r="40" fill="none" stroke="#E5E7EB" strokeWidth="11"/>
-                                  <circle cx="50" cy="50" r="40" fill="none"
-                                    stroke={syncingToday ? "#D1D5DB" : stale ? color + "88" : color}
-                                    strokeWidth="11" strokeLinecap="round"
-                                    strokeDasharray={circ}
-                                    strokeDashoffset={syncingToday ? circ : circ * (1 - (score ?? 0) / 100)}
-                                    className="transition-all duration-700"
-                                  />
-                                </svg>
-                                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                  {syncingToday ? (
-                                    <span className="text-[10px] text-gray-600 text-center leading-tight px-1 animate-pulse">Syncing…</span>
-                                  ) : score != null && score > 0 ? (
-                                    <>
-                                      <span className={`text-xl font-bold leading-none ${stale ? "text-gray-600" : "text-gray-900"}`}>{score}</span>
-                                      <span className="text-[9px] text-gray-600 mt-0.5">{stale ? "last" : "/100"}</span>
-                                    </>
-                                  ) : (
-                                    <span className="text-[11px] text-gray-600 text-center leading-tight px-1">—</span>
-                                  )}
-                                </div>
+                        <div className="px-4 pb-4">
+                          <div className="grid grid-cols-3 divide-x divide-gray-100">
+                            {rings.map(({ label, score, color, stale }) => (
+                              <div key={label} className="flex flex-col items-center py-1">
+                                {syncingToday ? (
+                                  <span className="text-3xl font-bold leading-none text-gray-300 animate-pulse">··</span>
+                                ) : score != null && score > 0 ? (
+                                  <span
+                                    className="text-3xl font-bold tabular-nums leading-none transition-colors duration-700"
+                                    style={{ color: stale ? color + "99" : color }}
+                                  >
+                                    {score}
+                                  </span>
+                                ) : (
+                                  <span className="text-3xl font-bold leading-none text-gray-300">—</span>
+                                )}
+                                <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest mt-1.5">{label}</p>
+                                <p className="text-[10px] font-medium" style={{ color: syncingToday ? "#9ca3af" : stale ? "#9ca3af" : color }}>
+                                  {syncingToday ? "Updating…" : stale ? "Last known" : scoreLabel(score)}
+                                </p>
                               </div>
-                              <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest">{label}</p>
-                              <p className="text-[11px] font-medium" style={{ color: syncingToday ? "#9ca3af" : stale ? "#9ca3af" : color }}>{syncingToday ? "Updating…" : stale ? "Last known" : scoreLabel(score)}</p>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                           {estimatedRings && (
-                            <p className="col-span-3 text-center text-[10px] text-gray-500 -mt-1">
+                            <p className="text-center text-[10px] text-gray-500 mt-2">
                               ≈ computed by BackNine from your Apple Health data
                             </p>
                           )}
@@ -2096,23 +2110,62 @@ export default function DashboardPage() {
               );
             })()}
 
-            {/* ── Biological Age — headline vitality metric (David 2026-08-07)
-                Renders above Longevity Score. Self-hides when we have
-                fewer than 3 markers. The "your body reads as X" hook +
-                per-marker transparency is our answer to Bevel's opaque
-                Biological Age. */}
-            {data.biological_age && (
-              <BiologicalAgeCard
-                data={data.biological_age}
-                onShare={() => setShowShare(true)}
-              />
-            )}
+              </div>{/* /pl-5 TODAY */}
 
-            {/* Healthy Years Ahead — the forward-looking hero (David
-                2026-09-06). Renders only when Bio Age has a projection. */}
-            {data.biological_age?.healthy_years && (
-              <HealthyYearsCard bio={data.biological_age} />
-            )}
+              {/* THIS WEEK — Health Span moved UP from below Bio Age:
+                  the spine reads in causal order (today's behavior →
+                  this week's pattern → the body it builds → the years
+                  it buys). Sensor-only process score, v2 2026-08-25. */}
+              {data.weekly_healthspan && data.weekly_healthspan.score != null && (
+                <>
+                  <SpineLink text="Seven days of this become…" />
+                  <SpineKicker label="This week" />
+                  <div className="pl-5">
+                    <WeeklyHealthSpanCard data={data.weekly_healthspan} />
+                  </div>
+                </>
+              )}
+
+              {/* YOUR BODY — Bio Age. Self-hides when <3 markers. The
+                  per-marker transparency (our answer to Bevel's opaque
+                  Biological Age) now lives in SpineBreakdown below. */}
+              {data.biological_age && (
+                <>
+                  <SpineLink text="…which moves your biological age…" />
+                  <SpineKicker label="Your body" />
+                  <div className="pl-5">
+                    <BiologicalAgeCard data={data.biological_age} />
+                  </div>
+                </>
+              )}
+
+              {/* HORIZON — QYL Index, the chain's terminal and the only
+                  accent border on the spine. Share moved here from Bio
+                  Age (QYL-led sharing). */}
+              {data.biological_age?.healthy_years && (
+                <>
+                  <SpineLink text="…which buys quality years." />
+                  <SpineKicker label="Horizon" />
+                  <div className="pl-5">
+                    <HealthyYearsCard
+                      bio={data.biological_age}
+                      onShare={() => setShowShare(true)}
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* ONE shared "why" drawer for the whole chain — replaces
+                  the four per-card expanders. */}
+              {(data.biological_age || data.weekly_healthspan) && (
+                <div className="pl-5 mt-3">
+                  <SpineBreakdown
+                    bio={data.biological_age}
+                    hs={data.weekly_healthspan}
+                  />
+                </div>
+              )}
+            </div>{/* /spine */}
 
             {/* WeeklyLeague moved higher — now sits right after Daily
                 Check-in (David 2026-08-11). Was here after Bio Age. */}
@@ -2121,15 +2174,6 @@ export default function DashboardPage() {
                 metric itself was retired for Bio Age + Health Span, but
                 this null-score teaser lived on — telling Chris, a fully
                 connected Apple Health user, to "connect a tracker." */}
-
-            {/* ── Weekly Health Span Score — David 2026-08-11.
-                Replaces old Longevity Score card. Behavioral/process
-                score using sleep habits, movement, adherence, protein,
-                check-in, hydration, CPAP. Zero overlap with Bio Age's
-                clinical markers. */}
-            {data.weekly_healthspan && data.weekly_healthspan.score != null && (
-              <WeeklyHealthSpanCard data={data.weekly_healthspan} />
-            )}
 
 
             {/* WeeklyLeague promoted to hero slot above (David 2026-08-11).
@@ -3025,5 +3069,32 @@ function ErrorState({ error }: { error: string }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/* ── Scorecard Spine chrome (Option B, David 2026-09-10) ──
+   Margin kicker + connective copy for the timescale spine. The dot
+   sits centered on the vertical connector line (left-[7px], w-px in
+   the spine container); content is indented pl-5 to clear it. */
+
+function SpineKicker({ label, first = false }: { label: string; first?: boolean }) {
+  return (
+    <div className={`relative flex items-center pl-5 pb-1.5 ${first ? "" : "pt-3"}`}>
+      <span
+        className="absolute left-0 top-1/2 -translate-y-1/2 w-[15px] h-[15px] rounded-full bg-white border-2 border-[#1B3829]/50 flex items-center justify-center"
+        aria-hidden
+      >
+        <span className="w-[5px] h-[5px] rounded-full bg-[#1B3829]" />
+      </span>
+      <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#1B3829]/70">
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function SpineLink({ text }: { text: string }) {
+  return (
+    <p className="pl-5 pt-3 text-[11px] italic text-gray-500 leading-snug">{text}</p>
   );
 }

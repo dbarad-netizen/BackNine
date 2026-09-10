@@ -1,212 +1,80 @@
 "use client";
 
 /**
- * BiologicalAgeCard — headline vitality metric on the Scorecard.
+ * BiologicalAgeCard — the YOUR BODY stop on the Scorecard spine.
  *
- * Shows chronological age vs computed biological age with the delta
- * as a big number ("4.7 years younger than 57"). Below that, an
- * expandable list of markers and their years-contribution — the
- * transparency-vs-Bevel move.
+ * Option B spine redesign (David 2026-09-10, "Let's do B"): slimmed to
+ * one primary number (your biological age) with a single supporting
+ * phrase (the delta vs chronological + trend chip). The confidence
+ * pill, per-marker expander, projection box, and one-line auto-take all
+ * moved into the shared SpineBreakdown drawer at the end of the chain —
+ * the transparency-vs-Bevel move lives there now, still one tap away.
+ * The share button moved to the QYL card (the chain's terminal, and the
+ * share-led metric per the QYL Index experiment).
  *
  * Renders nothing when we have <3 markers (biological_age === null).
  * That's intentional: don't fake precision with 1 data point.
  *
- * David 2026-08-07.
+ * David 2026-08-07 · spine 2026-09-10.
  */
 
-import { useState } from "react";
-import type { BiologicalAge, BioAgeComponent } from "@/lib/api";
+import type { BiologicalAge } from "@/lib/api";
 
 interface Props {
   data: BiologicalAge;
-  /** Optional — opens the ShareCardModal pre-set to the Bio Age card.
-   *  When omitted the share button is hidden. David 2026-08-11. */
-  onShare?: () => void;
 }
 
 function fmt(n: number, decimals = 1): string {
   return n.toFixed(decimals);
 }
 
-function deltaColor(delta: number): { text: string; bg: string; border: string; label: string } {
-  if (delta <= -3) return { text: "text-emerald-800", bg: "bg-emerald-50", border: "border-emerald-200", label: "younger" };
-  if (delta <= -1) return { text: "text-emerald-700", bg: "bg-emerald-50/60", border: "border-emerald-200", label: "younger" };
-  if (delta <= 1)  return { text: "text-gray-800",    bg: "bg-gray-50",     border: "border-gray-200",    label: "on par" };
-  if (delta <= 3)  return { text: "text-amber-800",   bg: "bg-amber-50",    border: "border-amber-200",   label: "older" };
-  return { text: "text-red-800", bg: "bg-red-50", border: "border-red-200", label: "older" };
+function deltaTone(delta: number): string {
+  if (delta <= -1) return "text-emerald-700";
+  if (delta <= 1)  return "text-gray-700";
+  if (delta <= 3)  return "text-amber-700";
+  return "text-red-700";
 }
 
-function confidencePill(conf: BiologicalAge["confidence"], n: number): { color: string; label: string } {
-  if (conf === "high")   return { color: "bg-emerald-100 text-emerald-800", label: `High confidence · ${n} markers` };
-  if (conf === "medium") return { color: "bg-amber-100 text-amber-800",     label: `Medium confidence · ${n} markers` };
-  return                        { color: "bg-gray-100 text-gray-600",       label: `Low confidence · ${n} markers` };
-}
-
-export default function BiologicalAgeCard({ data, onShare }: Props) {
-  const [expanded, setExpanded] = useState(false);
-
+export default function BiologicalAgeCard({ data }: Props) {
   if (data.biological_age == null || data.delta_years == null || data.chronological_age == null) {
     return null;
   }
 
-  const dc     = deltaColor(data.delta_years);
-  const chip   = confidencePill(data.confidence, data.n_markers);
   const absDel = Math.abs(data.delta_years);
   const isYounger = data.delta_years < 0;
+  const tone = deltaTone(data.delta_years);
 
   return (
-    <section
-      id="biological-age-card"
-      className={`rounded-2xl border-2 p-4 shadow-sm ${dc.border} ${dc.bg}`}
-    >
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-700">
-            🧬 Biological Age
-          </p>
-          <h3 className="text-base font-bold text-[#1B3829] mt-0.5 leading-tight">
-            Your body reads as {fmt(data.biological_age)}
-          </h3>
+    <section id="biological-age-card" className="rounded-2xl border border-gray-200 bg-white p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-baseline gap-2.5 flex-wrap min-w-0">
+          <span className="text-4xl font-bold tabular-nums leading-none text-[#1B3829]">
+            {fmt(data.biological_age)}
+          </span>
+          <span className={`text-sm font-semibold ${tone}`}>
+            {absDel < 0.5
+              ? `on par with your ${data.chronological_age}`
+              : `${fmt(absDel)} yrs ${isYounger ? "younger" : "older"} than your ${data.chronological_age}`}
+          </span>
+          {data.trend && Math.abs(data.trend.delta_years) >= 0.1 && (() => {
+            const dt = data.trend.delta_years;
+            const isBetter = dt < 0;
+            const chip = isBetter ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                                  : "text-red-700 bg-red-50 border-red-200";
+            return (
+              <span
+                className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold border ${chip}`}
+                title={`Compared to your Bio Age ~${data.trend.days_ago} days ago`}
+              >
+                {isBetter ? "▼" : "▲"} {Math.abs(dt).toFixed(1)} yr vs {data.trend.days_ago}d ago
+              </span>
+            );
+          })()}
         </div>
-        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${chip.color}`}>
-          {chip.label}
-        </span>
+        <p className="shrink-0 text-[10px] text-gray-500 uppercase tracking-widest text-right leading-tight">
+          🧬 Biological<br />Age
+        </p>
       </div>
-
-      {/* Big delta */}
-      <div className="flex items-baseline gap-2 mb-2 flex-wrap">
-        <span className={`text-3xl font-black ${dc.text}`}>
-          {absDel < 0.5 ? "≈" : fmt(absDel)}
-        </span>
-        <span className={`text-sm font-semibold ${dc.text}`}>
-          {absDel < 0.5 ? "on par with" : (isYounger ? "years younger than" : "years older than")}
-        </span>
-        <span className="text-sm text-gray-700">chronological {data.chronological_age}</span>
-        {/* Trend chip vs ~30 days ago. Green when getting younger,
-            red when getting older, gray when flat. David 2026-08-11. */}
-        {data.trend && Math.abs(data.trend.delta_years) >= 0.1 && (() => {
-          const dt = data.trend.delta_years;
-          const isBetter = dt < 0;
-          const tone = isBetter ? "text-emerald-700 bg-emerald-50 border-emerald-200"
-                                : "text-red-700 bg-red-50 border-red-200";
-          return (
-            <span
-              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold border ${tone}`}
-              title={`Compared to your Bio Age ~${data.trend.days_ago} days ago`}
-            >
-              {isBetter ? "▼" : "▲"} {Math.abs(dt).toFixed(1)} yr vs {data.trend.days_ago}d ago
-            </span>
-          );
-        })()}
-      </div>
-
-      {/* One-line auto-take — surfaces the biggest driver so the user
-          gets an insight without expanding. David 2026-08-11 polish. */}
-      {(() => {
-        const best  = data.components[data.components.length - 1]; // smallest |years_delta| — best-in-class
-        const worst = data.components[0]; // largest |years_delta| — biggest mover (positive or negative)
-        // Components come pre-sorted by |years_delta| desc from the backend.
-        if (!worst) return null;
-        const worstBad = worst.years_delta > 0.3;
-        const worstGood = worst.years_delta < -0.3;
-        if (!worstBad && !worstGood) return null;
-        return (
-          <p className="text-[11px] text-gray-700 leading-snug mb-2">
-            {worstGood ? (
-              <><span className="font-semibold">{worst.label}</span> is carrying you — takes ~{Math.abs(worst.years_delta).toFixed(1)} years off.</>
-            ) : (
-              <><span className="font-semibold">{worst.label}</span> is the biggest lever right now — adds ~{worst.years_delta.toFixed(1)} years. {best && best.years_delta < -0.3 ? `${best.label} is a bright spot.` : ""}</>
-            )}
-          </p>
-        );
-      })()}
-
-      {/* Age Projection — the effort→outcome loop. Bio Age projected
-          90 days forward at the user's current Health Span pace.
-          David 2026-08-11. Only shows when meaningful (≥0.2 yr move). */}
-      {data.projection && Math.abs(data.projection.delta_from_now) >= 0.2 && (() => {
-        const p = data.projection;
-        const improving = p.delta_from_now < 0;
-        const when = new Date(Date.now() + p.horizon_days * 24 * 60 * 60 * 1000)
-          .toLocaleDateString("en-US", { month: "long" });
-        return (
-          <div
-            className={`rounded-lg border px-3 py-2 mb-2 ${
-              improving
-                ? "border-emerald-200 bg-emerald-50/70"
-                : "border-amber-200 bg-amber-50/70"
-            }`}
-            title={p.caveat}
-          >
-            <p className="text-[11px] leading-snug text-gray-800">
-              <span className="font-semibold">
-                {improving ? "📈 On your current pace" : "📉 At your current pace"}
-              </span>{" "}
-              (Health Span {p.healthspan_score}), your Bio Age projects to{" "}
-              <span className={`font-bold ${improving ? "text-emerald-800" : "text-amber-800"}`}>
-                {p.projected_age}
-              </span>{" "}
-              by {when} — {Math.abs(p.delta_from_now).toFixed(1)} years{" "}
-              {improving ? "younger" : "older"} than today.
-            </p>
-          </div>
-        );
-      })()}
-
-      {/* Expand + share actions */}
-      <div className="flex items-center justify-between gap-2">
-        <button
-          onClick={() => setExpanded(e => !e)}
-          className="text-[11px] font-medium text-gray-600 hover:text-gray-900 underline-offset-2 hover:underline"
-        >
-          {expanded ? "▲ Hide markers" : `▼ See what's moving your score (${data.components.length} markers)`}
-        </button>
-        {onShare && (
-          <button
-            onClick={onShare}
-            className="shrink-0 text-[11px] font-semibold text-[#1B3829] border border-[#1B3829]/30 rounded-lg px-2.5 py-1 hover:bg-[#1B3829]/5 transition-colors"
-            title="Share your Biological Age"
-          >
-            📣 Share
-          </button>
-        )}
-      </div>
-
-      {expanded && (
-        <div className="mt-2 space-y-1.5">
-          {data.components.map(c => (
-            <ComponentRow key={c.key} c={c} />
-          ))}
-          <p className="text-[10px] text-gray-500 italic mt-2 leading-snug">
-            {data.caveat}
-          </p>
-        </div>
-      )}
     </section>
-  );
-}
-
-function ComponentRow({ c }: { c: BioAgeComponent }) {
-  const delta = c.years_delta;
-  const isYounger = delta < -0.3;
-  const isOlder   = delta > 0.3;
-  const tone = isYounger
-    ? "text-emerald-800 bg-emerald-50 border-emerald-100"
-    : isOlder
-    ? "text-red-800 bg-red-50 border-red-100"
-    : "text-gray-700 bg-gray-50 border-gray-100";
-  const sign  = delta < 0 ? "" : "+";
-  const label = isYounger ? "younger" : isOlder ? "older" : "neutral";
-
-  return (
-    <div className={`rounded-lg border px-2.5 py-1.5 ${tone}`}>
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[12px] font-semibold text-gray-900">{c.label}</span>
-        <span className="text-[11px] font-semibold">
-          {sign}{fmt(delta, 1)} yr {label}
-        </span>
-      </div>
-      <p className="text-[11px] text-gray-700 leading-snug mt-0.5">{c.why}</p>
-    </div>
   );
 }

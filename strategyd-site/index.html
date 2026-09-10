@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Strategy D is a Los Angeles venture studio building software for the second half of life. Current focus: healthspan and longevity products for adults 50+." />
+  <meta name="author" content="Strategy D, Incorporated" />
+  <meta property="og:title" content="Strategy D — a venture studio for the second half of life" />
+  <meta property="og:description" content="Los Angeles venture studio building software for adults 50 and older. Currently building BackNine." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://www.strategyd.com" />
+  <link rel="canonical" href="https://www.strategyd.com" />
+  <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+  <title>Strategy D — a venture studio for the second half of life</title>
+  <style>
+    :root {
+      --ink:       #0e1a14;
+      --ink-soft:  #37423d;
+      --paper:     #f6f4ee;
+      --line:      #d9d4c6;
+      --accent:    #1B3829;
+      --accent-2:  #2D6A4F;
+      --gold:      #b58a4f;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    a { color: var(--accent); text-decoration: none; transition: color .15s; }
+    a:hover { color: var(--accent-2); }
+    .wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+
+    /* ── Nav ── */
+    nav {
+      position: sticky; top: 0; z-index: 20;
+      background: rgba(246, 244, 238, 0.94);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--line);
+    }
+    nav .wrap {
+      display: flex; justify-content: space-between; align-items: center;
+      height: 60px;
+    }
+    .brand {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 20px; font-weight: 700;
+      letter-spacing: -0.01em;
+      color: var(--ink);
+    }
+    .brand em {
+      color: var(--accent-2); font-style: normal;
+    }
+    nav ul {
+      list-style: none; display: flex; gap: 28px;
+      font-size: 14px;
+    }
+    nav ul a { color: var(--ink-soft); font-weight: 500; }
+    nav ul a:hover { color: var(--ink); }
+    @media (max-width: 640px) {
+      nav ul { display: none; }
+    }
+
+    /* ── Hero ── */
+    .hero { padding: 96px 0 80px; }
+    .hero .eyebrow {
+      font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--accent-2); font-weight: 700; margin-bottom: 24px;
+    }
+    .hero h1 {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(38px, 6vw, 64px);
+      line-height: 1.08; font-weight: 700;
+      letter-spacing: -0.02em;
+      max-width: 820px; margin-bottom: 28px;
+    }
+    .hero h1 em {
+      color: var(--accent-2); font-style: normal;
+    }
+    .hero .lede {
+      font-size: 20px; color: var(--ink-soft);
+      max-width: 640px; line-height: 1.5;
+    }
+    .hero .meta {
+      margin-top: 40px;
+      font-size: 13px; color: var(--ink-soft);
+      display: flex; gap: 18px; flex-wrap: wrap;
+    }
+    .hero .meta span::before {
+      content: "•"; margin-right: 8px; color: var(--gold);
+    }
+    .hero .meta span:first-child::before { content: ""; margin: 0; }
+
+    /* ── Section ── */
+    section.block { padding: 80px 0; border-top: 1px solid var(--line); }
+    .eyebrow-small {
+      font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--accent-2); font-weight: 700; margin-bottom: 16px;
+    }
+    h2 {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(28px, 4vw, 40px);
+      line-height: 1.15; font-weight: 700;
+      letter-spacing: -0.015em;
+      margin-bottom: 20px;
+      max-width: 720px;
+    }
+    h2 em { color: var(--accent-2); font-style: normal; }
+    .subhead {
+      font-size: 18px; color: var(--ink-soft);
+      max-width: 640px; line-height: 1.6; margin-bottom: 40px;
+    }
+
+    /* ── Thesis grid ── */
+    .thesis-grid {
+      display: grid; gap: 32px;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      margin-top: 40px;
+    }
+    .thesis-card {
+      padding-left: 20px; border-left: 2px solid var(--accent);
+    }
+    .thesis-card h3 {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 20px; font-weight: 700; letter-spacing: -0.01em;
+      margin-bottom: 10px;
+    }
+    .thesis-card p {
+      font-size: 15px; color: var(--ink-soft); line-height: 1.55;
+    }
+
+    /* ── Portfolio ── */
+    .portfolio-card {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 36px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 28px;
+    }
+    @media (min-width: 720px) {
+      .portfolio-card { grid-template-columns: 1fr 1fr; align-items: center; gap: 48px; padding: 48px; }
+    }
+    .portfolio-card .brand-line {
+      font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--accent-2); font-weight: 700; margin-bottom: 12px;
+    }
+    .portfolio-card h3 {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 32px; font-weight: 700; letter-spacing: -0.015em;
+      margin-bottom: 12px;
+    }
+    .portfolio-card h3 .highlight { color: var(--accent-2); }
+    .portfolio-card .tagline {
+      font-size: 17px; color: var(--ink-soft); margin-bottom: 20px;
+      line-height: 1.55;
+    }
+    .portfolio-card ul {
+      list-style: none; font-size: 14px; color: var(--ink-soft);
+      display: grid; gap: 8px;
+    }
+    .portfolio-card ul li::before {
+      content: "→ "; color: var(--gold); font-weight: 700;
+    }
+    .portfolio-card .card-visual {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+      border-radius: 8px;
+      padding: 40px; color: #fff;
+      display: flex; flex-direction: column; justify-content: space-between;
+      min-height: 260px;
+    }
+    .portfolio-card .card-visual .logo {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 40px; font-weight: 700; letter-spacing: -0.02em;
+    }
+    .portfolio-card .card-visual .logo em {
+      color: #b8e0c8; font-style: normal;
+    }
+    .portfolio-card .card-visual .stat {
+      font-size: 13px; color: rgba(255,255,255,0.75); letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .portfolio-card .card-visual .stat strong {
+      display: block; font-size: 32px; color: #fff; margin-top: 4px;
+      font-family: Georgia, "Times New Roman", serif; font-weight: 700;
+      letter-spacing: -0.01em; text-transform: none;
+    }
+    .visit-link {
+      display: inline-block; margin-top: 20px;
+      font-size: 14px; font-weight: 600;
+      color: var(--accent); border-bottom: 1px solid var(--accent);
+      padding-bottom: 2px;
+    }
+    .visit-link:hover { color: var(--accent-2); border-color: var(--accent-2); }
+
+    /* ── Approach ── */
+    .approach-list {
+      list-style: none; display: grid; gap: 32px;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      margin-top: 40px;
+    }
+    .approach-list li {
+      display: flex; gap: 16px;
+    }
+    .approach-list .num {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 32px; font-weight: 700; color: var(--gold);
+      line-height: 1; min-width: 40px;
+    }
+    .approach-list h3 {
+      font-size: 16px; font-weight: 700; margin-bottom: 6px;
+    }
+    .approach-list p {
+      font-size: 14px; color: var(--ink-soft); line-height: 1.55;
+    }
+
+    /* ── Contact ── */
+    .contact-grid {
+      display: grid; gap: 40px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      margin-top: 40px;
+    }
+    .contact-block .label {
+      font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--accent-2); font-weight: 700; margin-bottom: 10px;
+    }
+    .contact-block .value {
+      font-size: 16px; color: var(--ink); line-height: 1.5;
+    }
+    .contact-block .value a { font-weight: 500; }
+
+    /* ── Footer ── */
+    footer {
+      background: var(--ink);
+      color: #a8b0aa;
+      padding: 48px 0 32px;
+      font-size: 13px;
+      margin-top: 60px;
+    }
+    footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 24px; }
+    footer .brand-footer {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 18px; color: #fff; font-weight: 700;
+    }
+    footer .brand-footer em {
+      color: #7fb896; font-style: normal;
+    }
+    footer .meta { color: #a8b0aa; line-height: 1.7; }
+    footer a { color: #cad3cc; }
+    footer a:hover { color: #fff; }
+
+  </style>
+</head>
+<body>
+
+  <!-- ── Nav ── -->
+  <nav>
+    <div class="wrap">
+      <a href="#top" class="brand">Strategy <em>D</em></a>
+      <ul>
+        <li><a href="#thesis">Thesis</a></li>
+        <li><a href="#portfolio">Portfolio</a></li>
+        <li><a href="#approach">Approach</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- ── Hero ── -->
+  <header id="top" class="hero">
+    <div class="wrap">
+      <p class="eyebrow">Los Angeles · founded 2013</p>
+      <h1>A venture studio building software for the <em>second half of life</em>.</h1>
+      <p class="lede">
+        Adults 50 and older are the largest, wealthiest, and most under-served
+        cohort in consumer technology. Strategy D builds the products that
+        take them seriously.
+      </p>
+      <div class="meta">
+        <span>Independent · founder-owned</span>
+        <span>D-U-N-S 095225396</span>
+        <span>State of California S-corp</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Thesis ── -->
+  <section class="block" id="thesis">
+    <div class="wrap">
+      <p class="eyebrow-small">Thesis</p>
+      <h2>The healthspan generation is <em>online, wealthy, and under-served</em>.</h2>
+      <p class="subhead">
+        The over-50 cohort holds 70% of American household wealth and lives
+        another 25 to 35 years after their 50th birthday. Consumer software
+        has spent two decades optimizing for the college graduate — leaving
+        the largest opportunity in the market to founders who assume their
+        users are 27 and unmedicated. We think that's a mistake, and we're
+        building the counter-thesis.
+      </p>
+      <div class="thesis-grid">
+        <div class="thesis-card">
+          <h3>Longevity is the default lens.</h3>
+          <p>The 25-year outcome — VO2 max, HRV, sleep, blood pressure, muscle mass retention — matters more than the six-week transformation.</p>
+        </div>
+        <div class="thesis-card">
+          <h3>Medicated users are the default users.</h3>
+          <p>Most adults over 50 take prescription medication. Software that treats this as an edge case ignores its own market.</p>
+        </div>
+        <div class="thesis-card">
+          <h3>Community halves churn.</h3>
+          <p>Retention in fitness apps doubles when users bring a friend. In this demographic — spouses, workout partners, foursomes — it triples.</p>
+        </div>
+        <div class="thesis-card">
+          <h3>The doctor is a first-class user.</h3>
+          <p>Products in this space should produce artifacts a physician actually wants to see, not just a consumer-facing dashboard.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Portfolio ── -->
+  <section class="block" id="portfolio">
+    <div class="wrap">
+      <p class="eyebrow-small">Current Portfolio</p>
+      <h2>Where we&rsquo;re building today.</h2>
+      <p class="subhead">
+        Strategy D operates as a single-tenant studio: one company at a time,
+        built to standalone economics before the next one begins. Today, that
+        company is BackNine.
+      </p>
+      <div class="portfolio-card">
+        <div>
+          <p class="brand-line">Featured — 2026</p>
+          <h3>Back<span class="highlight">Nine</span></h3>
+          <p class="tagline">
+            The healthspan coach for adults 50 and older. Reads across your
+            ring, labs, medications, and blood pressure — shows its math —
+            and puts your foursome on your back nine.
+          </p>
+          <ul>
+            <li>Doctor Report — one-page PDF for your next visit</li>
+            <li>Coach Al — reads across every pillar, honest about missing data</li>
+            <li>Community — invite your foursome, weekly leaderboards, group challenges</li>
+            <li>Proven for you — 7-day n-of-1 experiments with a permanent evidence ledger</li>
+          </ul>
+          <a href="https://www.backnine.health" class="visit-link" rel="noopener">Visit backnine.health →</a>
+        </div>
+        <div class="card-visual">
+          <div class="logo">Back<em>Nine</em></div>
+          <div class="stat">
+            Category<strong>Health &amp; Fitness</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Approach ── -->
+  <section class="block" id="approach">
+    <div class="wrap">
+      <p class="eyebrow-small">How we build</p>
+      <h2>Small team. <em>Long horizon.</em> Honest data.</h2>
+      <p class="subhead">
+        We operate as a small, senior team with no board pressure and no
+        VC clock. That freedom is the whole product plan.
+      </p>
+      <ol class="approach-list">
+        <li>
+          <span class="num">01</span>
+          <div>
+            <h3>Build for the reader who&rsquo;s already there.</h3>
+            <p>Every product decision assumes the user is medicated, sees a doctor, and already tracks something. Copy, defaults, and UX flow from that.</p>
+          </div>
+        </li>
+        <li>
+          <span class="num">02</span>
+          <div>
+            <h3>Ship transparency as a moat.</h3>
+            <p>Every score in our software shows its math. Every claim shows its evidence. Every stale metric labels itself stale.</p>
+          </div>
+        </li>
+        <li>
+          <span class="num">03</span>
+          <div>
+            <h3>Community, not virality.</h3>
+            <p>Our users don&rsquo;t forward TikToks — they text their brother-in-law. We design for the four-person unit, not the network graph.</p>
+          </div>
+        </li>
+        <li>
+          <span class="num">04</span>
+          <div>
+            <h3>Standalone economics before scale.</h3>
+            <p>Each portfolio company must reach standalone unit economics before the studio starts the next. No portfolio subsidies.</p>
+          </div>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ── Contact ── -->
+  <section class="block" id="contact">
+    <div class="wrap">
+      <p class="eyebrow-small">Contact</p>
+      <h2>Reach us.</h2>
+      <p class="subhead">
+        For press, partnerships, or a note about our work — we read every message.
+      </p>
+      <div class="contact-grid">
+        <div class="contact-block">
+          <p class="label">General</p>
+          <p class="value">
+            <a href="mailto:david@strategyd.com">david@strategyd.com</a>
+          </p>
+        </div>
+        <div class="contact-block">
+          <p class="label">Mailing address</p>
+          <p class="value">
+            Strategy D, Incorporated<br>
+            12121 W Olympic Blvd, Apt 6022<br>
+            Los Angeles, CA 90064<br>
+            United States
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Footer ── -->
+  <footer>
+    <div class="wrap">
+      <div>
+        <p class="brand-footer">Strategy <em>D</em>, Incorporated</p>
+        <p class="meta">Los Angeles · founded 2013</p>
+      </div>
+      <div class="meta">
+        <p>D-U-N-S 095225396 · CA S-Corp</p>
+        <p>&copy; <span id="year">2026</span> Strategy D, Incorporated. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    document.getElementById("year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

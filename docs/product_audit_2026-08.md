@@ -1,5 +1,6 @@
 # BackNine Product Audit — Keep / Freeze / Kill
 *August 2026 · against the spine: "My health, scored weekly, competed with my foursome."*
+*Reviewed with David 2026-08-25 — his amendments are marked ⭐ REVIEWED throughout. Also since first draft: Health Span Score went sensor-only (v2), which removed the score's dependence on logged behaviors entirely.*
 
 **The core loop:** open the app → see your Weekly Health Span Score and Bio Age → see where you stand in the league → do the Daily Check-in → get one good Coach Al line → log the minimum (sleep/meds/meal/workout). Everything below is judged by one question: does it make that loop stronger, or is it a promise we have to keep for no one?
 
@@ -23,19 +24,21 @@
 
 Plus the non-negotiable chassis: auth/SIWA, profile, onboarding, capability toggles.
 
+⭐ Added at review: **friend DMs, challenges, goals/goal coach, and the specialty report library** — see amended entries in the freeze section below.
+
 ## FREEZE — shipped, stop investing (the long tail)
 
 **Nutrition:** keep basic meal logging + protein (feeds Health Span). Freeze the AI plate coach, nutrition extras, macro-preset depth, body-comp report.
 
 **Training:** keep basic workout logging (feeds Health Span). Freeze PR badges, lifetime PRs, muscle heatmap, template browser, training load cards, prescribed Today's Workout, exercise history modals, injury flags.
 
-**Social beyond the foursome:** freeze Groups, group chat, group challenges, challenge competitions, Pulse feed depth, friend DMs. Keep one-tap taunts/cheers — they're league fuel and already built. The foursome is the unit; a foursome doesn't need a groups feature.
+**Social beyond the foursome** ⭐ REVIEWED: **friend DMs and challenges STAY LIVE** (trash talk needs a channel; challenges are a competition mechanic). Freeze Groups, group chat, group challenges, and Pulse feed depth. Keep one-tap taunts/cheers. The foursome is the unit; a foursome doesn't need a groups feature.
 
-**Coach adjacencies:** freeze standalone Insights feed, Daily Insight card, lifestyle correlations, coach memory card, goals/goal coach, experiments (Proven For You). Anything worth saying routes through the briefing.
+**Coach adjacencies** ⭐ REVIEWED: **goals/goal coach STAY LIVE** (commitment device). Freeze standalone Insights feed, Daily Insight card, lifestyle correlations, coach memory card, and experiments (Proven For You — right idea, needs a user base to prove anything; unfreeze when there is one). Anything worth saying routes through the briefing.
 
-**Doctor layer beyond the Handoff:** freeze Visit Prep mode, visit modals, the specialty report library (annual physical, cardiometabolic, training recovery, pre-procedure, goal progress). The Handoff one-pager IS the wedge; five report types for zero doctors is inventory.
+**Doctor layer** ⭐ REVIEWED: **the specialty report library STAYS LIVE** alongside the Handoff one-pager (annual physical, cardiometabolic, training recovery, pre-procedure, goal progress). Freeze Visit Prep mode and visit modals only.
 
-**Rituals & misc:** freeze Weekly Recap + recap share (the league's Sunday reset is the ritual), gear tab (hide from nav at launch — it dilutes the health story), vices + hydration (capability-gate like CPAP), BP card beyond data capture.
+**Nutrition / Training / Rituals & misc** ⭐ REVIEWED — confirmed as written: basic meal + workout logging stay, everything else in those tabs freezes. Weekly Recap + recap share freeze (the league's Sunday reset is the ritual), gear tab hides from nav at launch, vices + hydration capability-gate like CPAP, BP card stays data-capture (now auto-fed by Withings via Apple Health).
 
 **CPAP** stays exactly as-is: capability-gated, invisible unless switched on. This is the template for every niche feature from now on.
 

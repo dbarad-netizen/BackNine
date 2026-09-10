@@ -1,36 +1,39 @@
 "use client";
 
 /**
- * HealthyYearsCard — the QYL Index ("Quality Years Left"), the
- * Scorecard hero that
- * answers the question the whole app orbits: how much good time is
- * left, and is it growing?
+ * HealthyYearsCard — the QYL Index ("Quality Years Left"), the HORIZON
+ * stop and terminal card of the Scorecard spine.
  *
  * David 2026-09-06 ("could we add a death date?"); named by Chris
- * 2026-09-10 — QYL deliberately echoes QALY, the health-economics
- * term, which fits the doctor-layer positioning. Deliberately NOT a
- * death date: framed as projected ACTIVE years (actuarial baseline ×
- * healthy fraction, evaluated at biological age), with an honest range
- * and a bonus line showing what the user's markers buy them. The name
- * of the app is the thesis: play the back nine well.
+ * 2026-09-10 — QYL deliberately echoes QALY, the health-economics term.
+ * Deliberately NOT a death date: framed as projected ACTIVE years
+ * (actuarial baseline × healthy fraction, evaluated at biological age),
+ * with an honest range and a bonus line showing what the user's markers
+ * buy them. The name of the app is the thesis: play the back nine well.
+ *
+ * Option B spine redesign (2026-09-10): this card carries the spine's
+ * ONLY accent border — everything upstream funnels into this number.
+ * The "How is this computed?" expander moved to the shared
+ * SpineBreakdown drawer; the share button moved HERE from Bio Age
+ * (QYL-led sharing per the QYL Index experiment).
  */
 
-import { useState } from "react";
 import type { BiologicalAge } from "@/lib/api";
 
 interface Props {
   bio: BiologicalAge;
+  /** Opens the ShareCardModal (pre-set to the QYL card, its first tab). */
+  onShare?: () => void;
 }
 
-export default function HealthyYearsCard({ bio }: Props) {
-  const [showWhy, setShowWhy] = useState(false);
+export default function HealthyYearsCard({ bio, onShare }: Props) {
   const hy = bio.healthy_years;
   if (!hy || hy.years == null) return null;
 
   const bonus = hy.bonus_years ?? 0;
 
   return (
-    <section className="rounded-2xl border border-[#1B3829]/20 bg-gradient-to-br from-white via-white to-[#1B3829]/[0.04] p-5 space-y-3">
+    <section className="rounded-2xl border-2 border-[#1B3829]/50 bg-gradient-to-br from-white via-white to-[#1B3829]/[0.05] p-4 space-y-2.5">
       <div className="flex items-center justify-between">
         <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-600 flex items-center gap-1.5">
           ⛳ Quality years left
@@ -61,26 +64,16 @@ export default function HealthyYearsCard({ bio }: Props) {
         </div>
       </div>
 
-      <p className="text-[12px] text-gray-700">
-        That&apos;s the back nine. Sleep, movement, and the numbers on this
-        page are how you play it.
-      </p>
-
-      <button
-        onClick={() => setShowWhy(v => !v)}
-        className="text-[11px] font-medium text-gray-600 hover:text-gray-900 underline-offset-2 hover:underline"
-      >
-        {showWhy ? "▲ Hide" : "How is this computed?"}
-      </button>
-      {showWhy && (
-        <p className="text-[11px] text-gray-600 leading-relaxed bg-gray-50 border border-gray-100 rounded-xl p-3">
-          Actuarial life tables for your age and sex, scaled to
-          disability-free years (~70% of remaining years for US adults),
-          evaluated at your <span className="font-medium">biological</span> age
-          of {bio.biological_age} instead of your birthday age
-          {bio.chronological_age != null ? ` of ${bio.chronological_age}` : ""}.
-          {" "}{hy.caveat}
-        </p>
+      {onShare && (
+        <div className="flex justify-end">
+          <button
+            onClick={onShare}
+            className="text-[11px] font-semibold text-[#1B3829] border border-[#1B3829]/30 rounded-lg px-2.5 py-1 hover:bg-[#1B3829]/5 transition-colors"
+            title="Share your QYL Index"
+          >
+            📣 Share
+          </button>
+        </div>
       )}
     </section>
   );
