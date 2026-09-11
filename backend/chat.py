@@ -5,8 +5,11 @@ Builds a rich system prompt from the user's live health data and
 calls Claude to answer questions about it.
 """
 
+import logging
 import os
 from typing import Optional
+
+log = logging.getLogger(__name__)
 
 
 def _format_metric(label: str, value: str, unit: str = "") -> str:
@@ -662,11 +665,24 @@ def chat(
         history = []
     messages = history[-20:] + [{"role": "user", "content": user_message}]
 
-    response = client.messages.create(
-        model="claude-sonnet-5",
-        max_tokens=1024,
-        system=system,
-        messages=messages,
-    )
+    # Model fallback chain (David 2026-09-11) — same pattern as briefing.py:
+    # the Sonnet 5 swap broke generation with no fallback. Try Sonnet 5,
+    # log the real error, fall back to the previous known-good model.
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-5",
+            max_tokens=1024,
+            system=system,
+            messages=messages,
+        )
+    except Exception as e:
+        log.warning("chat: claude-sonnet-5 call failed (%s: %s) — falling back to haiku-4-5",
+                    type(e).__name__, e)
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1024,
+            system=system,
+            messages=messages,
+        )
 
     return response.content[0].text

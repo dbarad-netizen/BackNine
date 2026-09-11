@@ -11,8 +11,11 @@ Cache strategy lives in the route handler (main.py): one row per
 (user_id, date) in public.daily_briefings.
 """
 
+import logging
 import os
 from typing import Optional
+
+log = logging.getLogger(__name__)
 
 
 def _build_system_prompt(
@@ -432,8 +435,16 @@ def generate(
 
     # The "user" turn is a meta-instruction — Claude treats it as the prompt to
     # respond to. We don't have anything user-typed; this is a generation task.
-    response = client.messages.create(
-        model="claude-sonnet-5",
+    #
+    # Model fallback chain (David 2026-09-11): the Sonnet 5 swap took the
+    # briefing down for EVERY user — the create() call started failing and
+    # the endpoint 500'd with no fallback. Coach Al going silent is worse
+    # than Coach Al on the previous model, so: try Sonnet 5, and on ANY
+    # API failure fall back to the model that ran this surface reliably
+    # for months. The warning log carries the real exception so Render
+    # logs tell us exactly why Sonnet 5 is failing (model access, SDK
+    # version, etc.).
+    _msg_kwargs = dict(
         max_tokens=400,
         system=system,
         messages=[
@@ -443,5 +454,11 @@ def generate(
             }
         ],
     )
+    try:
+        response = client.messages.create(model="claude-sonnet-5", **_msg_kwargs)
+    except Exception as e:
+        log.warning("briefing: claude-sonnet-5 call failed (%s: %s) — falling back to haiku-4-5",
+                    type(e).__name__, e)
+        response = client.messages.create(model="claude-haiku-4-5-20251001", **_msg_kwargs)
 
     return response.content[0].text.strip()

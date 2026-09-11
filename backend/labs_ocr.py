@@ -209,10 +209,12 @@ def _vision_extract(file_bytes: bytes, filename: str) -> Optional[dict]:
 
     try:
         client   = anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
-            # Vision + document understanding requires a Sonnet-tier
-            # model. Haiku doesn't accept documents in the current API.
-            model="claude-sonnet-5",
+        # Vision + document understanding requires a Sonnet-tier model.
+        # Haiku doesn't accept documents in the current API.
+        # Fallback chain (David 2026-09-11): Sonnet 5 first, previous
+        # known-good Sonnet 4.6 on any API failure — same pattern as
+        # briefing.py/chat.py after the Sonnet 5 swap broke generation.
+        _ocr_kwargs = dict(
             max_tokens=4000,
             system=system,
             messages=[{
@@ -226,6 +228,12 @@ def _vision_extract(file_bytes: bytes, filename: str) -> Optional[dict]:
                 ],
             }],
         )
+        try:
+            response = client.messages.create(model="claude-sonnet-5", **_ocr_kwargs)
+        except Exception as _e5:
+            log.warning("labs_ocr: claude-sonnet-5 call failed (%s: %s) — falling back to sonnet-4-6",
+                        type(_e5).__name__, _e5)
+            response = client.messages.create(model="claude-sonnet-4-6", **_ocr_kwargs)
     except Exception as exc:
         log.warning("labs_ocr: vision call failed: %s", exc)
         return None

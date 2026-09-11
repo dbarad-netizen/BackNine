@@ -3414,6 +3414,9 @@ export type TauntKind = "cheer" | "catch_me" | "race_me" | "slow_today";
 export interface MetricValue {
   value:  number | null;
   anchor: string;
+  /** True when the score is BackNine-computed from Apple Health data
+   *  (vs a native Oura score). Rendered with a ≈ prefix. 2026-09-11. */
+  estimated?: boolean;
 }
 
 export interface HeadToHeadTally {

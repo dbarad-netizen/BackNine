@@ -393,10 +393,17 @@ export default function FriendLeaderboard({ onInvite, onSeeMore }: Props = {}) {
                           {METRIC_LABELS[m]}
                           {isLeader && " 🏅"}
                         </p>
-                        <p className={`text-[13px] font-bold leading-tight tabular-nums ${
-                          isLeader ? "text-amber-900" : has ? "text-gray-800" : "text-gray-500"
-                        }`}>
-                          {fmtMetric(mv.value, m)}
+                        <p
+                          className={`text-[13px] font-bold leading-tight tabular-nums ${
+                            isLeader ? "text-amber-900" : has ? "text-gray-800" : "text-gray-500"
+                          }`}
+                          title={mv.estimated ? "≈ computed by BackNine from Apple Health data" : undefined}
+                        >
+                          {/* ≈ marks BackNine-estimated scores (Apple Health
+                              users without native Oura scores) — same
+                              transparency contract as the Scorecard rings.
+                              David 2026-09-11: "so everyone can play." */}
+                          {has && mv.estimated ? "≈" : ""}{fmtMetric(mv.value, m)}
                         </p>
                         {fresh && (
                           <p

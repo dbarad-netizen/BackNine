@@ -7574,29 +7574,65 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
     # but the response always includes all three metric values per entry.
     _ = (metric or "").lower()
 
-    def _value_for(uid: str, metric: str) -> tuple[Optional[float], str]:
-        """Resolve the metric value for a user. Returns (value, anchor_date).
+    # ── BackNine-estimated ring scores from Apple Health (David
+    # 2026-09-11: "so everyone can play"). AH-only friends showed —
+    # for Sleep and Activity because those scores were Oura-only.
+    # Same estimate_ring_scores engine as the Scorecard rings; used
+    # strictly as a FALLBACK after the Oura walk-back finds nothing,
+    # so Oura users' native scores always win. Memoized per user —
+    # one apple_health_daily fetch each, reused across metrics and
+    # the head-to-head tally.
+    _ah_est_cache: dict[str, dict] = {}
+
+    def _ah_est(uid: str) -> dict[str, dict]:
+        """{date: {"sleep": float|None, "activity": float|None}} estimated."""
+        if uid in _ah_est_cache:
+            return _ah_est_cache[uid]
+        out: dict[str, dict] = {}
+        try:
+            rows = sorted((ah.get_data(uid, days=14) or []),
+                          key=lambda r: str(r.get("date") or ""), reverse=True)
+            for i, r in enumerate(rows):
+                est = ah.estimate_ring_scores(rows[i:])
+                sl = (est.get("sleep") or {}).get("score")
+                ac = (est.get("activity") or {}).get("score")
+                if sl or ac:
+                    out[str(r.get("date"))] = {
+                        "sleep":    float(sl) if sl else None,
+                        "activity": float(ac) if ac else None,
+                    }
+        except Exception:
+            pass
+        _ah_est_cache[uid] = out
+        return out
+
+    def _value_for(uid: str, metric: str) -> tuple[Optional[float], str, bool]:
+        """Resolve the metric value for a user. Returns
+        (value, anchor_date, estimated).
 
         Robust to today's data not being in the cache yet. For each metric we
         try today's anchor first, then walk backwards through the last 7 days
         looking for a real value. This is what keeps the leaderboard from
         going dark first thing in the morning before Oura/AH have synced.
 
-        Steps prefer Apple Health (live throughout the day); sleep and
-        activity scores come from Oura since AH doesn't compute those.
+        Steps prefer Apple Health (live throughout the day). Sleep and
+        activity scores come from Oura when available; for AH-only users
+        they fall back to BackNine-estimated ring scores (estimated=True).
         """
         try:
             rm, slm, am, smm = oc.get_days(uid, days=8)
         except Exception:
-            return None, ""
+            rm, slm, am, smm = {}, {}, {}, {}
         anchor, t_rdy, t_sl, t_act, t_sm = _resolve_oura_anchor(uid, rm, slm, am, smm)
 
         def _walk_back(days_to_check: int = 7):
-            """Yield (date_str) from anchor walking backwards."""
+            """Yield (date_str) from anchor walking backwards. AH-only
+            users may have no Oura anchor at all — walk from today so
+            the Apple Health fallbacks still get a window to search."""
             try:
                 cursor = datetime.strptime(anchor, "%Y-%m-%d").date()
             except Exception:
-                return
+                cursor = datetime.now().date()
             for i in range(days_to_check):
                 yield (cursor - timedelta(days=i)).isoformat()
 
@@ -7620,16 +7656,16 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
                 if idx == 0:
                     # Today: take whatever is recorded, even 0.
                     if ah_steps is not None:
-                        return float(ah_steps), d
+                        return float(ah_steps), d, False
                     if oura_steps is not None:
-                        return float(oura_steps), d
+                        return float(oura_steps), d, False
                     continue  # genuinely no record for today → fall back to walking
                 # Prior days: only count if non-zero (existing behavior).
                 if ah_steps:
-                    return float(ah_steps), d
+                    return float(ah_steps), d, False
                 if oura_steps:
-                    return float(oura_steps), d
-            return None, anchor
+                    return float(oura_steps), d, False
+            return None, anchor, False
 
         if metric == "sleep":
             for d in _walk_back():
@@ -7637,18 +7673,28 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
                 score = sl_day.get("score")
                 # score=0 means ring not worn — skip
                 if score and score > 0:
-                    return float(score), d
-            return None, anchor
+                    return float(score), d, False
+            # No Oura sleep score in the window → BackNine-estimated
+            # score from Apple Health, if the user has AH data.
+            for d in _walk_back():
+                est = (_ah_est(uid).get(d) or {}).get("sleep")
+                if est:
+                    return float(est), d, True
+            return None, anchor, False
 
         if metric == "activity":
             for d in _walk_back():
                 a_day = am.get(d) or {}
                 score = a_day.get("score")
                 if score and score > 0:
-                    return float(score), d
-            return None, anchor
+                    return float(score), d, False
+            for d in _walk_back():
+                est = (_ah_est(uid).get(d) or {}).get("activity")
+                if est:
+                    return float(est), d, True
+            return None, anchor, False
 
-        return None, anchor
+        return None, anchor, False
 
     # Pull today's taunt set up-front so the UI knows which preset (if any)
     # the user already sent to each friend today. Use the client's device-local
@@ -7696,10 +7742,20 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
                     steps = float(am_day["steps"])
             sleep_score = (slm.get(d) or {}).get("score")
             act_score   = (am.get(d)  or {}).get("score")
+            sleep_v = float(sleep_score) if sleep_score and sleep_score > 0 else None
+            act_v   = float(act_score)   if act_score and act_score > 0   else None
+            # AH-estimated fallback per day (David 2026-09-11) so the
+            # head-to-head tally also works for AH-only friends.
+            if sleep_v is None or act_v is None:
+                est_d = _ah_est(uid).get(d) or {}
+                if sleep_v is None and est_d.get("sleep"):
+                    sleep_v = est_d["sleep"]
+                if act_v is None and est_d.get("activity"):
+                    act_v = est_d["activity"]
             out[d] = {
                 "steps":    steps,
-                "sleep":    float(sleep_score) if sleep_score and sleep_score > 0 else None,
-                "activity": float(act_score)   if act_score and act_score > 0   else None,
+                "sleep":    sleep_v,
+                "activity": act_v,
             }
         return out
 
@@ -7728,9 +7784,9 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
     me_days_cache = _per_day_values(user_id)
 
     def _entry_for(uid: str, name: str, is_me: bool) -> dict:
-        steps_v, steps_a    = _value_for(uid, "steps")
-        sleep_v, sleep_a    = _value_for(uid, "sleep")
-        act_v,   act_a      = _value_for(uid, "activity")
+        steps_v, steps_a, steps_e = _value_for(uid, "steps")
+        sleep_v, sleep_a, sleep_e = _value_for(uid, "sleep")
+        act_v,   act_a,   act_e   = _value_for(uid, "activity")
         h2h = None
         if not is_me:
             try:
@@ -7742,10 +7798,13 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
             "user_id":  uid,
             "name":     name,
             "is_me":    is_me,
-            # Per-metric value + anchor
-            "steps":    {"value": steps_v, "anchor": steps_a},
-            "sleep":    {"value": sleep_v, "anchor": sleep_a},
-            "activity": {"value": act_v,   "anchor": act_a},
+            # Per-metric value + anchor. `estimated` marks BackNine-computed
+            # scores from Apple Health (vs native Oura scores) so the UI
+            # can label them ≈ — same transparency contract as the
+            # Scorecard rings. David 2026-09-11.
+            "steps":    {"value": steps_v, "anchor": steps_a, "estimated": steps_e},
+            "sleep":    {"value": sleep_v, "anchor": sleep_a, "estimated": sleep_e},
+            "activity": {"value": act_v,   "anchor": act_a,   "estimated": act_e},
             # Weekly engagement points — the inclusive metric everyone earns
             # (check-in, workouts, meals, weigh-ins + step bonus). Non-wearable
             # users still rank here instead of showing all-zero.
