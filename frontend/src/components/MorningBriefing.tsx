@@ -173,6 +173,16 @@ export default function MorningBriefing({ onOpenChat }: Props) {
             <p className="text-white text-[13px] leading-snug">
               Couldn&apos;t load today&apos;s briefing — usually means the server is waking up.
             </p>
+            {/* Server-side reason (David 2026-09-11): the backend puts the
+                real exception in the 500 detail, but this card was
+                swallowing it — which turned a one-line diagnosis
+                ("credit balance", "model not found", …) into a
+                multi-hour hunt. Small, dim, but visible. */}
+            {error && error !== "Failed to fetch" && (
+              <p className="mt-1 text-[10px] text-white/50 leading-snug break-words">
+                {error}
+              </p>
+            )}
             <button
               onClick={() => window.location.reload()}
               className="mt-2 text-[12px] text-white/90 hover:text-white font-semibold underline-offset-2 hover:underline"
