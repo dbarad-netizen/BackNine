@@ -80,12 +80,35 @@ export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
   const [showScoring, setShowScoring] = useState(false);
 
   useEffect(() => {
+    // Refetch on foreground, not just mount (David 2026-09-11): the iOS
+    // webview keeps this component alive for days, so a mount-only fetch
+    // froze standings at whatever the server said at open time. Worse,
+    // Health Span snapshots are upserted intraday — an early-morning
+    // load (before Oura sleep syncs) can persist a partial score (64)
+    // that later becomes 95; the Health Span card refreshes with the
+    // dashboard, this card didn't, and the same screen showed both.
+    // Now: refetch whenever the app returns to the foreground, throttled
+    // to once a minute.
     let cancelled = false;
-    api.friends.league()
-      .then(res => { if (!cancelled) setData(res); })
-      .catch(() => { /* soft-fail */ })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+    let lastFetch = 0;
+    const load = () => {
+      lastFetch = Date.now();
+      api.friends.league()
+        .then(res => { if (!cancelled) setData(res); })
+        .catch(() => { /* soft-fail */ })
+        .finally(() => { if (!cancelled) setLoading(false); });
+    };
+    load();
+    const onWake = () => {
+      if (document.visibilityState === "visible" && Date.now() - lastFetch > 60_000) load();
+    };
+    document.addEventListener("visibilitychange", onWake);
+    window.addEventListener("focus", onWake);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onWake);
+      window.removeEventListener("focus", onWake);
+    };
   }, []);
 
   if (loading) {

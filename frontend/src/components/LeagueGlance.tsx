@@ -24,7 +24,24 @@ export default function LeagueGlance({ onOpen }: Props) {
   const [data, setData] = useState<LeagueResponse | null>(null);
 
   useEffect(() => {
-    api.friends.league().then(setData).catch(() => setData(null));
+    // Refetch on foreground (David 2026-09-11) — same staleness fix as
+    // WeeklyLeague: mount-only fetches freeze intraday Health Span
+    // snapshots in the long-lived iOS webview.
+    let lastFetch = 0;
+    const load = () => {
+      lastFetch = Date.now();
+      api.friends.league().then(setData).catch(() => setData(null));
+    };
+    load();
+    const onWake = () => {
+      if (document.visibilityState === "visible" && Date.now() - lastFetch > 60_000) load();
+    };
+    document.addEventListener("visibilitychange", onWake);
+    window.addEventListener("focus", onWake);
+    return () => {
+      document.removeEventListener("visibilitychange", onWake);
+      window.removeEventListener("focus", onWake);
+    };
   }, []);
 
   if (!data || !data.league) return null;
