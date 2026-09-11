@@ -674,6 +674,9 @@ def chat(
             max_tokens=1024,
             system=system,
             messages=messages,
+            # 30s cap — see briefing.py: hangs fall back instead of
+            # killing the request silently.
+            timeout=30.0,
         )
     except Exception as e:
         log.warning("chat: claude-sonnet-5 call failed (%s: %s) — falling back to haiku-4-5",

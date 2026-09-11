@@ -455,7 +455,12 @@ def generate(
         ],
     )
     try:
-        response = client.messages.create(model="claude-sonnet-5", **_msg_kwargs)
+        # timeout=30s: David's outage showed NO errors in Render logs —
+        # the failure mode was a silent hang (SDK retry loops on
+        # 429/529), the client gave up, uvicorn cancelled the request
+        # quietly, and no briefing row was ever written. A hard timeout
+        # converts a hang into a logged fallback instead of a dead card.
+        response = client.messages.create(model="claude-sonnet-5", timeout=30.0, **_msg_kwargs)
     except Exception as e:
         log.warning("briefing: claude-sonnet-5 call failed (%s: %s) — falling back to haiku-4-5",
                     type(e).__name__, e)

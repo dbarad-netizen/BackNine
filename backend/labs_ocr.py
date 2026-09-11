@@ -229,7 +229,9 @@ def _vision_extract(file_bytes: bytes, filename: str) -> Optional[dict]:
             }],
         )
         try:
-            response = client.messages.create(model="claude-sonnet-5", **_ocr_kwargs)
+            # 90s cap (documents are big) — hangs fall back to 4.6
+            # instead of killing the upload silently. See briefing.py.
+            response = client.messages.create(model="claude-sonnet-5", timeout=90.0, **_ocr_kwargs)
         except Exception as _e5:
             log.warning("labs_ocr: claude-sonnet-5 call failed (%s: %s) — falling back to sonnet-4-6",
                         type(_e5).__name__, _e5)
