@@ -6,6 +6,7 @@ a headline, a short overview, and a focus + a few actions for each week. One
 Claude Haiku call at creation; the plan is cached on the goal row.
 """
 
+from ai_text import first_text  # ThinkingBlock-safe (2026-09-12)
 import json
 import os
 import re
@@ -115,7 +116,7 @@ def generate_plan(metric_label: str, unit: str, baseline, target, duration_weeks
             system=system,
             messages=[{"role": "user", "content": "Create the plan now. Output only the JSON object."}],
         )
-        parsed = _parse_json(resp.content[0].text.strip())
+        parsed = _parse_json(first_text(resp).strip())
         if not parsed or not parsed.get("weeks"):
             return fallback
         # Normalize

@@ -688,4 +688,6 @@ def chat(
             messages=messages,
         )
 
-    return response.content[0].text
+    # first_text, not content[0].text — see ai_text.py (ThinkingBlock).
+    from ai_text import first_text
+    return first_text(response)

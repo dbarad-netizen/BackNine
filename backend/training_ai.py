@@ -10,6 +10,7 @@ workout into structured exercises + sets the user confirms.
 Uses the same Claude Haiku model the rest of the app uses.
 """
 
+from ai_text import first_text  # ThinkingBlock-safe (2026-09-12)
 import json
 import os
 import re
@@ -109,4 +110,4 @@ def parse_workout(text: str) -> dict:
         system=_SYSTEM,
         messages=[{"role": "user", "content": f"Workout: {text}\n\nReturn the JSON object."}],
     )
-    return _parse(resp.content[0].text)
+    return _parse(first_text(resp))

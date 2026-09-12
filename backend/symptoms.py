@@ -19,6 +19,7 @@ about this.
 """
 
 from __future__ import annotations
+from ai_text import first_text  # ThinkingBlock-safe (2026-09-12)
 
 import json
 import logging
@@ -435,7 +436,7 @@ Output ONLY: {"narrative": "..."}  No code fences."""
             system=system,
             messages=[{"role": "user", "content": user_msg}],
         )
-        raw = (response.content[0].text if response.content else "").strip()
+        raw = first_text(response).strip()
         if raw.startswith("```"):
             raw = raw.strip("`").strip()
             if raw.startswith("json"):

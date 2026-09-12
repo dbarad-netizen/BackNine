@@ -240,7 +240,9 @@ def _vision_extract(file_bytes: bytes, filename: str) -> Optional[dict]:
         log.warning("labs_ocr: vision call failed: %s", exc)
         return None
 
-    raw    = response.content[0].text if response.content else ""
+    # first_text, not content[0].text — see ai_text.py (ThinkingBlock).
+    from ai_text import first_text
+    raw    = first_text(response)
     parsed = _parse_claude_json(raw)
     if not parsed:
         log.warning("labs_ocr: couldn't parse Claude output: %s", raw[:400])

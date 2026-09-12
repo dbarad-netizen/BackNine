@@ -28,6 +28,7 @@ never left with zero questions on the packet.
 """
 
 from __future__ import annotations
+from ai_text import first_text  # ThinkingBlock-safe (2026-09-12)
 
 import json
 import logging
@@ -276,7 +277,7 @@ def _call_claude(prompt_body: str) -> Optional[list[dict]]:
             system=_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": prompt_body}],
         )
-        raw = response.content[0].text if response.content else ""
+        raw = first_text(response)
     except Exception as exc:
         log.warning("visit_questions: LLM call failed: %s", exc)
         return None

@@ -7,6 +7,7 @@ is always a draft the user reviews before logging, so approximate estimates
 stay honest.
 """
 
+from ai_text import first_text  # ThinkingBlock-safe (2026-09-12)
 import json
 import os
 import re
@@ -75,7 +76,7 @@ def parse_text(text: str) -> list[dict]:
         system=_SYSTEM,
         messages=[{"role": "user", "content": f"Meal: {text}\n\nReturn the JSON array."}],
     )
-    return _parse_items(resp.content[0].text)
+    return _parse_items(first_text(resp))
 
 
 def parse_photo(image_b64: str, media_type: str = "image/jpeg") -> list[dict]:
@@ -94,4 +95,4 @@ def parse_photo(image_b64: str, media_type: str = "image/jpeg") -> list[dict]:
             ],
         }],
     )
-    return _parse_items(resp.content[0].text)
+    return _parse_items(first_text(resp))

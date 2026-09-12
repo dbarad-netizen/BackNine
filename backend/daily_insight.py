@@ -21,6 +21,7 @@ future generations so we learn what flavors of insight a user values.
 """
 
 from __future__ import annotations
+from ai_text import first_text  # ThinkingBlock-safe (2026-09-12)
 
 import json
 import logging
@@ -474,7 +475,7 @@ def _generate_insight(
             system=_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_msg}],
         )
-        raw = response.content[0].text if response.content else ""
+        raw = first_text(response)
         parsed = _parse_json_safe(raw)
         if not parsed:
             log.warning("daily_insight: couldn't parse Claude response: %s", raw[:200])

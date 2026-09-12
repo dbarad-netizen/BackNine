@@ -15,6 +15,7 @@ Output: {
 Uses the same Claude Haiku model the rest of the app uses.
 """
 
+from ai_text import first_text  # ThinkingBlock-safe (2026-09-12)
 import json
 import os
 import re
@@ -145,4 +146,4 @@ def find_gear(query: str, catalog: list, context: str = "") -> dict:
         system=_SYSTEM,
         messages=[{"role": "user", "content": user_block}],
     )
-    return _parse(resp.content[0].text, valid_ids)
+    return _parse(first_text(resp), valid_ids)

@@ -24,6 +24,7 @@ cached row. Status updates (started/skipped/completed) flow back here.
 """
 
 from __future__ import annotations
+from ai_text import first_text  # ThinkingBlock-safe (2026-09-12)
 
 import json
 import logging
@@ -367,7 +368,7 @@ def _generate(user_id: str, profile: dict, today_iso: str) -> Optional[dict]:
             system=_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_msg}],
         )
-        raw = response.content[0].text if response.content else ""
+        raw = first_text(response)
         parsed = _parse_json_safe(raw)
         if not parsed or not parsed.get("session_name"):
             log.warning("today_workout: bad Claude response: %s", raw[:200])

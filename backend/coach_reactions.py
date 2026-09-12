@@ -13,6 +13,7 @@ briefing — with a very tight prompt that forbids advice essays, lists, or
 sign-offs. Failures degrade silently (the action still succeeded).
 """
 
+from ai_text import first_text  # ThinkingBlock-safe (2026-09-12)
 import os
 from typing import Any, Optional
 
@@ -142,7 +143,7 @@ def generate_reaction(
                 "content": _user_payload(action_kind, details, profile, goal),
             }],
         )
-        text = (response.content[0].text or "").strip()
+        text = first_text(response).strip()
         # Trim quotes / trailing punctuation oddities — the prompt asks for one
         # sentence but Haiku occasionally wraps in quotes.
         if text.startswith('"') and text.endswith('"'):

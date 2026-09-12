@@ -12,6 +12,7 @@ to test it." One Claude Haiku call per user per week; caching lives in the
 route handler (main.py) keyed on (user_id, week_start).
 """
 
+from ai_text import first_text  # ThinkingBlock-safe (2026-09-12)
 import json
 import os
 import re
@@ -139,7 +140,7 @@ def generate(insight: dict, profile: dict) -> dict:
         ],
     )
 
-    raw = response.content[0].text.strip()
+    raw = first_text(response).strip()
     parsed = _parse_json(raw)
     if not parsed or not parsed.get("headline") or not parsed.get("narrative"):
         raise ValueError("weekly insight generation returned unparseable output")
