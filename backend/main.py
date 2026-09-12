@@ -9,8 +9,10 @@ Routes:
   GET  /api/wearables                → list connected wearables
   DELETE /api/wearables/{provider}   → disconnect a wearable
 """
-import io, os, secrets
+import io, logging, os, secrets
 from datetime import datetime, timedelta, timezone, date
+
+log = logging.getLogger(__name__)
 from typing import Optional, Tuple
 
 from fastapi import FastAPI, HTTPException, Depends, Request, Response, UploadFile, File, BackgroundTasks
@@ -6684,6 +6686,10 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
+        # Full traceback to Render logs (David 2026-09-11): this except
+        # used to swallow the stack trace, leaving nothing but a bare
+        # "500" access line — undebuggable from the dashboard.
+        log.exception("briefing generation failed for %s", user_id)
         raise HTTPException(status_code=500, detail=f"briefing generation failed: {e}")
 
     # Save to cache (best-effort — never crash the dashboard over a write).
