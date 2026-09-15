@@ -208,6 +208,40 @@ export default function MorningBriefing({ onOpenChat }: Props) {
   // of building the briefing on an older night's data.
   const pending = data.sleep_status === "pending";
 
+  // ─── Empty narrative guard (David 2026-09-15) ─────────────────────────────
+  // An all-thinking Sonnet 5 response once cached a briefing with an EMPTY
+  // narrative; the card rendered as bare chrome with no text and no way to
+  // tell anything was wrong. Backend now refuses to cache empties, but if
+  // one ever reaches the client again, show a regenerate card — never a
+  // silent blank.
+  if (!pending && paragraphs.length === 0) {
+    return (
+      <section
+        className="rounded-2xl shadow-sm overflow-hidden border border-[#1B3829]/15"
+        style={{ background: "linear-gradient(135deg, #1B3829 0%, #2D6A4F 100%)" }}
+      >
+        <div className="px-5 py-4 flex items-start gap-3">
+          <CoachAlAvatar size={40} className="rounded-full ring-2 ring-white/30 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] text-white/60 uppercase tracking-widest font-semibold mb-1">
+              Coach Al · {data.briefing_type_label || "Today’s Briefing"}
+            </p>
+            <p className="text-white text-[13px] leading-snug">
+              Today&apos;s briefing came back empty — let me write it again.
+            </p>
+            <button
+              onClick={handleRegenerate}
+              disabled={regenerating}
+              className="mt-2 text-[12px] text-white/90 hover:text-white font-semibold underline-offset-2 hover:underline disabled:opacity-60"
+            >
+              {regenerating ? "Writing…" : "Regenerate"}
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   // ─── Collapsed mode ────────────────────────────────────────────────────────
   // Once the user has acknowledged today's briefing (typically by logging a
   // mood), fold the long narrative away to free up dashboard real estate. The
