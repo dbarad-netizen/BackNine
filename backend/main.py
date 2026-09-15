@@ -6697,7 +6697,11 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
     # forced out with allow_no_sleep while today is still empty is NOT cached, so
     # the next open regenerates the real one once data lands. (Coach Al can be
     # re-run any time via Regenerate to fold in sleep detail that synced later.)
-    if db and (today_has_signal or not recent_signal):
+    # `narrative.strip()` guard (David 2026-09-15): an all-thinking
+    # Sonnet 5 response once produced an empty narrative that got
+    # CACHED, so every load that day served a blank briefing. Never
+    # cache emptiness.
+    if db and narrative and narrative.strip() and (today_has_signal or not recent_signal):
         try:
             db.table("daily_briefings").upsert(
                 {

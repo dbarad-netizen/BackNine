@@ -671,7 +671,9 @@ def chat(
     try:
         response = client.messages.create(
             model="claude-sonnet-5",
-            max_tokens=1024,
+            # 1024 → 2048 (2026-09-15): thinking tokens count against
+            # max_tokens on Sonnet 5 — see briefing.py.
+            max_tokens=2048,
             system=system,
             messages=messages,
             # 30s cap — see briefing.py: hangs fall back instead of
@@ -690,4 +692,15 @@ def chat(
 
     # first_text, not content[0].text — see ai_text.py (ThinkingBlock).
     from ai_text import first_text
-    return first_text(response)
+    text = first_text(response)
+    if not text.strip():
+        # All-thinking, no-text response (2026-09-15) — see briefing.py.
+        log.warning("chat: model returned no text blocks — falling back to haiku-4-5")
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1024,
+            system=system,
+            messages=messages,
+        )
+        text = first_text(response)
+    return text

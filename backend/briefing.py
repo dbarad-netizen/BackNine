@@ -445,7 +445,13 @@ def generate(
     # logs tell us exactly why Sonnet 5 is failing (model access, SDK
     # version, etc.).
     _msg_kwargs = dict(
-        max_tokens=400,
+        # 400 → 1600 (David 2026-09-15): Sonnet 5 thinks before it
+        # writes, and thinking tokens count against max_tokens. At 400
+        # the model sometimes spent the whole budget thinking and
+        # returned ZERO text blocks — an empty briefing that then got
+        # cached. The narrative itself is still prompt-capped (~120
+        # words); the extra headroom is for thinking, not longer output.
+        max_tokens=1600,
         system=system,
         messages=[
             {
@@ -469,4 +475,13 @@ def generate(
     # first_text, not content[0].text — Sonnet 5 prepends a ThinkingBlock,
     # which is exactly what broke the briefing for two days (2026-09-11).
     from ai_text import first_text
-    return first_text(response).strip()
+    text = first_text(response).strip()
+    if not text:
+        # All-thinking, no-text response (2026-09-15) — regenerate on
+        # the known-good model rather than shipping an empty briefing.
+        log.warning("briefing: sonnet-5 returned no text blocks — falling back to haiku-4-5")
+        response = client.messages.create(model="claude-haiku-4-5-20251001", **_msg_kwargs)
+        text = first_text(response).strip()
+    if not text:
+        raise RuntimeError("briefing model returned no text")
+    return text
