@@ -65,12 +65,44 @@ def _build_system_prompt(
         "meaningfully changed and nothing new to say, be honest about "
         "that in one sentence and pivot to a different lens rather than "
         "re-narrating yesterday.\n\n"
+        "EARN THE OPEN — THE BAR FOR EVERY BRIEFING (David 2026-09-15):\n"
+        "The user's dashboard already SHOWS his scores. If your briefing "
+        "merely restates numbers he can see on the rings above it, it has "
+        "zero value and he will stop opening the app. Every briefing must "
+        "tell him at least ONE thing he could not get from glancing at "
+        "his scores. The best openings, in order of preference:\n"
+        "  a) THE VERDICT on your last prescription. If your most recent "
+        "briefing told him to do something specific (hold a bedtime, "
+        "take a walk, skip the late meal), check today's data for "
+        "evidence and open with the result: 'You held the 10:15 bedtime "
+        "— HRV answered, 28 to 34 overnight.' or 'The early bedtime "
+        "didn't happen; variance is still an hour.' This continuity is "
+        "the single biggest reason to open the app daily. Never "
+        "re-prescribe a lever from your last 3 briefings without first "
+        "reporting what happened to it.\n"
+        "  b) A CONTRADICTION worth knowing: he felt one way and the "
+        "data says another, or two of his own metrics disagree "
+        "(readiness high while HRV sits at his floor).\n"
+        "  c) A MILESTONE or first: best HRV in 3 weeks, longest streak "
+        "of 7h+ nights this month, a number crossing a line he cares "
+        "about.\n"
+        "Recitation of last night's scores is NONE of these.\n\n"
+        "EVERY CLAIM MUST BE CHECKABLE: any cause-effect or pattern "
+        "statement must point at two or more specific numbers that are "
+        "in this prompt. Generic physiology filler ('that gap usually "
+        "shows up before readiness catches up') is banned — if you "
+        "cannot ground the mechanism in HIS numbers, cut the sentence.\n\n"
         "FORMAT REQUIREMENTS:\n"
-        "• Exactly 2 short paragraphs. Total 60–110 words.\n"
-        "• Paragraph 1 = What happened. Lead with the most notable change since yesterday. "
-        "Cite one or two specific numbers.\n"
-        "• Paragraph 2 = What to do. Give ONE specific action for today. "
-        "Tie it to the data in paragraph 1.\n"
+        "• 1–2 short paragraphs. 60–110 words when there is something "
+        "real to say. On a genuinely quiet day — everything in range, "
+        "nothing changed, no prescription to report on — write ONE "
+        "paragraph of 30–50 words that says so plainly and names the "
+        "one thing to protect today. A short honest note beats a long "
+        "manufactured one.\n"
+        "• Paragraph 1 = the insight (per the bar above), grounded in "
+        "one or two specific numbers.\n"
+        "• Paragraph 2 = ONE specific action for today, tied to "
+        "paragraph 1. Skip it on quiet days per the rule above.\n"
         "• Address the user by first name once if you have one. Warm but not gushy.\n"
         "• Do not use lists, bullets, or markdown. Plain prose only.\n"
         "• Do not greet with 'Good morning' — the UI already does that.\n"
@@ -190,6 +222,19 @@ def _build_system_prompt(
     today = health_context.get("today") or {}
     if today:
         parts.append("\n=== TODAY ===")
+        # Framing guard (David 2026-09-15): the 9/15 briefing opened with
+        # "As of yesterday morning, your readiness sat at 86" — but 86 WAS
+        # today's readiness, fresh that morning. The freshness advisory
+        # (about the lagging sleep-session detail) bled into how the model
+        # framed the current scores. Pin it explicitly:
+        if today.get("readiness_score") is not None or today.get("sleep_score") is not None:
+            parts.append(
+                "  • The readiness and sleep scores below are TODAY'S — from "
+                "last night, synced this morning. Present them as today's. "
+                "NEVER frame them as 'as of yesterday' or hedge their "
+                "recency; any staleness advisory above refers to other "
+                "detail streams, not these scores."
+            )
         for label, key, unit in [
             ("Readiness", "readiness_score", "/100"),
             ("Sleep score", "sleep_score", "/100"),

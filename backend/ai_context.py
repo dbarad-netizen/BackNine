@@ -329,10 +329,19 @@ def _recent_briefings(user_id: str, days: int = 5) -> str:
             "a specific stack item, a training rhythm, a check-in prompt) "
             "— DO NOT re-narrate yesterday.",
         ]
-        for r in rows:
+        for i, r in enumerate(rows):
             d   = r.get("date") or ""
             nar = (r.get("narrative") or "").strip().replace("\n", " ")
-            if nar:
+            if not nar:
+                continue
+            if i == 0:
+                # Most recent briefing IN FULL (David 2026-09-15): the
+                # follow-through loop ("you held the bedtime — HRV
+                # answered") needs yesterday's PRESCRIPTION, which lives
+                # in paragraph 2 — beyond the 240-char cut. Older
+                # briefings stay truncated; they're only for variety.
+                lines.append(f"  • {d} (your most recent — check today's data for evidence of whether the user followed its prescription, and open with the verdict): {nar[:900]}")
+            else:
                 lines.append(f"  • {d}: {nar[:240]}{'...' if len(nar) > 240 else ''}")
         return "\n".join(lines) + "\n"
     except Exception:
