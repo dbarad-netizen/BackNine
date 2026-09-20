@@ -208,15 +208,46 @@ function ConnectContent() {
             {/* Apple Health setup panel */}
             {showApple && (
               <div className="border-t border-zinc-800 px-5 py-4 space-y-4">
+                {/* Path 0 — the BackNine iOS app (David 2026-09-20, "Rob
+                    couldn't easily integrate with Apple Health"): a new
+                    iPhone user landing here was told to buy a $5 app or
+                    hand-build a Shortcut, while our own native app —
+                    one-tap HealthKit, automatic daily sync — went
+                    unmentioned. It is THE path for iPhone users; the
+                    Shortcut/HAE routes below are the fallback for people
+                    who don't want another app. Link comes from
+                    NEXT_PUBLIC_TESTFLIGHT_URL until App Store launch. */}
+                {process.env.NEXT_PUBLIC_TESTFLIGHT_URL && (
+                  <div className="rounded-lg border-2 border-green-500/70 bg-green-950/40 p-3 space-y-2">
+                    <span className="text-green-300 text-xs font-semibold">
+                      Easiest · Free · Recommended
+                    </span>
+                    <p className="text-white text-sm font-semibold">Get the BackNine iPhone app</p>
+                    <p className="text-zinc-300 text-xs leading-relaxed">
+                      Apple Health connects with one tap inside the app — no third-party
+                      tools, no setup keys. It syncs automatically every day and your
+                      account carries over (sign in the same way you did here).
+                    </p>
+                    <a
+                      href={process.env.NEXT_PUBLIC_TESTFLIGHT_URL}
+                      target="_blank" rel="noopener"
+                      className="block w-full text-center rounded-lg bg-green-500 hover:bg-green-400 text-black text-sm font-bold py-2.5 transition-colors"
+                    >
+                       Get the app
+                    </a>
+                  </div>
+                )}
+
                 <p className="text-zinc-300 text-xs leading-relaxed">
-                  Two ways to sync Apple Health to BackNine. Pick one — both send
-                  the same data, just packaged differently.
+                  {process.env.NEXT_PUBLIC_TESTFLIGHT_URL
+                    ? "Prefer not to install the app? Two other ways to sync Apple Health — both send the same data."
+                    : "Two ways to sync Apple Health to BackNine. Pick one — both send the same data, just packaged differently."}
                 </p>
 
                 {/* Path A — BackNine Shortcut (recommended once authored) */}
                 <div className="rounded-lg border border-green-700/60 bg-green-950/30 p-3 space-y-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-green-300 text-xs font-semibold">Recommended · Free</span>
+                    <span className="text-green-300 text-xs font-semibold">Free</span>
                     <span className="text-[10px] text-amber-300 bg-amber-950/60 border border-amber-700/60 px-1.5 py-0.5 rounded">
                       Install link coming soon
                     </span>

@@ -588,50 +588,117 @@ async def _ensure_valid_token(session: dict) -> Tuple[Optional[str], Optional[di
     if not session.get("access_token"):
         # No Oura link on this session — return cleanly, don't blow up.
         return None, None
+
+    # ── Multi-device token war fix (David 2026-09-20) ────────────────
+    # Oura refresh tokens are SINGLE-USE. Each device's session JWT
+    # carries its own copy of the tokens, so whenever the iOS app
+    # refreshed, the website's embedded refresh token was silently
+    # invalidated — and the next website visit demanded "reconnect
+    # Oura" (and vice versa, forever). The DB is now the source of
+    # truth: before refreshing, adopt newer tokens from the central
+    # store; on invalid_grant, retry once with the central refresh
+    # token; after any successful refresh, persist to BOTH token
+    # tables (the old code wrote only wearable_connections, whose
+    # UUID user_id column can't even hold text ids like David's —
+    # so his refreshes were never persisted at all).
+    user_id = session.get("user_id")
+    db = get_supabase()
+
+    def _central_tokens() -> Optional[dict]:
+        if not (db and user_id):
+            return None
+        for table in ("wearable_connections", "oura_connections"):
+            try:
+                q = db.table(table).select("access_token, refresh_token, expires_at")
+                q = q.eq("user_id", user_id)
+                if table == "wearable_connections":
+                    q = q.eq("provider", "oura")
+                rows = (q.limit(1).execute()).data or []
+                if rows and rows[0].get("access_token"):
+                    return rows[0]
+            except Exception:
+                continue
+        return None
+
+    def _persist_tokens(s: dict) -> None:
+        if not (db and user_id):
+            return
+        payload = {
+            "access_token":  s["access_token"],
+            "refresh_token": s["refresh_token"],
+            "expires_at":    s["expires_at"],
+        }
+        try:
+            db.table("wearable_connections").update(payload) \
+                .eq("user_id", user_id).eq("provider", "oura").execute()
+        except Exception:
+            pass
+        try:
+            db.table("oura_connections").update(payload) \
+                .eq("user_id", user_id).execute()
+        except Exception:
+            pass
+
+    now_ts = datetime.now(timezone.utc).timestamp()
     expires_at = session.get("expires_at", 0)
-    if expires_at and datetime.now(timezone.utc).timestamp() > expires_at - 60:
+    if expires_at and now_ts > expires_at - 60:
+        # This device's access token is expired. Another device may have
+        # already refreshed — adopt the central copy if it's fresher.
+        central = _central_tokens()
+        if central:
+            c_exp = central.get("expires_at") or 0
+            try:
+                c_exp = int(float(c_exp))
+            except (TypeError, ValueError):
+                c_exp = 0
+            if c_exp > expires_at:
+                session = {**session,
+                           "access_token":  central["access_token"],
+                           "refresh_token": central.get("refresh_token") or session.get("refresh_token"),
+                           "expires_at":    c_exp}
+                if now_ts <= c_exp - 60:
+                    # Central token still valid — use it, refresh cookie.
+                    return session["access_token"], session
+                expires_at = c_exp  # central also expired — fall through to refresh
+
         # Token is expired or about to expire — refresh
         rt = session.get("refresh_token")
         if not rt:
             raise HTTPException(status_code=401, detail="Please reconnect Oura — session expired")
         # Catch the case where Oura's OAuth endpoint returns 400 (refresh
-        # token invalidated because the user revoked BackNine's access,
-        # rotated their Oura password, or the token simply aged out).
-        # Before this catch, that 400 bubbled up as an uncaught exception
-        # and turned every dashboard load into a generic 500 the frontend
-        # couldn't route. Returning a clean 401 lets the frontend show
-        # its existing "Reconnect Oura" flow.
+        # token invalidated: revoked access, rotated password, aged out —
+        # or, most commonly, ANOTHER DEVICE already used it).
+        tokens = None
         try:
             tokens = await oura_refresh(rt, OURA_CLIENT_ID, OURA_CLIENT_SECRET)
         except Exception as e:
             msg = str(e).lower()
-            if "400" in msg or "401" in msg or "invalid_grant" in msg:
+            auth_err = "400" in msg or "401" in msg or "invalid_grant" in msg
+            if not auth_err:
+                # Non-auth error (Oura down, network blip) — surface as 502 so
+                # the frontend shows a "backend waking up" message, not
+                # "reconnect Oura" (which would be misleading).
+                raise HTTPException(status_code=502, detail=f"Oura token refresh failed: {e}")
+            # Our refresh token was consumed elsewhere — one retry with
+            # the central store's copy before giving up.
+            central = _central_tokens()
+            c_rt = (central or {}).get("refresh_token")
+            if c_rt and c_rt != rt:
+                try:
+                    tokens = await oura_refresh(c_rt, OURA_CLIENT_ID, OURA_CLIENT_SECRET)
+                    rt = c_rt
+                except Exception:
+                    tokens = None
+            if tokens is None:
                 raise HTTPException(
                     status_code=401,
                     detail="Please reconnect Oura — your ring authorization expired.",
                 )
-            # Non-auth error (Oura down, network blip) — surface as 502 so
-            # the frontend shows a "backend waking up" message, not
-            # "reconnect Oura" (which would be misleading).
-            raise HTTPException(
-                status_code=502,
-                detail=f"Oura token refresh failed: {e}",
-            )
         session = dict(session)  # make a copy so we can mutate
         session["access_token"]  = tokens["access_token"]
         session["refresh_token"] = tokens.get("refresh_token", rt)
-        session["expires_at"]    = int(datetime.now(timezone.utc).timestamp()) + tokens.get("expires_in", 86400)
-        # Persist to Supabase if available
-        db = get_supabase()
-        if db and session.get("user_id"):
-            try:
-                db.table("wearable_connections").update({
-                    "access_token":  session["access_token"],
-                    "refresh_token": session["refresh_token"],
-                    "expires_at":    session["expires_at"],
-                }).eq("user_id", session["user_id"]).eq("provider", "oura").execute()
-            except Exception:
-                pass  # write failure shouldn't block the current request
+        session["expires_at"]    = int(now_ts) + tokens.get("expires_in", 86400)
+        _persist_tokens(session)
         return session["access_token"], session  # signal: cookie needs refresh
     return session.get("access_token"), None
 
