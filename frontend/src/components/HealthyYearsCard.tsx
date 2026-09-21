@@ -18,6 +18,7 @@
  * (QYL-led sharing per the QYL Index experiment).
  */
 
+import { useState } from "react";
 import type { BiologicalAge } from "@/lib/api";
 
 interface Props {
@@ -27,6 +28,7 @@ interface Props {
 }
 
 export default function HealthyYearsCard({ bio, onShare }: Props) {
+  const [showWhy, setShowWhy] = useState(false);
   const hy = bio.healthy_years;
   if (!hy || hy.years == null) return null;
 
@@ -64,8 +66,16 @@ export default function HealthyYearsCard({ bio, onShare }: Props) {
         </div>
       </div>
 
-      {onShare && (
-        <div className="flex justify-end">
+      <div className="flex items-center justify-between">
+        {/* Under the hood (David 2026-09-21) — methodology restored to
+            the card after the shared spine drawer proved too buried. */}
+        <button
+          onClick={() => setShowWhy(v => !v)}
+          className="text-[11px] font-medium text-gray-600 hover:text-gray-900 underline-offset-2 hover:underline"
+        >
+          {showWhy ? "▲ Hide" : "▼ Under the hood"}
+        </button>
+        {onShare && (
           <button
             onClick={onShare}
             className="text-[11px] font-semibold text-[#1B3829] border border-[#1B3829]/30 rounded-lg px-2.5 py-1 hover:bg-[#1B3829]/5 transition-colors"
@@ -73,7 +83,17 @@ export default function HealthyYearsCard({ bio, onShare }: Props) {
           >
             📣 Share
           </button>
-        </div>
+        )}
+      </div>
+      {showWhy && (
+        <p className="text-[11px] text-gray-600 leading-relaxed bg-gray-50 border border-gray-100 rounded-xl p-3">
+          Actuarial life tables for your age and sex, scaled to
+          disability-free years (~70% of remaining years for US adults),
+          evaluated at your <span className="font-medium">biological</span> age
+          of {bio.biological_age} instead of your birthday age
+          {bio.chronological_age != null ? ` of ${bio.chronological_age}` : ""}.
+          {" "}{hy.caveat}
+        </p>
       )}
     </section>
   );

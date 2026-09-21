@@ -65,7 +65,6 @@ import CpapNightlyLogCard from "@/components/CpapNightlyLogCard";
 import BiologicalAgeCard from "@/components/BiologicalAgeCard";
 import HealthyYearsCard from "@/components/HealthyYearsCard";
 import WeeklyHealthSpanCard from "@/components/WeeklyHealthSpanCard";
-import SpineBreakdown from "@/components/SpineBreakdown";
 import ActivityTimelineCard from "@/components/ActivityTimelineCard";
 import DailyInsightCard from "@/components/DailyInsightCard";
 import SymptomCard from "@/components/SymptomCard";
@@ -2155,16 +2154,10 @@ export default function DashboardPage() {
                 </>
               )}
 
-              {/* ONE shared "why" drawer for the whole chain — replaces
-                  the four per-card expanders. */}
-              {(data.biological_age || data.weekly_healthspan) && (
-                <div className="pl-5 mt-3">
-                  <SpineBreakdown
-                    bio={data.biological_age}
-                    hs={data.weekly_healthspan}
-                  />
-                </div>
-              )}
+              {/* Shared SpineBreakdown drawer retired (David 2026-09-21):
+                  one drawer at the chain's end was too buried — "there is
+                  no way to see what is driving your score." Each card now
+                  carries its own "Under the hood" drill-down. */}
             </div>{/* /spine */}
 
             {/* WeeklyLeague moved higher — now sits right after Daily
