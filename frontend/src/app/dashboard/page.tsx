@@ -2141,13 +2141,20 @@ export default function DashboardPage() {
               {/* HORIZON — QYL Index, the chain's terminal and the only
                   accent border on the spine. Share moved here from Bio
                   Age (QYL-led sharing). */}
-              {data.biological_age?.healthy_years && (
+              {(data.biological_age?.healthy_years || data.provisional_qyl) && (
                 <>
-                  <SpineLink text="…which buys quality years." />
+                  <SpineLink text={data.biological_age?.healthy_years
+                    ? "…which buys quality years."
+                    : "…and here's where it's all heading."} />
                   <SpineKicker label="Horizon" />
                   <div className="pl-5">
+                    {/* Provisional QYL (2026-09-21): a brand-new user with
+                        just age/sex sees a starting estimate in minute
+                        one; swaps to the real projection automatically
+                        once Bio Age computes. */}
                     <HealthyYearsCard
                       bio={data.biological_age}
+                      provisional={data.provisional_qyl}
                       onShare={() => setShowShare(true)}
                     />
                   </div>

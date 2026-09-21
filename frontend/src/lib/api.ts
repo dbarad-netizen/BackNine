@@ -748,6 +748,18 @@ export interface DashboardData {
    *  2026-08-12 #185). SleepQuickLogCard checks this so it stops
    *  re-prompting after a successful manual save. */
   manual_sleep?:        { date: string; hours: number } | null;
+  /** Starting QYL from age/sex alone (2026-09-21) — attached only when
+   *  Bio Age can't compute yet, so a brand-new user sees a number in
+   *  their first minute. Replaced by the real projection automatically. */
+  provisional_qyl?: {
+    years: number | null;
+    low: number;
+    high: number;
+    bonus_years: number;
+    caveat: string;
+    provisional: true;
+    chronological_age: number;
+  } | null;
   /** Data freshness state — Fable IMPROVE #2. Frontend tiles read from
    *  this to render 'as of X ago' when stale instead of pretending
    *  9-day-old data is today's. */

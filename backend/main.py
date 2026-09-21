@@ -1811,6 +1811,7 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
         except Exception:
             log.exception("AH ring estimation failed for %s", user_id)
 
+        _attach_provisional_qyl(payload, user_id)
         return payload
 
     access_token, refreshed_session = await _ensure_valid_token(session)
@@ -2503,6 +2504,8 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
         },
     }
 
+    _attach_provisional_qyl(payload, user_id)
+
     # If tokens were just refreshed, write the new JWT cookie in the response
     if refreshed_session:
         resp = JSONResponse(payload)
@@ -2510,6 +2513,32 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
         return resp
 
     return payload
+
+
+def _attach_provisional_qyl(payload: dict, user_id: str) -> None:
+    """Instant first-value (David 2026-09-21, competitive review): every
+    recovery app in the category shows a number within minutes of
+    install; BackNine showed nothing until a tracker synced. Now a user
+    with just an age (and sex) on their profile gets a STARTING QYL —
+    the actuarial baseline for their age, bonus 0 — labeled provisional
+    so it's honest, and replaced automatically the moment Bio Age can
+    compute (≥3 markers). Attached only when the real projection is
+    absent."""
+    try:
+        bio = payload.get("biological_age") or {}
+        if bio.get("healthy_years"):
+            payload["provisional_qyl"] = None
+            return
+        prof = _get_profile(user_id) or {}
+        age = prof.get("age")
+        sex = prof.get("biological_sex") or "male"
+        hy = bioage.healthy_years(int(age), sex, None) if age else None
+        if hy:
+            hy["provisional"] = True
+            hy["chronological_age"] = int(age)
+        payload["provisional_qyl"] = hy
+    except Exception:
+        payload["provisional_qyl"] = None
 
 
 # ── Longevity Score history ─────────────────────────────────────────────────

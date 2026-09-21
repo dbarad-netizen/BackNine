@@ -77,8 +77,9 @@ export default function LandingPage() {
           <span className="text-green-400">not a black box.</span>
         </h1>
         <p className="mt-6 text-lg sm:text-xl text-zinc-300 max-w-2xl mx-auto leading-relaxed">
-          BackNine reads across your ring, labs, meds, and blood pressure — shows
-          its math — and puts your foursome on your back nine.
+          BackNine reads the Apple Watch or Oura ring you already own — plus your
+          labs, meds, and blood pressure — shows its math, and tells you what
+          today is buying you in quality years.
         </p>
         <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -95,7 +96,7 @@ export default function LandingPage() {
           </a>
         </div>
         <p className="mt-4 text-xs text-zinc-500">
-          Free at launch. Works with your Oura ring, or standalone.
+          Free at launch. Works with the Apple Watch you already own, or Oura. No ads, no data sales.
         </p>
       </section>
 
@@ -177,6 +178,40 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── "Why not just use the Oura app?" — David 2026-09-21. The
+          top comment on every new health app is "what does this do that
+          my watch's app doesn't?" (64 upvotes on the Baro thread).
+          Answer it before it's asked, in three lines. */}
+      <section className="border-t border-zinc-800/60 bg-[#0a1310]">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-16 sm:py-20">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-green-400 mb-2">
+            The fair question
+          </p>
+          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
+            Why not just use the Oura app? Or Apple Health?
+          </h2>
+          <p className="mt-4 text-lg text-zinc-300 max-w-2xl leading-relaxed">
+            Use them — we do. They tell you how you slept and how recovered you
+            are <em>today</em>. BackNine does three things they don&rsquo;t:
+          </p>
+          <div className="mt-8 grid sm:grid-cols-3 gap-4">
+            {[
+              ["Years, not days", "Your readiness score is about this morning. Your Biological Age and QYL Index are about the next twenty years — and they move when your habits do."],
+              ["A report your doctor reads", "One page, sourced, in clinical language: trends, flagged values, meds, family history. Bring it to the visit instead of your phone."],
+              ["Your foursome", "A weekly leaderboard ranked on behavior, not gadgets. The men who keep going are the ones with someone watching."],
+            ].map(([t, d]) => (
+              <div key={t} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
+                <p className="font-semibold text-white">{t}</p>
+                <p className="mt-2 text-sm text-zinc-400 leading-relaxed">{d}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-6 text-sm text-zinc-500">
+            If all you want is a prettier recovery dashboard, there are good free ones. That&rsquo;s not this.
+          </p>
+        </div>
+      </section>
+
       {/* ── Transparency ── */}
       <section className="border-t border-zinc-800/60 bg-[#0f1a15]">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-16 sm:py-20">
@@ -187,9 +222,14 @@ export default function LandingPage() {
             Every score, sourced.
           </h2>
           <p className="mt-4 text-lg text-zinc-300 max-w-2xl leading-relaxed">
-            Your Longevity Score isn&rsquo;t a black box. Tap it — see which
-            six markers rolled up, where each number came from, and how
-            recent the data is. If we&rsquo;re not confident, we say so.
+            Biological Age, Health Span, the QYL Index — none of them is a black
+            box. Tap any score to see which markers rolled up, how each one moved
+            the number, and how recent the data is. The full methodology is
+            public:{" "}
+            <Link href="/how-we-score" className="text-green-400 underline underline-offset-2 hover:text-green-300">
+              how we score you
+            </Link>
+            . If we&rsquo;re not confident, we say so.
           </p>
 
           {/* Comparison table */}
@@ -259,8 +299,16 @@ export default function LandingPage() {
             Play your back nine well.
           </h2>
           <p className="mt-4 text-lg text-zinc-300 leading-relaxed">
-            Free to start. Works with Oura, or on its own. Your data stays
-            yours — full export, one-tap account deletion.
+            Free while we&rsquo;re in beta. Works with Apple Watch or Oura.
+            Recovery apps tell you about today — BackNine tells you what today
+            is buying you.
+          </p>
+          <p className="mt-3 text-sm text-zinc-500 leading-relaxed">
+            The deal: we&rsquo;ll charge for BackNine Pro later, and that&rsquo;s
+            how we make money. We will never sell your data or show you ads.{" "}
+            <Link href="/your-data" className="underline underline-offset-2 hover:text-zinc-300">
+              Your data stays yours.
+            </Link>
           </p>
           <Link
             href="/signin"
@@ -278,6 +326,8 @@ export default function LandingPage() {
             <Link href="/support"    className="hover:text-white">Support</Link>
             <Link href="/terms"      className="hover:text-white">Terms</Link>
             <Link href="/privacy"    className="hover:text-white">Privacy</Link>
+            <Link href="/your-data"  className="hover:text-white">Your data</Link>
+            <Link href="/how-we-score" className="hover:text-white">How we score</Link>
             <Link href="/disclaimer" className="hover:text-white">Health Disclaimer</Link>
           </div>
           <p className="leading-relaxed">

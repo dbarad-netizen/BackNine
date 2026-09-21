@@ -12,27 +12,36 @@
  * buy them. The name of the app is the thesis: play the back nine well.
  *
  * Option B spine redesign (2026-09-10): this card carries the spine's
- * ONLY accent border — everything upstream funnels into this number.
- * The "How is this computed?" expander moved to the shared
- * SpineBreakdown drawer; the share button moved HERE from Bio Age
- * (QYL-led sharing per the QYL Index experiment).
+ * ONLY accent border. Share lives here (QYL-led sharing).
+ *
+ * Provisional mode (2026-09-21, competitive review): a brand-new user
+ * with only age/sex gets the actuarial STARTING estimate immediately —
+ * labeled as such, no bonus line, no share — so the first minute in
+ * BackNine shows a number instead of an empty spine. Swaps to the real
+ * projection automatically once Bio Age can compute.
  */
 
 import { useState } from "react";
-import type { BiologicalAge } from "@/lib/api";
+import type { BiologicalAge, DashboardData } from "@/lib/api";
+
+type Provisional = NonNullable<DashboardData["provisional_qyl"]>;
 
 interface Props {
-  bio: BiologicalAge;
+  bio?: BiologicalAge | null;
+  provisional?: Provisional | null;
   /** Opens the ShareCardModal (pre-set to the QYL card, its first tab). */
   onShare?: () => void;
 }
 
-export default function HealthyYearsCard({ bio, onShare }: Props) {
+export default function HealthyYearsCard({ bio, provisional, onShare }: Props) {
   const [showWhy, setShowWhy] = useState(false);
-  const hy = bio.healthy_years;
+  const real = bio?.healthy_years;
+  const isProvisional = !real && !!provisional;
+  const hy = real ?? provisional;
   if (!hy || hy.years == null) return null;
 
   const bonus = hy.bonus_years ?? 0;
+  const chronAge = isProvisional ? provisional!.chronological_age : bio?.chronological_age;
 
   return (
     <section className="rounded-2xl border-2 border-[#1B3829]/50 bg-gradient-to-br from-white via-white to-[#1B3829]/[0.05] p-4 space-y-2.5">
@@ -42,6 +51,11 @@ export default function HealthyYearsCard({ bio, onShare }: Props) {
           <span className="normal-case tracking-normal text-[9px] font-bold text-[#1B3829] bg-[#1B3829]/10 rounded px-1.5 py-0.5">
             QYL Index
           </span>
+          {isProvisional && (
+            <span className="normal-case tracking-normal text-[9px] font-bold text-amber-800 bg-amber-100 rounded px-1.5 py-0.5">
+              starting estimate
+            </span>
+          )}
         </p>
         <span className="text-[10px] text-gray-500">likely {hy.low}–{hy.high}</span>
       </div>
@@ -55,7 +69,9 @@ export default function HealthyYearsCard({ bio, onShare }: Props) {
             quality years projected — active and independent
           </p>
           <p className="text-[12px] text-gray-600 leading-tight mt-0.5">
-            {bonus > 0.05 ? (
+            {isProvisional ? (
+              <>the average for a {chronAge}-year-old — connect Apple Health or Oura and this becomes <span className="font-semibold text-[#1B3829]">yours</span></>
+            ) : bonus > 0.05 ? (
               <>your Bio Age is buying you <span className="font-semibold text-[#1B3829]">+{bonus.toFixed(1)}</span> of them</>
             ) : bonus < -0.05 ? (
               <>your Bio Age is costing <span className="font-semibold text-amber-700">{Math.abs(bonus).toFixed(1)}</span> of them — that&apos;s recoverable</>
@@ -75,7 +91,7 @@ export default function HealthyYearsCard({ bio, onShare }: Props) {
         >
           {showWhy ? "▲ Hide" : "▼ Under the hood"}
         </button>
-        {onShare && (
+        {onShare && !isProvisional && (
           <button
             onClick={onShare}
             className="text-[11px] font-semibold text-[#1B3829] border border-[#1B3829]/30 rounded-lg px-2.5 py-1 hover:bg-[#1B3829]/5 transition-colors"
@@ -88,10 +104,18 @@ export default function HealthyYearsCard({ bio, onShare }: Props) {
       {showWhy && (
         <p className="text-[11px] text-gray-600 leading-relaxed bg-gray-50 border border-gray-100 rounded-xl p-3">
           Actuarial life tables for your age and sex, scaled to
-          disability-free years (~70% of remaining years for US adults),
-          evaluated at your <span className="font-medium">biological</span> age
-          of {bio.biological_age} instead of your birthday age
-          {bio.chronological_age != null ? ` of ${bio.chronological_age}` : ""}.
+          disability-free years (~70% of remaining years for US adults)
+          {isProvisional ? (
+            <>. This starting estimate uses your birthday age only. Once BackNine
+            has three or more of your markers (HRV, resting heart rate, VO₂ max,
+            sleep, blood pressure, labs), it evaluates the same tables at your{" "}
+            <span className="font-medium">biological</span> age instead — that&apos;s
+            where the number becomes personal.</>
+          ) : (
+            <>, evaluated at your <span className="font-medium">biological</span> age
+            of {bio?.biological_age} instead of your birthday age
+            {chronAge != null ? ` of ${chronAge}` : ""}.</>
+          )}
           {" "}{hy.caveat}
         </p>
       )}
