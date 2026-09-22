@@ -1395,6 +1395,32 @@ async def list_oura_webhook_subscriptions(request: Request):
         return r.json()
 
 
+# ── The Sunday text (David 2026-09-22) ─────────────────────────────────
+# Coach Al goes to where the guys already are. See scoreboard.py.
+#   GET  /admin/scoreboard/preview  → the text that WOULD go out (no send)
+#   POST /admin/scoreboard/send     → compose + SMS every SCOREBOARD_RECIPIENT
+# Both gated by X-Admin-Key. The GitHub Actions cron in
+# .github/workflows/sunday-scoreboard.yml calls send every Sunday 5pm PT.
+
+@app.get("/admin/scoreboard/preview")
+async def scoreboard_preview(request: Request):
+    _check_admin(request)
+    import scoreboard as scb
+    built = scb.build()
+    return {"recipients": [p for _, p in scb.recipients()], **built}
+
+
+@app.post("/admin/scoreboard/send")
+async def scoreboard_send(request: Request):
+    _check_admin(request)
+    import scoreboard as scb
+    built = scb.build()
+    if not built["rows"]:
+        raise HTTPException(status_code=400, detail="SCOREBOARD_RECIPIENTS is empty")
+    result = await scb.send(built["text"])
+    return {"week_label": built["week_label"], **result}
+
+
 @app.delete("/admin/oura/webhook-subscriptions/{subscription_id}")
 async def delete_oura_webhook_subscription(subscription_id: str, request: Request):
     """Delete a specific Oura webhook subscription (useful for re-registering)."""

@@ -1,0 +1,18 @@
+# The Sunday text — fires Coach Al's weekly scoreboard SMS.
+# Sunday 5:00pm Pacific = Monday 00:00 UTC (PDT). Adjust to 01:00 UTC in PST.
+# Secrets: BACKNINE_ADMIN_KEY (same value as Render's ADMIN_KEY).
+name: Sunday scoreboard
+on:
+  schedule:
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send scoreboard
+        run: |
+          curl -sS -X POST "https://backnine-hu60.onrender.com/admin/scoreboard/send" \
+            -H "X-Admin-Key: ${{ secrets.BACKNINE_ADMIN_KEY }}" \
+            --max-time 120 | tee result.json
+          grep -q '"sent": *[1-9]' result.json || (echo "::warning::nothing sent (dry run or failure)"; cat result.json)
