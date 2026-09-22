@@ -98,6 +98,13 @@ export default function LandingPage() {
         <p className="mt-4 text-xs text-zinc-500">
           Free at launch. Works with the Apple Watch you already own, or Oura. No ads, no data sales.
         </p>
+        {/* Founder line (David 2026-09-21): people don't read policies;
+            they read who's asking. A named 58-year-old using it on himself
+            is a different proposition from an anonymous developer. */}
+        <p className="mt-6 text-sm text-zinc-400">
+          Built by <span className="text-zinc-200 font-medium">David B., 58</span>, for his own
+          foursome — and run on his own numbers every morning.
+        </p>
       </section>
 
       {/* ── Doctor Layer — the differentiator ── */}

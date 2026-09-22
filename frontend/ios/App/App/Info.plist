@@ -25,7 +25,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSHealthShareUsageDescription</key>
-	<string>BackNine reads your steps, heart rate, HRV, sleep, VO₂ max, weight, body fat, blood pressure, and respiratory data from Apple Health so Coach Al can give you insights across your ring, watch, scale, and BP cuff in one place.</string>
+	<string>BackNine reads your sleep, heart rate, HRV, steps, VO₂ max, weight, body fat, and blood pressure to compute your scores and daily briefing. Your health data is never sold, never shared, and never used for ads. Delete it any time from your Profile.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>BackNine may write manually-logged data (sleep, weight, blood pressure, CPAP nightly stats) back to Apple Health so your other apps see the same numbers. Writes are optional and only happen when you explicitly log a value.</string>
 	<key>UIApplicationSceneManifest</key>

@@ -1568,13 +1568,28 @@ async def _refresh_oura_cache_bg(user_id: str, access_token: str, days: int) -> 
     inline if the cache is still stale.
     """
     try:
-        raw = await fetch_all(access_token, days=days)
-        live_rm, live_slm, live_am, live_smm = parse_oura_data(raw)
-        if live_rm or live_slm or live_am or live_smm:
-            try:
-                oc.store_days(user_id, live_rm, live_slm, live_am, live_smm)
-            except Exception:
-                pass
+        # Recent window FIRST (David 2026-09-22, "Oura and BackNine are
+        # way off this morning"): the single 365-day pull is the one
+        # Oura's readiness endpoint is known to choke on, and when it
+        # failed, TODAY's provisional scores never got updated — the
+        # dashboard sat on the 8:54am snapshot all day while the Oura app
+        # moved on. A 14-day pull is fast and reliable; do it first so
+        # today is always current, then attempt the deep history.
+        try:
+            raw14 = await fetch_all(access_token, days=14)
+            r14, s14, a14, m14 = parse_oura_data(raw14)
+            if r14 or s14 or a14 or m14:
+                oc.store_days(user_id, r14, s14, a14, m14)
+        except Exception:
+            log.warning("bg oura refresh: 14-day pass failed for %s", user_id)
+        if days > 14:
+            raw = await fetch_all(access_token, days=days)
+            live_rm, live_slm, live_am, live_smm = parse_oura_data(raw)
+            if live_rm or live_slm or live_am or live_smm:
+                try:
+                    oc.store_days(user_id, live_rm, live_slm, live_am, live_smm)
+                except Exception:
+                    pass
         try:
             _ow = await oura_fetch_workouts(access_token, days=30)
             _os = await oura_fetch_sessions(access_token, days=30)
@@ -1845,10 +1860,18 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
     # Even when the cache is fresh, bypass it if today's session detail is
     # missing — Oura processes scores quickly but session detail takes longer.
     # Re-fetching live catches the moment Oura finishes processing.
-    if cache_hit:
-        today_str_check = _user_local_today_iso(request)
-        if slm.get(today_str_check) and not smm.get(today_str_check):
-            cache_hit = False  # force live fetch to try to get today's session
+    # `force_live` (David 2026-09-22): this bypass used to set cache_hit
+    # False and then get silently OVERRIDDEN by the 24h stale-while-
+    # revalidate block below, which flipped cache_hit back to True. Net
+    # effect: on any morning where the score landed before the session
+    # detail, the dashboard served the provisional snapshot all day and
+    # only the (fragile, 365-day) background refresh could fix it. Now
+    # the bypass skips SWR and runs the fast 14-day inline fetch.
+    force_live = False
+    today_str_check = _user_local_today_iso(request)
+    if have_cache and slm.get(today_str_check) and not smm.get(today_str_check):
+        cache_hit = False
+        force_live = True  # today's score is in, session detail isn't — go get it
 
     # ── Stale-while-revalidate ─────────────────────────────────────────────────
     # If we missed the strict 30-min freshness window but the cache is still
@@ -1859,7 +1882,7 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
     # Background refresh is best-effort; the next dashboard hit either reads
     # the freshly-updated cache, or (if the background task failed) falls
     # through to the inline live fetch below.
-    if not cache_hit and have_cache:
+    if not cache_hit and have_cache and not force_live:
         swr_ok = False
         try:
             # 24h window (was 2h — David 2026-09-01): the 2h cliff meant
