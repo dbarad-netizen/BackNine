@@ -410,24 +410,15 @@ def _build_system_prompt(
             "their goal. Only mention if it adds value. Never invent numbers.)"
         )
 
-    if prediction_status:
-        streak = prediction_status.get("streak")
-        last_pred = prediction_status.get("last_predicted")
-        last_act = prediction_status.get("last_actual")
-        if streak or last_pred is not None:
-            parts.append("\n=== PREDICTION GAME ===")
-            if last_pred is not None and last_act is not None:
-                hit = abs(last_act - last_pred) <= 7
-                parts.append(
-                    f"  • Yesterday's forecast: predicted {last_pred}, actual {last_act} "
-                    f"({'hit' if hit else 'miss'})"
-                )
-            if streak:
-                parts.append(f"  • Current streak: {streak} day(s)")
-            parts.append(
-                "  (You MAY reference the streak in paragraph 2 if it adds energy, "
-                "but only if it's at least 3 days. Otherwise skip it.)"
-            )
+    # PREDICTION GAME block removed (David 2026-09-24: "What is the
+    # forecast? Where was it? Why is it being communicated to me if I
+    # don't know it exists?"). The readiness-forecast card was cut from
+    # the Scorecard in an audit, but the backend kept forecasting and
+    # this prompt kept grading it — so Coach Al narrated an invisible
+    # game ("yesterday's forecast called for 76 — you landed at 66").
+    # Never brief a user on a feature they can't see. `prediction_status`
+    # is still accepted for signature compatibility; it is not used.
+    _ = prediction_status
 
     # Append the shared voice/brand block (golf metaphor allowance) so the
     # briefing inherits the same instructions as every other Coach Al surface.
