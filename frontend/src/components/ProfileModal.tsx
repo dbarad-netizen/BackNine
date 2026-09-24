@@ -329,6 +329,41 @@ export default function ProfileModal({ onClose, initialTab = "profile" }: Props)
                 </p>
               </div>
 
+              {/* Coach Al's voice (David 2026-09-24). The Sunday text went
+                  from "good summary" to "fantastic" when it got the
+                  Letterman/Berman treatment — so the voice is a choice.
+                  Same numbers, same safety rules, different delivery. */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-widest mb-1.5">
+                  Coach Al&apos;s voice
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { key: "straight", emoji: "🎯", label: "Straight talk", desc: "Direct, no jokes. The numbers and the one thing to do." },
+                    { key: "booth",    emoji: "🎙️", label: "Broadcast booth", desc: "Letterman meets Berman. Same numbers, called like a game." },
+                  ] as const).map(v => {
+                    const selected = (profile.coach_voice ?? "straight") === v.key;
+                    return (
+                      <button
+                        key={v.key}
+                        onClick={() => setProfile(p => ({ ...p, coach_voice: v.key }))}
+                        className={`flex flex-col items-start gap-1 rounded-xl px-3 py-2.5 text-left transition-colors border ${
+                          selected
+                            ? "bg-[#1B3829]/8 border-[#1B3829]/40 text-[#1B3829]"
+                            : "bg-gray-50 border-gray-200 text-gray-600 hover:border-gray-400"
+                        }`}
+                      >
+                        <span className="text-xs font-semibold"><span className="mr-1">{v.emoji}</span>{v.label}</span>
+                        <span className="text-[10px] leading-snug text-gray-500">{v.desc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-gray-500 leading-snug mt-1">
+                  Applies to your morning briefing and chat. Tap Regenerate on the briefing after saving to hear the difference.
+                </p>
+              </div>
+
               {/* Chronic injuries — feeds workout prescription to avoid
                   movements loading these areas. Simple comma-separated
                   entry so we don't overbuild UI. */}

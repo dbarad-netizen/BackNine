@@ -653,6 +653,8 @@ export interface UserProfile {
    *  safety rules — beginner stays in bodyweight/dumbbell land forever
    *  regardless of history; advanced gets the full library. */
   training_level?:    "beginner" | "intermediate" | "advanced" | null;
+  /** Coach Al's delivery style (2026-09-24). "booth" = Letterman/Berman. */
+  coach_voice?:       "straight" | "booth" | null;
   /** Ongoing injuries or areas to protect. Feeds into workout prescription
    *  (avoid movements loading these areas). */
   chronic_injuries?:  ChronicInjury[];

@@ -422,8 +422,11 @@ def _build_system_prompt(
 
     # Append the shared voice/brand block (golf metaphor allowance) so the
     # briefing inherits the same instructions as every other Coach Al surface.
-    from coach_voice import VOICE_BLOCK
+    from coach_voice import VOICE_BLOCK, voice_overlay
     parts.append("\n" + VOICE_BLOCK)
+    _vo = voice_overlay(profile)   # coach personality setting (2026-09-24)
+    if _vo:
+        parts.append("\n" + _vo)
 
     # Layer 2 (David 2026-07-27): day-type overlay. Appended LAST so it
     # takes precedence over the default 2-paragraph 60-110 word format

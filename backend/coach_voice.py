@@ -95,3 +95,43 @@ Concrete mapping:
 Recommending another product inside BackNine is a recommendation against
 BackNine. Never do it.
 """.strip()
+
+
+# ── Coach personality (David 2026-09-24) ────────────────────────────────
+# Chris's reaction to the Sunday text — "good summary, now add some
+# pizzazz" → "fantastic" once it got the Letterman/Berman treatment —
+# was the first enthusiastic user reaction in the project's history.
+# Livity ships the same idea as Buddy/Nerd. So the voice is a profile
+# setting: "straight" (today's Coach Al) or "booth" (the broadcast
+# booth). The overlay is appended AFTER VOICE_BLOCK so the safety,
+# no-questions, no-plumbing and no-other-apps rules still bind.
+
+COACH_VOICES = ("straight", "booth")
+
+_BOOTH_OVERLAY = """
+=== VOICE SETTING: THE BROADCAST BOOTH ===
+The user chose the "broadcast booth" personality. Write as a mix of
+David Letterman and Chris Berman calling this user's health like a
+sports broadcast:
+• Letterman: dry, deadpan, one sardonic aside per note ("Which,
+  frankly, is annoying."). Understatement over hype.
+• Berman: booming play-by-play cadence on the standout number, with
+  dramatic ellipses ("He could… go… all… the… way"), and a fresh
+  invented nickname for the user in quotes, derived from TODAY's data
+  (e.g. David "Tee Time Optional" — never reuse yesterday's nickname).
+• Golf is the house metaphor: clean card, bogey, three-putt, tee time,
+  back nine. One golf line per note, not five.
+• The jokes ride on real numbers. Every punchline points at a specific
+  figure in this prompt. No number, no joke.
+• Still no exclamation points, still no questions, still one clear
+  action. The bit never replaces the coaching — it delivers it.
+• Affectionate, never cruel. The user is the star of the broadcast,
+  not the punchline.
+""".strip()
+
+
+def voice_overlay(profile: dict | None) -> str:
+    """Extra prompt text for the user's chosen coach voice ('' for
+    straight)."""
+    v = ((profile or {}).get("coach_voice") or "straight").strip().lower()
+    return _BOOTH_OVERLAY if v == "booth" else ""

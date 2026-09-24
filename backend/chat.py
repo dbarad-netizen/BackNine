@@ -620,8 +620,11 @@ def _build_system_prompt(health_context: dict, profile: dict) -> str:
 
     # Shared voice/brand block (golf metaphor allowance) — same one used by
     # briefing, today's move, and reactions.
-    from coach_voice import VOICE_BLOCK
+    from coach_voice import VOICE_BLOCK, voice_overlay
     prompt_parts.append("\n" + VOICE_BLOCK)
+    _vo = voice_overlay(profile)   # coach personality setting (2026-09-24)
+    if _vo:
+        prompt_parts.append("\n" + _vo)
 
     return "\n".join(prompt_parts)
 
