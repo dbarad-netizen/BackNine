@@ -1407,7 +1407,22 @@ async def scoreboard_preview(request: Request):
     _check_admin(request)
     import scoreboard as scb
     built = scb.build()
-    return {"recipients": [p for _, p in scb.recipients()], **built}
+    return {"recipients": [f"…{p[-4:]}" for _, p in scb.recipients()], **built}
+
+
+@app.get("/scoreboard/text", response_class=PlainTextResponse)
+async def scoreboard_text(request: Request):
+    """Plain-text scoreboard for the iOS Shortcut delivery path (David
+    2026-09-22): Twilio trial accounts can't send free-form SMS anymore
+    (error 572006), and upgrading means 10DLC registration — so the
+    text goes out as an iMessage from David's phone into a real group
+    thread instead. Gated by its own read-only token (SCOREBOARD_TOKEN)
+    so the admin key never lives in a Shortcut."""
+    token = os.getenv("SCOREBOARD_TOKEN", "")
+    if not token or request.headers.get("X-Scoreboard-Token", "") != token:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    import scoreboard as scb
+    return scb.build()["text"]
 
 
 @app.post("/admin/scoreboard/send")

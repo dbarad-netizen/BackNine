@@ -144,7 +144,7 @@ async def send(text: str) -> dict:
     creds = _twilio_creds()
     recips = recipients()
     if not creds:
-        return {"sent": 0, "dry_run": True, "to": [p for _, p in recips], "text": text}
+        return {"sent": 0, "dry_run": True, "to": [f"…{p[-4:]}" for _, p in recips], "text": text}
     sid, tok, frm = creds
     url = f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json"
     results = []
@@ -153,8 +153,9 @@ async def send(text: str) -> dict:
             try:
                 r = await client.post(url, data={"From": frm, "To": phone, "Body": text})
                 ok = r.status_code in (200, 201)
-                results.append({"to": phone, "ok": ok, "status": r.status_code,
+                # Mask numbers — this JSON lands in GitHub Actions logs.
+                results.append({"to": f"…{phone[-4:]}", "ok": ok, "status": r.status_code,
                                 "detail": None if ok else r.text[:200]})
             except Exception as e:
-                results.append({"to": phone, "ok": False, "status": None, "detail": str(e)[:200]})
+                results.append({"to": f"…{phone[-4:]}", "ok": False, "status": None, "detail": str(e)[:200]})
     return {"sent": sum(1 for x in results if x["ok"]), "dry_run": False, "results": results, "text": text}

@@ -2,9 +2,10 @@
 # Sunday 5:00pm Pacific = Monday 00:00 UTC (PDT). Adjust to 01:00 UTC in PST.
 # Secrets: BACKNINE_ADMIN_KEY (same value as Render's ADMIN_KEY).
 name: Sunday scoreboard
+# Schedule disabled 2026-09-22: Twilio trial can't send free-form SMS
+# (error 572006). Delivery moved to the iOS Shortcut path (GET
+# /scoreboard/text → iMessage group). Re-enable if Twilio is upgraded.
 on:
-  schedule:
-    - cron: "0 0 * * 1"
   workflow_dispatch:
 jobs:
   send:
