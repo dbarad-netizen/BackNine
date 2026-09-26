@@ -277,6 +277,8 @@ def _resolve_oura_anchor(user_id: str, rm: dict, slm: dict, am: dict, smm: dict)
             ah_day = ah.get_day(user_id, anchor)
             if ah_day and (ah_day.get("sleep_hours") or ah_day.get("hrv")):
                 sh  = ah_day.get("sleep_hours") or 0
+                if sh > 12:
+                    sh = 0  # impossible night = overlap artifact; say nothing rather than narrate it
                 sdh = ah_day.get("sleep_deep_hours") or 0
                 srh = ah_day.get("sleep_rem_hours") or 0
                 t_sm = {
@@ -6666,7 +6668,13 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
     # detail is simply late. Apple Health carries Oura's own re-written
     # records plus iPhone/Watch spans and told Coach Al "10.6 hours" on
     # a 6-hour night. The AH fallback is for users with no Oura at all.
-    _is_oura_user = bool(session.get("access_token"))
+    # "Oura user" must NOT depend on the session carrying a token — since
+    # the multi-device token fix (2026-09-20) a web session may hold no
+    # access_token while the dashboard reads tokens from the central
+    # store. That gap let the 10.6h briefing regenerate after the first
+    # fix deployed. Any Oura sleep/readiness rows in the 30-day cache
+    # window make you an Oura user for this purpose.
+    _is_oura_user = bool(session.get("access_token")) or bool(rm) or bool(smm)
     if not t_sm.get("total") and not _is_oura_user:
         try:
             ah_day = ah.get_day(user_id, today_str)
