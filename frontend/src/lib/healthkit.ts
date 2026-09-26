@@ -264,6 +264,9 @@ interface Bucket {
   // than adding sources together (iPhone + Watch + third app all
   // count the same walking). David 2026-08-06.
   perSource?: Map<string, number>;
+  // Sleep intervals per source (2026-09-26): [startMs, endMs] pairs.
+  // Resolved by UNIONING overlapping intervals, not summing durations.
+  perSourceIntervals?: Map<string, Array<[number, number]>>;
 }
 
 class Aggregator {
@@ -307,6 +310,25 @@ class Aggregator {
     }
   }
 
+  /** Sleep interval (2026-09-26). Replaces duration-summing for sleep:
+   *  ONE source can write overlapping spans for the same night — Oura
+   *  writes a whole-night AsleepUnspecified span AND the Core/Deep/REM
+   *  stage spans covering the same minutes, and a re-sync can write the
+   *  session twice. Summing gave David 10.6 h (real: 6) and 17.8 h on a
+   *  ~6 h night. Unioning the intervals counts each minute once no
+   *  matter how many records describe it. */
+  addInterval(date: string, field: string, startMs: number, endMs: number, source?: string): void {
+    if (!(endMs > startMs)) return;
+    if (!this.buckets.has(date)) this.buckets.set(date, new Map());
+    const fields = this.buckets.get(date)!;
+    if (!fields.has(field)) fields.set(field, { latestTs: 0 });
+    const b = fields.get(field)!;
+    const key = source || "unknown";
+    if (!b.perSourceIntervals) b.perSourceIntervals = new Map();
+    if (!b.perSourceIntervals.has(key)) b.perSourceIntervals.set(key, []);
+    b.perSourceIntervals.get(key)!.push([startMs, endMs]);
+  }
+
   resolve(): Record<string, Record<string, number>> {
     const out: Record<string, Record<string, number>> = {};
     this.buckets.forEach((fields, date) => {
@@ -316,6 +338,21 @@ class Aggregator {
           row[field] = b.latestVal;
         } else if (b.n !== undefined && b.n > 0) {
           row[field] = b.sum! / b.n;
+        } else if (b.perSourceIntervals && b.perSourceIntervals.size > 0) {
+          // Union per source, then MAX across sources (2026-09-26).
+          let best = 0;
+          b.perSourceIntervals.forEach(ivs => {
+            ivs.sort((x, y) => x[0] - y[0]);
+            let total = 0, curS = ivs[0][0], curE = ivs[0][1];
+            for (let i = 1; i < ivs.length; i++) {
+              const [s0, e0] = ivs[i];
+              if (s0 <= curE) { if (e0 > curE) curE = e0; }
+              else { total += curE - curS; curS = s0; curE = e0; }
+            }
+            total += curE - curS;
+            if (total > best) best = total;
+          });
+          row[field] = Math.round((best / 3600000.0) * 100) / 100; // ms → hours
         } else if (b.perSource && b.perSource.size > 0) {
           // Multi-source dedupe: iPhone + Watch + third app all wrote
           // samples for the same walking (or the same night's sleep).
@@ -425,18 +462,19 @@ export async function syncRecent(days = 7, quick = false): Promise<SyncResult> {
 
         const startTs = Date.parse(s.startDate);
         if (isNaN(startTs)) continue;
-        const seconds = (ts - startTs) / 1000;
-        if (seconds <= 0) continue;
-        // sourceName passed so duration gets per-source dedupe
-        // (Watch + sleep app both writing the same night → MAX, not sum)
-        agg.add(date, m.field, seconds, "duration", ts, s.sourceName);
+        if (ts <= startTs) continue;
+        // Intervals, not durations (2026-09-26): the same minutes can be
+        // described by an AsleepUnspecified span AND stage spans from
+        // the same source; union counts them once. Cross-source dedupe
+        // (MAX) still applies at resolve time.
+        agg.addInterval(date, m.field, startTs, ts, s.sourceName);
         // Stage detail (2026-09-10): deep + REM tracked separately so
         // the sleep ring can score QUALITY. Chris slept 8h of light
         // sleep and our duration-only ring gave him a perfect 100.
         if (stageStr === "HKCategoryValueSleepAnalysisAsleepDeep") {
-          agg.add(date, "sleep_deep_hours", seconds, "duration", ts, s.sourceName);
+          agg.addInterval(date, "sleep_deep_hours", startTs, ts, s.sourceName);
         } else if (stageStr === "HKCategoryValueSleepAnalysisAsleepREM") {
-          agg.add(date, "sleep_rem_hours", seconds, "duration", ts, s.sourceName);
+          agg.addInterval(date, "sleep_rem_hours", startTs, ts, s.sourceName);
         }
       } else {
         let val = s.value;

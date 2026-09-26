@@ -6661,7 +6661,13 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
     t_sl  = slm.get(today_str, {}) or {}
     t_act = am.get(today_str, {}) or {}
     t_sm  = smm.get(today_str, {}) or {}
-    if not t_sm.get("total"):
+    # Oura wins (doctrine #175; David 2026-09-26): for an Oura user, NEVER
+    # borrow last night's sleep from Apple Health when the Oura session
+    # detail is simply late. Apple Health carries Oura's own re-written
+    # records plus iPhone/Watch spans and told Coach Al "10.6 hours" on
+    # a 6-hour night. The AH fallback is for users with no Oura at all.
+    _is_oura_user = bool(session.get("access_token"))
+    if not t_sm.get("total") and not _is_oura_user:
         try:
             ah_day = ah.get_day(user_id, today_str)
             if ah_day and (ah_day.get("sleep_hours") or ah_day.get("hrv")):
