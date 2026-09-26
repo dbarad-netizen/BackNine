@@ -29,167 +29,44 @@ etc. Keep them versioned so we can regen without losing prior takes.
 
 ---
 
-## The 8 shots
+## The 6 shots (rewritten 2026-09-24 — outcomes, not features)
 
-### 01 — Scorecard hero
+Format lesson from the category leaders: each screenshot is a four-to-six
+word PROMISE in big type with the product as the evidence beneath it. No
+feature lists in the headline. Dark BackNine green background, white
+headline, one accent word in green.
 
-**Route:** `/dashboard` (Scorecard tab, top of scroll)
-**Account state:**
+### 01 — Hero
+Headline: **KNOW WHAT TODAY IS BUYING YOU**
+Shot: Scorecard spine — TODAY rings → THIS WEEK Health Span → YOUR BODY Bio
+Age → HORIZON QYL card. Crop so all four kickers are visible.
 
-- Longevity Score shows **82** (good but not perfect)
-- Today's Briefing shows a Coach Al summary with two specific numbers ("HRV up 8%, RHR 54")
-- Goal card: active goal at 60% progress
-- Stack pill: "3 due · 2 taken · 67% on pace"
+### 02 — Horizon
+Headline: **YEARS, NOT JUST DAYS**
+Shot: the QYL card expanded (Under the hood open) — "~17 quality years, likely
+12–22, your Bio Age is buying you +1.2 of them."
 
-**Overlay caption:**
-```
-Your health, in one glance.
-```
+### 03 — Transparency
+Headline: **NO BLACK BOXES**
+Shot: Bio Age card with Under the hood open — marker rows showing years
+younger/older each.
 
-**Composition notes:**
-- Ensure the freshness banner is hidden (Oura synced fresh)
-- Hide any onboarding cards (demo account has completed onboarding)
+### 04 — Coach Al
+Headline: **A COACH WHO READS YOUR NUMBERS**
+Shot: a real morning briefing in broadcast-booth voice (pick a good one), with
+the Straight talk / Broadcast booth picker inset if room.
 
----
+### 05 — Doctor
+Headline: **A REPORT YOUR DOCTOR READS**
+Shot: Doctor Handoff one-pager.
 
-### 02 — Coach Al reads across signals
+### 06 — Foursome
+Headline: **YOUR FOURSOME, KEEPING SCORE**
+Shot: Weekly Leaderboard card with 3–4 real names, plus the Sunday text
+overlaid as an iMessage bubble ("Coffee's on David.").
 
-**Route:** `/dashboard` → open Coach Al chat drawer
-**Account state:**
-
-- Show a chat exchange like:
-  - User: "Why was my sleep worse last night?"
-  - Coach Al: "Two things stand out: you logged a glass of wine at 8pm — your HRV dips ~8% on wine nights — and your final ~90 min was restless (2 wakeups). Try holding the glass until dinner and see how tonight scores."
-
-**Overlay caption:**
-```
-Coach Al reads across all your data.
-```
-
-**Composition notes:**
-- The specific-numbers detail is what sells the shot — no generic "get more sleep" replies
-- Show the chat pill's context indicator ("Reading your sleep + nutrition")
-
----
-
-### 03 — Today's Workout prescription
-
-**Route:** `/dashboard` → Training tab
-**Account state:**
-
-- Today's Workout card at top: "Zone 2 Bike · 40 min · moderate effort"
-- Rationale line: "HRV is 6% below your 30-day baseline — easy day builds without dragging tomorrow down"
-- Weekly volume sparkline with a deload nudge visible if it fits
-- One PR badge visible on a recent workout below
-
-**Overlay caption:**
-```
-A workout tuned to how you slept.
-```
-
-**Composition notes:**
-- Injury flag chip in the right corner adds credibility (shows the app respects constraints)
-
----
-
-### 04 — Nutrition + stack adherence
-
-**Route:** `/dashboard` → Nutrition tab
-**Account state:**
-
-- Today's Plate card at top: protein 96g / target 140g, macros clean
-- Today's stack with 🌅 Morning taken (checked) and 🌙 Evening pending
-- One vice logged (e.g., 1 glass of wine yesterday) for context
-
-**Overlay caption:**
-```
-Meds, macros, and micros — one tap each.
-```
-
-**Composition notes:**
-- Time-of-day grouping is the differentiated UX moment — make sure both Morning and Evening groups are visible
-- The 🌙 Evening group should say "not yet" chip since it's a daytime screenshot
-
----
-
-### 05 — Sleep summary
-
-**Route:** `/dashboard` → Sleep tab
-**Account state:**
-
-- Last night's sleep: 7h 42m, efficiency 91%
-- Sleep balance signal: "In balance"
-- Streak counter: 12 nights over 7h in the last 14
-- Tag pills: "read before bed", "no screen", "8pm dinner"
-
-**Overlay caption:**
-```
-Track the pattern, not just the number.
-```
-
-**Composition notes:**
-- Tag pills visible = shows Oura tag integration (recently fixed) is a differentiator
-- Hide the manual-log CTA (empty state noise)
-
----
-
-### 06 — Doctor Handoff
-
-**Route:** `/dashboard` → Scorecard → tap "Doctor Handoff" → PDF preview modal open
-**Account state:**
-
-- PDF shows: patient name (demo), BP summary (30-day avg + morning/evening split), sleep trend, weight trend, latest 5 lab values with reference ranges, current med list
-
-**Overlay caption:**
-```
-Show up prepared to every doctor visit.
-```
-
-**Composition notes:**
-- The PDF is the star — frame it prominently
-- The share/download buttons should be visible below
-
----
-
-### 07 — Community leaderboard
-
-**Route:** `/dashboard` → Clubhouse tab
-**Account state:**
-
-- Weekly Leaderboard with 4 friends and one demo user
-- Community averages row visible below leaderboard
-- One cheer button highlighted (arrow indicator? — decide during shoot)
-
-**Overlay caption:**
-```
-Longevity is a team sport.
-```
-
-**Composition notes:**
-- Friend names should be first-name-only for demo privacy ("Alex", "Sam", "Jordan")
-- One friend ahead of user, one behind — realistic
-
----
-
-### 08 — Insight card
-
-**Route:** `/dashboard` → Scorecard, scrolled to Daily Insight card
-**Account state:**
-
-- Insight text: "You slept 45 min longer on nights you finished eating by 8pm (n=9). Try a 7:30pm dinner cutoff this week."
-- Confidence chip: "Moderate confidence · 9 nights"
-- "Log dinner time" CTA button visible
-
-**Overlay caption:**
-```
-Real correlations. Real actions.
-```
-
-**Composition notes:**
-- Confidence chip is a trust signal — Fable feedback #4 baked into UX
-- The CTA button closes the loop from insight to action
-
----
+Retired shots (feature has no face post-audit): Today's Workout, Nutrition +
+stack, Sleep summary, Insight card.
 
 ## iPad variants
 
@@ -227,4 +104,4 @@ first shoot happens — Photoshop is fine for v1).
 
 ---
 
-## LAST REVIEWED: 2026-07-23
+## LAST REVIEWED: 2026-09-24

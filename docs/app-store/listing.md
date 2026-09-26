@@ -14,95 +14,89 @@ Update the LAST-REVIEWED line at the bottom whenever you change anything.
 BackNine — Longevity Coach
 ```
 
-Length: 25 chars. Room to spare. Alternatives:
-
-- `BackNine Health` (15 chars) — cleanest, closest to brand
-- `BackNine — Health & Longevity` (30 chars) — keyword-rich but verbose
-
-**Recommended: `BackNine — Longevity Coach`**. "Longevity Coach" carries the
-Coach-Al mental model and hits the search term "longevity" hard.
+Length: 25 chars. Kept from the July draft — "Longevity Coach" still carries
+the Coach Al mental model and the search term.
 
 ---
 
 ## Subtitle (max 30 chars)
 
 ```
-Add years, live better after 50
+Know what today is buying you
 ```
 
-Length: 30 chars — pinned to the limit. Alternatives:
+Length: 29 chars. Rewritten 2026-09-24 (competitive review): every recovery
+app's subtitle is a feature list ("Watch, Workout & Heart Rate"). Ours is the
+one promise none of them make — the horizon. Alternatives:
 
-- `Personal health intelligence` (28 chars) — safer, less category-defining
-- `Recovery, sleep, longevity` (25 chars) — feature-forward
-- `The back nine of life, well-played` (34 chars — TOO LONG, keep for marketing)
+- `Years, not just days` (20) — shorter, punchier, less clear cold
+- `Add years, live better after 50` (30) — the July draft; fine, generic
 
 ---
 
 ## Promotional text (max 170 chars — editable without new build)
 
 ```
-Now with time-of-day med tracking, Sunday scorecard ritual, and a Doctor Handoff
-one-pager you can send before your next visit.
+Works with the Apple Watch you already own. Your Biological Age, your QYL Index
+(quality years left), and a Sunday scoreboard with your friends. Free in beta.
 ```
 
-Length: 148 chars. Rotate this weekly when new features ship — it's the only
-listing field that doesn't require a new build submission.
+Length: 166 chars. Rotate when something ships; this is the only field that
+doesn't need a new build.
 
 ---
 
 ## Description (max 4000 chars)
 
+Rewritten 2026-09-24 — OUTCOMES FIRST, and only features that currently have a
+face in the app (post-August audit). Do not re-add Insight feed, sleep tags,
+Visit Prep, experiments, or groups unless the surface is back.
+
 ```
-BackNine is the longevity coach for the second half of life.
+Recovery apps tell you about today. BackNine tells you what today is buying you.
 
-Built for men and women 50+ who take their health seriously, BackNine turns your
-wearable data, labs, and daily habits into a coherent picture — and then coaches
-you toward better recovery, sleep, training, nutrition, and community.
+Built by a 58-year-old for his own foursome, BackNine reads the Apple Watch or
+Oura ring you already own — plus your labs and blood pressure — and turns them
+into three numbers that matter on the back nine of life.
 
---- Six pillars, one dashboard ---
+KNOW WHAT TODAY IS BUYING YOU
+Your Health Span Score grades the week from sensors only — sleep, movement,
+consistency. Nothing you log or forget to log changes it. Your Biological Age
+reads up to thirteen markers (HRV, VO2 max, blood pressure, HbA1c, LDL, kidney
+function and more) against what's typical for your age, not an athlete's
+optimum. And the QYL Index — Quality Years Left — projects your active,
+independent years ahead, evaluated at your biological age rather than your
+birthday. Move the markers and the years move with them.
 
-RECOVERY. Your Oura or Apple Watch data streams in and becomes a readiness
-signal Coach Al uses to prescribe today's workout intensity. HRV trends,
-resting heart rate, and sleep balance sit next to each other so you can see
-what's actually changing.
+NO BLACK BOXES
+Every score has an "Under the hood" view: which inputs, how each one moved the
+number, and how recent the data is. The full methodology is published at
+backnine.health/how-we-score. If we can't show the math, we don't show the
+score.
 
-SLEEP. Track your sleep debt, streaks, and sleep tags. If you don't wear a
-ring, log manually. Split-night sleep (couch + bed) is captured correctly.
+A COACH WHO READS YOUR NUMBERS
+Coach Al writes you a morning briefing from your actual data — the one thing
+worth knowing and the one thing to do about it — and reports back the next day
+on whether it worked. Pick his voice: straight talk, or the broadcast booth.
 
-TRAINING. A daily workout prescription tuned to your training level, recent
-sessions, and how you're recovering. Injury flags override the plan — a sore
-knee day gets mobility work, not squats. PR badges, muscle-group balance
-heatmap, and weekly volume with deload prompts.
+A REPORT YOUR DOCTOR READS
+One page, in clinical language: trends, flagged values, medications, family
+history. Bring it to the visit instead of your phone. Upload a lab PDF and it
+reads the values in.
 
-NUTRITION. Log meals with a photo or a sentence. Today's Plate summarizes
-protein progress; the daily stack checklist tracks whether you took your meds
-and supplements, grouped by morning / midday / evening. Hydration and vice
-logging (alcohol, nicotine) feed into daily insights.
+YOUR FOURSOME, KEEPING SCORE
+Invite your friends. A weekly leaderboard ranked on behavior — not on who owns
+the fanciest gadget — and a Sunday scoreboard that tells the group who's
+buying coffee. The men who keep going are the ones with someone watching.
 
-INSIGHT. Coach Al reads across all your data and surfaces one or two
-observations per day. "Your HRV dips 8% on nights you drink more than one
-glass of wine" — the kind of cross-signal read that no single-purpose app can
-make. Correlations are gated behind statistical confidence — no random noise
-dressed as insight.
+WORKS WITH WHAT YOU OWN
+Apple Watch connects in one tap. Oura ring, Withings blood pressure, and lab
+PDFs all feed the same picture.
 
-COMMUNITY. Invite your friends, spouse, or workout partners. Group challenges,
-weekly recaps, leaderboards, and a shared Clubhouse where friends see each
-other's progress and cheer each other on. Longevity is a team sport.
-
---- Doctor-ready reports ---
-
-Every quarter, BackNine generates a Doctor Handoff one-pager — a printable
-summary of your blood pressure, sleep, weight, and lab trends that you can
-share with your PCP before your next visit. Includes clinical escalation flags
-if your BP has been consistently elevated over 7+ readings.
-
---- Privacy ---
-
-Your data is your data. Full export and account deletion available in
-Settings. We don't sell your data. We don't run third-party ad SDKs. Read the
-full privacy policy at backnine.health/privacy.
-
---- Important ---
+YOUR DATA
+Free while we're in beta; we'll charge for BackNine Pro later, and that is the
+entire business model. No ads, no data sales, no "partners." One-tap export,
+one-tap delete. Details at backnine.health/your-data.
 
 BackNine is not a medical device, and nothing in the app is medical advice,
 diagnosis, or treatment. Coach Al is a coaching layer, not a clinician. Always
@@ -110,14 +104,14 @@ consult a qualified healthcare professional before beginning or changing any
 exercise, nutrition, medication, or supplement regimen.
 ```
 
-Length: ~2600 chars. Room to expand as features ship.
+Length: ~2450 chars.
 
 ---
 
 ## Keywords (max 100 chars, comma-separated)
 
 ```
-longevity,health,recovery,sleep,hrv,oura,healthspan,fitness,coach,nutrition,vo2,doctor
+longevity,apple watch,oura,healthspan,biological age,hrv,recovery,sleep,coach,doctor,friends
 ```
 
 Length: 96 chars. Notes:

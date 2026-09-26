@@ -68,6 +68,7 @@ import WeeklyHealthSpanCard from "@/components/WeeklyHealthSpanCard";
 import ActivityTimelineCard from "@/components/ActivityTimelineCard";
 import DailyInsightCard from "@/components/DailyInsightCard";
 import SymptomCard from "@/components/SymptomCard";
+import { registerForPush } from "@/lib/push";
 // WeeklyInsight retired 2026-07-09 per David: content overlapped Coach Al
 // briefing + Daily Insight + Weekly Recap. Component file stays in place
 // in case we want to revive under a different framing later.
@@ -1004,7 +1005,24 @@ export default function DashboardPage() {
       })
       .catch(() => {});
 
-    return () => clearTimeout(hkTimer);
+    // Push registration (2026-09-24) — native only, no-op on web. Delayed
+    // past the HealthKit autosync so the permission sheet doesn't land
+    // on top of the first render. See lib/push.ts.
+    const pushTimer = setTimeout(() => { registerForPush(); }, 9000);
+    // Notification tap → route. Routes come from the backend payload.
+    const onPushRoute = (e: Event) => {
+      const route = (e as CustomEvent<string>).detail;
+      if (route === "league") setSection("challenges");
+      else setSection("coaching");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+    window.addEventListener("backnine:push-route", onPushRoute);
+
+    return () => {
+      clearTimeout(hkTimer);
+      clearTimeout(pushTimer);
+      window.removeEventListener("backnine:push-route", onPushRoute);
+    };
   }, []);
 
   // ── Foreground refetch loop ────────────────────────────────────────────────

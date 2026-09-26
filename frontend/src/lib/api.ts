@@ -2166,6 +2166,10 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 export const api = {
   dashboard():          Promise<DashboardData> { return request("/api/dashboard"); },
   ouraEventsDebug():    Promise<Record<string, unknown>> { return request("/api/oura/events-debug"); },
+  /** APNs device token → backend (2026-09-24). */
+  pushRegister(token: string, platform = "ios"): Promise<{ ok: boolean }> {
+    return request("/api/push/register", { method: "POST", body: JSON.stringify({ token, platform }) });
+  },
   wearables():          Promise<{ connected: Wearable[]; available: Wearable[] }> { return request("/api/wearables"); },
   disconnect(p: string): Promise<void> { return request(`/api/wearables/${p}`, { method: "DELETE" }); },
   logout():             Promise<void> { clearToken(); return request("/auth/logout", { method: "POST" }); },

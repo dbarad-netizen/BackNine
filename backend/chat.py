@@ -68,9 +68,10 @@ def _build_system_prompt(health_context: dict, profile: dict) -> str:
     # health_context keys ("active_goal" is a structured dict in the
     # briefing endpoint's chain — merging our string block onto that same
     # key crashed the briefing when the join() saw a dict).
+    # Ghost-feature audit (2026-09-24): active_visit_ctx, recent_insights_ctx,
+    # weekly_recap_ctx removed — their UI was cut/frozen. See briefing.py.
     for key in ("data_quality_flags", "training_flag_ctx", "manual_readings_ctx",
-                "active_visit_ctx", "active_goal_ctx",
-                "recent_insights_ctx", "weekly_recap_ctx",
+                "active_goal_ctx",
                 # Med ↔ lab attribution (David 2026-08-11, #177) — chat must
                 # frame med-consistent lab shifts as pharmacology, not aging.
                 "med_lab_ctx",

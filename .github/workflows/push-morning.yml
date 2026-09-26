@@ -1,0 +1,15 @@
+# Morning teaser push — 7:05am Pacific daily (14:05 UTC in PDT; 15:05 in PST).
+# Sends today's readiness/sleep + "Coach Al's briefing is ready" to every
+# registered device. Dry-runs harmlessly until APNS_* vars exist on Render.
+name: Push — morning teaser
+on:
+  schedule:
+    - cron: "5 14 * * *"
+  workflow_dispatch:
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -sS -X POST "https://backnine-hu60.onrender.com/admin/push/morning" \
+            -H "X-Admin-Key: ${{ secrets.BACKNINE_ADMIN_KEY }}" --max-time 120

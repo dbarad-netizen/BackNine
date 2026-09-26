@@ -1,0 +1,13 @@
+# Sunday scoreboard push — 5:00pm Pacific Sunday (00:00 UTC Monday in PDT).
+name: Push — Sunday scoreboard
+on:
+  schedule:
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -sS -X POST "https://backnine-hu60.onrender.com/admin/push/scoreboard" \
+            -H "X-Admin-Key: ${{ secrets.BACKNINE_ADMIN_KEY }}" --max-time 120

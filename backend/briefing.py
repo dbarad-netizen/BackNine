@@ -55,13 +55,8 @@ def _build_system_prompt(
         "similar to recent days, the briefing must NOT open with the same "
         "framing, quote the same numbers, or prescribe the same action as "
         "any of those recent briefings. Rotate what you lead with (last "
-        "night's number, a 7-day trend, an experiment in progress, a "
-        "specific stack item, a training rhythm). If the user is running "
-        "an active experiment (see 'USER IS ACTIVELY TESTING' block), "
-        "tie today's briefing to that test — day-of, what to watch for. "
-        "If they have a Proven For You result (see 'PROVEN FOR THIS "
-        "USER'), reference it by name when it's relevant — the user "
-        "trusts those more than generic guidance. If nothing has "
+        "night's number, a 7-day trend, a "
+        "specific stack item, a training rhythm). If nothing has "
         "meaningfully changed and nothing new to say, be honest about "
         "that in one sentence and pivot to a different lens rather than "
         "re-narrating yesterday.\n\n"
@@ -174,14 +169,20 @@ def _build_system_prompt(
     # sets active_goal = <dict>; if we read that here and tried to
     # "\n".join() it into parts, we crash with TypeError. This was the
     # July-5 briefing outage.) `isinstance(str)` guard is belt-and-braces.
+    # Ghost-feature audit (David 2026-09-24, "why is it telling me about
+    # a forecast I can't see?"): Coach Al may only reference things that
+    # have a face in the app. Removed from this loop because their UI was
+    # cut or frozen in the Aug audit: recent_insights_ctx (DailyInsightCard
+    # + InsightsSection not rendered), weekly_recap_ctx (card removed),
+    # active_visit_ctx (Visit Prep frozen), experiments_ctx (only
+    # spawnable from the removed insight card; Proven ledger not
+    # rendered), recent_nudges_ctx (NudgeCard not rendered). Restore a
+    # key ONLY when its surface comes back.
     for key in ("clinical_escalation", "data_quality_flags", "training_flag_ctx",
-                "manual_readings_ctx", "active_visit_ctx", "active_goal_ctx",
-                "recent_insights_ctx", "weekly_recap_ctx",
-                # Anti-repetition + fresh-behavior blocks (David 2026-07-27).
-                # These MUST make it into the prompt or the model can't
-                # vary its output and can't reference the user's Proven
-                # For You / active experiments.
-                "recent_briefings_ctx", "experiments_ctx", "recent_nudges_ctx",
+                "manual_readings_ctx", "active_goal_ctx",
+                # Anti-repetition (David 2026-07-27) — the model can't vary
+                # its output unless it sees its own recent briefings.
+                "recent_briefings_ctx",
                 # Med ↔ lab attribution (David 2026-08-11, #177) — makes
                 # the briefing frame med-consistent lab shifts correctly.
                 "med_lab_ctx",

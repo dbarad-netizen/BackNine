@@ -162,30 +162,13 @@ def pick_type(user_id: str, today: Optional[_date] = None) -> tuple[str, dict]:
     if _recent_lab_upload(sb, user_id, t):
         return TYPE_LAB_FOCUS, {}
 
-    # 2. Upcoming doctor visit in T-3..T-14 window
-    visit = _upcoming_visit(sb, user_id, t)
-    if visit:
-        try:
-            days_out = (_date.fromisoformat(visit["visit_date"]) - t).days
-        except Exception:
-            days_out = None
-        return TYPE_VISIT_PREP, {
-            "visit_date":    visit.get("visit_date"),
-            "provider_type": visit.get("provider_type") or "your doctor",
-            "reason":        visit.get("reason") or "",
-            "days_out":      days_out,
-        }
-
-    # 3. Mid-experiment check-in
-    exp = _mid_experiment(sb, user_id, t)
-    if exp:
-        return TYPE_EXPERIMENT_PROGRESS, {
-            "action":       exp.get("action") or "",
-            "metric_type":  exp.get("metric_type") or "",
-            "baseline_avg": exp.get("baseline_avg"),
-            "day":          exp.get("_day"),
-            "total":        exp.get("_total"),
-        }
+    # 2./3. Visit-prep and mid-experiment types DISABLED (ghost-feature
+    # audit, David 2026-09-24): Visit Prep is frozen and the experiment
+    # loop lost its entry point when DailyInsightCard was cut, so neither
+    # has a face in the app. A briefing "checking in on day 4 of your
+    # experiment" that the user can't open anywhere is exactly the
+    # "why is it telling me this?" bug. Re-enable when the surfaces
+    # return; the helpers (_upcoming_visit, _mid_experiment) are intact.
 
     # 4/5. Day-of-week rotations. weekday(): Mon=0, Sun=6
     dow = t.weekday()

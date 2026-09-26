@@ -1425,6 +1425,89 @@ async def scoreboard_text(request: Request):
     return scb.build()["text"]
 
 
+# ── Push notifications (David 2026-09-24) ───────────────────────────────
+# See push.py. The phone registers its APNs token after the user grants
+# permission; the two senders below are called by GitHub Actions crons
+# (.github/workflows/push-*.yml) — morning teaser daily, scoreboard Sunday.
+
+@app.post("/api/push/register")
+async def push_register(request: Request):
+    session = _require_session(request)
+    body = await request.json()
+    token = (body.get("token") or "").strip()
+    if not token or len(token) > 256:
+        raise HTTPException(status_code=400, detail="token required")
+    import push
+    try:
+        push.register_token(session["user_id"], token, (body.get("platform") or "ios")[:16])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"could not register: {e}")
+    return {"ok": True}
+
+
+@app.post("/admin/push/test")
+async def push_test(request: Request):
+    """Send a test push to one user: {"user_id": "...", "title": "...", "body": "..."}."""
+    _check_admin(request)
+    body = await request.json()
+    import push
+    return await push.send_to_user(
+        body.get("user_id", ""), body.get("title") or "BackNine", body.get("body") or "Test push.",
+    )
+
+
+@app.post("/admin/push/morning")
+async def push_morning(request: Request):
+    """Daily 7am teaser to every registered user: today's readiness + sleep
+    from the cache and a nudge to open the briefing. Cheap — no Claude
+    call. The full briefing push comes later if this earns its keep."""
+    _check_admin(request)
+    import push
+    today = _user_local_today_iso(request)
+    results = {}
+    for uid in push.all_user_ids():
+        try:
+            rm, slm, _am, _smm = oc.get_days(uid, days=2)
+            rdy = (rm.get(today) or {}).get("score")
+            slp = (slm.get(today) or {}).get("score")
+            if rdy is None and slp is None:
+                ah_day = ah.get_day(uid, today) or {}
+                slp_h = ah_day.get("sleep_hours")
+                body = (f"Slept {slp_h:.1f} h. Coach Al's briefing is ready." if slp_h
+                        else "Coach Al's briefing is ready.")
+            else:
+                bits = []
+                if rdy is not None: bits.append(f"Readiness {int(rdy)}")
+                if slp is not None: bits.append(f"sleep {int(slp)}")
+                body = ", ".join(bits) + ". Coach Al's briefing is ready."
+            results[uid[:8]] = await push.send_to_user(
+                uid, "Good morning", body, data={"route": "briefing"}, collapse_id="morning",
+            )
+        except Exception as e:
+            results[uid[:8]] = {"error": str(e)[:120]}
+    return {"date": today, "results": results}
+
+
+@app.post("/admin/push/scoreboard")
+async def push_scoreboard(request: Request):
+    """Sunday: push the scoreboard headline to every SCOREBOARD_RECIPIENT."""
+    _check_admin(request)
+    import push
+    import scoreboard as scb
+    built = scb.build()
+    rows = built["rows"]
+    if not rows:
+        raise HTTPException(status_code=400, detail="no recipients")
+    standings = " · ".join(f"{r['name']} {r['score'] if r['score'] is not None else '—'}" for r in rows)
+    results = {}
+    for r in rows:
+        results[r["name"]] = await push.send_to_user(
+            r["user_id"], f"Sunday scoreboard — {built['week_label']}",
+            f"{standings}. {r['line']}", data={"route": "league"}, collapse_id="scoreboard",
+        )
+    return {"week_label": built["week_label"], "results": results}
+
+
 @app.post("/admin/scoreboard/send")
 async def scoreboard_send(request: Request):
     _check_admin(request)

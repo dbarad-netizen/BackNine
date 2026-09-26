@@ -1,3 +1,5 @@
+> **SUPERSEDED (2026-09-24).** This described the retired 'Health Sync' companion app. The shipping app is the full BackNine app; use `docs/app-store/listing.md`.
+
 # App Store Connect — BackNine Health Sync submission package
 
 Everything you'll need to paste into App Store Connect when the app is
