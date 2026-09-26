@@ -205,6 +205,19 @@ export default function DoctorHandoffOnePager() {
         </section>
       )}
 
+      {/* Baseline notes (2026-09-26): e.g. CPAP start with the measured
+          HRV/RHR shift and any medication consistent with it. */}
+      {(data.baseline_notes?.length ?? 0) > 0 && (
+        <section className="mb-2">
+          <p className="text-[10px] uppercase tracking-wide font-semibold text-gray-700 mb-1">Wearable baseline note</p>
+          <ul className="text-xs text-gray-800 space-y-0.5">
+            {(data.baseline_notes ?? []).map((line, i) => (
+              <li key={i}>{line}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {/* Latest labs */}
       {labs.length > 0 && (
         <section className="mb-2">

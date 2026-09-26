@@ -77,7 +77,9 @@ def _build_system_prompt(health_context: dict, profile: dict) -> str:
                 "med_lab_ctx",
                 # Family history (David 2026-09-06) — screening topics
                 # only; interpretation guardrails live in the block.
-                "family_history_ctx"):
+                "family_history_ctx",
+                # Baseline reset (David 2026-09-26) — see baseline.py.
+                "baseline_reset_ctx"):
         block = health_context.get(key)
         if isinstance(block, str) and block:
             prompt_parts.append(block)

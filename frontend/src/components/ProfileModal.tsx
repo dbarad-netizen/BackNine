@@ -364,6 +364,35 @@ export default function ProfileModal({ onClose, initialTab = "profile" }: Props)
                 </p>
               </div>
 
+              {/* Baseline reset (David 2026-09-26). Starting CPAP dropped his
+                  HRV from an apnea-inflated 55 to a real 32, and Oura graded
+                  the true baseline against the fake one. Setting a reset
+                  date makes every "vs your baseline" comparison — readiness,
+                  Coach Al, the doctor report — start fresh from that day. */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-widest mb-1.5">
+                  Baseline reset
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="date"
+                    value={profile.baseline_reset_date ?? ""}
+                    onChange={e => setProfile(p => ({ ...p, baseline_reset_date: e.target.value || null }))}
+                    className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-[#1B3829]/50"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Reason (e.g. Started CPAP)"
+                    value={profile.baseline_reset_reason ?? ""}
+                    onChange={e => setProfile(p => ({ ...p, baseline_reset_reason: e.target.value || null }))}
+                    className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-[#1B3829]/50"
+                  />
+                </div>
+                <p className="text-[10px] text-gray-500 leading-snug mt-1">
+                  Started CPAP, a new heart medication, or anything else that changes what &ldquo;normal&rdquo; means for you? Set the date and BackNine compares you only to yourself since then — your readiness, Coach Al, and your doctor report all follow. Leave blank if nothing&apos;s changed.
+                </p>
+              </div>
+
               {/* Chronic injuries — feeds workout prescription to avoid
                   movements loading these areas. Simple comma-separated
                   entry so we don't overbuild UI. */}

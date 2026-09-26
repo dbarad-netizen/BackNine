@@ -655,6 +655,9 @@ export interface UserProfile {
   training_level?:    "beginner" | "intermediate" | "advanced" | null;
   /** Coach Al's delivery style (2026-09-24). "booth" = Letterman/Berman. */
   coach_voice?:       "straight" | "booth" | null;
+  /** Baseline reset (2026-09-26): personal-history comparisons start here. */
+  baseline_reset_date?:   string | null;
+  baseline_reset_reason?: string | null;
   /** Ongoing injuries or areas to protect. Feeds into workout prescription
    *  (avoid movements loading these areas). */
   chronic_injuries?:  ChronicInjury[];
@@ -753,6 +756,16 @@ export interface DashboardData {
   /** Starting QYL from age/sex alone (2026-09-21) — attached only when
    *  Bio Age can't compute yet, so a brand-new user sees a number in
    *  their first minute. Replaced by the real projection automatically. */
+  /** Baseline reset (2026-09-26): when set, today.readiness.score is
+   *  BackNine's (baseline since reset_date) and oura_score is the
+   *  manufacturer's. See backend/baseline.py. */
+  readiness_baseline?: {
+    reset_date: string;
+    reason: string;
+    applied: boolean;
+    baseline_days: number | null;
+    oura_score: number | null;
+  } | null;
   provisional_qyl?: {
     years: number | null;
     low: number;
@@ -1631,6 +1644,7 @@ export interface DoctorOnePagerPayload {
   labs:             DoctorOnePagerLab[];
   /** Clinician-ready family history lines (2026-09-06). */
   family_history?:  string[];
+  baseline_notes?:  string[];
 }
 
 // ── Coach Al persistent memory ───────────────────────────────────────────

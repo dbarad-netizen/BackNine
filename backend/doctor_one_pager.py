@@ -450,6 +450,20 @@ def _labs(user_id: str, limit: int = 10) -> list[dict]:
 
 # ── public ───────────────────────────────────────────────────────────────
 
+def _baseline_notes(user_id: str, profile: dict) -> list[str]:
+    """Baseline reset note for the clinician (David 2026-09-26) — e.g.
+    CPAP start with the measured HRV/RHR shift. See baseline.py."""
+    try:
+        import baseline as bl
+        if not bl.reset_info(profile):
+            return []
+        import oura_cache as oc
+        _rm, _slm, _am, smm = oc.get_days(user_id, days=120)
+        return bl.handoff_lines(profile, smm or {})
+    except Exception:
+        return []
+
+
 def _family_history(profile: dict) -> list[str]:
     """Render family history as clinician-ready lines (David 2026-09-06).
     First thing a new doctor asks; the thing patients half-remember in
@@ -513,4 +527,5 @@ def build_one_pager(user_id: str, profile: dict,
         "escalation_pin":    handoff_pin_row,   # None when no flags
         "escalation_flags":  escalation_flags,  # full list for optional expansion
         "family_history":    _family_history(profile),
+        "baseline_notes":    _baseline_notes(user_id, profile),
     }

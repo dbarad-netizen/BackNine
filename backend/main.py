@@ -2652,6 +2652,7 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
     }
 
     _attach_provisional_qyl(payload, user_id)
+    _apply_baseline_reset(payload, user_id, smm, anchor)
 
     # If tokens were just refreshed, write the new JWT cookie in the response
     if refreshed_session:
@@ -2660,6 +2661,51 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
         return resp
 
     return payload
+
+
+def _apply_baseline_reset(payload: dict, user_id: str, smm: dict, anchor: str) -> None:
+    """Baseline reset (David 2026-09-26): when the profile has a
+    baseline_reset_date, replace the manufacturer's readiness score in
+    payload["today"] with BackNine's, computed from the same HRV/RHR but
+    against a baseline that starts at the reset. See baseline.py. The
+    manufacturer's number is kept as oura_score for transparency."""
+    try:
+        import baseline as bl
+        prof = _get_profile(user_id) or {}
+        info = bl.reset_info(prof)
+        if not info:
+            payload["readiness_baseline"] = None
+            return
+        bn = bl.backnine_readiness(smm, anchor, info["date"])
+        today = payload.get("today") or {}
+        rdy = dict(today.get("readiness") or {})
+        oura_score = rdy.get("score")
+        if bn:
+            rdy["score"] = bn["score"]
+            rdy["oura_score"] = oura_score
+            rdy["source"] = "backnine"
+            today["readiness"] = rdy
+            payload["today"] = today
+            # The coach verdict under the rings is derived from the
+            # readiness score — regenerate it so it can't contradict
+            # the number it sits beneath.
+            try:
+                _sm = (smm or {}).get(anchor) or {}
+                coaches = payload.get("coaches") or {}
+                coaches["overall"] = coach_overall(rdy, _sm)
+                payload["coaches"] = coaches
+            except Exception:
+                pass
+        payload["readiness_baseline"] = {
+            "reset_date":    info["date"],
+            "reason":        info["reason"],
+            "applied":       bool(bn),
+            "baseline_days": (bn or {}).get("baseline_days"),
+            "oura_score":    oura_score,
+        }
+    except Exception:
+        log.exception("baseline reset failed for %s", user_id)
+        payload["readiness_baseline"] = None
 
 
 def _attach_provisional_qyl(payload: dict, user_id: str) -> None:
@@ -6089,7 +6135,7 @@ async def save_profile(request: Request):
     session = _require_session(request)
     user_id = session["user_id"]
     body = await request.json()
-    allowed = {"name", "age", "biological_sex", "height_cm", "health_goals", "vo2_max", "birthdate", "supplements", "peptides", "medications", "training_level", "chronic_injuries", "family_history", "coach_voice"}
+    allowed = {"name", "age", "biological_sex", "height_cm", "health_goals", "vo2_max", "birthdate", "supplements", "peptides", "medications", "training_level", "chronic_injuries", "family_history", "coach_voice", "baseline_reset_date", "baseline_reset_reason"}
     data = {k: v for k, v in body.items() if k in allowed}
     # Empty birthdate string clears it (Postgres date column rejects "").
     if "birthdate" in data and not data["birthdate"]:

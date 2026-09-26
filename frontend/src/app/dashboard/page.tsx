@@ -2000,6 +2000,18 @@ export default function DashboardPage() {
                               ≈ computed by BackNine from your Apple Health data
                             </p>
                           )}
+                          {/* Baseline reset (David 2026-09-26): readiness is
+                              BackNine's, scored against a baseline that starts
+                              at the reset date (e.g. CPAP start), not the
+                              manufacturer's inflated pre-reset history. */}
+                          {!estimatedRings && data.readiness_baseline?.applied && (
+                            <p className="text-center text-[10px] text-gray-500 mt-2">
+                              ≈ Readiness by BackNine · baseline since{" "}
+                              {new Date(data.readiness_baseline.reset_date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                              {data.readiness_baseline.reason ? ` (${data.readiness_baseline.reason})` : ""}
+                              {data.readiness_baseline.oura_score != null ? ` · Oura says ${data.readiness_baseline.oura_score}` : ""}
+                            </p>
+                          )}
                         </div>
                       );
                     }

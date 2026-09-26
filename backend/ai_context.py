@@ -492,6 +492,19 @@ def _family_history_ctx(profile: Optional[dict]) -> str:
     return chr(10).join(lines)
 
 
+def _baseline_reset_ctx(user_id: str, profile: Optional[dict]) -> str:
+    """Baseline reset block (David 2026-09-26) — see baseline.py."""
+    try:
+        import baseline as bl
+        if not bl.reset_info(profile):
+            return ""
+        import oura_cache as oc
+        _rm, _slm, _am, smm = oc.get_days(user_id, days=120)
+        return bl.context_block(profile, smm or {})
+    except Exception:
+        return ""
+
+
 def build(user_id: str, profile: Optional[dict] = None) -> dict:
     """Assemble the shared AI context bundle. Every AI surface (chat,
     briefing, today_workout, daily_insight) reads from this — one
@@ -512,6 +525,7 @@ def build(user_id: str, profile: Optional[dict] = None) -> dict:
         "freshness_advisory":     _freshness(user_id),
         "clinical_escalation":    _clinical(user_id, profile),
         "family_history_ctx":     _family_history_ctx(profile),
+        "baseline_reset_ctx":     _baseline_reset_ctx(user_id, profile),
         "active_visit_ctx":       _active_visit(user_id),
         "training_flag_ctx":      _training_flag(user_id),
         "active_goal_ctx":        _active_goal(user_id),
