@@ -1810,7 +1810,26 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
             _import_oura_events_bg, user_id, session["access_token"]
         )
 
+    # Oura-by-evidence (David 2026-09-30): on Sep 30 at 7:45am the iOS app
+    # rendered BackNine-estimated rings (57/62) for David — a user with a
+    # year of Oura data and valid tokens in oura_connections — meaning the
+    # token lookup above came back empty on that load (transient DB blip,
+    # RLS hiccup, whatever). Falling into the Apple-Health-only path for
+    # an Oura user is the worst outcome: wrong numbers with no error.
+    # Rule: if the Oura cache has recent data, this IS an Oura user; run
+    # the Oura path from cache even without a token (the inline fetch
+    # will fail closed and serve cache, exactly like an Oura outage).
+    _has_oura_cache = False
     if not session.get("access_token"):
+        try:
+            _c_rm, _c_slm, _c_am, _c_smm = oc.get_days(user_id, days=8)
+            _has_oura_cache = bool(_c_rm or _c_slm or _c_smm)
+        except Exception:
+            _has_oura_cache = False
+        if _has_oura_cache:
+            log.warning("dashboard: no Oura token resolved for %s but Oura cache exists — serving Oura path from cache", user_id)
+
+    if not session.get("access_token") and not _has_oura_cache:
         # User is authenticated but hasn't connected Oura yet. Build the empty
         # payload baseline, then overlay Apple Health data if they're syncing it.
         # Without this, non-Oura users (e.g. email signups using Health Auto

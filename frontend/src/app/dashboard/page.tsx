@@ -1904,6 +1904,14 @@ export default function DashboardPage() {
               // if it were today's. The score trend card still shows
               // yesterday's value with proper date framing.
               const syncingToday = !anchorIsToday;
+              // Early read (David 2026-09-30): Oura publishes a PROVISIONAL
+              // readiness/sleep score on first sync and revises it as the
+              // night's detail processes (7:45am: 57/62 → 7:55am: 68/78).
+              // When today's score is in but the session detail (HRV,
+              // duration) isn't, the numbers are still moving — say so.
+              const _sm = (data.today?.sleep_model ?? {}) as Record<string, unknown>;
+              const earlyRead = anchorIsToday && !syncingToday && data.has_oura !== false && hasReadiness &&
+                (_sm.hrv == null && _sm.total == null);
               const dayFull  = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
               const scoreColor = (s: number | undefined) =>
                 !s ? "#9ca3af" : s >= 85 ? "#22c55e" : s >= 70 ? "#f59e0b" : "#ef4444";
@@ -2004,6 +2012,11 @@ export default function DashboardPage() {
                               BackNine's, scored against a baseline that starts
                               at the reset date (e.g. CPAP start), not the
                               manufacturer's inflated pre-reset history. */}
+                          {!estimatedRings && earlyRead && (
+                            <p className="text-center text-[10px] text-amber-700 mt-2">
+                              Early read — Oura is still processing last night; these numbers usually settle within the hour.
+                            </p>
+                          )}
                           {!estimatedRings && data.readiness_baseline?.applied && (
                             <p className="text-center text-[10px] text-gray-500 mt-2">
                               ≈ Readiness by BackNine · baseline since{" "}
