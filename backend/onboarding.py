@@ -133,17 +133,16 @@ def _has_goal(sb: Client, user_id: str) -> bool:
 
 
 def _has_recent_checkin(sb: Client, user_id: str) -> bool:
-    """A check-in (mood tap or symptom log) in the last 3 days is enough
-    to consider onboarding step 3 done. The 3-day window lets someone who
-    onboarded on Friday come back Monday without re-triggering the card
-    just because they missed the weekend."""
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=3)).date().isoformat()
+    """ANY check-in, ever (David 2026-10-05). This used to require one in
+    the last 3 days — so a user with months of check-ins who skipped a
+    weekend got the "Let's get you set up in 60 seconds" card back on
+    Monday, step 4 un-done. A first-time onboarding step must never
+    un-complete itself."""
     for table in ("symptom_logs", "mood_logs", "daily_checkins"):
         try:
             res = (sb.table(table)
                      .select("id", count="exact")
                      .eq("user_id", user_id)
-                     .gte("date", cutoff)
                      .limit(1).execute())
             if res.data:
                 return True
@@ -193,6 +192,17 @@ def status(user_id: str) -> dict:
     }
     completed    = all(steps.values())
     dismissed_at = _dismissed_at(sb, user_id)
+
+    # Sticky completion (2026-10-05): the first time all four steps are
+    # done, stamp dismissed_at so the card can never come back — not
+    # for an expired goal, a removed friend, or a transient Oura miss.
+    # Onboarding is a one-way door.
+    if completed and not dismissed_at:
+        try:
+            if dismiss(user_id):
+                dismissed_at = datetime.now(timezone.utc).isoformat()
+        except Exception:
+            pass
 
     # Show the card ONLY when there's real value in it: at least one
     # step is incomplete AND the user hasn't explicitly dismissed. That
