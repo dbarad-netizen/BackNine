@@ -1,0 +1,14 @@
+# Coffee Tab — record this week's loser/winner at 3:30pm Pacific Sunday
+# (22:30 UTC in PDT; 23:30 in PST), before the 4pm Sunday text reads it.
+name: Coffee ledger
+on:
+  schedule:
+    - cron: "30 22 * * 0"
+  workflow_dispatch:
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -sS -X POST "https://backnine-hu60.onrender.com/admin/coffee/record" \
+            -H "X-Admin-Key: ${{ secrets.BACKNINE_ADMIN_KEY }}" --max-time 120

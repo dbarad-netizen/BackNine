@@ -2180,6 +2180,15 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 export const api = {
   dashboard():          Promise<DashboardData> { return request("/api/dashboard"); },
   ouraEventsDebug():    Promise<Record<string, unknown>> { return request("/api/oura/events-debug"); },
+  /** Client event (2026-10-07) — link taps etc. Fire-and-forget. */
+  trackEvent(event: string, meta?: Record<string, unknown>): Promise<{ ok: boolean }> {
+    return request("/api/events", { method: "POST", body: JSON.stringify({ event, meta }) });
+  },
+  /** The Coffee Tab (2026-10-07). */
+  coffee(): Promise<CoffeeLedger> { return request("/api/coffee"); },
+  settleCoffee(id: number): Promise<{ ok: boolean }> {
+    return request(`/api/coffee/${id}/settle`, { method: "POST" });
+  },
   /** APNs device token → backend (2026-09-24). */
   pushRegister(token: string, platform = "ios"): Promise<{ ok: boolean }> {
     return request("/api/push/register", { method: "POST", body: JSON.stringify({ token, platform }) });
@@ -3916,4 +3925,17 @@ export interface Challenge {
   archived?:     boolean;
   participants:  ChallengeParticipant[];
   type_info:     { label: string; unit: string; icon: string };
+}
+
+
+/** The Coffee Tab (2026-10-07). */
+export interface CoffeeLedger {
+  weeks: Array<{
+    id: number;
+    week_start: string;
+    loser:  { user_id: string; name: string; score: number | null };
+    winner: { user_id: string; name: string; score: number | null };
+    settled_at: string | null;
+  }>;
+  owed: Array<{ user_id: string; name: string; count: number }>;
 }

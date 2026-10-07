@@ -1510,6 +1510,106 @@ async def push_scoreboard(request: Request):
     return {"week_label": built["week_label"], "results": results}
 
 
+# ── Link taps + the Coffee Tab (David 2026-10-07) ────────────────────────
+# "How do we make the texts drive usage?" Two honest mechanisms: a tagged
+# link in the Sunday text (measurable app opens) and stakes that live only
+# in the app (the coffee ledger). Both are instrumented through app_events.
+
+@app.post("/api/events")
+async def post_event(request: Request):
+    """Lightweight client event: {"event": "link_tap", "meta": {...}}."""
+    session = _require_session(request)
+    body = await request.json()
+    ev = (body.get("event") or "").strip()[:64]
+    if not ev:
+        raise HTTPException(status_code=400, detail="event required")
+    db = get_supabase()
+    if db:
+        try:
+            db.table("app_events").insert({
+                "user_id": session["user_id"], "event": ev,
+                "meta": body.get("meta") if isinstance(body.get("meta"), dict) else None,
+            }).execute()
+        except Exception:
+            pass
+    return {"ok": True}
+
+
+def _coffee_rows_for(user_id: str) -> list[dict]:
+    db = get_supabase()
+    if not db:
+        return []
+    try:
+        res = (db.table("coffee_ledger").select("*")
+                 .or_(f"loser_user_id.eq.{user_id},winner_user_id.eq.{user_id}")
+                 .order("week_start", desc=True).limit(26).execute())
+        return res.data or []
+    except Exception:
+        return []
+
+
+@app.get("/api/coffee")
+def get_coffee(request: Request):
+    """The Coffee Tab: every week's loser/winner among the foursome, with
+    running totals of coffees owed and a settled flag."""
+    session = _require_session(request)
+    uid = session["user_id"]
+    rows = _coffee_rows_for(uid)
+    ids = sorted({r["loser_user_id"] for r in rows} | {r["winner_user_id"] for r in rows})
+    names = lg._names_for(get_supabase(), ids) if ids else {}
+    owed: dict[str, int] = {}   # user_id → coffees still owed
+    for r in rows:
+        if not r.get("settled_at"):
+            owed[r["loser_user_id"]] = owed.get(r["loser_user_id"], 0) + 1
+    return {
+        "weeks": [{
+            "id": r["id"], "week_start": r["week_start"],
+            "loser":  {"user_id": r["loser_user_id"],  "name": names.get(r["loser_user_id"], "Friend"),  "score": r.get("loser_score")},
+            "winner": {"user_id": r["winner_user_id"], "name": names.get(r["winner_user_id"], "Friend"), "score": r.get("winner_score")},
+            "settled_at": r.get("settled_at"),
+        } for r in rows],
+        "owed": [{"user_id": k, "name": names.get(k, "Friend"), "count": v} for k, v in sorted(owed.items(), key=lambda kv: -kv[1])],
+    }
+
+
+@app.post("/api/coffee/{row_id}/settle")
+def settle_coffee(row_id: int, request: Request):
+    session = _require_session(request)
+    uid = session["user_id"]
+    db = get_supabase()
+    if not db:
+        raise HTTPException(status_code=500, detail="db unavailable")
+    res = db.table("coffee_ledger").select("*").eq("id", row_id).limit(1).execute()
+    row = (res.data or [None])[0]
+    if not row or uid not in (row["loser_user_id"], row["winner_user_id"]):
+        raise HTTPException(status_code=404, detail="not your tab")
+    db.table("coffee_ledger").update({"settled_at": datetime.now(timezone.utc).isoformat()}).eq("id", row_id).execute()
+    return {"ok": True}
+
+
+@app.post("/admin/coffee/record")
+async def coffee_record(request: Request):
+    """Sunday cron: write this week's loser/winner from the scoreboard
+    standings. Idempotent per week_start."""
+    _check_admin(request)
+    import scoreboard as scb
+    built = scb.build()
+    scored = [r for r in built["rows"] if r.get("score") is not None]
+    if len(scored) < 2:
+        return {"recorded": False, "reason": "fewer than 2 scored players"}
+    winner, loser = scored[0], scored[-1]
+    from datetime import date as _d
+    today = _d.today()
+    week_start = (today - timedelta(days=today.weekday())).isoformat()
+    db = get_supabase()
+    db.table("coffee_ledger").upsert({
+        "week_start": week_start,
+        "loser_user_id": loser["user_id"], "winner_user_id": winner["user_id"],
+        "loser_score": loser["score"], "winner_score": winner["score"],
+    }, on_conflict="week_start").execute()
+    return {"recorded": True, "week_start": week_start, "loser": loser["name"], "winner": winner["name"]}
+
+
 @app.post("/admin/scoreboard/send")
 async def scoreboard_send(request: Request):
     _check_admin(request)

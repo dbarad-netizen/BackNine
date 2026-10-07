@@ -69,6 +69,7 @@ import ActivityTimelineCard from "@/components/ActivityTimelineCard";
 import DailyInsightCard from "@/components/DailyInsightCard";
 import SymptomCard from "@/components/SymptomCard";
 import { registerForPush } from "@/lib/push";
+import CoffeeLedgerCard from "@/components/CoffeeLedgerCard";
 // WeeklyInsight retired 2026-07-09 per David: content overlapped Coach Al
 // briefing + Daily Insight + Weekly Recap. Component file stays in place
 // in case we want to revive under a different framing later.
@@ -1004,6 +1005,22 @@ export default function DashboardPage() {
         }
       })
       .catch(() => {});
+
+    // Tagged links (2026-10-07): /league?from=sunday lands here with
+    // ?section=challenges&from=...&w=... — open the section and record
+    // the tap so the Sunday text's effect on app opens is measurable.
+    try {
+      const qp = new URLSearchParams(window.location.search);
+      const sec = qp.get("section");
+      const from = qp.get("from");
+      if (sec === "challenges" || sec === "coaching" || sec === "nutrition" || sec === "training") {
+        setSection(sec as Section);
+      }
+      if (from) {
+        api.trackEvent("link_tap", { from, week: qp.get("w") || null, section: sec || null }).catch(() => {});
+        window.history.replaceState({}, "", window.location.pathname);
+      }
+    } catch { /* ignore */ }
 
     // Push registration (2026-09-24) — native only, no-op on web. Delayed
     // past the HealthKit autosync so the permission sheet doesn't land
@@ -2845,6 +2862,11 @@ export default function DashboardPage() {
 
             {/* Weekly league — engagement-points race over a 7-day window. */}
             <WeeklyLeague onInvite={() => setShowShare(true)} />
+
+            {/* The Coffee Tab (2026-10-07): "Coffee's on David" is a joke
+                until there's a ledger. Stakes from the Sunday text, living
+                only in the app. */}
+            <CoffeeLedgerCard />
 
             {/* Pulse feed — friend milestones, comments, reactions. */}
             <PulseFeed onInviteFriend={() => { setProfileInitialTab("friends"); setShowProfile(true); }} />
