@@ -1587,6 +1587,44 @@ def settle_coffee(row_id: int, request: Request):
     return {"ok": True}
 
 
+@app.post("/admin/healthspan/snapshot")
+async def healthspan_snapshot(request: Request):
+    """Daily cron (David 2026-10-07): persist today's Health Span for
+    every user with recent sensor data, whether or not they opened the
+    app. Before this, weekly_healthspan_history only got a row on a
+    dashboard load — so the Tuesday text showed Chris as '—' because he
+    hadn't opened BackNine since Sunday. The texts exist precisely so
+    nobody has to open anything; the scores have to keep up."""
+    _check_admin(request)
+    db = get_supabase()
+    if not db:
+        raise HTTPException(status_code=500, detail="db unavailable")
+    from datetime import date as _d
+    today = _d.today()
+    since = (today - timedelta(days=7)).isoformat()
+    ids: set[str] = set()
+    for table in ("apple_health_daily", "oura_daily_cache"):
+        try:
+            res = db.table(table).select("user_id").gte("date", since).execute()
+            ids |= {r["user_id"] for r in (res.data or []) if r.get("user_id")}
+        except Exception:
+            pass
+    results = {}
+    for uid in sorted(ids):
+        try:
+            _rm, _slm, am, smm = oc.get_days(uid, days=8)
+        except Exception:
+            am, smm = {}, {}
+        try:
+            snap = hspan.compute(uid, today.isoformat(), am or {}, smm or {}, {})
+            if snap.get("score") is not None:
+                hspan.persist_and_delta(uid, today.isoformat(), snap)
+            results[uid[:8]] = snap.get("score")
+        except Exception as e:
+            results[uid[:8]] = f"error: {str(e)[:80]}"
+    return {"date": today.isoformat(), "users": len(ids), "scores": results}
+
+
 @app.post("/admin/coffee/record")
 async def coffee_record(request: Request):
     """Sunday cron: write this week's loser/winner from the scoreboard

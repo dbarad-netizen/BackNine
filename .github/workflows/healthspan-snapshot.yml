@@ -1,0 +1,15 @@
+# Daily Health Span snapshot — 3:00pm Pacific (22:00 UTC in PDT), after
+# the day's wearable data has synced and before any evening text reads it.
+# Scores for everyone with recent sensor data, no app open required.
+name: Health Span snapshot
+on:
+  schedule:
+    - cron: "0 22 * * *"
+  workflow_dispatch:
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -sS -X POST "https://backnine-hu60.onrender.com/admin/healthspan/snapshot" \
+            -H "X-Admin-Key: ${{ secrets.BACKNINE_ADMIN_KEY }}" --max-time 180
