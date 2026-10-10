@@ -2979,6 +2979,25 @@ def _apply_baseline_reset(payload: dict, user_id: str, smm: dict, anchor: str) -
         today = payload.get("today") or {}
         rdy = dict(today.get("readiness") or {})
         oura_score = rdy.get("score")
+        # "Use Oura when it's right, be better when it's wrong" (David
+        # 2026-10-09). Oura's readiness baseline is a rolling ~2-3 month
+        # window, so a reset only matters while that window still holds
+        # pre-reset nights. Override ONLY when the reset is <90 days old
+        # AND the two scores disagree by 8+ points; otherwise Oura's
+        # number stands so the rings match the Oura app exactly.
+        override = False
+        reset_age_days = None
+        try:
+            reset_age_days = (date.fromisoformat(anchor) - date.fromisoformat(info["date"])).days
+        except Exception:
+            pass
+        if bn and oura_score is not None and reset_age_days is not None:
+            override = reset_age_days < 90 and abs(int(bn["score"]) - int(oura_score)) >= 8
+        elif bn and oura_score is None:
+            override = True  # nothing from Oura — BackNine's is all we have
+        backnine_score = (bn or {}).get("score")
+        if not override:
+            bn = None
         if bn:
             rdy["score"] = bn["score"]
             rdy["oura_score"] = oura_score
@@ -3001,6 +3020,8 @@ def _apply_baseline_reset(payload: dict, user_id: str, smm: dict, anchor: str) -
             "applied":       bool(bn),
             "baseline_days": (bn or {}).get("baseline_days"),
             "oura_score":    oura_score,
+            "backnine_score": backnine_score,
+            "reset_age_days": reset_age_days,
         }
     except Exception:
         log.exception("baseline reset failed for %s", user_id)

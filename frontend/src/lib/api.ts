@@ -767,6 +767,8 @@ export interface DashboardData {
     applied: boolean;
     baseline_days: number | null;
     oura_score: number | null;
+    backnine_score?: number | null;
+    reset_age_days?: number | null;
   } | null;
   provisional_qyl?: {
     years: number | null;

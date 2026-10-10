@@ -2059,11 +2059,12 @@ export default function DashboardPage() {
                             </p>
                           )}
                           {!estimatedRings && data.readiness_baseline?.applied && (
-                            <p className="text-center text-[10px] text-gray-500 mt-2">
-                              ≈ Readiness by BackNine · baseline since{" "}
+                            <p className="text-center text-[10px] text-amber-700 mt-2">
+                              Readiness is BackNine&apos;s
+                              {data.readiness_baseline.oura_score != null ? ` — Oura says ${data.readiness_baseline.oura_score}` : ""}
+                              . Oura&apos;s baseline still includes nights before{" "}
                               {new Date(data.readiness_baseline.reset_date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                              {data.readiness_baseline.reason ? ` (${data.readiness_baseline.reason})` : ""}
-                              {data.readiness_baseline.oura_score != null ? ` · Oura says ${data.readiness_baseline.oura_score}` : ""}
+                              {data.readiness_baseline.reason ? ` (${data.readiness_baseline.reason})` : ""}; ours starts there.
                             </p>
                           )}
                         </div>
