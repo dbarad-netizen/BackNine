@@ -9,6 +9,7 @@ Routes:
   GET  /api/wearables                → list connected wearables
   DELETE /api/wearables/{provider}   → disconnect a wearable
 """
+import asyncio
 import io, logging, os, secrets
 from datetime import datetime, timedelta, timezone, date
 
@@ -2155,6 +2156,20 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
     if have_cache and slm.get(today_str_check) and not smm.get(today_str_check):
         cache_hit = False
         force_live = True  # today's score is in, session detail isn't — go get it
+    # First open of the day (David 2026-10-09): the cache had NO row for
+    # today at 9:33am while the Oura app already showed 88/85/84. SWR
+    # served yesterday and refreshed in the background — so the first
+    # open of every morning was a day behind, and only the second open
+    # was right. If there's no row for the user's local today, fetch live
+    # inline. Throttled by the 30-min freshness check so we don't hit
+    # Oura on every load while they genuinely haven't published yet.
+    if have_cache and not force_live and not slm.get(today_str_check) and not rm.get(today_str_check):
+        try:
+            if not oc.is_fresh(user_id, max_age_hours=0.5):
+                cache_hit = False
+                force_live = True
+        except Exception:
+            pass
 
     # ── Stale-while-revalidate ─────────────────────────────────────────────────
     # If we missed the strict 30-min freshness window but the cache is still
@@ -2193,7 +2208,12 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
             # a cold cache meant six 365-day Oura calls inline; with
             # Oura's API degraded that was a multi-minute spinner while
             # the app claimed the user had no Oura at all.
-            raw = await fetch_all(access_token, days=min(days, 14))
+            # Cap the wait when we have a cache to fall back on — a slow
+            # Oura morning should cost ~12s at worst, never a hung spinner.
+            if have_cache:
+                raw = await asyncio.wait_for(fetch_all(access_token, days=min(days, 14)), timeout=12)
+            else:
+                raw = await fetch_all(access_token, days=min(days, 14))
             live_rm, live_slm, live_am, live_smm = parse_oura_data(raw)
             # Only adopt live data when it actually came back with something;
             # otherwise keep whatever the cache gave us above. MERGE the
@@ -2764,6 +2784,7 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
         "today": {
             "date":               anchor,             # Oura data anchor (often yesterday)
             "calendar_today":     oura_today,         # Timezone-safe "today" from Oura data
+            "local_today":        _user_local_today_iso(request),  # user's actual calendar date (X-User-Local-Date)
             "readiness":          t_rdy,
             "sleep":              t_sl,
             "activity":           t_act,              # Oura activity for anchor (coach card)

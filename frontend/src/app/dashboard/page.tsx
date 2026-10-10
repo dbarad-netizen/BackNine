@@ -1621,7 +1621,14 @@ export default function DashboardPage() {
           // Yesterday's Performance — only show when the main rings are showing TODAY's data.
           // Use today.calendar_today (Oura's timezone-safe "today") rather than the browser's
           // UTC date, which can be one day ahead of the user's local date after ~8 PM ET.
-          const anchorIsToday = today.date === today.calendar_today;
+          // 2026-10-09: calendar_today is the MAX Oura date — when today has no row
+          // yet, that IS yesterday, so yesterday compared equal to itself and we
+          // labelled Oct 8's rings "Early read" under "Friday, October 9". Compare
+          // against the user's real calendar date instead (local_today, from the
+          // client's X-User-Local-Date header); fall back to calendar_today.
+          const realToday = today.local_today ?? today.calendar_today;
+          const anchorIsToday = today.date === realToday;
+          const anchorBehindToday = !!realToday && !!today.date && today.date < realToday;
           const yest       = today.yesterday_activity as Record<string, number | null> | undefined;
           const yestScore  = yest?.score   ?? null;
           const yestSteps  = yest?.steps   ?? null;
@@ -1960,14 +1967,21 @@ export default function DashboardPage() {
                       // wraps to 2 lines if needed, and lets the
                       // greeting-side compress before pushing the row.
                       <div className="text-right ml-3 min-w-0 max-w-[55%]">
+                        {/* 2026-10-09: when Oura hasn't published today yet, the
+                            verdict pill described YESTERDAY ("Moderate readiness")
+                            under today's date. Say what's actually happening. */}
                         <span
                           className="inline-block rounded-full px-2.5 py-1 text-[11px] font-semibold leading-tight break-words"
-                          style={{ color: heroColor, backgroundColor: heroColor + "18" }}
+                          style={anchorBehindToday
+                            ? { color: "#6b7280", backgroundColor: "#6b728018" }
+                            : { color: heroColor, backgroundColor: heroColor + "18" }}
                         >
-                          {coaches.overall.title.replace(/[.!]$/, "")}
+                          {anchorBehindToday ? "Waiting on Oura" : coaches.overall.title.replace(/[.!]$/, "")}
                         </span>
-                        {isStale && (
-                          <p className="text-[10px] text-gray-600 mt-1">{fmtDate(data.today.date!)}</p>
+                        {(isStale || anchorBehindToday) && (
+                          <p className="text-[10px] text-gray-600 mt-1">
+                            {anchorBehindToday ? "Last scored " : ""}{fmtDate(data.today.date!)}
+                          </p>
                         )}
                       </div>
                     )}
@@ -2029,6 +2043,11 @@ export default function DashboardPage() {
                               BackNine's, scored against a baseline that starts
                               at the reset date (e.g. CPAP start), not the
                               manufacturer's inflated pre-reset history. */}
+                          {!estimatedRings && syncingToday && (
+                            <p className="text-center text-[10px] text-gray-500 mt-2">
+                              Oura hasn't published today's scores yet. Open the Oura app to sync your ring, then come back here.
+                            </p>
+                          )}
                           {!estimatedRings && earlyRead && (
                             <p className="text-center text-[10px] text-amber-700 mt-2">
                               Early read — Oura is still processing last night; these numbers usually settle within the hour.
@@ -2159,7 +2178,7 @@ export default function DashboardPage() {
                   })()}
 
                   {/* Coach verdict */}
-                  {coaches.overall?.msg && (
+                  {coaches.overall?.msg && !anchorBehindToday && (
                     <div className="border-t border-gray-100 px-5 py-3 flex items-start gap-2.5">
                       <span className="text-base shrink-0 mt-0.5">💬</span>
                       <p className="text-xs text-gray-600 leading-relaxed">{coaches.overall.msg}</p>
