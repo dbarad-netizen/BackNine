@@ -1695,10 +1695,17 @@ async def oura_refresh_all(request: Request):
             report[key] = f"auth {he.status_code}: {str(he.detail)[:80]}"
         except Exception as e:
             report[key] = f"error: {str(e)[:120]}"
-        # Freshness check: anything still >6h old after this pass is a red flag.
+        # Alarm only for ACTIVE users (a cache write in the last 30 days)
+        # whose refresh errored or left the cache >6h old. Rings in a
+        # drawer (Oura returns nothing) and long-dead connections must
+        # not keep the cron red forever.
         try:
-            if not oc.is_fresh(uid, max_age_hours=6.0):
-                stale.append(key)
+            last = oc.last_fetched_at(uid)
+            active = bool(last) and (datetime.now(timezone.utc) -
+                datetime.fromisoformat(str(last).replace("Z", "+00:00"))).days <= 30
+            failed = report[key].startswith(("error", "auth", "no token"))
+            if active and (failed or not oc.is_fresh(uid, max_age_hours=6.0)):
+                stale.append(f"{key}: {report[key]}")
         except Exception:
             pass
     body = {"ran_at": datetime.now(timezone.utc).isoformat(), "users": len(conns),
