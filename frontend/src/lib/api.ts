@@ -256,6 +256,7 @@ export interface TodayData {
   date?:               string;   // Oura anchor date (often yesterday)
   calendar_today?:     string;   // Timezone-safe "today" from Oura max date
   local_today?:        string;   // user's real calendar date (from X-User-Local-Date header)
+  oura_synced_at?:     string | null; // last Oura cache write (ISO)
   readiness:           Record<string, unknown>;
   sleep:               Record<string, unknown>;
   activity:            Record<string, unknown>; // Oura summary for anchor (coach card)

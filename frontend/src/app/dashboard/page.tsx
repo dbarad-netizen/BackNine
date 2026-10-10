@@ -2048,6 +2048,11 @@ export default function DashboardPage() {
                               Oura hasn't published today's scores yet. Open the Oura app to sync your ring, then come back here.
                             </p>
                           )}
+                          {!estimatedRings && data.today?.oura_synced_at && (
+                            <p className="text-center text-[10px] text-gray-400 mt-1">
+                              Oura synced {new Date(data.today.oura_synced_at).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" })}
+                            </p>
+                          )}
                           {!estimatedRings && earlyRead && (
                             <p className="text-center text-[10px] text-amber-700 mt-2">
                               Early read — Oura is still processing last night; these numbers usually settle within the hour.

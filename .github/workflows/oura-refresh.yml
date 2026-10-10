@@ -1,0 +1,17 @@
+# Oura cache refresh — server-side, on a schedule, so the app never has to
+# fetch on first open. Every 20 min from 4:00am–1:00pm Pacific (11:00–20:59
+# UTC in PDT), then hourly the rest of the day. Fails (→ email) when any
+# connected user's cache is still >6h stale after the run.
+name: Oura refresh
+on:
+  schedule:
+    - cron: "*/20 11-20 * * *"
+    - cron: "0 0-10,21-23 * * *"
+  workflow_dispatch:
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -sS --fail-with-body -X POST "https://backnine-hu60.onrender.com/admin/oura/refresh" \
+            -H "X-Admin-Key: ${{ secrets.BACKNINE_ADMIN_KEY }}" --max-time 300

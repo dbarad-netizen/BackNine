@@ -140,3 +140,21 @@ def is_fresh(user_id: str, max_age_hours: float = 2.0) -> bool:
         return age_hours < max_age_hours
     except Exception:
         return False
+
+
+def last_fetched_at(user_id: str):
+    """ISO timestamp of the most recent cache write for this user, or None.
+    Surfaced on the Scorecard as "Oura synced 9:12am" (David 2026-10-09)."""
+    try:
+        res = (
+            _sb().table("oura_daily_cache")
+            .select("fetched_at")
+            .eq("user_id", user_id)
+            .order("fetched_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        rows = res.data or []
+        return rows[0]["fetched_at"] if rows else None
+    except Exception:
+        return None

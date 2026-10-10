@@ -1626,6 +1626,90 @@ async def healthspan_snapshot(request: Request):
     return {"date": today.isoformat(), "users": len(ids), "scores": results}
 
 
+@app.post("/admin/oura/refresh")
+async def oura_refresh_all(request: Request):
+    """Cron (David 2026-10-09, "we are really ruining the BackNine
+    experience"): pull the last 14 days from Oura for EVERY connected
+    user and write the cache — on a schedule, not on app open.
+
+    Before this, the cache was only refreshed when someone loaded the
+    dashboard, and the first load of the day served yesterday while a
+    background task (which could fail silently) tried to catch up. The
+    Oura app showed 88/85/84 at 9:33am; BackNine showed Oct 8's 77/76/83.
+    With this cron running every 20 minutes through the morning, the
+    cache is already current when the user opens the app — the app just
+    reads it. Tokens come from the central store; refreshes are
+    persisted back so devices adopt them (single-use refresh tokens).
+
+    Returns 207-style report; responds 500 when any connected user's
+    cache is still >6h stale after the run so GitHub Actions goes red
+    and David gets the email instead of finding out at 9:33am."""
+    _check_admin(request)
+    db = get_supabase()
+    if not db:
+        raise HTTPException(status_code=500, detail="db unavailable")
+    conns: dict[str, dict] = {}
+    for table in ("oura_connections", "wearable_connections"):
+        try:
+            q = db.table(table).select("user_id, access_token, refresh_token, expires_at")
+            if table == "wearable_connections":
+                q = q.eq("provider", "oura")
+            for r in (q.execute().data or []):
+                uid = r.get("user_id")
+                if uid and r.get("access_token") and uid not in conns:
+                    conns[uid] = r
+        except Exception as e:
+            log.error("oura refresh cron: %s read failed: %s", table, str(e)[:200])
+    # Skip users who paused Oura on purpose.
+    paused: set[str] = set()
+    try:
+        pr = db.table("profiles").select("id").not_.is_("oura_paused_at", "null").execute()
+        paused = {r["id"] for r in (pr.data or [])}
+    except Exception:
+        pass
+    now_ts = datetime.now(timezone.utc).timestamp()
+    report: dict[str, str] = {}
+    stale: list[str] = []
+    for uid, row in sorted(conns.items()):
+        key = uid[:12]
+        if uid in paused:
+            report[key] = "paused"
+            continue
+        session = {"user_id": uid, "access_token": row["access_token"],
+                   "refresh_token": row.get("refresh_token"),
+                   "expires_at": int(row.get("expires_at") or 0)}
+        try:
+            tok, _ = await _ensure_valid_token(session)
+            if not tok:
+                report[key] = "no token"
+                continue
+            raw = await asyncio.wait_for(fetch_all(tok, days=14), timeout=45)
+            r14, s14, a14, m14 = parse_oura_data(raw)
+            if r14 or s14 or a14 or m14:
+                oc.store_days(uid, r14, s14, a14, m14)
+                latest = max(list(r14) + list(s14) + list(a14) + list(m14))
+                report[key] = f"ok through {latest}"
+            else:
+                report[key] = "ok (empty)"
+        except HTTPException as he:
+            report[key] = f"auth {he.status_code}: {str(he.detail)[:80]}"
+        except Exception as e:
+            report[key] = f"error: {str(e)[:120]}"
+        # Freshness check: anything still >6h old after this pass is a red flag.
+        try:
+            if not oc.is_fresh(uid, max_age_hours=6.0):
+                stale.append(key)
+        except Exception:
+            pass
+    body = {"ran_at": datetime.now(timezone.utc).isoformat(), "users": len(conns),
+            "results": report, "stale_after_run": stale}
+    log.info("oura refresh cron: %s", body)
+    if stale:
+        # Loud failure → GitHub Actions marks the run failed → email.
+        raise HTTPException(status_code=500, detail=body)
+    return body
+
+
 @app.post("/admin/coffee/record")
 async def coffee_record(request: Request):
     """Sunday cron: write this week's loser/winner from the scoreboard
@@ -1845,8 +1929,11 @@ async def _refresh_oura_cache_bg(user_id: str, access_token: str, days: int) -> 
             r14, s14, a14, m14 = parse_oura_data(raw14)
             if r14 or s14 or a14 or m14:
                 oc.store_days(user_id, r14, s14, a14, m14)
-        except Exception:
-            log.warning("bg oura refresh: 14-day pass failed for %s", user_id)
+        except Exception as _e:
+            # Oct 9: David's cache sat untouched for 24h+ (last write Oct 8
+            # 14:04 UTC) while the dashboard served it as "fresh". This
+            # path swallowed WHY. Log the actual error every time.
+            log.error("bg oura refresh: 14-day pass failed for %s: %s", user_id, str(_e)[:300])
         if days > 14:
             raw = await fetch_all(access_token, days=days)
             live_rm, live_slm, live_am, live_smm = parse_oura_data(raw)
@@ -2785,6 +2872,7 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
             "date":               anchor,             # Oura data anchor (often yesterday)
             "calendar_today":     oura_today,         # Timezone-safe "today" from Oura data
             "local_today":        _user_local_today_iso(request),  # user's actual calendar date (X-User-Local-Date)
+            "oura_synced_at":     oc.last_fetched_at(user_id),     # last cache write — shown on the Scorecard
             "readiness":          t_rdy,
             "sleep":              t_sl,
             "activity":           t_act,              # Oura activity for anchor (coach card)
