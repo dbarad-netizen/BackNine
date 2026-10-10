@@ -224,8 +224,15 @@ async def fetch_all(access_token: str, days: int = 120) -> dict:
             except Exception:
                 results[key] = {"data": []}  # empty fallback
 
+    # Auth failure on ANY core endpoint must surface — before 2026-10-09 the
+    # optional endpoints' empty placeholders made `results` non-empty, so
+    # three 401s came back as "ok, no data" and the cache quietly froze.
+    auth_errs = [e for e in errors if "401" in e or "403" in e]
+    if auth_errs:
+        raise RuntimeError("Oura token invalid or expired (401): " + "; ".join(auth_errs))
     # If ALL core endpoints failed, surface one clear error
-    if not results:
+    core_ok = any(k in results for k in core_endpoints)
+    if not core_ok:
         detail = "; ".join(errors) if errors else "Oura API unreachable"
         raise RuntimeError(detail)
 

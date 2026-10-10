@@ -85,7 +85,7 @@ def store_days(user_id: str, rm: dict, slm: dict, am: dict, smm: dict) -> int:
     except Exception:
         pass
 
-    return len(rows)
+    return len(all_dates)
 
 
 def get_days(user_id: str, days: int = 120) -> tuple[dict, dict, dict, dict]:

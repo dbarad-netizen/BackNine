@@ -1683,7 +1683,31 @@ async def oura_refresh_all(request: Request):
             if not tok:
                 report[key] = "no token"
                 continue
-            raw = await asyncio.wait_for(fetch_all(tok, days=14), timeout=45)
+            try:
+                raw = await asyncio.wait_for(fetch_all(tok, days=14), timeout=45)
+            except RuntimeError as re_:
+                if "401" not in str(re_) and "403" not in str(re_):
+                    raise
+                # Stored access token rejected even though expires_at says
+                # it's valid (David, Oct 9). Force a refresh with the
+                # central refresh token, persist, retry once.
+                rt = session.get("refresh_token")
+                if not rt:
+                    raise
+                tokens = await oura_refresh(rt, OURA_CLIENT_ID, OURA_CLIENT_SECRET)
+                fresh = {"access_token": tokens["access_token"],
+                         "refresh_token": tokens.get("refresh_token", rt),
+                         "expires_at": int(now_ts) + int(tokens.get("expires_in", 86400))}
+                for table in ("oura_connections", "wearable_connections"):
+                    try:
+                        q = db.table(table).update(fresh).eq("user_id", uid)
+                        if table == "wearable_connections":
+                            q = q.eq("provider", "oura")
+                        q.execute()
+                    except Exception:
+                        pass
+                raw = await asyncio.wait_for(fetch_all(fresh["access_token"], days=14), timeout=45)
+                report[key + " note"] = "token force-refreshed"
             r14, s14, a14, m14 = parse_oura_data(raw)
             if r14 or s14 or a14 or m14:
                 oc.store_days(uid, r14, s14, a14, m14)
