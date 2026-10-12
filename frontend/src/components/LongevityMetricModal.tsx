@@ -26,7 +26,11 @@ interface HistoryPayload {
   metric:    string;
   unit:      string;
   threshold: number | null;
-  trend:     Array<{ date: string; value: number }>;
+  trend:     Array<{ date: string; value: number; pre_reset?: boolean }>;
+  /** Baseline reset (e.g. "Started CPAP" on Aug 3): nights before this
+      date are drawn dimmed and excluded from stats/direction. */
+  reset_date?:   string | null;
+  reset_reason?: string | null;
 }
 
 export default function LongevityMetricModal({ open, metricKey, metricLabel, onClose }: Props) {
@@ -47,8 +51,17 @@ export default function LongevityMetricModal({ open, metricKey, metricLabel, onC
 
   if (!open) return null;
 
-  // Mini-stats from the trend
-  const vals = data?.trend.map(p => p.value) ?? [];
+  // Mini-stats from the trend — post-reset nights only. Pre-reset HRV
+  // (apnea-inflated) is not a baseline; it's shown on the chart as
+  // history, never averaged into "you".
+  const resetDate = data?.reset_date ?? null;
+  const postTrend = data?.trend.filter(p => !p.pre_reset) ?? [];
+  const preVals   = data?.trend.filter(p => p.pre_reset).map(p => p.value) ?? [];
+  const vals = postTrend.map(p => p.value);
+  const preAvg  = preVals.length >= 5 ? Math.round((preVals.reduce((a, b) => a + b, 0) / preVals.length) * 10) / 10 : null;
+  const fmtReset = resetDate
+    ? new Date(resetDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : null;
   const avg  = vals.length ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10 : null;
   const min  = vals.length ? Math.min(...vals) : null;
   const max  = vals.length ? Math.max(...vals) : null;
@@ -93,7 +106,7 @@ export default function LongevityMetricModal({ open, metricKey, metricLabel, onC
               {/* Stat tiles */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
                 <StatTile label="Latest" value={last} unit={data.unit} />
-                <StatTile label="Average" value={avg}  unit={data.unit} />
+                <StatTile label={fmtReset ? `Avg since ${fmtReset}` : "Average"} value={avg}  unit={data.unit} />
                 <StatTile label="Min"     value={min}  unit={data.unit} />
                 <StatTile label="Max"     value={max}  unit={data.unit} />
               </div>
@@ -105,11 +118,29 @@ export default function LongevityMetricModal({ open, metricKey, metricLabel, onC
                   threshold={data.threshold}
                   unit={data.unit}
                   lowerIsBetter={lowerIsBetter}
+                  resetLabel={fmtReset}
                 />
               ) : (
                 <p className="text-sm text-gray-600 italic">
                   Not enough history yet. Trend will fill in as data accumulates.
                 </p>
+              )}
+
+              {/* Baseline reset explainer — the before/after shown as what it is */}
+              {fmtReset && preVals.length > 0 && (
+                <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+                  <p className="font-semibold">
+                    Baseline reset {fmtReset}{data.reset_reason ? ` — ${data.reset_reason}` : ""}
+                  </p>
+                  <p className="text-xs mt-0.5">
+                    {preAvg != null && avg != null
+                      ? `Before: ${preAvg} ${data.unit} avg · Since: ${avg} ${data.unit} avg. `
+                      : ""}
+                    {metricKey === "hrv"
+                      ? "Nights before the reset are shown faded and aren't counted as your baseline. Untreated sleep apnea inflates wearable HRV; a lower, steadier number after treatment is the real you — not a decline."
+                      : "Nights before the reset are shown faded and aren't counted as your baseline, so trends and averages only compare you to yourself since then."}
+                  </p>
+                </div>
               )}
 
               {/* Direction summary */}
@@ -156,15 +187,22 @@ function StatTile({ label, value, unit }: { label: string; value: number | null;
   );
 }
 
-function MiniChart({ trend, threshold, lowerIsBetter }: {
-  trend:        Array<{ date: string; value: number }>;
+function MiniChart({ trend, threshold, lowerIsBetter, resetLabel }: {
+  trend:        Array<{ date: string; value: number; pre_reset?: boolean }>;
   threshold:    number | null;
   unit:         string;
   lowerIsBetter: boolean;
+  resetLabel?:  string | null;
 }) {
   if (trend.length < 2) return null;
+  // Index of the first post-reset night (divider position), if any pre-reset nights exist.
+  const firstPost = trend.findIndex(p => !p.pre_reset);
+  const hasDivider = firstPost > 0;
 
-  const allValues  = trend.map(p => p.value);
+  // Y-range from the post-reset line (plus threshold) so an inflated
+  // pre-reset era doesn't squash the real signal; pre-reset points are
+  // clamped into view.
+  const allValues  = (hasDivider ? trend.slice(firstPost) : trend).map(p => p.value);
   const refValues  = threshold != null ? [threshold] : [];
   const dataMin    = Math.min(...allValues, ...refValues);
   const dataMax    = Math.max(...allValues, ...refValues);
@@ -180,10 +218,13 @@ function MiniChart({ trend, threshold, lowerIsBetter }: {
 
   const n = trend.length;
   const xFor = (i: number) => margin.left + (i / Math.max(1, n - 1)) * innerW;
-  const yFor = (v: number) => margin.top  + (1 - (v - lo) / (hi - lo)) * innerH;
+  const yFor = (v: number) => margin.top  + (1 - (Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo)) * innerH;
 
-  const polyline = trend.map((p, i) => `${xFor(i)},${yFor(p.value)}`).join(" ");
   const lineColor = lowerIsBetter ? "#0891b2" : "#059669";
+  const prePts  = trend.slice(0, hasDivider ? firstPost : 0);
+  const postPts = hasDivider ? trend.slice(firstPost) : trend;
+  const prePoly  = prePts.map((p, i) => `${xFor(i)},${yFor(p.value)}`).join(" ");
+  const postPoly = postPts.map((p, i) => `${xFor(i + (hasDivider ? firstPost : 0))},${yFor(p.value)}`).join(" ");
 
   const fmtDate = (iso: string) => {
     try {
@@ -215,8 +256,24 @@ function MiniChart({ trend, threshold, lowerIsBetter }: {
         </g>
       )}
 
-      {/* Trend line */}
-      <polyline fill="none" stroke={lineColor} strokeWidth="1.5" points={polyline} />
+      {/* Pre-reset history: faded, dashed — context, not baseline */}
+      {prePts.length >= 2 && (
+        <polyline fill="none" stroke="#9ca3af" strokeWidth="1.25" strokeDasharray="2,3" points={prePoly} />
+      )}
+      {/* Reset divider */}
+      {hasDivider && (
+        <g>
+          <line x1={xFor(firstPost)} y1={margin.top} x2={xFor(firstPost)} y2={margin.top + innerH}
+                stroke="#0284c7" strokeWidth="1" strokeDasharray="4,3" />
+          <text x={xFor(firstPost) + 4} y={margin.top + 10} fontSize="10" fill="#0284c7">
+            {resetLabel ? `reset ${resetLabel}` : "reset"}
+          </text>
+        </g>
+      )}
+      {/* Trend line (post-reset, or everything when no reset) */}
+      {postPts.length >= 2 && (
+        <polyline fill="none" stroke={lineColor} strokeWidth="1.5" points={postPoly} />
+      )}
       <circle cx={xFor(n - 1)} cy={yFor(trend[n - 1].value)} r="3" fill={lineColor} />
 
       {/* Date stamps */}

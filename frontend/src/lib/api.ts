@@ -257,6 +257,7 @@ export interface TodayData {
   calendar_today?:     string;   // Timezone-safe "today" from Oura max date
   local_today?:        string;   // user's real calendar date (from X-User-Local-Date header)
   oura_synced_at?:     string | null; // last Oura cache write (ISO)
+  refreshing?:         boolean;       // server kicked off a background Oura refresh; re-pull once
   readiness:           Record<string, unknown>;
   sleep:               Record<string, unknown>;
   activity:            Record<string, unknown>; // Oura summary for anchor (coach card)
@@ -2447,7 +2448,9 @@ export const api = {
     metric:    string;
     unit:      string;
     threshold: number | null;
-    trend:     Array<{ date: string; value: number }>;
+    trend:     Array<{ date: string; value: number; pre_reset?: boolean }>;
+    reset_date?:   string | null;
+    reset_reason?: string | null;
   }> {
     return request(`/api/longevity/metric-history?metric=${encodeURIComponent(metric)}&days=${days}`);
   },

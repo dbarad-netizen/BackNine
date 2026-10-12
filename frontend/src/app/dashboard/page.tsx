@@ -1082,6 +1082,24 @@ export default function DashboardPage() {
     };
   }, []);
 
+  // Server says a background Oura refresh is in flight (cache was >3 min
+  // old when we loaded) → re-pull once in 15s so the rings catch Oura's
+  // latest revision without waiting for the next interval. David 2026-10-12:
+  // "didn't match at launch, then resolved as I was typing."
+  const refreshingRef = useRef(false);
+  useEffect(() => {
+    if (!data?.today?.refreshing || refreshingRef.current) return;
+    refreshingRef.current = true;
+    const t = setTimeout(() => {
+      api.dashboard().then(d => { setData(d); writeDashboardCache(d); }).catch(() => {})
+        .finally(() => { refreshingRef.current = false; });
+    }, 15000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.today?.refreshing, data?.today?.oura_synced_at]);
+
+
+
   // Reload nutrition data when the Nutrition tab OR the Scorecard is opened.
   // The Scorecard's inline quick-actions (Enter a meal/macros panel, Body &
   // Weight pill) read nutToday/weightLog too, so without fetching here they'd be

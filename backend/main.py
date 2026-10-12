@@ -2011,6 +2011,51 @@ async def _refresh_oura_cache_bg(user_id: str, access_token: str, days: int) -> 
         pass
 
 
+
+async def _force_refresh_oura_token(user_id: str, session: dict) -> Optional[str]:
+    """Refresh with the central store's refresh token (falling back to the
+    session's), persist to both token tables, return the new access token
+    or None. Used when Oura rejects an access token that our expires_at
+    still considers valid."""
+    db = get_supabase()
+    rts = []
+    try:
+        for table in ("oura_connections", "wearable_connections"):
+            q = db.table(table).select("refresh_token").eq("user_id", user_id)
+            if table == "wearable_connections":
+                q = q.eq("provider", "oura")
+            rows = (q.limit(1).execute()).data or []
+            if rows and rows[0].get("refresh_token"):
+                rts.append(rows[0]["refresh_token"])
+    except Exception:
+        pass
+    if session.get("refresh_token"):
+        rts.append(session["refresh_token"])
+    seen = set()
+    for rt in rts:
+        if rt in seen:
+            continue
+        seen.add(rt)
+        try:
+            tokens = await oura_refresh(rt, OURA_CLIENT_ID, OURA_CLIENT_SECRET)
+        except Exception:
+            continue
+        now_ts = datetime.now(timezone.utc).timestamp()
+        fresh = {"access_token": tokens["access_token"],
+                 "refresh_token": tokens.get("refresh_token", rt),
+                 "expires_at": int(now_ts) + int(tokens.get("expires_in", 86400))}
+        for table in ("oura_connections", "wearable_connections"):
+            try:
+                q = db.table(table).update(fresh).eq("user_id", user_id)
+                if table == "wearable_connections":
+                    q = q.eq("provider", "oura")
+                q.execute()
+            except Exception:
+                pass
+        log.warning("oura token force-refreshed for %s (dashboard 401)", user_id)
+        return fresh["access_token"]
+    return None
+
 @app.get("/api/dashboard")
 async def get_dashboard(request: Request, background_tasks: BackgroundTasks, days: int = 365):
     session = _require_session(request)
@@ -2258,6 +2303,19 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
     # Only trust the cache if it's both fresh AND actually has data — a fresh but
     # empty cache row should still trigger a live fetch.
     cache_hit = fresh and have_cache
+    # Oct 12 (David): Oura revises provisional scores through the morning,
+    # and a 20-min cron snapshot can lag the Oura app by a revision. Serve
+    # the cache instantly, but if it's more than 3 minutes old, refresh in
+    # the background and flag it so the client re-pulls once in ~15s. Gap
+    # goes from "up to 20 minutes" to "a few seconds", no spinner.
+    bg_refreshing = False
+    if cache_hit:
+        try:
+            if not oc.is_fresh(user_id, max_age_hours=0.05) and access_token:
+                background_tasks.add_task(_refresh_oura_cache_bg, user_id, access_token, 14)
+                bg_refreshing = True
+        except Exception:
+            pass
 
     # Even when the cache is fresh, bypass it if today's session detail is
     # missing — Oura processes scores quickly but session detail takes longer.
@@ -2313,6 +2371,7 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
             pass
         if swr_ok:
             cache_hit = True
+            bg_refreshing = True
             background_tasks.add_task(
                 _refresh_oura_cache_bg, user_id, access_token, days
             )
@@ -2328,10 +2387,24 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
             # the app claimed the user had no Oura at all.
             # Cap the wait when we have a cache to fall back on — a slow
             # Oura morning should cost ~12s at worst, never a hung spinner.
-            if have_cache:
+            try:
+                if have_cache:
+                    raw = await asyncio.wait_for(fetch_all(access_token, days=min(days, 14)), timeout=12)
+                else:
+                    raw = await fetch_all(access_token, days=min(days, 14))
+            except RuntimeError as _re:
+                if not ("401" in str(_re) or "403" in str(_re)):
+                    raise
+                # Stored access token rejected though not yet "expired" —
+                # the multi-device token war. Force a refresh with the
+                # central refresh token, persist, retry once (same as the
+                # cron). Before this, the dashboard quietly served cache
+                # forever and only the user re-connecting fixed it.
+                _ft = await _force_refresh_oura_token(user_id, session)
+                if not _ft:
+                    raise
+                access_token = _ft
                 raw = await asyncio.wait_for(fetch_all(access_token, days=min(days, 14)), timeout=12)
-            else:
-                raw = await fetch_all(access_token, days=min(days, 14))
             live_rm, live_slm, live_am, live_smm = parse_oura_data(raw)
             # Only adopt live data when it actually came back with something;
             # otherwise keep whatever the cache gave us above. MERGE the
@@ -2342,6 +2415,11 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
                 slm = {**slm, **live_slm}
                 am  = {**am,  **live_am}
                 smm = {**smm, **live_smm}
+                try:
+                    import baseline as _bl
+                    smm = _bl.apply_discontinuity(smm, oc.reset_date_for(user_id))
+                except Exception:
+                    pass
                 oura_vo2_max = parse_oura_vo2_max(raw)
                 # Upsert only the freshly-fetched days into the cache.
                 try:
@@ -2904,6 +2982,7 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
             "calendar_today":     oura_today,         # Timezone-safe "today" from Oura data
             "local_today":        _user_local_today_iso(request),  # user's actual calendar date (X-User-Local-Date)
             "oura_synced_at":     oc.last_fetched_at(user_id),     # last cache write — shown on the Scorecard
+            "refreshing":         bg_refreshing,                   # client should re-pull once in ~15s
             "readiness":          t_rdy,
             "sleep":              t_sl,
             "activity":           t_act,              # Oura activity for anchor (coach card)
@@ -3967,22 +4046,33 @@ def get_longevity_metric_history(request: Request, metric: str, days: int = 90):
     metric = (metric or "").strip().lower()
 
     try:
-        _, slm, am, smm = oc.get_days(user_id, days=days_int)
+        # raw=True: the chart is the one place pre-reset values SHOULD
+        # appear — with the reset marked, so the drop reads as what it
+        # is (treatment working), not a decline.
+        _, slm, am, smm = oc.get_days(user_id, days=days_int, raw=True)
     except Exception:
         slm, am, smm = {}, {}, {}
+    _reset_date = oc.reset_date_for(user_id)
+    _prof_r = _get_profile(user_id) or {}
+    _reset_reason = (_prof_r.get("baseline_reset_reason") or "").strip() or None
 
     def _series_from_smm(field: str) -> list[dict]:
         out = []
         for d in sorted(smm.keys()):
             v = smm[d].get(field)
             if v is not None:
-                out.append({"date": d, "value": v})
+                row = {"date": d, "value": v}
+                if _reset_date and d < _reset_date:
+                    row["pre_reset"] = True
+                out.append(row)
         return out
 
     if metric == "hrv":
-        return {"metric": "hrv", "unit": "ms", "threshold": 30, "trend": _series_from_smm("hrv")}
+        return {"metric": "hrv", "unit": "ms", "threshold": 30, "trend": _series_from_smm("hrv"),
+                "reset_date": _reset_date, "reset_reason": _reset_reason}
     if metric == "rhr":
-        return {"metric": "rhr", "unit": "bpm", "threshold": 60, "trend": _series_from_smm("rhr")}
+        return {"metric": "rhr", "unit": "bpm", "threshold": 60, "trend": _series_from_smm("rhr"),
+                "reset_date": _reset_date, "reset_reason": _reset_reason}
     if metric == "sleep":
         out = []
         for d in sorted(smm.keys()):
@@ -6482,6 +6572,8 @@ async def save_profile(request: Request):
     try:
         db = get_supabase()
         db.table("user_profiles").upsert(data, on_conflict="user_id").execute()
+        if "baseline_reset_date" in data:
+            oc.invalidate_reset_cache(user_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -6968,6 +7060,11 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
                 rm, slm, am, smm = l_rm, l_slm, l_am, l_smm
                 try:
                     oc.store_days(user_id, rm, slm, am, smm)
+                except Exception:
+                    pass
+                try:
+                    import baseline as _bl
+                    smm = _bl.apply_discontinuity(smm, oc.reset_date_for(user_id))
                 except Exception:
                     pass
         except Exception:
