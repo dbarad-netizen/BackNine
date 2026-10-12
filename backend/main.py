@@ -1645,9 +1645,20 @@ async def oura_refresh_all(request: Request):
     cache is still >6h stale after the run so GitHub Actions goes red
     and David gets the email instead of finding out at 9:33am."""
     _check_admin(request)
+    body = await _oura_refresh_all_users()
+    if body.get("stale_after_run"):
+        # Loud failure → GitHub Actions marks the run failed → email.
+        raise HTTPException(status_code=500, detail=body)
+    return body
+
+
+async def _oura_refresh_all_users() -> dict:
+    """The refresh pass itself — shared by /admin/oura/refresh and the
+    in-process 20-minute timer (GitHub's scheduler dropped ~85% of runs
+    over Oct 10–12, so the backend now keeps its own clock)."""
     db = get_supabase()
     if not db:
-        raise HTTPException(status_code=500, detail="db unavailable")
+        return {"error": "db unavailable", "stale_after_run": []}
     conns: dict[str, dict] = {}
     for table in ("oura_connections", "wearable_connections"):
         try:
@@ -1735,10 +1746,32 @@ async def oura_refresh_all(request: Request):
     body = {"ran_at": datetime.now(timezone.utc).isoformat(), "users": len(conns),
             "results": report, "stale_after_run": stale}
     log.info("oura refresh cron: %s", body)
-    if stale:
-        # Loud failure → GitHub Actions marks the run failed → email.
-        raise HTTPException(status_code=500, detail=body)
     return body
+
+
+_INPROC_REFRESH_MINUTES = int(os.getenv("OURA_REFRESH_MINUTES", "20"))
+
+
+@app.on_event("startup")
+async def _start_inproc_oura_refresh() -> None:
+    """In-process scheduler: refresh every user's Oura cache every N
+    minutes (default 20) for as long as the service is up. Set
+    OURA_REFRESH_MINUTES=0 to disable (e.g. on a second instance)."""
+    if _INPROC_REFRESH_MINUTES <= 0:
+        return
+
+    async def _loop():
+        await asyncio.sleep(30)  # let the service finish booting
+        while True:
+            try:
+                body = await _oura_refresh_all_users()
+                if body.get("stale_after_run"):
+                    log.error("in-process oura refresh: stale after run: %s", body["stale_after_run"])
+            except Exception:
+                log.exception("in-process oura refresh failed")
+            await asyncio.sleep(_INPROC_REFRESH_MINUTES * 60)
+
+    asyncio.create_task(_loop())
 
 
 @app.post("/admin/coffee/record")

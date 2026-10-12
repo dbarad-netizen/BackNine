@@ -1,12 +1,12 @@
-# Oura cache refresh — server-side, on a schedule, so the app never has to
-# fetch on first open. Every 20 min from 4:00am–1:00pm Pacific (11:00–20:59
-# UTC in PDT), then hourly the rest of the day. Fails (→ email) when any
-# connected user's cache is still >6h stale after the run.
+# Oura cache refresh — BACKUP + ALARM. The backend refreshes every user's
+# Oura cache on its own 20-minute timer (main.py _start_inproc_oura_refresh);
+# GitHub's scheduler dropped most runs Oct 10–12, so it is no longer the
+# clock. This hourly run exists to go red (→ email) when any active user's
+# cache is still >6h stale, i.e. when the in-process refresh itself is sick.
 name: Oura refresh
 on:
   schedule:
-    - cron: "*/20 11-20 * * *"
-    - cron: "0 0-10,21-23 * * *"
+    - cron: "7 * * * *"
   workflow_dispatch:
 jobs:
   refresh:
