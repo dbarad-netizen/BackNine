@@ -1751,6 +1751,61 @@ async def _oura_refresh_all_users() -> dict:
 
 _INPROC_REFRESH_MINUTES = int(os.getenv("OURA_REFRESH_MINUTES", "20"))
 
+# App Review demo accounts (2026-10-14): synthetic Oura-shaped data with
+# no real ring behind it. Rolled forward daily so the reviewer always
+# sees "today", however long the review queue takes.
+DEMO_USER_IDS = [u.strip() for u in os.getenv(
+    "DEMO_USER_IDS",
+    "26082f46-c1b5-4988-9179-274ab790f7f4,a0000000-0000-4000-8000-00000000de01",
+).split(",") if u.strip()]
+
+
+def _roll_demo_data_forward() -> None:
+    """For each demo user, make sure yesterday and today have rows by
+    copying the most recent row forward with light jitter. Idempotent."""
+    db = get_supabase()
+    if not db or not DEMO_USER_IDS:
+        return
+    import random
+    from datetime import date as _d
+    today = _d.today()
+    for uid in DEMO_USER_IDS:
+        try:
+            res = (db.table("oura_daily_cache").select("*").eq("user_id", uid)
+                   .order("date", desc=True).limit(1).execute())
+            rows = res.data or []
+            if not rows:
+                continue
+            latest = rows[0]
+            latest_date = _d.fromisoformat(str(latest["date"])[:10])
+            d = latest_date + timedelta(days=1)
+            rnd = random.Random(f"{uid}:{today.isoformat()}")
+            def jitter(v, lo, hi, spread):
+                try:
+                    return max(lo, min(hi, round(float(v) + rnd.uniform(-spread, spread))))
+                except Exception:
+                    return v
+            while d <= today:
+                rd = dict(latest.get("readiness") or {}); sl = dict(latest.get("sleep_score") or {})
+                ac = dict(latest.get("activity") or {});  sm = dict(latest.get("sleep_model") or {})
+                if "score" in rd: rd["score"] = jitter(rd["score"], 60, 95, 6)
+                if "score" in sl: sl["score"] = jitter(sl["score"], 60, 95, 6)
+                if "score" in ac: ac["score"] = jitter(ac["score"], 55, 98, 8)
+                if "steps" in ac: ac["steps"] = jitter(ac["steps"], 3000, 15000, 1800)
+                if "hrv" in sm and sm["hrv"] is not None: sm["hrv"] = jitter(sm["hrv"], 25, 60, 4)
+                if "rhr" in sm and sm["rhr"] is not None: sm["rhr"] = jitter(sm["rhr"], 48, 66, 2)
+                if "total" in sm and sm["total"]: sm["total"] = jitter(sm["total"], 5*3600, 9*3600, 1800)
+                if "bedtime_start" in sm and sm["bedtime_start"]:
+                    sm["bedtime_start"] = (d - timedelta(days=1)).isoformat() + str(sm["bedtime_start"])[10:]
+                row = {"user_id": uid, "date": d.isoformat(), "readiness": rd, "sleep_score": sl,
+                       "activity": ac if d < today else None, "sleep_model": sm,
+                       "fetched_at": datetime.now(timezone.utc).isoformat()}
+                db.table("oura_daily_cache").upsert(row, on_conflict="user_id,date").execute()
+                latest = row
+                d += timedelta(days=1)
+        except Exception:
+            log.exception("demo roll-forward failed for %s", uid)
+
 
 @app.on_event("startup")
 async def _start_inproc_oura_refresh() -> None:
@@ -1763,6 +1818,10 @@ async def _start_inproc_oura_refresh() -> None:
     async def _loop():
         await asyncio.sleep(30)  # let the service finish booting
         while True:
+            try:
+                _roll_demo_data_forward()
+            except Exception:
+                log.exception("demo roll-forward failed")
             try:
                 body = await _oura_refresh_all_users()
                 if body.get("stale_after_run"):
