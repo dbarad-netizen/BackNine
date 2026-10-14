@@ -100,6 +100,14 @@ def _rule_hrv_drop(user_id: str, today: _date) -> Optional[dict]:
                  .lte("date", today.isoformat())
                  .execute())
         rows = [r for r in (res.data or []) if r.get("hrv") is not None]
+        # Baseline reset: never compare against pre-reset nights.
+        try:
+            import oura_cache as _oc
+            _rd = _oc.reset_date_for(user_id)
+            if _rd:
+                rows = [r for r in rows if str(r["date"])[:10] >= _rd]
+        except Exception:
+            pass
         today_row = next((r for r in rows if r["date"] == today.isoformat()), None)
         prior = [float(r["hrv"]) for r in rows if r["date"] != today.isoformat()]
         if today_row and len(prior) >= 4:

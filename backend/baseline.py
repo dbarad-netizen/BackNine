@@ -38,6 +38,51 @@ def reset_info(profile: Optional[dict]) -> Optional[dict]:
     return {"date": str(d)[:10], "reason": (p.get("baseline_reset_reason") or "").strip()}
 
 
+# Nightly fields that describe the autonomic baseline and are NOT
+# comparable across a physiological discontinuity (CPAP start, new
+# cardiac medication). Sleep duration, stages, SpO2 etc. still are.
+DISCONTINUOUS_FIELDS = ("hrv", "rhr", "avg_hr")
+
+
+def apply_discontinuity(smm: dict, reset_date: Optional[str]) -> dict:
+    """Return a copy of smm in which nights BEFORE reset_date carry no
+    HRV / resting-HR (they're kept as rows so sleep math still works,
+    with pre_reset=True so a chart can draw them differently).
+
+    This is the single lever (David 2026-10-09, "do it properly"): every
+    'you vs your own history' consumer — coaching, insights, progress,
+    deload, nudges, doctor reports, Bio Age deltas — reads through the
+    cache loader, and the loader applies this. Pre-reset HRV never again
+    gets to count as a 'good baseline', and a post-reset HRV that is
+    lower than the inflated pre-reset era can't be scored as a decline,
+    because the comparison simply isn't available."""
+    if not reset_date or not smm:
+        return smm
+    out = {}
+    for d, row in smm.items():
+        if d < reset_date and isinstance(row, dict):
+            r = dict(row)
+            for f in DISCONTINUOUS_FIELDS:
+                if f in r:
+                    r[f] = None
+            r["pre_reset"] = True
+            out[d] = r
+        else:
+            out[d] = row
+    return out
+
+
+def window_label(reset_date: Optional[str]) -> Optional[str]:
+    """'since Aug 3' — for any UI label that describes a personal window."""
+    if not reset_date:
+        return None
+    try:
+        rd = date.fromisoformat(reset_date[:10])
+        return f"since {rd.strftime('%b')} {rd.day}"
+    except Exception:
+        return None
+
+
 def backnine_readiness(smm: dict, anchor: str, reset_date: str) -> Optional[dict]:
     """Readiness computed by BackNine from Oura's own HRV/RHR, against a
     baseline that starts at reset_date. Reuses the Apple Health ring
@@ -147,9 +192,17 @@ def context_block(profile: Optional[dict], smm: dict) -> str:
             "stopping, or changing any dose; that is the doctor's call."
         )
     lines.append(
-        "The Scorecard shows a BackNine-computed readiness (baseline since the "
-        "reset date) in place of the manufacturer's. Refer to readiness as "
-        "'your readiness' — do not name Oura's number or explain the substitution."
+        "Direction rule: after this reset, a LOWER and STEADIER HRV than the "
+        "pre-reset era is the success signal (treatment working), and the only "
+        "valid 'trend' is within the post-reset window. All HRV/resting-HR "
+        "averages, trends and 'vs your baseline' figures you are given already "
+        "exclude pre-reset nights."
+    )
+    lines.append(
+        "The Scorecard shows Oura's readiness unless Oura's trailing baseline is "
+        "still visibly contaminated by pre-reset nights (then BackNine's own "
+        "readiness is shown, with both numbers on screen). Either way, refer to "
+        "it as 'your readiness' — do not explain the substitution."
     )
     return "\n".join(lines)
 

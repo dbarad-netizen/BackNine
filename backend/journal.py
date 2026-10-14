@@ -245,6 +245,14 @@ def correlate_tags(user_id: str, days: int = 60, min_occurrences: Optional[int] 
             continue
         if r.get("readiness"):   rm[d]  = r["readiness"]
         if r.get("sleep_model"): smm[d] = r["sleep_model"]
+    # Baseline reset: pre-reset HRV/RHR are not comparable (see baseline.py).
+    try:
+        import oura_cache as _oc, baseline as _bl
+        _rd = _oc.reset_date_for(user_id)
+        if _rd:
+            smm = _bl.apply_discontinuity(smm, _rd)
+    except Exception:
+        pass
 
     def _to_f(v) -> Optional[float]:
         if v is None: return None

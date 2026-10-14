@@ -333,6 +333,19 @@ def get_data(user_id: str, days: int = 30) -> List[dict]:
         ac = r.get("active_calories")
         if ac is not None and (float(ac) < 0 or float(ac) > 1500):
             r["active_calories"] = None
+    # Baseline reset (David 2026-10-09): same discontinuity rule as the
+    # Oura loader — pre-reset HRV / resting HR are not a baseline.
+    try:
+        import oura_cache as _oc
+        rd = _oc.reset_date_for(user_id)
+        if rd:
+            for r in rows:
+                if str(r.get("date", ""))[:10] < rd:
+                    r["hrv"] = None
+                    r["resting_hr"] = None
+                    r["pre_reset"] = True
+    except Exception:
+        pass
     return rows
 
 

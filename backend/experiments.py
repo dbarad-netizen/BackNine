@@ -172,7 +172,16 @@ def _series_oura_sleep_model_field(sb, user_id: str, field: str, start_d: _date,
              .lte("date", end_d.isoformat())
              .execute())
     out: list[float] = []
+    try:
+        import oura_cache as _oc
+        _rd = _oc.reset_date_for(user_id)
+    except Exception:
+        _rd = None
     for r in (res.data or []):
+        # Baseline reset: a before/after that straddles the reset would
+        # credit the experiment with the CPAP effect. Skip pre-reset nights.
+        if _rd and field in ("hrv", "hr_lowest", "rhr") and str(r.get("date", ""))[:10] < _rd:
+            continue
         model = r.get("sleep_model") or {}
         if isinstance(model, dict):
             v = model.get(field)

@@ -74,7 +74,18 @@ def _oura_rows(user_id: str, start: str, end: str) -> list[dict]:
         .lte("date", end)
         .execute()
     )
-    return res.data or []
+    rows = res.data or []
+    # Baseline reset: pre-reset HRV/RHR are not a baseline (see baseline.py).
+    try:
+        import oura_cache as _oc, baseline as _bl
+        rd = _oc.reset_date_for(user_id)
+        if rd:
+            smm = _bl.apply_discontinuity({str(r["date"]): (r.get("sleep_model") or {}) for r in rows}, rd)
+            for r in rows:
+                r["sleep_model"] = smm.get(str(r["date"])) or r.get("sleep_model")
+    except Exception:
+        pass
+    return rows
 
 
 def _nutrition_rows(user_id: str, start: str, end: str) -> dict:

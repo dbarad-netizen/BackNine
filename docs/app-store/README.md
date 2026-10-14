@@ -270,3 +270,28 @@ Sign in with Apple is offered alongside Oura Ring OAuth and email/password.
 ---
 
 ## LAST REVIEWED: 2026-07-23
+
+### HealthKit background delivery (added 2026-10-14)
+
+Apple Health data now syncs to BackNine **without the app being opened**:
+`ios/App/App/BackgroundHealthSync.swift` registers HealthKit observer
+queries at launch; iOS wakes the app in the background when new samples
+land (hourly at best — Apple's cap) and the native side aggregates the
+last 3 days exactly like `healthkit.ts` and POSTs to
+`/api/apple-health/import-aggregated` with header
+`X-BackNine-Sync-Source: backnine-ios-bgsync`.
+
+One-time Xcode step for the next build:
+1. Target **App → Signing & Capabilities → HealthKit** → tick
+   **Background Delivery**. (The entitlement is already in
+   `App.entitlements`; ticking the box keeps Xcode's view in sync.)
+2. Build → TestFlight. On first open after install the JS hands the
+   session token to native (`configureBackgroundSync`); from then on
+   syncs happen on their own.
+
+Verify: Render logs → grep `source=backnine-ios-bgsync`. On the phone,
+Console.app → filter `BACKNINE bgsync`.
+
+Limits: iOS throttles to roughly hourly; nothing is delivered if the
+user force-quits the app (swipe-up kill) until they open it again; and
+nothing happens before the first unlock after a reboot.

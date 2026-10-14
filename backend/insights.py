@@ -83,6 +83,16 @@ def _load_oura(user_id: str, since: str) -> dict:
             "activity":    r.get("activity")    or {},
             "sleep_model": r.get("sleep_model") or {},
         }
+    # Baseline reset: pre-reset nights carry no HRV/RHR (see baseline.py).
+    try:
+        import oura_cache as _oc, baseline as _bl
+        rd = _oc.reset_date_for(user_id)
+        if rd:
+            smm = _bl.apply_discontinuity({d: v["sleep_model"] for d, v in out.items()}, rd)
+            for d in out:
+                out[d]["sleep_model"] = smm.get(d) or {}
+    except Exception:
+        pass
     return out
 
 

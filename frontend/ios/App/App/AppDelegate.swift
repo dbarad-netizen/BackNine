@@ -7,7 +7,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // HealthKit background delivery (2026-10-14): observers MUST be
+        // registered here, at launch, because iOS launches the app in the
+        // background (no webview, no JS) to deliver new Health samples.
+        // No-op until the JS side has configured a session token.
+        BackgroundHealthSync.shared.startIfConfigured()
         return true
     }
 

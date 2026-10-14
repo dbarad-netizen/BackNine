@@ -7,6 +7,7 @@
 import GEAR from "./gearData";
 
 const BASE = "https://backnine-hu60.onrender.com";
+export const API_BASE = BASE;
 
 // The user's LOCAL calendar date as YYYY-MM-DD. Using this (instead of
 // toISOString(), which is UTC) keeps "today" aligned with the user's timezone —
@@ -169,6 +170,8 @@ export function clearToken(): void {
     clearDashboardCache();
     const p = _nativePrefs();
     if (p) p.remove({ key: "bn_token" }).catch(() => { /* best-effort */ });
+    // Stop background HealthKit syncs posting with a dead token.
+    import("./healthkit").then(m => m.clearBackgroundSync()).catch(() => { /* noop */ });
   }
 }
 

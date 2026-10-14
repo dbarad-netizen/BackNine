@@ -9198,6 +9198,11 @@ async def apple_health_import_aggregated(request: Request):
     dates = [d for d in dates_all if not since_date or d >= since_date]
     skipped = len(dates_all) - len(dates)
     metrics_seen: set = set()
+    # Who synced: "backnine-ios-bgsync" = HealthKit background delivery
+    # (2026-10-14), otherwise the foreground JS sync. Lets Render logs
+    # answer "is Chris's phone syncing on its own?" in one grep.
+    log.info("apple health import: user=%s source=%s days=%d",
+             user_id[:12], request.headers.get("X-BackNine-Sync-Source", "foreground"), len(dates))
 
     from datetime import datetime as _dt
     now_iso = _dt.utcnow().isoformat()

@@ -88,7 +88,7 @@ def store_days(user_id: str, rm: dict, slm: dict, am: dict, smm: dict) -> int:
     return len(all_dates)
 
 
-def get_days(user_id: str, days: int = 120) -> tuple[dict, dict, dict, dict]:
+def get_days(user_id: str, days: int = 120, raw: bool = False) -> tuple[dict, dict, dict, dict]:
     """
     Return cached Oura data as (rm, slm, am, smm) dicts keyed by YYYY-MM-DD.
     Returns four empty dicts if the cache is empty.
@@ -112,7 +112,53 @@ def get_days(user_id: str, days: int = 120) -> tuple[dict, dict, dict, dict]:
         if row.get("activity"):    am[d]  = row["activity"]
         if row.get("sleep_model"): smm[d] = row["sleep_model"]
 
+    if not raw:
+        # Baseline reset as a physiological discontinuity (David
+        # 2026-10-09): nights before the user's reset date lose HRV/RHR
+        # here, at the one loader every comparative consumer reads
+        # through. Pass raw=True only when you genuinely need the
+        # pre-reset values (pre/post shift notes, the history chart).
+        rd = reset_date_for(user_id)
+        if rd:
+            import baseline as _bl
+            smm = _bl.apply_discontinuity(smm, rd)
+
     return rm, slm, am, smm
+
+
+_RESET_TTL: dict = {}   # user_id -> (expires_ts, reset_date|None)
+
+
+def reset_date_for(user_id: str) -> "str | None":
+    """The user's baseline_reset_date (YYYY-MM-DD) or None. Memoised for
+    5 minutes so the loader doesn't add a profile query to every call."""
+    import time
+    now = time.time()
+    hit = _RESET_TTL.get(user_id)
+    if hit and hit[0] > now:
+        return hit[1]
+    rd = None
+    try:
+        res = (
+            _sb().table("user_profiles")
+            .select("baseline_reset_date")
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        rows = res.data or []
+        if rows and rows[0].get("baseline_reset_date"):
+            rd = str(rows[0]["baseline_reset_date"])[:10]
+    except Exception:
+        # Transient DB failure: don't cache "no reset" for 5 minutes.
+        return hit[1] if hit else None
+    _RESET_TTL[user_id] = (now + 300, rd)
+    return rd
+
+
+def invalidate_reset_cache(user_id: str) -> None:
+    """Call after the profile's baseline_reset_date changes."""
+    _RESET_TTL.pop(user_id, None)
 
 
 def is_fresh(user_id: str, max_age_hours: float = 2.0) -> bool:

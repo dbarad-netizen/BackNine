@@ -598,6 +598,15 @@ def persist_and_delta(user_id: str, today_iso: str, snapshot: dict) -> Optional[
         prior      = rows[0]
         prior_age  = float(prior["biological_age"])
         prior_date = _d.fromisoformat(prior["date"])
+        # No delta across a baseline reset: a prior snapshot built on
+        # pre-reset (apnea-inflated) HRV is not comparable to today's.
+        try:
+            import oura_cache as _oc
+            _rd = _oc.reset_date_for(user_id)
+            if _rd and prior["date"] < _rd:
+                return None
+        except Exception:
+            pass
         delta      = round(float(bio_age) - prior_age, 1)
         return {
             "delta_years": delta,

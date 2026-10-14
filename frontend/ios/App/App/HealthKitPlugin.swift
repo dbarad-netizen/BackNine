@@ -147,6 +147,31 @@ public class HealthKitPlugin: CAPPlugin {
         healthStore.execute(query)
     }
 
+    // ── Public: background sync (2026-10-14) ────────────────────────
+    //
+    // JS hands over the session token + API base so the native side can
+    // sync in the background when HealthKit wakes the app. Call this on
+    // every app open (token may have rotated).
+
+    @objc func configureBackgroundSync(_ call: CAPPluginCall) {
+        guard let token = call.getString("token"), !token.isEmpty,
+              let base  = call.getString("baseUrl"), !base.isEmpty else {
+            call.reject("token and baseUrl are required")
+            return
+        }
+        BackgroundHealthSync.shared.configure(token: token, baseURL: base)
+        var out: [String: Any] = ["configured": true]
+        if let last = BackgroundHealthSync.shared.lastBackgroundSync {
+            out["lastBackgroundSync"] = ISO8601DateFormatter().string(from: last)
+        }
+        call.resolve(out)
+    }
+
+    @objc func clearBackgroundSync(_ call: CAPPluginCall) {
+        BackgroundHealthSync.shared.clear()
+        call.resolve(["configured": false])
+    }
+
     // ── Sleep value mapping ─────────────────────────────────────────
 
     private func sleepValueString(_ value: Int) -> String {

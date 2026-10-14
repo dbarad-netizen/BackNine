@@ -14,4 +14,6 @@
 CAP_PLUGIN(HealthKitPlugin, "CapacitorHealthkit",
     CAP_PLUGIN_METHOD(requestAuthorization, CAPPluginReturnPromise);
     CAP_PLUGIN_METHOD(queryHKitSampleType,  CAPPluginReturnPromise);
+    CAP_PLUGIN_METHOD(configureBackgroundSync, CAPPluginReturnPromise);
+    CAP_PLUGIN_METHOD(clearBackgroundSync,     CAPPluginReturnPromise);
 )

@@ -102,6 +102,10 @@ interface HealthKitPlugin {
     endDate:    string;
     limit:      number;
   }): Promise<{ resultData: unknown[] }>;
+  // Background delivery (2026-10-14) — may be absent on builds older
+  // than iOS build 5; always optional-call.
+  configureBackgroundSync?(opts: { token: string; baseUrl: string }): Promise<{ configured: boolean; lastBackgroundSync?: string }>;
+  clearBackgroundSync?(): Promise<{ configured: boolean }>;
 }
 
 function getHealthKitPlugin(): HealthKitPlugin | null {
@@ -560,8 +564,37 @@ function hasEverSynced(): boolean {
  * syncs pull 30 days so slow-cadence metrics (Withings weight, BP)
  * fill in even when they're only measured every few days.
  */
+/**
+ * Background delivery (2026-10-14): hand the session token + API base
+ * to the native side so iOS can sync Apple Health → BackNine when new
+ * samples land, without the app being opened. Call on every app open
+ * (the token rotates). Returns the last background sync time, if any.
+ */
+export async function configureBackgroundSync(): Promise<string | null> {
+  if (!(await isHealthKitAvailable())) return null;
+  const plugin = getHealthKitPlugin();
+  if (!plugin?.configureBackgroundSync) return null;
+  const { getToken, API_BASE } = await import("./api");
+  const token = getToken();
+  if (!token) return null;
+  try {
+    const r = await plugin.configureBackgroundSync({ token, baseUrl: API_BASE });
+    return r.lastBackgroundSync ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function clearBackgroundSync(): Promise<void> {
+  const plugin = getHealthKitPlugin();
+  try { await plugin?.clearBackgroundSync?.(); } catch { /* noop */ }
+}
+
 export async function maybeAutoSync(): Promise<void> {
   if (!(await isHealthKitAvailable())) return;
+  // Always (re)arm background delivery with the current token, even when
+  // the foreground sync is skipped as recent.
+  configureBackgroundSync().catch(() => { /* silent */ });
   if (isRecentSync(6)) return;
   const first = !hasEverSynced();
   const days  = first ? FIRST_SYNC_DAYS : AUTO_SYNC_DAYS;

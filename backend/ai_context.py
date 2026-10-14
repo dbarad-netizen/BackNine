@@ -499,7 +499,7 @@ def _baseline_reset_ctx(user_id: str, profile: Optional[dict]) -> str:
         if not bl.reset_info(profile):
             return ""
         import oura_cache as oc
-        _rm, _slm, _am, smm = oc.get_days(user_id, days=120)
+        _rm, _slm, _am, smm = oc.get_days(user_id, days=120, raw=True)
         return bl.context_block(profile, smm or {})
     except Exception:
         return ""
