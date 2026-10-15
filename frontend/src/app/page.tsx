@@ -149,21 +149,21 @@ export default function LandingPage() {
           </h2>
           <p className="mt-4 text-lg text-zinc-300 max-w-2xl leading-relaxed">
             Invite your spouse, workout partners, or the guys you tee off with
-            Saturday. Weekly leaderboards, group challenges, cheers on each
-            other&rsquo;s wins. Friends halve churn in fitness apps — and
-            you&rsquo;ll actually keep the streak.
+            Saturday. A weekly league, a Sunday scoreboard, and a coffee tab
+            for whoever finishes last. People quit alone. Nobody quits the
+            week the coffee&rsquo;s on them.
           </p>
 
           <div className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
             <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold mb-3">
-              Weekly Leaderboard preview
+              Weekly League preview · Health Span score
             </p>
             <ul className="space-y-2">
               {[
-                { name: "Alex",   pts: 187, mine: false },
-                { name: "You",    pts: 164, mine: true  },
-                { name: "Sam",    pts: 149, mine: false },
-                { name: "Jordan", pts: 122, mine: false },
+                { name: "Alex",   pts: 88, mine: false },
+                { name: "You",    pts: 84, mine: true  },
+                { name: "Sam",    pts: 79, mine: false },
+                { name: "Jordan", pts: 71, mine: false },
               ].map((r, i) => (
                 <li
                   key={r.name}
@@ -176,11 +176,14 @@ export default function LandingPage() {
                     {r.name}
                   </span>
                   <span className={`text-sm font-mono ${r.mine ? "text-green-400" : "text-zinc-500"}`}>
-                    {r.pts} pts
+                    {r.pts}
                   </span>
                 </li>
               ))}
             </ul>
+            <p className="mt-3 text-[11px] text-zinc-500">
+              Scored on sleep, movement and consistency — not on which gadget you own. Lowest score buys the coffee.
+            </p>
           </div>
         </div>
       </section>
@@ -256,7 +259,7 @@ export default function LandingPage() {
                   ["Community — friends, leaderboards, groups", "Yes",       "No"],
                   ["Age-relative norms (50+)",                  "Yes",       "General population"],
                   ["Meds + supplement adherence",               "Yes",       "No"],
-                  ["Price at launch",                           "Free",      "$14.99/mo"],
+                  ["Price",                                     "Free in beta", "Free · Pro $14.99/mo"],
                 ].map(([label, a, b]) => (
                   <tr key={label} className="bg-zinc-950/30">
                     <td className="px-4 py-3 text-zinc-300">{label}</td>
@@ -267,6 +270,13 @@ export default function LandingPage() {
               </tbody>
             </table>
           </div>
+          {/* Competitor facts go stale. Date them, name the source, and
+              re-check quarterly — "show your math" applies to this table
+              too. Last verified 2026-10-15 (Bevel made all but its AI
+              coach free in Dec 2025; Pro is the AI tier). */}
+          <p className="mt-2 text-[11px] text-zinc-500">
+            Bevel features and pricing as listed by Bevel, checked Oct 2026. If we got something wrong, tell us and we&rsquo;ll fix it.
+          </p>
         </div>
       </section>
 
@@ -282,12 +292,12 @@ export default function LandingPage() {
 
           <ul className="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
-              { emoji: "😴", title: "Sleep",     body: "Debt, streaks, tags, split-nights — all captured." },
+              { emoji: "😴", title: "Sleep",     body: "Hours, stages, bedtime drift, split nights — from the device you already wear." },
               { emoji: "❤️", title: "Recovery",  body: "HRV + RHR trends turned into today's readiness call." },
               { emoji: "🏋️", title: "Training",  body: "One workout a day tuned to how you slept and what you did yesterday." },
               { emoji: "🥗", title: "Nutrition", body: "Protein streak, meal photos, meds + supplement adherence." },
-              { emoji: "💡", title: "Insight",   body: "One pattern a day, gated by statistical confidence." },
-              { emoji: "🤝", title: "Community", body: "Your foursome, cheer buttons, groups, weekly recaps." },
+              { emoji: "💡", title: "Insight",   body: "Coach Al’s morning read — what last night means for today, in plain English." },
+              { emoji: "🤝", title: "Community", body: "Your foursome: the Weekly League, the Sunday scoreboard, the Coffee Tab." },
             ].map(p => (
               <li key={p.title} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
                 <p className="text-2xl mb-2">{p.emoji}</p>
