@@ -8700,7 +8700,12 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
             today = datetime.strptime(today_str, "%Y-%m-%d").date()
         except Exception:
             today = datetime.now().date()
-        for i in range(7):
+        # Steps and activity accumulate all day — Oura even publishes a
+        # running activity score — so "today" is a partial for everyone
+        # and never a fair contest. Judge them on the last COMPLETE day.
+        # Sleep is finished once it's scored, so today counts for sleep.
+        start = 1 if metric_key in ("steps", "activity") else 0
+        for i in range(start, 7):
             d = (today - timedelta(days=i)).isoformat()
             scored = []
             for uid, days in per_day_by_uid.items():

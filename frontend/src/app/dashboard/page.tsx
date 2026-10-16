@@ -75,7 +75,6 @@ import CoffeeLedgerCard from "@/components/CoffeeLedgerCard";
 // in case we want to revive under a different framing later.
 import GoalCard from "@/components/GoalCard";
 import GearPicks from "@/components/GearPicks";
-import PulseFeed from "@/components/PulseFeed";
 import FriendLeaderboard from "@/components/FriendLeaderboard";
 import WeeklyLeague from "@/components/WeeklyLeague";
 import GroupsSection from "@/components/GroupsSection";
@@ -2911,8 +2910,11 @@ export default function DashboardPage() {
                 only in the app. */}
             <CoffeeLedgerCard />
 
-            {/* Pulse feed — friend milestones, comments, reactions. */}
-            <PulseFeed onInviteFriend={() => { setProfileInitialTab("friends"); setShowProfile(true); }} />
+            {/* Pulse feed KILLED (David 2026-10-16): only fired for Oura
+                users who opened their briefing, so it advertised the quiet.
+                The Weekly League, Coffee Tab and Sunday text carry the
+                social load. Component kept on disk in case a bigger crowd
+                wants a feed later. */}
 
             {/* Groups (Crews) — shared group chat + standings. */}
             <GroupsSection />

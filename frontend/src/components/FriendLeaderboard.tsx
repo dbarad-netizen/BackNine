@@ -200,7 +200,7 @@ export default function FriendLeaderboard({ onInvite, onSeeMore }: Props = {}) {
   const medalDays = Object.values(data.leader_dates ?? {}).filter((d): d is string => !!d);
   const allToday = medalDays.length > 0 && medalDays.every(d => d === data.date);
   const headerLine = totalContested > 0
-    ? `You're leading in ${myWins} of ${totalContested}${allToday ? " today" : " (latest full day)"}`
+    ? `You're leading in ${myWins} of ${totalContested}${allToday ? " today" : " — judged on the last full day"}`
     : maxHs > 0
     ? "Ranked by Weekly Health Span Score"
     : "Waiting on data — check back later";
