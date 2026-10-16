@@ -201,6 +201,23 @@ def _load_sleep_consistency(user_id: str, oura_smm: dict) -> Optional[float]:
         except Exception:
             continue
     if len(times) < 3:
+        # Apple Health fallback (David 2026-10-16): the sync now carries
+        # the night's first asleep timestamp (sleep_start), so Apple
+        # Watch users get the timing band too instead of a free pass.
+        try:
+            import apple_health as ah
+            for r in ah.get_data(user_id, days=14):
+                bs = r.get("sleep_start")
+                if not bs:
+                    continue
+                dt = datetime.fromisoformat(str(bs).replace("Z", "+00:00"))
+                hr = dt.hour + dt.minute / 60.0
+                if hr < 12:
+                    hr += 24
+                times.append(hr)
+        except Exception:
+            pass
+    if len(times) < 3:
         return None
     mean = sum(times) / len(times)
     var  = sum((t - mean) ** 2 for t in times) / len(times)
@@ -309,6 +326,9 @@ def persist_and_delta(user_id: str, today_iso: str, snapshot: dict) -> Optional[
             "score":         int(score),
             "grade":         snapshot.get("grade"),
             "bands_present": snapshot.get("bands_present"),
+            # Per-band breakdown (David 2026-10-16): lets the League score
+            # everyone on the bands everyone has, and show the math.
+            "components":    snapshot.get("components") or {},
         }, on_conflict="user_id,date").execute()
     except Exception:
         log.exception("healthspan history upsert failed for %s", user_id)

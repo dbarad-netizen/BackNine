@@ -2937,7 +2937,7 @@ export const api = {
    *  parsed the export.xml locally, so we post only a small (~200 KB)
    *  JSON blob instead of the raw multi-hundred-MB file.
    *  See frontend/src/lib/appleHealthParser.ts for the parser. */
-  appleHealthImportAggregated(daily: Record<string, Record<string, number>>, sinceDate?: string): Promise<{
+  appleHealthImportAggregated(daily: Record<string, Record<string, number | string>>, sinceDate?: string): Promise<{
     days_imported: number;
     earliest_date: string | null;
     latest_date:   string | null;
@@ -3605,6 +3605,11 @@ export interface LeagueStanding {
    *  David 2026-08-11. Null when the member has no snapshot this week
    *  (hasn't opened the app); they rank at the bottom. */
   healthspan?: number | null;
+  /** Show-your-math (2026-10-16): per-band breakdown behind the score. */
+  bands?: Record<string, { label: string; value: string; norm?: string; points: number; max: number; why?: string }>;
+  /** Full 4-band Scorecard score; differs from `healthspan` when the
+   *  League is scored on the bands everyone shares. */
+  full_score?: number | null;
   rank:    number;
   is_me:   boolean;
   /** @deprecated Always null — gamification layer removed. */
@@ -3664,6 +3669,8 @@ export interface LeagueResponse {
   member_count: number;
   my_breakdown?: LeagueBreakdown | null;   // current user's per-category points
   categories?:   LeagueCategory[];         // column defs for the per-task grid
+  /** Band keys every scored player shares — the League is scored on these only. */
+  common_bands?: string[];
 }
 
 export interface LeaderboardResponse {

@@ -333,10 +333,19 @@ class Aggregator {
     b.perSourceIntervals.get(key)!.push([startMs, endMs]);
   }
 
-  resolve(): Record<string, Record<string, number>> {
-    const out: Record<string, Record<string, number>> = {};
+  /** Earliest timestamp seen for a field on a date (used for bedtime). */
+  earliest: Map<string, Map<string, number>> = new Map();
+  addEarliest(date: string, field: string, ts: number): void {
+    if (!this.earliest.has(date)) this.earliest.set(date, new Map());
+    const m = this.earliest.get(date)!;
+    const cur = m.get(field);
+    if (cur === undefined || ts < cur) m.set(field, ts);
+  }
+
+  resolve(): Record<string, Record<string, number | string>> {
+    const out: Record<string, Record<string, number | string>> = {};
     this.buckets.forEach((fields, date) => {
-      const row: Record<string, number> = {};
+      const row: Record<string, number | string> = {};
       fields.forEach((b, field) => {
         if (b.latestVal !== undefined) {
           row[field] = b.latestVal;
@@ -381,6 +390,13 @@ class Aggregator {
         }
       });
       if (Object.keys(row).length > 0) out[date] = row;
+    });
+    // Attach bedtimes as ISO strings (only for dates that have sleep).
+    this.earliest.forEach((fields, date) => {
+      const bs = fields.get("sleep_start");
+      if (bs !== undefined && out[date] && out[date]["sleep_hours"] !== undefined) {
+        out[date]["sleep_start"] = new Date(bs).toISOString();
+      }
     });
     return out;
   }
@@ -472,6 +488,10 @@ export async function syncRecent(days = 7, quick = false): Promise<SyncResult> {
         // the same source; union counts them once. Cross-source dedupe
         // (MAX) still applies at resolve time.
         agg.addInterval(date, m.field, startTs, ts, s.sourceName);
+        // Bedtime (2026-10-16): the night's first asleep timestamp feeds
+        // the Health Span sleep-timing band for Apple Watch users — they
+        // were getting a free pass on it versus Oura users.
+        agg.addEarliest(date, "sleep_start", startTs);
         // Stage detail (2026-09-10): deep + REM tracked separately so
         // the sleep ring can score QUALITY. Chris slept 8h of light
         // sleep and our duration-only ring gave him a perfect 100.

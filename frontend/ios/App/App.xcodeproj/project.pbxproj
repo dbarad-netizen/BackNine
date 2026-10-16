@@ -17,7 +17,6 @@
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 		DBBA18A33024FFB90084F493 /* HealthKitPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBBA18A23024FFB90084F493 /* HealthKitPlugin.swift */; };
-		DBBA18C13025A0010084F493 /* BackgroundHealthSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBBA18C03025A0010084F493 /* BackgroundHealthSync.swift */; };
 		DBBA18A43024FFB90084F493 /* HealthKitPlugin.m in Sources */ = {isa = PBXBuildFile; fileRef = DBBA18A13024FFB90084F493 /* HealthKitPlugin.m */; };
 		DBBA18A730250C750084F493 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBBA18A630250C750084F493 /* ViewController.swift */; };
 		DBBA18A930250C770084F493 /* HealthKitPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBBA18A830250C770084F493 /* HealthKitPlugin.swift */; };
@@ -25,6 +24,7 @@
 		DBBA18AD30250CB20084F493 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBBA18AC30250CB20084F493 /* AppDelegate.swift */; };
 		DBBA18AF30250CC50084F493 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBBA18AE30250CC50084F493 /* SceneDelegate.swift */; };
 		DBBA18B130250CDD0084F493 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBBA18B030250CDD0084F493 /* ViewController.swift */; };
+		DBBA18C13025A0010084F493 /* BackgroundHealthSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBBA18C03025A0010084F493 /* BackgroundHealthSync.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -42,7 +42,6 @@
 		DBBA18A03023A09D0084F493 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
 		DBBA18A13024FFB90084F493 /* HealthKitPlugin.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HealthKitPlugin.m; sourceTree = "<group>"; };
 		DBBA18A23024FFB90084F493 /* HealthKitPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitPlugin.swift; sourceTree = "<group>"; };
-		DBBA18C03025A0010084F493 /* BackgroundHealthSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundHealthSync.swift; sourceTree = "<group>"; };
 		DBBA18A53024FFCA0084F493 /* App-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "App-Bridging-Header.h"; sourceTree = "<group>"; };
 		DBBA18A630250C750084F493 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
 		DBBA18A830250C770084F493 /* HealthKitPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitPlugin.swift; sourceTree = "<group>"; };
@@ -50,6 +49,7 @@
 		DBBA18AC30250CB20084F493 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		DBBA18AE30250CC50084F493 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		DBBA18B030250CDD0084F493 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
+		DBBA18C03025A0010084F493 /* BackgroundHealthSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundHealthSync.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */

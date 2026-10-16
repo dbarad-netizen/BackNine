@@ -78,6 +78,9 @@ export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
   const [data, setData] = useState<LeagueResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [showScoring, setShowScoring] = useState(false);
+  // Show-your-math (David 2026-10-16): tap a player to see the bands
+  // behind their score, and which bands the League is judged on.
+  const [openUid, setOpenUid] = useState<string | null>(null);
 
   useEffect(() => {
     // Refetch on foreground, not just mount (David 2026-09-11): the iOS
@@ -178,10 +181,15 @@ export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
       <div className="divide-y divide-gray-50">
         {standings.slice(0, 12).map(s => {
           const top3 = s.rank <= 3;
+          const common = data?.common_bands ?? [];
+          const bandKeys = Object.keys(s.bands ?? {});
+          const isOpen = openUid === s.user_id;
           return (
+            <div key={s.user_id} className={s.is_me ? "bg-[#1B3829]/5" : ""}>
             <div
-              key={s.user_id}
-              className={`flex items-center gap-3 px-4 py-2.5 ${s.is_me ? "bg-[#1B3829]/5" : ""}`}
+              role={bandKeys.length ? "button" : undefined}
+              onClick={() => bandKeys.length && setOpenUid(isOpen ? null : s.user_id)}
+              className={`flex items-center gap-3 px-4 py-2.5 ${bandKeys.length ? "cursor-pointer" : ""}`}
             >
               <span className={`w-7 text-center text-sm font-bold shrink-0 ${top3 ? "" : "text-gray-600"}`}>
                 {top3 ? MEDAL[s.rank - 1] : s.rank}
@@ -214,6 +222,32 @@ export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
                 {s.score.toLocaleString()} pts
               </span>
             </div>
+            {isOpen && (
+              <div className="px-4 pb-3 -mt-1">
+                <div className="rounded-xl border border-gray-100 bg-white divide-y divide-gray-50">
+                  {bandKeys.map(k => {
+                    const b = s.bands![k];
+                    const counted = common.length === 0 || common.includes(k);
+                    return (
+                      <div key={k} className={`flex items-center gap-2 px-3 py-1.5 text-[11px] ${counted ? "" : "opacity-50"}`}>
+                        <span className="flex-1 min-w-0">
+                          <span className="font-semibold text-gray-800">{b.label}</span>
+                          <span className="text-gray-500"> · {b.value}</span>
+                          {!counted && <span className="text-gray-400"> · not in League (not everyone has it)</span>}
+                        </span>
+                        <span className="font-mono tabular-nums text-gray-800 shrink-0">{b.points}/{b.max}</span>
+                      </div>
+                    );
+                  })}
+                  {s.full_score != null && s.healthspan != null && s.full_score !== s.healthspan && (
+                    <p className="px-3 py-1.5 text-[10px] text-gray-500">
+                      League score {s.healthspan} on shared bands · full Scorecard score {s.full_score}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+            </div>
           );
         })}
       </div>
@@ -226,6 +260,7 @@ export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
               ? "You're first in — invite friends to make it a race"
               : `You're #${me_rank} of ${member_count} · ranked by Weekly Health Span Score`
             : "Ranked by Weekly Health Span Score — sleep, steps & movement, straight from your wearable"}
+          {(data?.common_bands?.length ?? 0) > 0 && " · tap a player for the math"}
         </p>
         {onInvite && soloOrTiny && (
           <button

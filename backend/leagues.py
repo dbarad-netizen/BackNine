@@ -340,6 +340,55 @@ def weekly_points(user_ids: list[str], today_str: str) -> dict[str, int]:
         return {}
 
 
+def latest_healthspan_rows(sb, ids: list[str], week_start: str) -> dict[str, dict]:
+    """Latest weekly_healthspan_history row per user this week:
+    {uid: {"score": int, "components": {...}}}."""
+    out: dict[str, dict] = {}
+    try:
+        res = (sb.table("weekly_healthspan_history")
+                 .select("user_id, date, score, components")
+                 .in_("user_id", ids)
+                 .gte("date", week_start)
+                 .order("date", desc=True)
+                 .execute())
+        for r in (res.data or []):
+            uid = r.get("user_id")
+            if uid and uid not in out and r.get("score") is not None:
+                out[uid] = {"score": int(r["score"]), "components": r.get("components") or {}}
+    except Exception:
+        pass
+    return out
+
+
+def fair_scores(rows: dict[str, dict]) -> tuple[dict[str, Optional[int]], list[str]]:
+    """Score every player on the bands EVERY scored player has (David
+    2026-10-16: the sleep-timing band only exists for Oura users, so an
+    Apple Watch user was scored out of 40 and David out of 50 — and he
+    lost 9 of his 12-point gap on a band Chris wasn't even scored on).
+
+    Returns ({uid: fair_score_or_None}, common_band_keys). When no
+    components are stored yet (pre-migration rows) falls back to the
+    stored score so the League never goes blank."""
+    comp = {uid: (r.get("components") or {}) for uid, r in rows.items()}
+    with_bands = {uid: c for uid, c in comp.items() if c}
+    if len(with_bands) < 2:
+        return {uid: r.get("score") for uid, r in rows.items()}, []
+    common = set.intersection(*(set(c.keys()) for c in with_bands.values()))
+    if len(common) < 2:
+        # Too little overlap to compare fairly — fall back to stored scores.
+        return {uid: r.get("score") for uid, r in rows.items()}, []
+    out: dict[str, Optional[int]] = {}
+    for uid, r in rows.items():
+        c = comp.get(uid) or {}
+        if not c:
+            out[uid] = r.get("score")
+            continue
+        pts = sum(float((c[k] or {}).get("points") or 0) for k in common)
+        mx  = sum(float((c[k] or {}).get("max") or 0) for k in common)
+        out[uid] = int(round(100 * pts / mx)) if mx > 0 else r.get("score")
+    return out, sorted(common)
+
+
 def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
     """Join (or fetch) the user's current-week league and return live standings."""
     sb = _sb()
@@ -372,19 +421,10 @@ def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
     # within this league week; members who haven't opened the app this
     # week have no snapshot → healthspan None → rank at the bottom.
     healthspan: dict[str, Optional[int]] = {uid: None for uid in ids}
-    try:
-        res_hs = (sb.table("weekly_healthspan_history")
-                    .select("user_id, date, score")
-                    .in_("user_id", ids)
-                    .gte("date", week_start)
-                    .order("date", desc=True)
-                    .execute())
-        for r in (res_hs.data or []):
-            uid = r.get("user_id")
-            if uid in healthspan and healthspan[uid] is None and r.get("score") is not None:
-                healthspan[uid] = int(r["score"])
-    except Exception:
-        pass
+    hs_rows = latest_healthspan_rows(sb, ids, week_start)
+    fair, common_bands = fair_scores(hs_rows)
+    for uid in ids:
+        healthspan[uid] = fair.get(uid)
     # Refresh cached scores (best-effort) so other surfaces can read them cheaply.
     for uid in ids:
         try:
@@ -401,6 +441,11 @@ def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
             # Primary ranking metric (David 2026-08-11): the member's
             # Weekly Health Span Score. None = no snapshot this week.
             "healthspan": healthspan.get(uid),
+            # Show the math (David 2026-10-16): each player's bands with
+            # points earned / possible, plus their full 4-band Scorecard
+            # score when it differs from the fair League score.
+            "bands":      (hs_rows.get(uid) or {}).get("components") or {},
+            "full_score": (hs_rows.get(uid) or {}).get("score"),
             "is_me":   uid == user_id,
             # `level` retained as null for client backwards-compat — the
             # badge/XP/Level layer was removed.
@@ -435,4 +480,7 @@ def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
         "member_count": len(standings),
         "my_breakdown": my_breakdown,
         "categories":   CATEGORY_META,
+        # Band keys every scored player shares — the League is scored on
+        # these only. Empty = stored scores used (no overlap data yet).
+        "common_bands": common_bands,
     }

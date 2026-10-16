@@ -165,6 +165,7 @@ final class BackgroundHealthSync {
         var sum:       [String: [String: [String: Double]]] = [:]          // date/field/source -> total
         var avg:       [String: [String: (Double, Int)]] = [:]             // date/field -> (sum, n)
         var intervals: [String: [String: [String: [(Double, Double)]]]] = [:] // date/field/source -> [(s,e)]
+        var bedtime:   [String: Double] = [:]                                   // date -> earliest asleep start (ms)
 
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -189,6 +190,7 @@ final class BackgroundHealthSync {
                         let e0 = c.endDate.timeIntervalSince1970 * 1000
                         guard e0 > s0 else { continue }
                         self.syncQueue.sync {
+                            if bedtime[date] == nil || s0 < bedtime[date]! { bedtime[date] = s0 }
                             intervals[date, default: [:]]["sleep_hours", default: [:]][source, default: []].append((s0, e0))
                             if v == 4 { intervals[date, default: [:]]["sleep_deep_hours", default: [:]][source, default: []].append((s0, e0)) }
                             if v == 5 { intervals[date, default: [:]]["sleep_rem_hours",  default: [:]][source, default: []].append((s0, e0)) }
@@ -212,7 +214,7 @@ final class BackgroundHealthSync {
 
         group.notify(queue: syncQueue) {
             // Resolve — same rules as Aggregator.resolve() in healthkit.ts
-            var daily: [String: [String: Double]] = [:]
+            var daily: [String: [String: Any]] = [:]
             for (date, fields) in sum {
                 for (field, perSource) in fields {
                     let best = perSource.values.max() ?? 0
@@ -244,12 +246,18 @@ final class BackgroundHealthSync {
                     daily[date, default: [:]][field] = (best / 3_600_000.0 * 100).rounded() / 100
                 }
             }
+            // Bedtime as ISO string for the sleep-timing band (mirrors healthkit.ts).
+            let isoOut = ISO8601DateFormatter()
+            isoOut.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            for (date, ms) in bedtime where daily[date]?["sleep_hours"] != nil {
+                daily[date, default: [:]]["sleep_start"] = isoOut.string(from: Date(timeIntervalSince1970: ms / 1000))
+            }
             guard !daily.isEmpty else { completion(0); return }
             self.post(daily: daily, token: token, base: base, completion: completion)
         }
     }
 
-    private func post(daily: [String: [String: Double]], token: String, base: String,
+    private func post(daily: [String: [String: Any]], token: String, base: String,
                       completion: @escaping (Int) -> Void) {
         guard let url = URL(string: base.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
                                   + "/api/apple-health/import-aggregated") else { completion(0); return }

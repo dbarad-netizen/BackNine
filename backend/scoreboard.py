@@ -110,9 +110,21 @@ def build(today: Optional[date] = None) -> dict:
             "user_id": uid,
             "name":    name,
             "score":   snap.get("score"),
+            "_components": snap.get("components") or {},
             "line":    _one_true_line(name, snap.get("components") or {}),
         })
 
+    # Fair scoring (David 2026-10-16): score everyone on the bands
+    # everyone has, so an Oura user isn't judged on bedtime timing
+    # against an Apple Watch user who isn't.
+    try:
+        _hs_rows = {r["user_id"]: {"score": r["score"], "components": r.get("_components") or {}} for r in rows if r.get("score") is not None}
+        _fair, _ = lg.fair_scores(_hs_rows)
+        for r in rows:
+            if r["user_id"] in _fair and _fair[r["user_id"]] is not None:
+                r["score"] = _fair[r["user_id"]]
+    except Exception:
+        log.exception("scoreboard: fair scoring failed")
     rows.sort(key=lambda r: -(r["score"] if r["score"] is not None else -1))
 
     standings = " · ".join(

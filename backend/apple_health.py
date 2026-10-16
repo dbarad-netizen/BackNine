@@ -99,6 +99,10 @@ FIELDS = [
     "waist_circumference_cm",
 ]
 
+# String fields (not numeric). sleep_start = ISO timestamp of the night's
+# first asleep interval, used for the Health Span sleep-timing band.
+STRING_FIELDS = {"sleep_start"}
+
 # Fields stored as integer in Supabase — must cast to int before insert
 INTEGER_FIELDS = {"steps", "active_calories", "resting_hr",
                   "blood_pressure_systolic", "blood_pressure_diastolic"}

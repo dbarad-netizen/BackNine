@@ -8670,16 +8670,9 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
     try:
         _db_hs = get_supabase()
         if _db_hs:
-            _res_hs = (_db_hs.table("weekly_healthspan_history")
-                         .select("user_id, date, score")
-                         .in_("user_id", all_uids)
-                         .gte("date", _week_start)
-                         .order("date", desc=True)
-                         .execute())
-            for r in (_res_hs.data or []):
-                uid_hs = r.get("user_id")
-                if uid_hs in healthspan_map and healthspan_map[uid_hs] is None and r.get("score") is not None:
-                    healthspan_map[uid_hs] = int(r["score"])
+            _fair, _ = lg.fair_scores(lg.latest_healthspan_rows(_db_hs, all_uids, _week_start))
+            for uid_hs in all_uids:
+                healthspan_map[uid_hs] = _fair.get(uid_hs)
     except Exception:
         pass
 
@@ -9304,6 +9297,10 @@ async def apple_health_import_aggregated(request: Request):
                     row[field] = int(round(val)) if field in ah.INTEGER_FIELDS else round(val, 2)
                 except (TypeError, ValueError):
                     pass
+        for field in ah.STRING_FIELDS:
+            v = payload.get(field)
+            if isinstance(v, str) and 10 <= len(v) <= 40:
+                row[field] = v
         rows.append(row)
 
     if not rows:
