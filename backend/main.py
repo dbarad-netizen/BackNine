@@ -8603,6 +8603,8 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
     # Cache the current user's 7-day data once — each friend pairing uses it.
     me_days_cache = _per_day_values(user_id)
 
+    per_day_by_uid: dict[str, dict[str, dict]] = {user_id: me_days_cache}
+
     def _entry_for(uid: str, name: str, is_me: bool) -> dict:
         steps_v, steps_a, steps_e = _value_for(uid, "steps")
         sleep_v, sleep_a, sleep_e = _value_for(uid, "sleep")
@@ -8611,6 +8613,7 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
         if not is_me:
             try:
                 friend_days = _per_day_values(uid)
+                per_day_by_uid[uid] = friend_days
                 h2h = _head_to_head(me_days_cache, friend_days)
             except Exception:
                 h2h = None
@@ -8684,19 +8687,35 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
     for f in friends:
         entries.append(_entry_for(f["user_id"], f.get("name") or "Friend", False))
 
-    # Per-metric leader: id of the entry with the highest non-null value.
-    def _leader_id(metric_key: str) -> Optional[str]:
-        scored = [e for e in entries if (e[metric_key].get("value") or 0) > 0]
-        if not scored:
-            return None
-        winner = max(scored, key=lambda e: e[metric_key]["value"])
-        return winner["user_id"]
+    # Per-metric leader (David 2026-10-16: "you're giving Josh 3 medals
+    # but all his data is from yesterday and my steps yesterday beat
+    # his"). The old rule compared whatever each card was showing —
+    # Josh's full day yesterday vs David's half day today. Medals now
+    # compare the SAME calendar day only: the contest day for a metric
+    # is the most recent day on which at least two people have a value,
+    # and the winner is the best number on that day. A card showing a
+    # different day's number can't win off it.
+    def _leader(metric_key: str) -> tuple[Optional[str], Optional[str]]:
+        try:
+            today = datetime.strptime(today_str, "%Y-%m-%d").date()
+        except Exception:
+            today = datetime.now().date()
+        for i in range(7):
+            d = (today - timedelta(days=i)).isoformat()
+            scored = []
+            for uid, days in per_day_by_uid.items():
+                v = (days.get(d) or {}).get(metric_key)
+                if v is not None and v > 0:
+                    scored.append((uid, v))
+            if len(scored) >= 2:
+                best = max(v for _, v in scored)
+                winners = [uid for uid, v in scored if v == best]
+                return (winners[0] if len(winners) == 1 else None), d  # tie → no medal
+        return None, None
 
-    leaders = {
-        "steps":    _leader_id("steps"),
-        "sleep":    _leader_id("sleep"),
-        "activity": _leader_id("activity"),
-    }
+    leaders, leader_dates = {}, {}
+    for _m in ("steps", "sleep", "activity"):
+        leaders[_m], leader_dates[_m] = _leader(_m)
 
     # Default sort (task #187): Weekly Health Span Score first — the same
     # primary ranking the Weekly League uses (None sorts last). Engagement
@@ -8733,6 +8752,7 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
     return {
         "entries":   entries,
         "leaders":   leaders,
+        "leader_dates": leader_dates,   # which calendar day each medal was decided on
         "community": community,
         "date":      today_str,
     }

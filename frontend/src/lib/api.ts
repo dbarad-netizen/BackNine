@@ -3670,6 +3670,8 @@ export interface LeaderboardResponse {
   entries: LeaderboardEntry[];
   /** user_id of the per-metric leader, or null if no one has a value yet. */
   leaders: { steps: string | null; sleep: string | null; activity: string | null };
+  /** Calendar day each medal was decided on — medals only compare the same day. */
+  leader_dates?: { steps: string | null; sleep: string | null; activity: string | null };
   /** David 2026-07-09: aggregate averages across the leaderboard so a user
    *  can see "where do I stand vs the community?" at a glance. Nulls when
    *  no one in the group has data for that metric. */

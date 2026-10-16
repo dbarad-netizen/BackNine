@@ -194,8 +194,13 @@ export default function FriendLeaderboard({ onInvite, onSeeMore }: Props = {}) {
   const me = data.entries.find(e => e.is_me);
   const myWins = me ? (tally[me.user_id] ?? 0) : 0;
   const totalContested = Object.values(data.leaders).filter(Boolean).length;
+  // Medals are decided on the most recent day where 2+ people have the
+  // metric (David 2026-10-16) — which is often yesterday, since today is
+  // still in progress. Say so instead of claiming "today".
+  const medalDays = Object.values(data.leader_dates ?? {}).filter((d): d is string => !!d);
+  const allToday = medalDays.length > 0 && medalDays.every(d => d === data.date);
   const headerLine = totalContested > 0
-    ? `You're leading in ${myWins} of ${totalContested} today`
+    ? `You're leading in ${myWins} of ${totalContested}${allToday ? " today" : " (latest full day)"}`
     : maxHs > 0
     ? "Ranked by Weekly Health Span Score"
     : "Waiting on data — check back later";
