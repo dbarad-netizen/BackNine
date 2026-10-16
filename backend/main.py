@@ -8637,6 +8637,9 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
             # so the two social surfaces never disagree. None = no
             # snapshot this week (user hasn't opened the app).
             "healthspan": healthspan_map.get(uid),
+            # Show-your-math (2026-10-16): the bands behind the score.
+            "bands":      (hs_rows_map.get(uid) or {}).get("components") or {},
+            "full_score": (hs_rows_map.get(uid) or {}).get("score"),
             "level":    None,  # gamification layer removed; key kept for backwards-compat
             # If you've taunted this friend today, surface which kind (else None).
             "taunt_sent":   None if is_me else taunts_today.get(uid),
@@ -8667,10 +8670,13 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
         _today_d = datetime.now().date()
     _week_start = (_today_d - timedelta(days=_today_d.weekday())).isoformat()
     healthspan_map: dict[str, Optional[int]] = {uid: None for uid in all_uids}
+    hs_rows_map: dict[str, dict] = {}
+    _common_bands: list[str] = []
     try:
         _db_hs = get_supabase()
         if _db_hs:
-            _fair, _ = lg.fair_scores(lg.latest_healthspan_rows(_db_hs, all_uids, _week_start))
+            hs_rows_map = lg.ensure_components(_db_hs, lg.latest_healthspan_rows(_db_hs, all_uids, _week_start), all_uids, today_str)
+            _fair, _common_bands = lg.fair_scores(hs_rows_map)
             for uid_hs in all_uids:
                 healthspan_map[uid_hs] = _fair.get(uid_hs)
     except Exception:
@@ -8751,6 +8757,7 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
         "entries":   entries,
         "leaders":   leaders,
         "leader_dates": leader_dates,   # which calendar day each medal was decided on
+        "common_bands": _common_bands,  # Health Span bands every scored player shares
         "community": community,
         "date":      today_str,
     }

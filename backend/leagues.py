@@ -38,6 +38,9 @@ This module is a thin Supabase wrapper. Callers (main.py) handle auth.
 import os
 from datetime import date, timedelta
 from typing import Optional
+import logging
+
+log = logging.getLogger(__name__)
 
 import goals as gl
 
@@ -360,6 +363,29 @@ def latest_healthspan_rows(sb, ids: list[str], week_start: str) -> dict[str, dic
     return out
 
 
+def ensure_components(sb, rows: dict[str, dict], ids: list[str], today_iso: str) -> dict[str, dict]:
+    """Members whose latest snapshot has no band breakdown (rows written
+    before 2026-10-16, or users who haven't opened the app since) get
+    one computed live and persisted, so the League can be fair and
+    show the math today rather than after the next cron."""
+    import healthspan as hspan
+    import oura_cache as oc
+    for uid in ids:
+        r = rows.get(uid)
+        if r and r.get("components"):
+            continue
+        try:
+            _rm, _slm, am, smm = oc.get_days(uid, days=8)
+            snap = hspan.compute(uid, today_iso, am or {}, smm or {}, {})
+            if snap.get("score") is None:
+                continue
+            hspan.persist_and_delta(uid, today_iso, snap)
+            rows[uid] = {"score": int(snap["score"]), "components": snap.get("components") or {}}
+        except Exception:
+            log.exception("ensure_components failed for %s", uid)
+    return rows
+
+
 def fair_scores(rows: dict[str, dict]) -> tuple[dict[str, Optional[int]], list[str]]:
     """Score every player on the bands EVERY scored player has (David
     2026-10-16: the sleep-timing band only exists for Oura users, so an
@@ -421,7 +447,7 @@ def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
     # within this league week; members who haven't opened the app this
     # week have no snapshot → healthspan None → rank at the bottom.
     healthspan: dict[str, Optional[int]] = {uid: None for uid in ids}
-    hs_rows = latest_healthspan_rows(sb, ids, week_start)
+    hs_rows = ensure_components(sb, latest_healthspan_rows(sb, ids, week_start), ids, today_str)
     fair, common_bands = fair_scores(hs_rows)
     for uid in ids:
         healthspan[uid] = fair.get(uid)

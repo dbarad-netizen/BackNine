@@ -85,6 +85,8 @@ interface Props {
 
 export default function FriendLeaderboard({ onInvite, onSeeMore }: Props = {}) {
   const [data, setData] = useState<LeaderboardResponse | null>(null);
+  // Tap the HS chip to see the bands behind the score (David 2026-10-16).
+  const [mathFor, setMathFor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
   /** Tracks in-flight taunts per friend so double-taps don't fire twice. */
@@ -307,8 +309,10 @@ export default function FriendLeaderboard({ onInvite, onSeeMore }: Props = {}) {
                       as the Weekly League (task #187). Engagement points
                       demoted to a small secondary chip below. */}
                   {e.healthspan != null ? (
-                    <span
-                      title="Weekly Health Span Score — sleep, movement, adherence & consistency this week"
+                    <button
+                      type="button"
+                      onClick={() => setMathFor(mathFor === e.user_id ? null : e.user_id)}
+                      title="Weekly Health Span Score — tap to see the math"
                       className={`text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 ${
                         e.healthspan > 0 && e.healthspan === maxHs
                           ? "bg-amber-100 border border-amber-300 text-amber-800"
@@ -316,7 +320,7 @@ export default function FriendLeaderboard({ onInvite, onSeeMore }: Props = {}) {
                       }`}
                     >
                       {e.healthspan > 0 && e.healthspan === maxHs ? "👑 " : ""}{e.healthspan} HS
-                    </span>
+                    </button>
                   ) : (
                     <span
                       title="No Health Span Score yet this week"
@@ -344,6 +348,35 @@ export default function FriendLeaderboard({ onInvite, onSeeMore }: Props = {}) {
                     </span>
                   )}
                 </div>
+
+                {/* Show-your-math: Health Span bands (David 2026-10-16) */}
+                {mathFor === e.user_id && e.bands && Object.keys(e.bands).length > 0 && (() => {
+                  const common = data.common_bands ?? [];
+                  return (
+                    <div className="mb-2 rounded-xl border border-gray-100 bg-white divide-y divide-gray-50">
+                      {Object.entries(e.bands).map(([k, b]) => {
+                        const counted = common.length === 0 || common.includes(k);
+                        return (
+                          <div key={k} className={`flex items-center gap-2 px-3 py-1.5 text-[11px] ${counted ? "" : "opacity-50"}`}>
+                            <span className="flex-1 min-w-0">
+                              <span className="font-semibold text-gray-800">{b.label}</span>
+                              <span className="text-gray-500"> · {b.value}</span>
+                              {!counted && <span className="text-gray-400"> · not counted (not everyone has it)</span>}
+                            </span>
+                            <span className="font-mono tabular-nums text-gray-800 shrink-0">{b.points}/{b.max}</span>
+                          </div>
+                        );
+                      })}
+                      <p className="px-3 py-1.5 text-[10px] text-gray-500">
+                        {common.length > 0
+                          ? `Scored on the ${common.length} bands everyone on the board has.`
+                          : "Scored on all bands."}
+                        {e.full_score != null && e.healthspan != null && e.full_score !== e.healthspan
+                          ? ` Full Scorecard score: ${e.full_score}.` : ""}
+                      </p>
+                    </div>
+                  );
+                })()}
 
                 {/* Weekly head-to-head — only for friend rows */}
                 {!e.is_me && e.head_to_head && (() => {
