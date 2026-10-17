@@ -158,7 +158,7 @@ function ConnectContent() {
                 <p className="text-xs text-zinc-400">
                   {ahStatus?.connected
                     ? `Syncing — ${ahStatus.days_synced} day${ahStatus.days_synced === 1 ? "" : "s"} of data`
-                    : "Apple Watch — sleep, HRV, steps & heart rate"}
+                    : "Apple Watch — sleep, HRV, steps & heart rate. No watch? Your iPhone has been counting steps for years — that's enough to start."}
                 </p>
               </div>
               {ahStatus?.connected ? (

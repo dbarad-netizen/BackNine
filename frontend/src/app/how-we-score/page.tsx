@@ -169,7 +169,8 @@ export default function HowWeScorePage() {
           <li><span className="text-white font-medium">Scratch</span> — par is capped at 90. The score tops out at 100, so a very fit player&apos;s best days average 99 and he could never beat par. Above 90, the game is holding it.</li>
           <li><span className="text-white font-medium">Slow up, fast down</span> — par can fall at most 3 points from one week to the next, so a bad patch can&apos;t quietly hand you strokes; it rises as fast as you do.</li>
           <li><span className="text-white font-medium">Net</span> — this week&apos;s score minus par. +4 means you beat the person you&apos;ve been by four. The League ranks on net; lowest net buys the coffee.</li>
-          <li><span className="text-white font-medium">New members</span> — your watch or ring has been keeping score for months, so we read the 28 days before you joined and hand you a real par on day one. No sandbag week, no honeymoon week.</li>
+          <li><span className="text-white font-medium">New members</span> — your watch or ring has been keeping score for months, so we read the 28 days before you joined and hand you a real par on day one.</li>
+          <li><span className="text-white font-medium">No device at all</span> — your iPhone counts steps on its own. Connect Apple Health, log your sleep in ten seconds a day, and a 7,500-step day counts as active. Three days to a provisional par, ten to a full one — and while your history is short, par is your median day, not your best, so a strong first week can&apos;t set you up to fail.</li>
           <li><span className="text-white font-medium">Medical hold</span> — injured or sick? Set a date in your profile and you sit out until then. Golf has one too.</li>
         </ul>
         <P>

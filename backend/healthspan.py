@@ -243,6 +243,7 @@ def _load_steps_avg(user_id: str, oura_am: dict, as_of: Optional[str] = None) ->
 
 
 ACTIVE_DAY_KCAL = 300  # ~45-60 min brisk walk; catches real movement without gym bias
+ACTIVE_DAY_STEPS_PHONE_ONLY = 7500  # phone-only users: no calorie source, so steps stand in
 
 
 def _load_active_days(user_id: str, today_iso: str, oura_am: dict) -> Optional[int]:
@@ -271,17 +272,35 @@ def _load_active_days(user_id: str, today_iso: str, oura_am: dict) -> Optional[i
                 qualifying.add(d)
 
     # Apple Health active calories
+    have_cal_data = any((oura_am.get(d) or {}).get("active_cal") is not None for d in window)
+    ah_rows = []
     try:
         import apple_health as ah
-        for r in ah.get_data(user_id, days=7, end_date=today_iso):
+        ah_rows = ah.get_data(user_id, days=7, end_date=today_iso)
+        for r in ah_rows:
             d = str(r.get("date"))
             cal = r.get("active_calories")
             if d in window and cal is not None:
                 have_any_data = True
+                have_cal_data = True
                 if float(cal) >= ACTIVE_DAY_KCAL:
                     qualifying.add(d)
     except Exception:
         pass
+
+    # Phone-only players (David 2026-10-17: "a newer person to fitness may
+    # not be coming with data"): an iPhone counts steps with no watch at
+    # all. When there is NO active-calorie source, a day of 7,500+ phone
+    # steps is real movement and counts as active. Not applied when a
+    # watch/ring is reporting calories, so it can't inflate those users.
+    if not have_cal_data:
+        for r in ah_rows:
+            d = str(r.get("date"))
+            st = r.get("steps")
+            if d in window and st is not None:
+                have_any_data = True
+                if int(st) >= ACTIVE_DAY_STEPS_PHONE_ONLY:
+                    qualifying.add(d)
 
     # Logged workouts (count toward active days, never required)
     sb = _sb()

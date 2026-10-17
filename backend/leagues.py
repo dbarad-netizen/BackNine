@@ -416,10 +416,21 @@ SCRATCH_PAR = 90
 PAR_MAX_DROP_PER_WEEK = 3
 
 
+PAR_BEST_OF_MIN_DAYS = 20   # below this, use the median (honeymoon guard)
+
+
 def _par_from_scores(scores: list[int]) -> Optional[int]:
+    """Best-40% once a real month exists. While history is short (a new
+    player, or one who just started logging), the best 40% of ten days
+    IS the honeymoon week and would set a par they then fail against —
+    so use the median until there are 20 scored days."""
     if len(scores) < PAR_MIN_DAYS_ANY:
         return None
     s = sorted(scores, reverse=True)
+    if len(s) < PAR_BEST_OF_MIN_DAYS:
+        mid = len(s) // 2
+        med = s[mid] if len(s) % 2 else (s[mid - 1] + s[mid]) / 2
+        return min(SCRATCH_PAR, int(round(med)))
     k = max(PAR_MIN_DAYS_ANY, int(round(len(s) * PAR_BEST_FRACTION)))
     best = s[:k]
     return min(SCRATCH_PAR, int(round(sum(best) / len(best))))
