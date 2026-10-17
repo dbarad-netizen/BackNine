@@ -145,19 +145,19 @@ def _score_active_days(active_days: Optional[int]) -> Optional[dict]:
 
 # ── Data loaders ────────────────────────────────────────────────────────
 
-def _load_sleep_avg(user_id: str, oura_smm: dict) -> Optional[float]:
+def _load_sleep_avg(user_id: str, oura_smm: dict, as_of: Optional[str] = None) -> Optional[float]:
     """Source chain: Oura (nightly total seconds) → Apple Health
     (apple_health_daily.sleep_hours) → manual entries in device_readings
     (source='manual', metric='sleep_hours'). The manual fallback is the
     Julie fix (2026-08-12, #185) — manual-only users were getting no
     sleep band at all despite diligently logging."""
-    vals = [oura_smm[d]["total"] / 3600 for d in sorted(oura_smm, reverse=True)[:7]
-            if oura_smm.get(d, {}).get("total")]
+    _keys = sorted((d for d in oura_smm if not as_of or d <= as_of), reverse=True)[:7]
+    vals = [oura_smm[d]["total"] / 3600 for d in _keys if oura_smm.get(d, {}).get("total")]
     if vals:
         return round(sum(vals) / len(vals), 2)
     try:
         import apple_health as ah
-        rows = ah.get_data(user_id, days=7)
+        rows = ah.get_data(user_id, days=7, end_date=as_of)
         ah_vals = [float(r["sleep_hours"]) for r in rows if r.get("sleep_hours") is not None]
         if ah_vals:
             return round(sum(ah_vals) / len(ah_vals), 2)
@@ -168,13 +168,15 @@ def _load_sleep_avg(user_id: str, oura_smm: dict) -> Optional[float]:
     if not sb:
         return None
     try:
-        since = (_date.today() - timedelta(days=6)).isoformat()
+        _end = _date.fromisoformat(as_of[:10]) if as_of else _date.today()
+        since = (_end - timedelta(days=6)).isoformat()
         res = (sb.table("device_readings")
                  .select("date, value")
                  .eq("user_id", user_id)
                  .eq("source", "manual")
                  .eq("metric", "sleep_hours")
                  .gte("date", since)
+                 .lte("date", _end.isoformat())
                  .execute())
         m_vals = [float(r["value"]) for r in (res.data or []) if r.get("value") is not None]
         return round(sum(m_vals) / len(m_vals), 2) if m_vals else None
@@ -182,11 +184,11 @@ def _load_sleep_avg(user_id: str, oura_smm: dict) -> Optional[float]:
         return None
 
 
-def _load_sleep_consistency(user_id: str, oura_smm: dict) -> Optional[float]:
+def _load_sleep_consistency(user_id: str, oura_smm: dict, as_of: Optional[str] = None) -> Optional[float]:
     """Standard deviation of bedtime hour over last 14 nights.
     Uses Oura's bedtime_start when available."""
     times: list[float] = []
-    for d in sorted(oura_smm, reverse=True)[:14]:
+    for d in sorted((d for d in oura_smm if not as_of or d <= as_of), reverse=True)[:14]:
         bs = oura_smm.get(d, {}).get("bedtime_start")
         if not bs: continue
         try:
@@ -206,7 +208,7 @@ def _load_sleep_consistency(user_id: str, oura_smm: dict) -> Optional[float]:
         # Watch users get the timing band too instead of a free pass.
         try:
             import apple_health as ah
-            for r in ah.get_data(user_id, days=14):
+            for r in ah.get_data(user_id, days=14, end_date=as_of):
                 bs = r.get("sleep_start")
                 if not bs:
                     continue
@@ -225,15 +227,15 @@ def _load_sleep_consistency(user_id: str, oura_smm: dict) -> Optional[float]:
     return round(sd_hours * 60, 0)  # convert to minutes
 
 
-def _load_steps_avg(user_id: str, oura_am: dict) -> Optional[float]:
+def _load_steps_avg(user_id: str, oura_am: dict, as_of: Optional[str] = None) -> Optional[float]:
     """Oura steps first, AH fallback."""
-    vals = [oura_am[d]["steps"] for d in sorted(oura_am, reverse=True)[:7]
-            if oura_am.get(d, {}).get("steps")]
+    _keys = sorted((d for d in oura_am if not as_of or d <= as_of), reverse=True)[:7]
+    vals = [oura_am[d]["steps"] for d in _keys if oura_am.get(d, {}).get("steps")]
     if vals:
         return round(sum(vals) / len(vals))
     try:
         import apple_health as ah
-        rows = ah.get_data(user_id, days=7)
+        rows = ah.get_data(user_id, days=7, end_date=as_of)
         ah_vals = [int(r["steps"]) for r in rows if r.get("steps") is not None]
         return round(sum(ah_vals) / len(ah_vals)) if ah_vals else None
     except Exception:
@@ -271,7 +273,7 @@ def _load_active_days(user_id: str, today_iso: str, oura_am: dict) -> Optional[i
     # Apple Health active calories
     try:
         import apple_health as ah
-        for r in ah.get_data(user_id, days=7):
+        for r in ah.get_data(user_id, days=7, end_date=today_iso):
             d = str(r.get("date"))
             cal = r.get("active_calories")
             if d in window and cal is not None:
@@ -290,6 +292,7 @@ def _load_active_days(user_id: str, today_iso: str, oura_am: dict) -> Optional[i
                      .select("date")
                      .eq("user_id", user_id)
                      .gte("date", since)
+                     .lte("date", today.isoformat())
                      .execute())
             for r in (res.data or []):
                 d = str(r.get("date"))
@@ -386,16 +389,16 @@ def compute(user_id: str, today_iso: str, oura_am: dict, oura_smm: dict,
     max_possible = 0
 
     # --- Sleep bands ---
-    sleep_avg = _load_sleep_avg(user_id, oura_smm)
+    sleep_avg = _load_sleep_avg(user_id, oura_smm, as_of=today_iso)
     c = _score_sleep_hours(sleep_avg)
     if c: components["sleep_hours"] = c; total_points += c["points"]; max_possible += c["max"]
 
-    sc_min = _load_sleep_consistency(user_id, oura_smm)
+    sc_min = _load_sleep_consistency(user_id, oura_smm, as_of=today_iso)
     c = _score_sleep_consistency(sc_min)
     if c: components["sleep_consistency"] = c; total_points += c["points"]; max_possible += c["max"]
 
     # --- Movement bands ---
-    steps_avg = _load_steps_avg(user_id, oura_am)
+    steps_avg = _load_steps_avg(user_id, oura_am, as_of=today_iso)
     c = _score_steps(steps_avg)
     if c: components["steps"] = c; total_points += c["points"]; max_possible += c["max"]
 
@@ -433,3 +436,56 @@ def compute(user_id: str, today_iso: str, oura_am: dict, oura_smm: dict,
             "outcome over months."
         ),
     }
+
+
+# ── History backfill (David 2026-10-17) ─────────────────────────────────
+#
+# "How do we set a new member's initial handicap?" Golf says: no
+# handicap until you've posted rounds. Ours already exist — the watch
+# or ring has months of data and we pull it on connect. So compute the
+# score AS OF each of the last N days from that history and write the
+# rows weekly_healthspan_history was missing. Par then comes from the
+# member's real recent month, not from an enthusiastic first week.
+# Never overwrites a row that already exists.
+
+def backfill_history(user_id: str, days: int = 35, end_iso: Optional[str] = None) -> int:
+    sb = _sb()
+    if not sb or not user_id:
+        return 0
+    try:
+        import oura_cache as oc
+        end = _date.fromisoformat(end_iso[:10]) if end_iso else _date.today()
+        start = end - timedelta(days=days)
+        existing: set = set()
+        try:
+            res = (sb.table("weekly_healthspan_history").select("date")
+                     .eq("user_id", user_id)
+                     .gte("date", start.isoformat()).lte("date", end.isoformat()).execute())
+            existing = {str(r["date"])[:10] for r in (res.data or [])}
+        except Exception:
+            pass
+        try:
+            _rm, _slm, am, smm = oc.get_days(user_id, days=days + 21)
+        except Exception:
+            am, smm = {}, {}
+        written = 0
+        d = start
+        while d <= end:
+            iso = d.isoformat()
+            if iso not in existing:
+                try:
+                    snap = compute(user_id, iso, am or {}, smm or {}, {})
+                    if snap.get("score") is not None:
+                        sb.table("weekly_healthspan_history").upsert({
+                            "user_id": user_id, "date": iso, "score": int(snap["score"]),
+                            "grade": snap.get("grade"), "bands_present": snap.get("bands_present"),
+                            "components": snap.get("components") or {},
+                        }, on_conflict="user_id,date").execute()
+                        written += 1
+                except Exception:
+                    log.exception("healthspan backfill failed for %s %s", user_id, iso)
+            d += timedelta(days=1)
+        return written
+    except Exception:
+        log.exception("healthspan backfill failed for %s", user_id)
+        return 0

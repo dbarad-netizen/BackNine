@@ -443,12 +443,52 @@ def _league_holds(sb, ids: list[str], today_iso: str) -> dict[str, bool]:
     return out
 
 
+_BACKFILL_TRIED: dict[str, float] = {}
+
+
+def _backfill_thin_history(sb, ids: list[str], week_start: str) -> None:
+    """New-member par (2026-10-17): if a member has fewer than
+    PAR_MIN_DAYS_FULL scored days in the par window, compute the missing
+    days from the device history they connected with. Once per user per
+    6h so a member whose watch truly has no data doesn't cost a backfill
+    on every League load."""
+    import time as _time
+    import healthspan as hspan
+    try:
+        monday = date.fromisoformat(week_start)
+    except Exception:
+        return
+    lo = (monday - timedelta(days=PAR_WINDOW_DAYS)).isoformat()
+    hi = (monday - timedelta(days=1)).isoformat()
+    try:
+        res = (sb.table("weekly_healthspan_history").select("user_id")
+                 .in_("user_id", ids).gte("date", lo).lte("date", hi).execute())
+        counts: dict[str, int] = {}
+        for r in (res.data or []):
+            counts[r["user_id"]] = counts.get(r["user_id"], 0) + 1
+    except Exception:
+        return
+    now = _time.time()
+    for uid in ids:
+        if counts.get(uid, 0) >= PAR_MIN_DAYS_FULL:
+            continue
+        if now - _BACKFILL_TRIED.get(uid, 0) < 6 * 3600:
+            continue
+        _BACKFILL_TRIED[uid] = now
+        try:
+            n = hspan.backfill_history(uid, days=PAR_WINDOW_DAYS + 7)
+            log.info("league par backfill: %s wrote %d day(s)", uid[:12], n)
+        except Exception:
+            log.exception("league par backfill failed for %s", uid)
+
+
 def compute_par(sb, ids: list[str], week_start: str) -> dict[str, dict]:
     """{uid: {"par": int|None, "provisional": bool, "days": n}} for the
     week starting `week_start` (Monday). Window = the 28 days before it."""
     out: dict[str, dict] = {uid: {"par": None, "provisional": True, "days": 0} for uid in ids}
     if not sb or not ids:
         return out
+    _backfill_thin_history(sb, ids, week_start)
     try:
         monday = date.fromisoformat(week_start)
     except Exception:

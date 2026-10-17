@@ -951,6 +951,14 @@ async def oura_auth_callback(
             except Exception:
                 pass
 
+        # New-member par (2026-10-17): once the first dashboard load has
+        # filled the Oura cache, backfill 35 days of Health Span history so
+        # the League gives them a real par from day one.
+        try:
+            _schedule_healthspan_backfill(session_data.get("user_id"), delay_s=120)
+        except Exception:
+            pass
+
         # Pass token in URL for cross-origin compatibility (Vercel + Render)
         jwt_token = _encode_session(session_data)
         redirect = RedirectResponse(f"{FRONTEND_URL}/dashboard?token={jwt_token}")
@@ -1586,6 +1594,55 @@ def settle_coffee(row_id: int, request: Request):
         raise HTTPException(status_code=404, detail="not your tab")
     db.table("coffee_ledger").update({"settled_at": datetime.now(timezone.utc).isoformat()}).eq("id", row_id).execute()
     return {"ok": True}
+
+
+_BACKFILL_LAST: dict = {}
+
+
+def _schedule_healthspan_backfill(user_id: Optional[str], delay_s: int = 0) -> None:
+    """Run healthspan.backfill_history in a background thread, at most
+    once per user per 6 hours."""
+    import threading, time as _time
+    if not user_id:
+        return
+    now = _time.time()
+    if now - _BACKFILL_LAST.get(user_id, 0) < 6 * 3600:
+        return
+    _BACKFILL_LAST[user_id] = now
+
+    def _run():
+        try:
+            if delay_s:
+                _time.sleep(delay_s)
+            n = hspan.backfill_history(user_id, days=35)
+            log.info("healthspan backfill: %s wrote %d day(s)", user_id[:12], n)
+        except Exception:
+            log.exception("healthspan backfill thread failed for %s", user_id)
+    threading.Thread(target=_run, daemon=True).start()
+
+
+@app.post("/admin/healthspan/backfill")
+async def healthspan_backfill(request: Request, user_id: Optional[str] = None, days: int = 35):
+    """Backfill Health Span history from device data (new-member par).
+    One user, or everyone with device data in the last 7 days."""
+    _check_admin(request)
+    db = get_supabase()
+    ids: set[str] = set()
+    if user_id:
+        ids.add(user_id)
+    else:
+        from datetime import date as _d
+        since = (_d.today() - timedelta(days=7)).isoformat()
+        for table in ("apple_health_daily", "oura_daily_cache"):
+            try:
+                res = db.table(table).select("user_id").gte("date", since).execute()
+                ids |= {r["user_id"] for r in (res.data or []) if r.get("user_id")}
+            except Exception:
+                pass
+    out = {}
+    for uid in sorted(ids):
+        out[uid[:12]] = hspan.backfill_history(uid, days=max(7, min(int(days), 120)))
+    return {"users": len(ids), "written": out}
 
 
 @app.post("/admin/healthspan/snapshot")
@@ -9347,6 +9404,15 @@ async def apple_health_import_aggregated(request: Request):
 
     if written == 0 and batch_errors:
         raise HTTPException(status_code=500, detail=f"Wrote 0 rows. First error: {batch_errors[0]}")
+
+    # New-member par (2026-10-17): a first sync brings 90 days of history.
+    # Backfill Health Span scores for the last 35 so the League has a par
+    # for them immediately. Cheap no-op once the rows exist.
+    try:
+        if len(dates) >= 7:
+            _schedule_healthspan_backfill(user_id, delay_s=5)
+    except Exception:
+        pass
 
     # ── Mirror BP days into blood_pressure_log (David 2026-08-25) ────────
     # Withings cuff → Apple Health → HealthKit sync now carries BP, but

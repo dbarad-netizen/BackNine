@@ -169,6 +169,7 @@ export default function HowWeScorePage() {
           <li><span className="text-white font-medium">Scratch</span> — par is capped at 90. The score tops out at 100, so a very fit player&apos;s best days average 99 and he could never beat par. Above 90, the game is holding it.</li>
           <li><span className="text-white font-medium">Slow up, fast down</span> — par can fall at most 3 points from one week to the next, so a bad patch can&apos;t quietly hand you strokes; it rises as fast as you do.</li>
           <li><span className="text-white font-medium">Net</span> — this week&apos;s score minus par. +4 means you beat the person you&apos;ve been by four. The League ranks on net; lowest net buys the coffee.</li>
+          <li><span className="text-white font-medium">New members</span> — your watch or ring has been keeping score for months, so we read the 28 days before you joined and hand you a real par on day one. No sandbag week, no honeymoon week.</li>
           <li><span className="text-white font-medium">Medical hold</span> — injured or sick? Set a date in your profile and you sit out until then. Golf has one too.</li>
         </ul>
         <P>

@@ -298,7 +298,7 @@ def get_day(user_id: str, date_str: str) -> Optional[dict]:
     return rows[0] if rows else None
 
 
-def get_data(user_id: str, days: int = 30) -> List[dict]:
+def get_data(user_id: str, days: int = 30, end_date: Optional[str] = None) -> List[dict]:
     """Return the most recent `days` rows for this user, newest first.
 
     Applies a sanity clamp to sleep_hours: values > 14h are almost
@@ -309,13 +309,18 @@ def get_data(user_id: str, days: int = 30) -> List[dict]:
     Client-side dedupe in healthkit.ts is the durable fix; this clamp
     is the safety net for rows already in the DB or from future
     devices with new failure modes."""
-    since = (date.today() - timedelta(days=days - 1)).isoformat()
+    # end_date (2026-10-17): "as of" support so the Health Span score can be
+    # computed for a past day — new League members get a par from the
+    # history their watch already has, instead of a provisional first week.
+    _end = date.fromisoformat(end_date[:10]) if end_date else date.today()
+    since = (_end - timedelta(days=days - 1)).isoformat()
     sb = _sb()
     res = (
         sb.table("apple_health_daily")
         .select("*")
         .eq("user_id", user_id)
         .gte("date", since)
+        .lte("date", _end.isoformat())
         .order("date", desc=True)
         .execute()
     )
