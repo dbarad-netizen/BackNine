@@ -3219,8 +3219,15 @@ def _apply_baseline_reset(payload: dict, user_id: str, smm: dict, anchor: str) -
             reset_age_days = (date.fromisoformat(anchor) - date.fromisoformat(info["date"])).days
         except Exception:
             pass
+        # Direction matters (David 2026-10-17: Oura 87, BackNine 72). The
+        # contamination the reset guards against makes Oura score the
+        # post-CPAP HRV as a DECLINE — i.e. Oura too LOW. Oura being
+        # HIGHER than our two-input estimate is not that failure; it's a
+        # simple model disagreeing with a richer one, and the simple one
+        # must not win. So: override only when BackNine > Oura by 8+, and
+        # only inside Oura's ~2-month trend window (60 days).
         if bn and oura_score is not None and reset_age_days is not None:
-            override = reset_age_days < 90 and abs(int(bn["score"]) - int(oura_score)) >= 8
+            override = reset_age_days < 60 and (int(bn["score"]) - int(oura_score)) >= 8
         elif bn and oura_score is None:
             override = True  # nothing from Oura — BackNine's is all we have
         backnine_score = (bn or {}).get("score")
