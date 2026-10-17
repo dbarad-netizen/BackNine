@@ -85,7 +85,14 @@ async def fetch_workouts(access_token: str, days: int = 30) -> list[dict]:
     calories, distance, average_heart_rate}. Best-effort: returns [] on any
     failure so a flaky endpoint never blocks the dashboard.
     """
-    end   = datetime.now().strftime("%Y-%m-%d")
+    # end_date is TOMORROW on purpose (David 2026-10-17). Oura's document
+    # endpoints (/sleep, /workout, /session, /enhanced_tag) treat end_date
+    # as exclusive, and this server runs on UTC — so with end_date=today,
+    # today's sleep session only appeared once UTC rolled over, i.e. 5pm
+    # Pacific, every single day (device_readings first_seen: 17:00-17:17
+    # PT for a week straight). The daily_* endpoints are inclusive and
+    # simply have no row for tomorrow, so +1 day is safe everywhere.
+    end   = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
     start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
     headers = {"Authorization": f"Bearer {access_token}"}
     url = f"{OURA_API_BASE}/workout?start_date={start}&end_date={end}"
@@ -104,7 +111,14 @@ async def fetch_sessions(access_token: str, days: int = 30) -> list[dict]:
     Each entry: {id, type (meditation/breathing/rest/etc.), start_datetime,
     end_datetime, day, heart_rate}. Best-effort: returns [] on failure.
     """
-    end   = datetime.now().strftime("%Y-%m-%d")
+    # end_date is TOMORROW on purpose (David 2026-10-17). Oura's document
+    # endpoints (/sleep, /workout, /session, /enhanced_tag) treat end_date
+    # as exclusive, and this server runs on UTC — so with end_date=today,
+    # today's sleep session only appeared once UTC rolled over, i.e. 5pm
+    # Pacific, every single day (device_readings first_seen: 17:00-17:17
+    # PT for a week straight). The daily_* endpoints are inclusive and
+    # simply have no row for tomorrow, so +1 day is safe everywhere.
+    end   = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
     start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
     headers = {"Authorization": f"Bearer {access_token}"}
     url = f"{OURA_API_BASE}/session?start_date={start}&end_date={end}"
@@ -129,7 +143,14 @@ async def fetch_enhanced_tags(access_token: str, days: int = 30) -> list[dict]:
     relatively stable but newer than the other endpoints, so we don't
     want a flaky tag service to break the dashboard.
     """
-    end   = datetime.now().strftime("%Y-%m-%d")
+    # end_date is TOMORROW on purpose (David 2026-10-17). Oura's document
+    # endpoints (/sleep, /workout, /session, /enhanced_tag) treat end_date
+    # as exclusive, and this server runs on UTC — so with end_date=today,
+    # today's sleep session only appeared once UTC rolled over, i.e. 5pm
+    # Pacific, every single day (device_readings first_seen: 17:00-17:17
+    # PT for a week straight). The daily_* endpoints are inclusive and
+    # simply have no row for tomorrow, so +1 day is safe everywhere.
+    end   = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
     start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
     headers = {"Authorization": f"Bearer {access_token}"}
     url = f"{OURA_API_BASE}/enhanced_tag?start_date={start}&end_date={end}"
@@ -149,7 +170,14 @@ async def fetch_naps(access_token: str, days: int = 30) -> list[dict]:
 
     Each entry: {id, type, day, total_sleep_duration, bedtime_start,
     bedtime_end, efficiency}. Best-effort."""
-    end   = datetime.now().strftime("%Y-%m-%d")
+    # end_date is TOMORROW on purpose (David 2026-10-17). Oura's document
+    # endpoints (/sleep, /workout, /session, /enhanced_tag) treat end_date
+    # as exclusive, and this server runs on UTC — so with end_date=today,
+    # today's sleep session only appeared once UTC rolled over, i.e. 5pm
+    # Pacific, every single day (device_readings first_seen: 17:00-17:17
+    # PT for a week straight). The daily_* endpoints are inclusive and
+    # simply have no row for tomorrow, so +1 day is safe everywhere.
+    end   = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
     start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
     headers = {"Authorization": f"Bearer {access_token}"}
     url = f"{OURA_API_BASE}/sleep?start_date={start}&end_date={end}"
@@ -176,7 +204,14 @@ async def fetch_all(access_token: str, days: int = 120) -> dict:
     still loads.  The core endpoints (readiness, sleep, activity) raise on
     failure so callers know when we have no useful data at all.
     """
-    end   = datetime.now().strftime("%Y-%m-%d")
+    # end_date is TOMORROW on purpose (David 2026-10-17). Oura's document
+    # endpoints (/sleep, /workout, /session, /enhanced_tag) treat end_date
+    # as exclusive, and this server runs on UTC — so with end_date=today,
+    # today's sleep session only appeared once UTC rolled over, i.e. 5pm
+    # Pacific, every single day (device_readings first_seen: 17:00-17:17
+    # PT for a week straight). The daily_* endpoints are inclusive and
+    # simply have no row for tomorrow, so +1 day is safe everywhere.
+    end   = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
     start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
     headers = {"Authorization": f"Bearer {access_token}"}
 
