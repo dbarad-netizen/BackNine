@@ -393,6 +393,23 @@ export default function ProfileModal({ onClose, initialTab = "profile" }: Props)
                 </p>
               </div>
 
+              {/* Net League medical hold (2026-10-17). Golf has one too:
+                  a bad back shouldn't cost you four weeks of coffee. */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-widest mb-1.5">
+                  League medical hold
+                </label>
+                <input
+                  type="date"
+                  value={profile.league_hold_until ?? ""}
+                  onChange={e => setProfile(p => ({ ...p, league_hold_until: e.target.value || null }))}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-[#1B3829]/50"
+                />
+                <p className="text-[10px] text-gray-500 leading-snug mt-1">
+                  Injured or sick? Set a date and you sit out the Weekly League until then — no coffee owed. Clear it when you&apos;re back.
+                </p>
+              </div>
+
               {/* Chronic injuries — feeds workout prescription to avoid
                   movements loading these areas. Simple comma-separated
                   entry so we don't overbuild UI. */}

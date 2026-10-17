@@ -664,6 +664,8 @@ export interface UserProfile {
   /** Baseline reset (2026-09-26): personal-history comparisons start here. */
   baseline_reset_date?:   string | null;
   baseline_reset_reason?: string | null;
+  /** Net League medical hold (2026-10-17): sit out the League through this date. */
+  league_hold_until?:     string | null;
   /** Ongoing injuries or areas to protect. Feeds into workout prescription
    *  (avoid movements loading these areas). */
   chronic_injuries?:  ChronicInjury[];
@@ -3498,6 +3500,11 @@ export interface LeaderboardEntry {
   /** Show-your-math: bands behind the Health Span score (2026-10-16). */
   bands?: Record<string, { label: string; value: string; norm?: string; points: number; max: number; why?: string }>;
   full_score?: number | null;
+  fair_score?: number | null;
+  par?: number | null;
+  par_provisional?: boolean;
+  net?: number | null;
+  on_hold?: boolean;
   /** @deprecated Always null — badge/XP/Level layer was removed. Key kept
    *  for response-shape backwards-compat. Safe to remove on next API revision. */
   level?:        number | null;
@@ -3610,9 +3617,17 @@ export interface LeagueStanding {
   healthspan?: number | null;
   /** Show-your-math (2026-10-16): per-band breakdown behind the score. */
   bands?: Record<string, { label: string; value: string; norm?: string; points: number; max: number; why?: string }>;
-  /** Full 4-band Scorecard score; differs from `healthspan` when the
-   *  League is scored on the bands everyone shares. */
+  /** Full 4-band Scorecard score (gross). */
   full_score?: number | null;
+  /** Shared-band score, for the math view. */
+  fair_score?: number | null;
+  /** Net League (2026-10-17): par = best 40% of your last 28 daily scores
+   *  (capped 90); net = this week − par. Ranking is by net. */
+  par?: number | null;
+  par_provisional?: boolean;
+  par_days?: number;
+  net?: number | null;
+  on_hold?: boolean;
   rank:    number;
   is_me:   boolean;
   /** @deprecated Always null — gamification layer removed. */
@@ -3672,8 +3687,9 @@ export interface LeagueResponse {
   member_count: number;
   my_breakdown?: LeagueBreakdown | null;   // current user's per-category points
   categories?:   LeagueCategory[];         // column defs for the per-task grid
-  /** Band keys every scored player shares — the League is scored on these only. */
+  /** Band keys every scored player shares (math view). */
   common_bands?: string[];
+  scoring?: { mode: "net" | "gross"; par_rule: string; scratch_par: number };
 }
 
 export interface LeaderboardResponse {

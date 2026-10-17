@@ -191,6 +191,9 @@ export default function FriendLeaderboard({ onInvite, onSeeMore }: Props = {}) {
   // metric as the Weekly League (task #187); engagement points are
   // now a tiebreaker only.
   const maxHs = Math.max(0, ...data.entries.map(e => e.healthspan ?? 0));
+  // Net League: the crown goes to the net-of-par leader, not the highest gross.
+  const nets = data.entries.filter(e => e.net != null && !e.on_hold).map(e => e.net as number);
+  const maxNet = nets.length ? Math.max(...nets) : null;
 
   // ── Header line: how many metrics am I leading? ──
   const me = data.entries.find(e => e.is_me);
@@ -314,12 +317,21 @@ export default function FriendLeaderboard({ onInvite, onSeeMore }: Props = {}) {
                       onClick={() => setMathFor(mathFor === e.user_id ? null : e.user_id)}
                       title="Weekly Health Span Score — tap to see the math"
                       className={`text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 ${
-                        e.healthspan > 0 && e.healthspan === maxHs
+                        (maxNet != null ? (e.net === maxNet && !e.on_hold) : (e.healthspan > 0 && e.healthspan === maxHs))
                           ? "bg-amber-100 border border-amber-300 text-amber-800"
                           : "bg-[#1B3829]/8 text-[#1B3829]"
                       }`}
                     >
-                      {e.healthspan > 0 && e.healthspan === maxHs ? "👑 " : ""}{e.healthspan} HS
+                      {e.net != null && !e.on_hold ? (
+                        <>
+                          <span className={e.net > 0 ? "text-emerald-700" : e.net < 0 ? "text-red-600" : ""}>{e.net === maxNet ? "👑 " : ""}{e.net > 0 ? "+" : ""}{e.net}</span>
+                          <span className="font-normal opacity-70"> · {e.healthspan} HS</span>
+                        </>
+                      ) : e.on_hold ? (
+                        <>hold · {e.healthspan} HS</>
+                      ) : (
+                        <>{e.healthspan > 0 && e.healthspan === maxHs ? "👑 " : ""}{e.healthspan} HS</>
+                      )}
                     </button>
                   ) : (
                     <span
@@ -368,11 +380,11 @@ export default function FriendLeaderboard({ onInvite, onSeeMore }: Props = {}) {
                         );
                       })}
                       <p className="px-3 py-1.5 text-[10px] text-gray-500">
-                        {common.length > 0
-                          ? `Scored on the ${common.length} bands everyone on the board has.`
-                          : "Scored on all bands."}
-                        {e.full_score != null && e.healthspan != null && e.full_score !== e.healthspan
-                          ? ` Full Scorecard score: ${e.full_score}.` : ""}
+                        {e.par != null
+                          ? `Par ${e.par}${e.par_provisional ? " (provisional)" : ""} = best 40% of daily scores, 28 days before Monday, capped at 90. Net = ${e.healthspan} − ${e.par} = ${e.net != null && e.net > 0 ? "+" : ""}${e.net ?? "—"}. Ranked net of par, like golf.`
+                          : "No par yet — a few more days of history and this player plays net."}
+                        {e.fair_score != null && e.healthspan != null && e.fair_score !== e.healthspan
+                          ? ` On the ${common.length || "shared"} bands everyone has: ${e.fair_score}.` : ""}
                       </p>
                     </div>
                   );

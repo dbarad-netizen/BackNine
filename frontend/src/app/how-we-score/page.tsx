@@ -151,9 +151,30 @@ export default function HowWeScorePage() {
           <li><span className="text-white font-medium">Active days</span> (15 pts) — days with ≥300 active kcal or a detected workout. 5+ days = 15, 4 = 12, 3 = 9, 2 = 6, 1 = 3.</li>
         </ul>
         <P>
-          Grades: 85+ Excellent, 70+ Good, 55+ Fair. The Weekly Leaderboard ranks on
-          this score, so everyone is compared on behavior, not on who owns the fanciest
-          ring.
+          Grades: 85+ Excellent, 70+ Good, 55+ Fair. This is your <em>gross</em> — the
+          number your doctor cares about.
+        </P>
+
+        {/* ── Net League ── */}
+        <H2>The Weekly League plays net, like golf</H2>
+        <P>
+          Four friends — one fit, one carrying extra weight, one much younger, one much
+          older — can&apos;t compete on gross scores: the same person wins every week and
+          the same person buys the coffee. So the League does what golf did a century
+          ago. Everyone plays against <span className="text-white">par</span>, and
+          everyone&apos;s par is their own.
+        </P>
+        <ul className="space-y-2 text-zinc-300 mb-4">
+          <li><span className="text-white font-medium">Par</span> — the average of your best 40% of daily Health Span scores in the 28 days before Monday (golf uses best 8 of 20). Dropping the bad days means a lazy month can&apos;t earn you strokes.</li>
+          <li><span className="text-white font-medium">Scratch</span> — par is capped at 90. The score tops out at 100, so a very fit player&apos;s best days average 99 and he could never beat par. Above 90, the game is holding it.</li>
+          <li><span className="text-white font-medium">Slow up, fast down</span> — par can fall at most 3 points from one week to the next, so a bad patch can&apos;t quietly hand you strokes; it rises as fast as you do.</li>
+          <li><span className="text-white font-medium">Net</span> — this week&apos;s score minus par. +4 means you beat the person you&apos;ve been by four. The League ranks on net; lowest net buys the coffee.</li>
+          <li><span className="text-white font-medium">Medical hold</span> — injured or sick? Set a date in your profile and you sit out until then. Golf has one too.</li>
+        </ul>
+        <P>
+          Fewer than ten days of history and your par is marked provisional (≈). Tap any
+          player on the League to see their par, their net, and the bands behind the
+          number.
         </P>
 
         {/* ── QYL ── */}

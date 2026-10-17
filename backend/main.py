@@ -6637,7 +6637,7 @@ async def save_profile(request: Request):
     session = _require_session(request)
     user_id = session["user_id"]
     body = await request.json()
-    allowed = {"name", "age", "biological_sex", "height_cm", "health_goals", "vo2_max", "birthdate", "supplements", "peptides", "medications", "training_level", "chronic_injuries", "family_history", "coach_voice", "baseline_reset_date", "baseline_reset_reason"}
+    allowed = {"name", "age", "biological_sex", "height_cm", "health_goals", "vo2_max", "birthdate", "supplements", "peptides", "medications", "training_level", "chronic_injuries", "family_history", "coach_voice", "baseline_reset_date", "baseline_reset_reason", "league_hold_until"}
     data = {k: v for k, v in body.items() if k in allowed}
     # Empty birthdate string clears it (Postgres date column rejects "").
     if "birthdate" in data and not data["birthdate"]:
@@ -8640,6 +8640,11 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
             # Show-your-math (2026-10-16): the bands behind the score.
             "bands":      (hs_rows_map.get(uid) or {}).get("components") or {},
             "full_score": (hs_rows_map.get(uid) or {}).get("score"),
+            "fair_score": _fair.get(uid),
+            "par":            (pars_map.get(uid) or {}).get("par"),
+            "par_provisional": bool((pars_map.get(uid) or {}).get("provisional", True)),
+            "net":            None if holds_map.get(uid) else lg.net_of(healthspan_map.get(uid), pars_map.get(uid)),
+            "on_hold":        bool(holds_map.get(uid)),
             "level":    None,  # gamification layer removed; key kept for backwards-compat
             # If you've taunted this friend today, surface which kind (else None).
             "taunt_sent":   None if is_me else taunts_today.get(uid),
@@ -8672,13 +8677,20 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
     healthspan_map: dict[str, Optional[int]] = {uid: None for uid in all_uids}
     hs_rows_map: dict[str, dict] = {}
     _common_bands: list[str] = []
+    pars_map: dict[str, dict] = {}
+    holds_map: dict[str, bool] = {}
+    _fair: dict[str, Optional[int]] = {}
     try:
         _db_hs = get_supabase()
         if _db_hs:
             hs_rows_map = lg.ensure_components(_db_hs, lg.latest_healthspan_rows(_db_hs, all_uids, _week_start), all_uids, today_str)
             _fair, _common_bands = lg.fair_scores(hs_rows_map)
+            # Net League (2026-10-17): headline = full Health Span (gross);
+            # ranking = net of par. Fair (shared-band) score kept for the math view.
             for uid_hs in all_uids:
-                healthspan_map[uid_hs] = _fair.get(uid_hs)
+                healthspan_map[uid_hs] = (hs_rows_map.get(uid_hs) or {}).get("score")
+            pars_map = lg.compute_par(_db_hs, all_uids, _week_start)
+            holds_map = lg._league_holds(_db_hs, all_uids, today_str)
     except Exception:
         pass
 
@@ -8725,6 +8737,7 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
     # primary ranking the Weekly League uses (None sorts last). Engagement
     # points then steps as tiebreakers. Frontend can re-sort.
     entries.sort(key=lambda e: (
+        -(e["net"] if e.get("net") is not None else -10_000),
         -(e["healthspan"] if e.get("healthspan") is not None else -1),
         -(e.get("points") or 0),
         -(e["steps"].get("value") or 0),

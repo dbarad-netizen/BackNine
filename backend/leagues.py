@@ -386,6 +386,111 @@ def ensure_components(sb, rows: dict[str, dict], ids: list[str], today_iso: str)
     return rows
 
 
+# ── Net League: golf-style handicap (David 2026-10-17) ──────────────
+#
+# "Me and 3 friends want to compete but one is fit, one is very
+# overweight, one is much younger and one is much older." Absolute
+# scores mean the same guy buys coffee every week and quits. Golf solved
+# this: play against PAR, and give everyone their own par.
+#
+#   par      = average of the BEST 40% of your daily Health Span scores
+#              in the 28 days before this week's Monday (best 8 of 20 in
+#              golf). Dropping the bad days means you can't sandbag a
+#              lazy baseline into strokes.
+#   scratch  = par is capped at SCRATCH_PAR (90). The score tops out at
+#              100, so a fit player's best days average ~99 and he could
+#              never beat par. Above 90 the game is holding it.
+#   slow up  = par can fall at most 3 points vs last week's par (golf's
+#              soft cap): a bad month can't quietly hand you strokes.
+#   net      = this week's score − par. The League ranks on net.
+#   provisional = fewer than 10 scored days in the window; shown as "≈".
+#
+# Gross (the Health Span score itself) stays what the doctor cares about.
+# Net is the game.
+
+PAR_WINDOW_DAYS = 28
+PAR_BEST_FRACTION = 0.4
+PAR_MIN_DAYS_FULL = 10
+PAR_MIN_DAYS_ANY = 3
+SCRATCH_PAR = 90
+PAR_MAX_DROP_PER_WEEK = 3
+
+
+def _par_from_scores(scores: list[int]) -> Optional[int]:
+    if len(scores) < PAR_MIN_DAYS_ANY:
+        return None
+    s = sorted(scores, reverse=True)
+    k = max(PAR_MIN_DAYS_ANY, int(round(len(s) * PAR_BEST_FRACTION)))
+    best = s[:k]
+    return min(SCRATCH_PAR, int(round(sum(best) / len(best))))
+
+
+def _league_holds(sb, ids: list[str], today_iso: str) -> dict[str, bool]:
+    """Medical hold (golf has one too): user_profiles.league_hold_until
+    >= today → sits out the League this week, no coffee owed."""
+    out = {uid: False for uid in ids}
+    if not sb or not ids:
+        return out
+    try:
+        res = (sb.table("user_profiles").select("user_id, league_hold_until")
+                 .in_("user_id", ids).execute())
+        for r in (res.data or []):
+            hu = r.get("league_hold_until")
+            if hu and str(hu)[:10] >= today_iso[:10]:
+                out[r["user_id"]] = True
+    except Exception:
+        pass
+    return out
+
+
+def compute_par(sb, ids: list[str], week_start: str) -> dict[str, dict]:
+    """{uid: {"par": int|None, "provisional": bool, "days": n}} for the
+    week starting `week_start` (Monday). Window = the 28 days before it."""
+    out: dict[str, dict] = {uid: {"par": None, "provisional": True, "days": 0} for uid in ids}
+    if not sb or not ids:
+        return out
+    try:
+        monday = date.fromisoformat(week_start)
+    except Exception:
+        return out
+    lo = (monday - timedelta(days=PAR_WINDOW_DAYS + 7)).isoformat()  # +7 so last week's par is computable
+    hi = (monday - timedelta(days=1)).isoformat()
+    try:
+        res = (sb.table("weekly_healthspan_history")
+                 .select("user_id, date, score")
+                 .in_("user_id", ids)
+                 .gte("date", lo).lte("date", hi)
+                 .execute())
+        rows = res.data or []
+    except Exception:
+        return out
+    by_uid: dict[str, list[tuple[str, int]]] = {}
+    for r in rows:
+        if r.get("score") is None:
+            continue
+        by_uid.setdefault(r["user_id"], []).append((str(r["date"])[:10], int(r["score"])))
+    this_lo = (monday - timedelta(days=PAR_WINDOW_DAYS)).isoformat()
+    prev_lo = (monday - timedelta(days=PAR_WINDOW_DAYS + 7)).isoformat()
+    prev_hi = (monday - timedelta(days=8)).isoformat()
+    for uid in ids:
+        pts = by_uid.get(uid, [])
+        cur = [s for d, s in pts if this_lo <= d <= hi]
+        par = _par_from_scores(cur)
+        if par is None:
+            continue
+        prev = _par_from_scores([s for d, s in pts if prev_lo <= d <= prev_hi])
+        if prev is not None and par < prev - PAR_MAX_DROP_PER_WEEK:
+            par = prev - PAR_MAX_DROP_PER_WEEK
+        out[uid] = {"par": par, "provisional": len(cur) < PAR_MIN_DAYS_FULL, "days": len(cur)}
+    return out
+
+
+def net_of(score: Optional[int], par_info: Optional[dict]) -> Optional[int]:
+    if score is None or not par_info or par_info.get("par") is None:
+        return None
+    return int(score) - int(par_info["par"])
+
+
 def fair_scores(rows: dict[str, dict]) -> tuple[dict[str, Optional[int]], list[str]]:
     """Score every player on the bands EVERY scored player has (David
     2026-10-16: the sleep-timing band only exists for Oura users, so an
@@ -449,8 +554,13 @@ def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
     healthspan: dict[str, Optional[int]] = {uid: None for uid in ids}
     hs_rows = ensure_components(sb, latest_healthspan_rows(sb, ids, week_start), ids, today_str)
     fair, common_bands = fair_scores(hs_rows)
+    # Net League (2026-10-17): the ranking metric is net-of-par on the
+    # full Health Span score. Par is self-relative, so band fairness is
+    # mostly solved by construction; `fair` stays for the math view.
+    pars = compute_par(sb, ids, week_start)
+    holds = _league_holds(sb, ids, today_str)
     for uid in ids:
-        healthspan[uid] = fair.get(uid)
+        healthspan[uid] = (hs_rows.get(uid) or {}).get("score")
     # Refresh cached scores (best-effort) so other surfaces can read them cheaply.
     for uid in ids:
         try:
@@ -467,10 +577,16 @@ def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
             # Primary ranking metric (David 2026-08-11): the member's
             # Weekly Health Span Score. None = no snapshot this week.
             "healthspan": healthspan.get(uid),
+            # Net League (2026-10-17): par + net; rank on net.
+            "par":            (pars.get(uid) or {}).get("par"),
+            "par_provisional": bool((pars.get(uid) or {}).get("provisional", True)),
+            "par_days":       (pars.get(uid) or {}).get("days", 0),
+            "net":            None if holds.get(uid) else net_of(healthspan.get(uid), pars.get(uid)),
+            "on_hold":        bool(holds.get(uid)),
             # Show the math (David 2026-10-16): each player's bands with
-            # points earned / possible, plus their full 4-band Scorecard
-            # score when it differs from the fair League score.
+            # points earned / possible, plus the fair (shared-band) score.
             "bands":      (hs_rows.get(uid) or {}).get("components") or {},
+            "fair_score": fair.get(uid),
             "full_score": (hs_rows.get(uid) or {}).get("score"),
             "is_me":   uid == user_id,
             # `level` retained as null for client backwards-compat — the
@@ -482,7 +598,10 @@ def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
     ]
     # Rank: Health Span first (None sorts last), engagement points as
     # tiebreaker, then name for stability.
+    # Rank: net-of-par first (None/on-hold last), gross as tiebreaker,
+    # engagement points, then name.
     standings.sort(key=lambda s: (
+        -(s["net"] if s["net"] is not None else -10_000),
         -(s["healthspan"] if s["healthspan"] is not None else -1),
         -s["score"],
         s["name"].lower(),
@@ -509,4 +628,9 @@ def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
         # Band keys every scored player shares — the League is scored on
         # these only. Empty = stored scores used (no overlap data yet).
         "common_bands": common_bands,
+        "scoring": {
+            "mode": "net",
+            "par_rule": f"Par = average of your best {int(PAR_BEST_FRACTION*100)}% of daily Health Span scores in the {PAR_WINDOW_DAYS} days before Monday, capped at {SCRATCH_PAR}. Net = this week − par.",
+            "scratch_par": SCRATCH_PAR,
+        },
     }

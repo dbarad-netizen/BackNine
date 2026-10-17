@@ -202,19 +202,25 @@ export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
                   2026-08-11). Engagement points demoted to a small
                   secondary chip. Members without a snapshot this week
                   show an em-dash. */}
-              {s.healthspan != null ? (
+              {/* Net League (2026-10-17): headline is net-of-par, gross beside it. */}
+              {s.on_hold ? (
+                <span className="text-[11px] font-semibold text-gray-500 shrink-0">medical hold</span>
+              ) : s.net != null ? (
                 <span
-                  className="text-sm font-semibold text-gray-900 shrink-0"
-                  title="Weekly Health Span Score — sleep, movement, adherence & consistency this week"
+                  className={`text-sm font-bold tabular-nums shrink-0 ${s.net > 0 ? "text-emerald-700" : s.net < 0 ? "text-red-600" : "text-gray-700"}`}
+                  title={`Net of par · par ${s.par}${s.par_provisional ? " (provisional)" : ""}`}
                 >
-                  {s.healthspan}
+                  {s.net > 0 ? "+" : ""}{s.net}
                 </span>
               ) : (
-                <span className="text-sm font-semibold text-gray-400 shrink-0" title="No Health Span Score yet this week">
+                <span className="text-sm font-semibold text-gray-400 shrink-0" title="No par yet — needs a few days of history">
                   —
                 </span>
               )}
-              <span className="text-[11px] text-gray-600 shrink-0">HS</span>
+              <span className="text-[11px] text-gray-600 shrink-0 tabular-nums">
+                {s.healthspan != null ? `${s.healthspan} HS` : "— HS"}
+                {s.par != null ? ` · par ${s.par}${s.par_provisional ? "≈" : ""}` : ""}
+              </span>
               <span
                 className="text-[10px] text-gray-500 shrink-0 w-12 text-right"
                 title="Weekly engagement points (secondary)"
@@ -239,11 +245,13 @@ export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
                       </div>
                     );
                   })}
-                  {s.full_score != null && s.healthspan != null && s.full_score !== s.healthspan && (
-                    <p className="px-3 py-1.5 text-[10px] text-gray-500">
-                      League score {s.healthspan} on shared bands · full Scorecard score {s.full_score}
-                    </p>
-                  )}
+                  <p className="px-3 py-1.5 text-[10px] text-gray-500">
+                    {s.par != null
+                      ? `Par ${s.par}${s.par_provisional ? " (provisional — under 10 days of history)" : ""}: the average of your best 40% of daily scores over the 28 days before Monday, capped at ${data?.scoring?.scratch_par ?? 90}. Net = this week ${s.healthspan ?? "—"} − par.`
+                      : "No par yet — a few more days of history and you'll play net."}
+                    {s.fair_score != null && s.healthspan != null && s.fair_score !== s.healthspan
+                      ? ` On shared bands only you'd be ${s.fair_score}.` : ""}
+                  </p>
                 </div>
               </div>
             )}
@@ -258,8 +266,8 @@ export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
           {me_rank != null
             ? soloOrTiny
               ? "You're first in — invite friends to make it a race"
-              : `You're #${me_rank} of ${member_count} · ranked by Weekly Health Span Score`
-            : "Ranked by Weekly Health Span Score — sleep, steps & movement, straight from your wearable"}
+              : `You're #${me_rank} of ${member_count} · ranked net of par, like golf`
+            : "Ranked net of par — everyone plays against their own best recent month"}
           {(data?.common_bands?.length ?? 0) > 0 && " · tap a player for the math"}
         </p>
         {onInvite && soloOrTiny && (

@@ -114,22 +114,33 @@ def build(today: Optional[date] = None) -> dict:
             "line":    _one_true_line(name, snap.get("components") or {}),
         })
 
-    # Fair scoring (David 2026-10-16): score everyone on the bands
-    # everyone has, so an Oura user isn't judged on bedtime timing
-    # against an Apple Watch user who isn't.
+    # Net League (David 2026-10-17): the Sunday text ranks on net-of-par.
+    # `score` stays the gross Health Span; `par` and `net` ride along.
     try:
-        _hs_rows = {r["user_id"]: {"score": r["score"], "components": r.get("_components") or {}} for r in rows if r.get("score") is not None}
-        _fair, _ = lg.fair_scores(_hs_rows)
+        monday = (today - timedelta(days=today.weekday())).isoformat()
+        pars = lg.compute_par(sb, ids, monday) if sb else {}
+        holds = lg._league_holds(sb, ids, today_iso) if sb else {}
         for r in rows:
-            if r["user_id"] in _fair and _fair[r["user_id"]] is not None:
-                r["score"] = _fair[r["user_id"]]
+            p = pars.get(r["user_id"]) or {}
+            r["par"] = p.get("par")
+            r["par_provisional"] = bool(p.get("provisional", True))
+            r["on_hold"] = bool(holds.get(r["user_id"]))
+            r["net"] = None if r["on_hold"] else lg.net_of(r["score"], p)
     except Exception:
-        log.exception("scoreboard: fair scoring failed")
-    rows.sort(key=lambda r: -(r["score"] if r["score"] is not None else -1))
+        log.exception("scoreboard: net scoring failed")
+    rows.sort(key=lambda r: (-(r.get("net") if r.get("net") is not None else -10_000),
+                             -(r["score"] if r["score"] is not None else -1)))
 
-    standings = " · ".join(
-        f"{r['name']} {r['score'] if r['score'] is not None else '—'}" for r in rows
-    )
+    def _fmt(r):
+        if r.get("on_hold"):
+            return f"{r['name']} (medical hold)"
+        if r["score"] is None:
+            return f"{r['name']} —"
+        if r.get("net") is None:
+            return f"{r['name']} {r['score']}"
+        n = r["net"]
+        return f"{r['name']} {'+' if n > 0 else ''}{n} (gross {r['score']}, par {r['par']}{'≈' if r.get('par_provisional') else ''})"
+    standings = " · ".join(_fmt(r) for r in rows)
     lines = "\n".join(r["line"] for r in rows)
     scored = [r for r in rows if r["score"] is not None]
     closer = ""
