@@ -1,0 +1,13 @@
+# Health Span backfill — on demand only. Computes missing daily Health Span
+# scores for the last 35 days from device history, for everyone with recent
+# data. Used to give new League members a real par on day one.
+name: Health Span backfill
+on:
+  workflow_dispatch:
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -sS --fail-with-body -X POST "https://backnine-hu60.onrender.com/admin/healthspan/backfill" \
+            -H "X-Admin-Key: ${{ secrets.BACKNINE_ADMIN_KEY }}" --max-time 300
