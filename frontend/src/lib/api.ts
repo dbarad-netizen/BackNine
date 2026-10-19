@@ -2196,6 +2196,14 @@ export const api = {
   },
   /** The Coffee Tab (2026-10-07). */
   coffee(): Promise<CoffeeLedger> { return request("/api/coffee"); },
+  // Food Plan (2026-10-18)
+  foodPlanToday(): Promise<FoodPlanToday | { plan: null }> { return request("/api/food-plan/today"); },
+  foodPlanPut(body: Record<string, unknown>): Promise<{ ok: boolean }> {
+    return request("/api/food-plan", { method: "PUT", body: JSON.stringify(body) });
+  },
+  foodPlanDay(body: { date?: string; veg_lunch?: boolean; veg_dinner?: boolean; note?: string }): Promise<{ ok: boolean }> {
+    return request("/api/food-plan/day", { method: "POST", body: JSON.stringify(body) });
+  },
   settleCoffee(id: number): Promise<{ ok: boolean }> {
     return request(`/api/coffee/${id}/settle`, { method: "POST" });
   },
@@ -3978,4 +3986,30 @@ export interface CoffeeLedger {
     settled_at: string | null;
   }>;
   owed: Array<{ user_id: string; name: string; count: number }>;
+}
+
+
+// ── Food Plan (2026-10-18) ───────────────────────────────────────────
+export interface FoodPlanRule { ok: boolean | null; detail: string }
+export interface FoodPlanToday {
+  plan: {
+    name: string; started: string | null; restart_days: number; window_hours: number;
+    kitchen_close_hours_before_bed: number; meals_per_day: number;
+    protein_floor_g: { breakfast: number; lunch: number; dinner: number };
+    protein_day_g: [number, number]; carb_cap_meal_g: number; carb_cap_day_g: number;
+    fiber_day_g: number; veg_portions: { lunch: number; dinner: number };
+    alcohol_week_max: number; water_liters: [number, number]; restart_rules: string[];
+    eating_out: Record<string, string>; sunday_prep: string;
+  };
+  phase: { phase: "restart" | "targets" | "not_started"; day: number; restart_days: number };
+  today: {
+    date: string;
+    rules: Record<"window" | "kitchen_closed" | "no_snacks" | "protein_first" | "carbs_capped" | "veg" | "alcohol", FoodPlanRule>;
+    meals: Array<{ slot: string; name: string | null; protein: number | null; carbs: number | null; protein_floor: number; carb_cap: number; protein_ok: boolean; carb_ok: boolean }>;
+    kept: number; measured: number; drinks: number;
+  };
+  week: Record<"window" | "kitchen_closed" | "protein_first" | "veg" | "no_snacks", { kept: number; of: number }>;
+  drinks_week: number;
+  weight_lb: number | null;
+  not_tracked: string[];
 }

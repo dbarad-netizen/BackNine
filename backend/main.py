@@ -1890,6 +1890,54 @@ async def _start_inproc_oura_refresh() -> None:
     asyncio.create_task(_loop())
 
 
+# ── Food Plan (David 2026-10-18) ─────────────────────────────────────────
+import food_plan as fplan
+
+
+@app.get("/api/food-plan/today")
+def food_plan_today(request: Request):
+    session = _require_session(request)
+    user_id = session["user_id"]
+    prof = _get_profile(user_id) or {}
+    out = fplan.today(user_id, prof, _user_local_today_iso(request))
+    return out or {"plan": None}
+
+
+@app.put("/api/food-plan")
+async def food_plan_put(request: Request):
+    """Set or update the plan. Body: partial plan dict; {"start": true}
+    stamps `started` = today; {"clear": true} removes it."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    body = await request.json()
+    db = get_supabase()
+    prof = _get_profile(user_id) or {}
+    cur = (prof.get("food_plan") or {}) if isinstance(prof.get("food_plan"), dict) else {}
+    if body.get("clear"):
+        new_plan = None
+    else:
+        new_plan = {**fplan.DEFAULT_PLAN, **cur}
+        for k, v in body.items():
+            if k in ("start", "clear"):
+                continue
+            if k in fplan.DEFAULT_PLAN:
+                new_plan[k] = v
+        if body.get("start"):
+            new_plan["started"] = _user_local_today_iso(request)
+    db.table("user_profiles").upsert({"user_id": user_id, "food_plan": new_plan}, on_conflict="user_id").execute()
+    return {"ok": True, "plan": new_plan}
+
+
+@app.post("/api/food-plan/day")
+async def food_plan_day(request: Request):
+    """Taps no sensor can see: {"date", "veg_lunch", "veg_dinner", "note"}."""
+    session = _require_session(request)
+    body = await request.json()
+    d = body.get("date") or _user_local_today_iso(request)
+    ok = fplan.set_tap(session["user_id"], d, body.get("veg_lunch"), body.get("veg_dinner"), body.get("note"))
+    return {"ok": ok}
+
+
 @app.post("/admin/coffee/record")
 async def coffee_record(request: Request):
     """Sunday cron: write this week's loser/winner from the scoreboard
@@ -6701,7 +6749,7 @@ async def save_profile(request: Request):
     session = _require_session(request)
     user_id = session["user_id"]
     body = await request.json()
-    allowed = {"name", "age", "biological_sex", "height_cm", "health_goals", "vo2_max", "birthdate", "supplements", "peptides", "medications", "training_level", "chronic_injuries", "family_history", "coach_voice", "baseline_reset_date", "baseline_reset_reason", "league_hold_until"}
+    allowed = {"name", "age", "biological_sex", "height_cm", "health_goals", "vo2_max", "birthdate", "supplements", "peptides", "medications", "training_level", "chronic_injuries", "family_history", "coach_voice", "baseline_reset_date", "baseline_reset_reason", "league_hold_until", "food_plan"}
     data = {k: v for k, v in body.items() if k in allowed}
     # Empty birthdate string clears it (Postgres date column rejects "").
     if "birthdate" in data and not data["birthdate"]:

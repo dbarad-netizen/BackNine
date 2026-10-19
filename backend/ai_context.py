@@ -526,6 +526,7 @@ def build(user_id: str, profile: Optional[dict] = None) -> dict:
         "clinical_escalation":    _clinical(user_id, profile),
         "family_history_ctx":     _family_history_ctx(profile),
         "baseline_reset_ctx":     _baseline_reset_ctx(user_id, profile),
+        "food_plan_ctx":          _food_plan_ctx(user_id, profile),
         "active_visit_ctx":       _active_visit(user_id),
         "training_flag_ctx":      _training_flag(user_id),
         "active_goal_ctx":        _active_goal(user_id),
@@ -565,3 +566,17 @@ def merge_into(health_context: dict, user_id: str, profile: Optional[dict] = Non
 
 
 __all__ = ["build", "merge_into"]
+
+
+def _food_plan_ctx(user_id: str, profile: Optional[dict]) -> str:
+    """Food Plan (David 2026-10-18) — the user's eating protocol, checked
+    against meal logs, Oura bedtime, vices and scale weight. Empty when
+    no plan is set."""
+    try:
+        if not (profile or {}).get("food_plan"):
+            return ""
+        import food_plan as _fp
+        from datetime import date as _d
+        return _fp.context_block(user_id, profile or {}, _d.today().isoformat())
+    except Exception:
+        return ""

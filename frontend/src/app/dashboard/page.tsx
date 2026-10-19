@@ -70,6 +70,7 @@ import DailyInsightCard from "@/components/DailyInsightCard";
 import SymptomCard from "@/components/SymptomCard";
 import { registerForPush } from "@/lib/push";
 import CoffeeLedgerCard from "@/components/CoffeeLedgerCard";
+import FoodPlanCard from "@/components/FoodPlanCard";
 // WeeklyInsight retired 2026-07-09 per David: content overlapped Coach Al
 // briefing + Daily Insight + Weekly Recap. Component file stays in place
 // in case we want to revive under a different framing later.
@@ -2547,6 +2548,11 @@ export default function DashboardPage() {
                 Today's Workout pattern: pace check, protein streak, concrete
                 next-meal suggestion. Renders nothing when targets unset. */}
             {!nutLoading && <NutritionCoachCard onAsk={(seed) => openChatRef.current?.(seed)} />}
+
+            {/* Food Plan (David 2026-10-18): his nutritionist's protocol,
+                checked against meal logs, Oura bedtime, vices and the
+                scale. Self-hides for users without a plan. */}
+            {!nutLoading && <FoodPlanCard onAsk={(seed) => openChatRef.current?.(seed)} />}
 
             {/* Vices + Hydration (David batch 2026-07-06). Vices are
                 episodic pattern-detection input (alcohol/nicotine/etc.);

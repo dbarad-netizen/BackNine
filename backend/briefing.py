@@ -190,7 +190,9 @@ def _build_system_prompt(
                 # only; interpretation guardrails live in the block.
                 "family_history_ctx",
                 # Baseline reset (David 2026-09-26) — see baseline.py.
-                "baseline_reset_ctx"):
+                "baseline_reset_ctx",
+                # Food Plan (David 2026-10-18) — see food_plan.py.
+                "food_plan_ctx"):
         block = health_context.get(key)
         if isinstance(block, str) and block:
             parts.append(block)
