@@ -372,6 +372,7 @@ def parse_oura_data(raw: dict) -> tuple[dict, dict, dict, dict]:
         # restless_periods, and efficiency. The report classifies nights
         # using efficiency thresholds we control.
         _smm_raw.setdefault(day, []).append({
+            "type":          rec.get("type"),
             "total":         total,
             "deep":          rec.get("deep_sleep_duration") or 0,
             "rem":           rec.get("rem_sleep_duration") or 0,
@@ -392,6 +393,14 @@ def parse_oura_data(raw: dict) -> tuple[dict, dict, dict, dict]:
         total_sleep = sum(s["total"] for s in sessions)
         total_deep  = sum(s["deep"]  for s in sessions)
         total_rem   = sum(s["rem"]   for s in sessions)
+        # Split-night transparency (David 2026-10-21: "my deep sleep was
+        # 64 minutes", we said 70). When Oura records the night as more
+        # than one session we SUM them (the app's total does too), but
+        # the app's stage figures are often the main session only. Keep
+        # the pieces so the briefing can say "including your 20-minute
+        # return to sleep" instead of looking wrong.
+        segments = [{"type": s.get("type"), "total": s["total"], "deep": s["deep"], "rem": s["rem"]}
+                    for s in sessions] if len(sessions) > 1 else None
 
         # Weighted HRV average (weight by session length)
         hrv_pairs = [(s["hrv"], s["total"]) for s in sessions if s["hrv"] is not None]
@@ -435,6 +444,7 @@ def parse_oura_data(raw: dict) -> tuple[dict, dict, dict, dict]:
             "total":         total_sleep,
             "deep":          total_deep  or None,
             "rem":           total_rem   or None,
+            "segments":      segments,   # None unless the night was split
             "hrv":           avg_hrv,
             "rhr":           min_rhr,
             "avg_hr":        avg_hr,

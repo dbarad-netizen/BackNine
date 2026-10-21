@@ -7394,12 +7394,37 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
     except Exception:
         short_text = ""
 
+    # "Vs usual" (David 2026-10-21: the briefing called 5.2 h "less than
+    # half your usual" when usual was 7.3 h — the model did its own
+    # arithmetic and inflated it). Compute the comparisons HERE, against
+    # the 7 nights BEFORE last night, and hand the model the percentages.
+    def _vs_usual(key: str, scale: float = 1.0):
+        prior = [smm[d][key] for d in sorted(smm.keys(), reverse=True) if d != today_str and smm[d].get(key)][:7]
+        cur = t_sm.get(key)
+        if not cur or len(prior) < 3:
+            return None
+        avg = sum(prior) / len(prior)
+        if avg <= 0:
+            return None
+        pct = round(100 * (cur - avg) / avg)
+        return {"last_night": round(cur * scale, 1), "usual": round(avg * scale, 1), "pct": pct}
+    _vs = {
+        "sleep_hours": _vs_usual("total", 1 / 3600),
+        "deep_min":    _vs_usual("deep", 1 / 60),
+        "rem_min":     _vs_usual("rem", 1 / 60),
+        "hrv":         _vs_usual("hrv"),
+    }
+
     health_context = {
         "today": {
             "readiness_score":     t_rdy.get("score"),
             "sleep_score":         t_sl.get("score"),
             "hrv":                 t_sm.get("hrv"),
             "rhr":                 t_sm.get("rhr"),
+            "deep_min":            round(t_sm["deep"] / 60) if t_sm.get("deep") else None,
+            "rem_min":             round(t_sm["rem"] / 60) if t_sm.get("rem") else None,
+            "vs_usual":            {k: v for k, v in _vs.items() if v},
+            "segments":            t_sm.get("segments"),
             # Activity = YESTERDAY's complete day (see note above where y_act is set).
             "activity_score":      y_act.get("score"),
             "steps":               y_act.get("steps"),

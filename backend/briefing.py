@@ -272,6 +272,31 @@ def _build_system_prompt(
                     parts.append(f"  • {label}: {v:.1f}{unit}")
                 else:
                     parts.append(f"  • {label}: {v}{unit}")
+        for label, key in (("Deep sleep", "deep_min"), ("REM sleep", "rem_min")):
+            v = today.get(key)
+            if v is not None:
+                parts.append(f"  • {label}: {int(v)} min")
+        segs = today.get("segments")
+        if segs:
+            parts.append(
+                "  • SPLIT NIGHT: Oura recorded last night as "
+                + " + ".join(f"{(s.get('type') or 'sleep').replace('_', ' ')} {round((s.get('total') or 0)/3600, 1)} h (deep {round((s.get('deep') or 0)/60)} min, REM {round((s.get('rem') or 0)/60)} min)" for s in segs)
+                + ". The totals above combine them. The Oura app's stage figures may show the main session only — if you cite deep/REM, say they include the return to sleep."
+            )
+        vs = today.get("vs_usual") or {}
+        if vs:
+            parts.append("  • VS USUAL (computed for you — use these words, do not do your own arithmetic):")
+            for key, label, unit in (("sleep_hours", "Sleep", "h"), ("deep_min", "Deep", "min"),
+                                     ("rem_min", "REM", "min"), ("hrv", "HRV", "ms")):
+                d = vs.get(key)
+                if d:
+                    sign = "+" if d["pct"] >= 0 else ""
+                    parts.append(f"      – {label}: {d['last_night']} {unit} vs usual {d['usual']} {unit} ({sign}{d['pct']}%)")
+            parts.append(
+                "      Magnitude words must match the percentage: 'about a third less' for -30%, "
+                "'a bit under' for -10%. NEVER say 'half', 'double', 'less than half' unless the "
+                "percentage is actually ≥50% in that direction."
+            )
         # Guard against hallucinated sleep figures: if last night's detailed
         # sleep (duration/HRV) hasn't synced but we have the score, tell Coach
         # Al not to quote a duration/HRV or borrow the 7-day average as if it
@@ -337,8 +362,12 @@ def _build_system_prompt(
         parts.append("\n=== YESTERDAY'S CHECK-IN ===")
         parts.append(f"  • The user reported feeling {descriptor} yesterday.")
         parts.append(
-            "  (You MAY reference this in paragraph 1 if today's metrics either "
-            "confirm or contrast with how they felt. Only mention if it adds insight.)"
+            "  TIME ORDER (David 2026-10-21): how he felt YESTERDAY was shaped by "
+            "the night BEFORE yesterday — NOT by last night's sleep, which "
+            "happened after he logged it. Last night's numbers can only speak "
+            "to TODAY. Never explain yesterday's mood with last night's deep "
+            "sleep, HRV or duration. You may contrast ('you felt good yesterday; "
+            "last night was short, so today may feel different'), never cause."
         )
 
     goal = health_context.get("active_goal") or {}
