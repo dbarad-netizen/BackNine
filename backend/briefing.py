@@ -91,7 +91,10 @@ def _build_system_prompt(
         "briefing means'): a briefing with nine numbers and phrases like "
         "'recovery lagging behind output' proves everything and explains "
         "nothing. Rules: at most FOUR numbers in the whole briefing — pick "
-        "the ones that carry the point and drop the rest. Sentence one is "
+        "the ones that carry the point and drop the rest — and a 'vs usual' "
+        "comparison counts as TWO numbers, so at most one comparison per "
+        "briefing. Baselines, 30-day averages and bedtime-swing minutes are "
+        "almost never worth a slot. Sentence one is "
         "the verdict in words a friend would use over coffee ('You're "
         "spending energy faster than you're getting it back'), THEN the "
         "numbers that show it. No physiology-speak: say 'your body didn't "
@@ -293,9 +296,12 @@ def _build_system_prompt(
                     sign = "+" if d["pct"] >= 0 else ""
                     parts.append(f"      – {label}: {d['last_night']} {unit} vs usual {d['usual']} {unit} ({sign}{d['pct']}%)")
             parts.append(
-                "      Magnitude words must match the percentage: 'about a third less' for -30%, "
-                "'a bit under' for -10%. NEVER say 'half', 'double', 'less than half' unless the "
-                "percentage is actually ≥50% in that direction."
+                "      INTERNAL (never quote fractions or percentages mechanically): say it the way "
+                "a friend would — '135 minutes of REM, way up from your usual 82', 'a short night, "
+                "5.2 hours against your usual 7-ish'. Words like 'half', 'double', 'twice' only when "
+                "the percentage is actually ≥50%. Never 'two-thirds more', 'one-fifth edge', "
+                "'a third less' — that reads like a spreadsheet. One comparison is plenty; don't "
+                "compare every number."
             )
         # Guard against hallucinated sleep figures: if last night's detailed
         # sleep (duration/HRV) hasn't synced but we have the score, tell Coach
@@ -362,12 +368,13 @@ def _build_system_prompt(
         parts.append("\n=== YESTERDAY'S CHECK-IN ===")
         parts.append(f"  • The user reported feeling {descriptor} yesterday.")
         parts.append(
-            "  TIME ORDER (David 2026-10-21): how he felt YESTERDAY was shaped by "
-            "the night BEFORE yesterday — NOT by last night's sleep, which "
-            "happened after he logged it. Last night's numbers can only speak "
-            "to TODAY. Never explain yesterday's mood with last night's deep "
-            "sleep, HRV or duration. You may contrast ('you felt good yesterday; "
-            "last night was short, so today may feel different'), never cause."
+            "  INTERNAL TIME-ORDER RULE (never explain this to the user): how he felt "
+            "YESTERDAY was shaped by the night BEFORE yesterday, not by last night, "
+            "which happened after he logged it. So never use last night's numbers to "
+            "explain yesterday's mood. Do NOT write sentences like 'that was shaped by "
+            "the night before' — the reader doesn't need the mechanics. Either skip the "
+            "check-in, or use it lightly ('you called yesterday okay; today looks better "
+            "than that'). The mood is optional color, not a required beat."
         )
 
     goal = health_context.get("active_goal") or {}
