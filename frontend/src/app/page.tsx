@@ -202,13 +202,18 @@ export default function LandingPage() {
           </h2>
           <p className="mt-4 text-lg text-zinc-300 max-w-2xl leading-relaxed">
             Use them — we do. They tell you how you slept and how recovered you
-            are <em>today</em>. BackNine does three things they don&rsquo;t:
+            are <em>today</em>, and they&rsquo;re getting better at it every year.
+            BackNine does three things they can&rsquo;t:
           </p>
+          {/* Reordered 2026-10-22 after Oura shipped lab upload + Counsel:
+              the doctor report is becoming table stakes inside the ring's
+              own app. Lead with what a single-device, single-person app
+              structurally can't do — the foursome — and the math. */}
           <div className="mt-8 grid sm:grid-cols-3 gap-4">
             {[
-              ["Years, not days", "Your readiness score is about this morning. Your Biological Age and QYL Index are about the next twenty years — and they move when your habits do."],
-              ["A report your doctor reads", "One page, sourced, in clinical language: trends, flagged values, meds, family history. Bring it to the visit instead of your phone."],
-              ["Your foursome", "A weekly leaderboard ranked on behavior, not gadgets. The men who keep going are the ones with someone watching."],
+              ["Your foursome, played net", "A weekly league your friends can join from any watch or ring — scored like golf, against your own par, so the fit guy and the guy getting started play the same game. Lowest net buys the coffee."],
+              ["Every score, with the math", "Tap any number and see what moved it. Your ring's app tells you a score; we show you the work, and we'll say out loud when we're not sure."],
+              ["Years, not days", "Readiness is about this morning. Your Health Span score, Biological Age and QYL Index are about the next twenty years — and they move when your habits do. The doctor report is the receipt."],
             ].map(([t, d]) => (
               <div key={t} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
                 <p className="font-semibold text-white">{t}</p>
