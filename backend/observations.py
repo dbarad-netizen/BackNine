@@ -158,9 +158,15 @@ def generate_and_upsert(
     today = today or _today_str()
     candidates: list[dict] = []
 
+    # detect_prediction_streak REMOVED from the run list (David 2026-10-26:
+    # "Five-day prediction streak… I don't know what it is for"). The
+    # prediction game left the briefing on 2026-09-24; its streak counter
+    # kept ticking and this detector kept turning it into a Coach Al
+    # opener. Ghost-feature rule: Coach Al may only mention things with a
+    # face in the app. Function kept for history; not wired.
+    _ = prediction_accuracy
     for fn, args in (
         (detect_hrv_drop,           (smm, today)),
-        (detect_prediction_streak,  (prediction_accuracy, today)),
         (detect_top_insight,        (insights or [], today)),
     ):
         try:
