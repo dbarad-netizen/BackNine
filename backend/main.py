@@ -9450,8 +9450,17 @@ async def apple_health_import_aggregated(request: Request):
     # Who synced: "backnine-ios-bgsync" = HealthKit background delivery
     # (2026-10-14), otherwise the foreground JS sync. Lets Render logs
     # answer "is Chris's phone syncing on its own?" in one grep.
-    log.info("apple health import: user=%s source=%s days=%d",
-             user_id[:12], request.headers.get("X-BackNine-Sync-Source", "foreground"), len(dates))
+    _sync_source = request.headers.get("X-BackNine-Sync-Source", "foreground")
+    log.info("apple health import: user=%s source=%s days=%d", user_id[:12], _sync_source, len(dates))
+    # Durable record (Chris 2026-10-27, "18 hours behind"): so "is iOS
+    # waking his phone in the background?" is a query, not a log search.
+    try:
+        get_supabase().table("app_events").insert({
+            "user_id": user_id, "event": "ah_sync",
+            "meta": {"source": _sync_source, "days": len(dates), "latest": dates[-1] if dates else None},
+        }).execute()
+    except Exception:
+        pass
 
     from datetime import datetime as _dt
     now_iso = _dt.utcnow().isoformat()
