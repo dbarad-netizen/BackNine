@@ -1,5 +1,9 @@
 # ── Secrets — NEVER commit these ──────────────────────────────────────────────
 backend/.env
+# Apple keys (APNs .p8, Sign-in-with-Apple .p8). The APNs key was committed
+# by mistake on 2026-09-26 and revoked 2026-10-26 — never again.
+*.p8
+AuthKey_*
 frontend/.env.local
 frontend/.env
 
