@@ -260,6 +260,7 @@ export interface TodayData {
   calendar_today?:     string;   // Timezone-safe "today" from Oura max date
   local_today?:        string;   // user's real calendar date (from X-User-Local-Date header)
   oura_synced_at?:     string | null; // last Oura cache write (ISO)
+  apple_health_synced_at?: string | null; // last Apple Health write (ISO)
   refreshing?:         boolean;       // server kicked off a background Oura refresh; re-pull once
   readiness:           Record<string, unknown>;
   sleep:               Record<string, unknown>;

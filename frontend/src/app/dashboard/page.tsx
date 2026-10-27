@@ -2071,6 +2071,11 @@ export default function DashboardPage() {
                               Oura synced {new Date(data.today.oura_synced_at).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" })}
                             </p>
                           )}
+                          {estimatedRings && data.today?.apple_health_synced_at && (
+                            <p className="text-center text-[10px] text-gray-400 mt-1">
+                              Apple Health synced {new Date(data.today.apple_health_synced_at).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" })} · opening the app refreshes it
+                            </p>
+                          )}
                           {!estimatedRings && earlyRead && (
                             <p className="text-center text-[10px] text-amber-700 mt-2">
                               Early read — Oura is still processing last night; these numbers usually settle within the hour.

@@ -2209,6 +2209,20 @@ async def _refresh_oura_cache_bg(user_id: str, access_token: str, days: int) -> 
 
 
 
+def _ah_last_synced_at(user_id: str) -> Optional[str]:
+    """Most recent apple_health_daily write for the user — the honest
+    freshness stamp for Apple Watch users (their data is pushed by the
+    phone, not pulled by us, so 'when' matters)."""
+    try:
+        db = get_supabase()
+        res = (db.table("apple_health_daily").select("updated_at").eq("user_id", user_id)
+                 .order("updated_at", desc=True).limit(1).execute())
+        rows = res.data or []
+        return rows[0]["updated_at"] if rows else None
+    except Exception:
+        return None
+
+
 async def _force_refresh_oura_token(user_id: str, session: dict) -> Optional[str]:
     """Refresh with the central store's refresh token (falling back to the
     session's), persist to both token tables, return the new access token
@@ -3179,6 +3193,7 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
             "calendar_today":     oura_today,         # Timezone-safe "today" from Oura data
             "local_today":        _user_local_today_iso(request),  # user's actual calendar date (X-User-Local-Date)
             "oura_synced_at":     oc.last_fetched_at(user_id),     # last cache write — shown on the Scorecard
+            "apple_health_synced_at": _ah_last_synced_at(user_id),  # last apple_health_daily write (Chris 2026-10-27)
             "refreshing":         bg_refreshing,                   # client should re-pull once in ~15s
             "readiness":          t_rdy,
             "sleep":              t_sl,

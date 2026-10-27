@@ -610,19 +610,40 @@ export async function clearBackgroundSync(): Promise<void> {
   try { await plugin?.clearBackgroundSync?.(); } catch { /* noop */ }
 }
 
+const QUICK_SYNC_KEY = "bn_hk_last_quick_sync";
+
 export async function maybeAutoSync(): Promise<void> {
   if (!(await isHealthKitAvailable())) return;
   // Always (re)arm background delivery with the current token, even when
   // the foreground sync is skipped as recent.
   configureBackgroundSync().catch(() => { /* silent */ });
-  if (isRecentSync(6)) return;
   const first = !hasEverSynced();
-  const days  = first ? FIRST_SYNC_DAYS : AUTO_SYNC_DAYS;
-  // Recurring syncs run in quick mode (per-metric caps). The first-ever
-  // sync keeps full windows for a proper baseline — it's a one-time
-  // cost, and chunking + yields keep the UI responsive while it runs.
-  const res = await syncRecent(days, !first);
-  if (res.days_synced > 0) markSyncedNow();
+  if (first || !isRecentSync(6)) {
+    // Full window: first-ever (90d baseline) or every 6h (30d, quick caps).
+    const res = await syncRecent(first ? FIRST_SYNC_DAYS : AUTO_SYNC_DAYS, !first);
+    if (res.days_synced > 0) { markSyncedNow(); markQuickSyncedNow(); }
+    return;
+  }
+  // Chris 2026-10-27 ("delay on Apple Health data being accurate and
+  // timely"): the 6-hour throttle meant OPENING the app didn't refresh
+  // it — he could hold the phone and look at six-hour-old steps. Now
+  // every open pulls the last 3 days (cheap: a few hundred samples),
+  // throttled to once per 10 minutes.
+  if (!isRecentQuickSync(10)) {
+    const res = await syncRecent(3, true);
+    if (res.days_synced > 0) markQuickSyncedNow();
+  }
+}
+
+function isRecentQuickSync(withinMinutes: number): boolean {
+  try {
+    const last = localStorage.getItem(QUICK_SYNC_KEY);
+    if (!last) return false;
+    return Date.now() - parseInt(last, 10) < withinMinutes * 60 * 1000;
+  } catch { return false; }
+}
+function markQuickSyncedNow(): void {
+  try { localStorage.setItem(QUICK_SYNC_KEY, String(Date.now())); } catch { /* noop */ }
 }
 
 /**
