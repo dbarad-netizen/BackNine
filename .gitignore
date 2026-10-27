@@ -36,3 +36,6 @@ Thumbs.db
 *.swp
 *.swo
 frontend/tsconfig.tsbuildinfo
+
+# Local one-off admin scripts (not for the repo)
+scripts/local/
