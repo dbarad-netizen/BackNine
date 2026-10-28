@@ -597,6 +597,40 @@ def fair_scores(rows: dict[str, dict]) -> tuple[dict[str, Optional[int]], list[s
     return out, sorted(common)
 
 
+_CARRIED: dict[str, float] = {}   # league_id -> epoch of last carry-forward
+
+
+def _carry_forward_members(sb, tier: int, league_id: str, monday: date) -> None:
+    """Enrol last week's members in this week's league.
+
+    Membership used to be created only when a player opened the app, so a
+    player who didn't open BackNine between Monday and the Sunday text
+    simply vanished from the board (Josh, week of 2026-10-26). The server
+    owns the clock: once you've played a week you're in every week until
+    you leave. Throttled to once per 30 min per league per process.
+    """
+    import time
+    now = time.time()
+    if now - _CARRIED.get(league_id, 0) < 1800:
+        return
+    _CARRIED[league_id] = now
+    try:
+        prev_start = (monday - timedelta(days=7)).isoformat()
+        prev = sb.table("leagues").select("id").eq("tier", tier).eq("week_start", prev_start).execute()
+        if not prev.data:
+            return
+        prev_id = prev.data[0]["id"]
+        prev_members = sb.table("league_members").select("user_id").eq("league_id", prev_id).execute()
+        cur_members  = sb.table("league_members").select("user_id").eq("league_id", league_id).execute()
+        have = {r["user_id"] for r in (cur_members.data or [])}
+        for r in (prev_members.data or []):
+            uid = r.get("user_id")
+            if uid and uid not in have:
+                _ensure_member(sb, league_id, uid)
+    except Exception:
+        pass
+
+
 def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
     """Join (or fetch) the user's current-week league and return live standings."""
     sb = _sb()
@@ -611,6 +645,7 @@ def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
         return {"league": None, "standings": [], "me_rank": None, "days_left": None, "member_count": 0, "my_breakdown": None, "categories": CATEGORY_META}
 
     _ensure_member(sb, league_id, user_id)
+    _carry_forward_members(sb, tier, league_id, monday)
 
     res = sb.table("league_members").select("user_id").eq("league_id", league_id).execute()
     ids = [r["user_id"] for r in (res.data or [])]
