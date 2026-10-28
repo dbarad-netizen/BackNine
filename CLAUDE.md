@@ -109,8 +109,9 @@ wrapped in Capacitor for iOS (TestFlight). Backend: FastAPI on Render
 - Never paste secrets in chat. Keys live in Render env vars; the APNs `.p8`
   was once committed by mistake (revoked 2026-10-26) — `*.p8` is now ignored.
 - Cowork scheduled tasks compose the Sunday/Tuesday/Friday texts from
-  Supabase; their prompts carry the fair/net scoring rules — update them when
-  scoring changes.
+  Supabase; their prompts carry the fair/net scoring rules and the player
+  roster (David, Chris, Josh as of 2026-10-27) — update them when scoring
+  changes or a player joins/leaves.
 
 ## People (ids in `user_profiles`)
 
