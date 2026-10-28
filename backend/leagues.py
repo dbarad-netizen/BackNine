@@ -370,20 +370,40 @@ def ensure_components(sb, rows: dict[str, dict], ids: list[str], today_iso: str)
     show the math today rather than after the next cron."""
     import healthspan as hspan
     import oura_cache as oc
-    for uid in ids:
-        r = rows.get(uid)
-        if r and r.get("components"):
-            continue
+    import threading, time as _time
+    missing = [uid for uid in ids if not (rows.get(uid) or {}).get("components")]
+    # Only compute inline for members who have a snapshot but no breakdown
+    # (cheap, bounded); members with NO snapshot at all are handled in the
+    # background so the board never waits on data-less friends.
+    inline = [uid for uid in missing if rows.get(uid)][:3]
+    background = [uid for uid in missing if uid not in inline
+                  and _time.time() - _ENSURE_TRIED.get(uid, 0) >= 6 * 3600]
+    for uid in background:
+        _ENSURE_TRIED[uid] = _time.time()
+
+    def _compute(uid: str, persist: bool = True):
         try:
             _rm, _slm, am, smm = oc.get_days(uid, days=8)
             snap = hspan.compute(uid, today_iso, am or {}, smm or {}, {})
             if snap.get("score") is None:
-                continue
-            hspan.persist_and_delta(uid, today_iso, snap)
-            rows[uid] = {"score": int(snap["score"]), "components": snap.get("components") or {}}
+                return None
+            if persist:
+                hspan.persist_and_delta(uid, today_iso, snap)
+            return {"score": int(snap["score"]), "components": snap.get("components") or {}}
         except Exception:
             log.exception("ensure_components failed for %s", uid)
+            return None
+
+    for uid in inline:
+        r = _compute(uid)
+        if r:
+            rows[uid] = r
+    if background:
+        threading.Thread(target=lambda: [_compute(u) for u in background], daemon=True).start()
     return rows
+
+
+_ENSURE_TRIED: dict[str, float] = {}
 
 
 # ── Net League: golf-style handicap (David 2026-10-17) ──────────────
@@ -480,17 +500,23 @@ def _backfill_thin_history(sb, ids: list[str], week_start: str) -> None:
     except Exception:
         return
     now = _time.time()
-    for uid in ids:
-        if counts.get(uid, 0) >= PAR_MIN_DAYS_FULL:
-            continue
-        if now - _BACKFILL_TRIED.get(uid, 0) < 6 * 3600:
-            continue
+    import threading
+    todo = [uid for uid in ids if counts.get(uid, 0) < PAR_MIN_DAYS_FULL
+            and now - _BACKFILL_TRIED.get(uid, 0) >= 6 * 3600]
+    for uid in todo:
         _BACKFILL_TRIED[uid] = now
-        try:
-            n = hspan.backfill_history(uid, days=PAR_WINDOW_DAYS + 7)
-            log.info("league par backfill: %s wrote %d day(s)", uid[:12], n)
-        except Exception:
-            log.exception("league par backfill failed for %s", uid)
+
+    # Off the request path (David 2026-10-27: the Clubhouse took ~30s
+    # because four data-less friends were being backfilled inline).
+    def _run(uids: list[str]):
+        for uid in uids:
+            try:
+                n = hspan.backfill_history(uid, days=PAR_WINDOW_DAYS + 7)
+                log.info("league par backfill: %s wrote %d day(s)", uid[:12], n)
+            except Exception:
+                log.exception("league par backfill failed for %s", uid)
+    if todo:
+        threading.Thread(target=_run, args=(todo,), daemon=True).start()
 
 
 def compute_par(sb, ids: list[str], week_start: str) -> dict[str, dict]:

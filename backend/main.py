@@ -8555,6 +8555,28 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
     # one apple_health_daily fetch each, reused across metrics and
     # the head-to-head tally.
     _ah_est_cache: dict[str, dict] = {}
+    # Request-scoped memo (David 2026-10-27: "Today's Leaderboard took a
+    # really long time to load"): the board was reloading each friend's
+    # Oura cache 3-4 times and hitting Apple Health day-by-day. One read
+    # per friend, reused everywhere below.
+    _days_memo: dict[str, tuple] = {}
+    _ah_rows_memo: dict[str, dict] = {}
+
+    def _days(uid: str) -> tuple:
+        if uid not in _days_memo:
+            try:
+                _days_memo[uid] = oc.get_days(uid, days=10)
+            except Exception:
+                _days_memo[uid] = ({}, {}, {}, {})
+        return _days_memo[uid]
+
+    def _ah_day(uid: str, d: str) -> Optional[dict]:
+        if uid not in _ah_rows_memo:
+            try:
+                _ah_rows_memo[uid] = {str(r.get("date")): r for r in ah.get_data(uid, days=10)}
+            except Exception:
+                _ah_rows_memo[uid] = {}
+        return _ah_rows_memo[uid].get(d)
 
     def _ah_est(uid: str) -> dict[str, dict]:
         """{date: {"sleep": float|None, "activity": float|None}} estimated."""
@@ -8592,7 +8614,7 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
         they fall back to BackNine-estimated ring scores (estimated=True).
         """
         try:
-            rm, slm, am, smm = oc.get_days(uid, days=8)
+            rm, slm, am, smm = _days(uid)
         except Exception:
             rm, slm, am, smm = {}, {}, {}, {}
         anchor, t_rdy, t_sl, t_act, t_sm = _resolve_oura_anchor(uid, rm, slm, am, smm)
@@ -8609,16 +8631,16 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
                 yield (cursor - timedelta(days=i)).isoformat()
 
         if metric == "steps":
-            # Walk-back logic: for TODAY (idx 0), trust what the sources have
-            # even if it's 0 — otherwise mid-day, when today is still partial,
-            # we silently fell through to yesterday's bigger number and the user
-            # was looking at yesterday without knowing it. For PRIOR days, keep
-            # the original "only non-zero" rule so we don't surface a stale 0.
-            days = list(_walk_back())
+            # Clubhouse board (David 2026-10-27): steps and activity show the
+            # LAST COMPLETE DAY for everyone. Showing "today so far" for one
+            # player next to a full day for another made a correct medal
+            # look wrong (5,503 🏅 beside 6,764). Today-so-far lives on the
+            # user's own Scorecard, not on a board that compares people.
+            days = [d for d in _walk_back() if d != today_str] or list(_walk_back())
             for idx, d in enumerate(days):
                 ah_steps = None
                 try:
-                    ah_day = ah.get_day(uid, d)
+                    ah_day = _ah_day(uid, d)
                     if ah_day is not None and "steps" in ah_day:
                         ah_steps = ah_day.get("steps")
                 except Exception:
@@ -8655,12 +8677,13 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
             return None, anchor, False
 
         if metric == "activity":
-            for d in _walk_back():
+            _complete = [d for d in _walk_back() if d != today_str] or list(_walk_back())
+            for d in _complete:
                 a_day = am.get(d) or {}
                 score = a_day.get("score")
                 if score and score > 0:
                     return float(score), d, False
-            for d in _walk_back():
+            for d in _complete:
                 est = (_ah_est(uid).get(d) or {}).get("activity")
                 if est:
                     return float(est), d, True
@@ -8690,7 +8713,7 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
         tally matches the user's actual local day, not server ET.
         """
         try:
-            rm, slm, am, smm = oc.get_days(uid, days=days + 2)
+            rm, slm, am, smm = _days(uid)
         except Exception:
             return {}
         try:
@@ -8703,7 +8726,7 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
             # AH-first for steps
             steps = None
             try:
-                ah_day = ah.get_day(uid, d)
+                ah_day = _ah_day(uid, d)
                 if ah_day and ah_day.get("steps"):
                     steps = float(ah_day["steps"])
             except Exception:
