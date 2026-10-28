@@ -8881,7 +8881,7 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
     # is the most recent day on which at least two people have a value,
     # and the winner is the best number on that day. A card showing a
     # different day's number can't win off it.
-    def _leader(metric_key: str) -> tuple[Optional[str], Optional[str]]:
+    def _leader(metric_key: str) -> tuple[Optional[str], Optional[str], list[str]]:
         try:
             today = datetime.strptime(today_str, "%Y-%m-%d").date()
         except Exception:
@@ -8901,12 +8901,16 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
             if len(scored) >= 2:
                 best = max(v for _, v in scored)
                 winners = [uid for uid, v in scored if v == best]
-                return (winners[0] if len(winners) == 1 else None), d  # tie → no medal
-        return None, None
+                # Tie → both are acknowledged (David 2026-10-27: "in a tie
+                # both leaders should be acknowledged"). `leaders` keeps the
+                # single-winner contract (None on a tie) for older clients;
+                # `leader_ids` carries everyone who shares the top value.
+                return (winners[0] if len(winners) == 1 else None), d, winners
+        return None, None, []
 
-    leaders, leader_dates = {}, {}
+    leaders, leader_dates, leader_ids = {}, {}, {}
     for _m in ("steps", "sleep", "activity"):
-        leaders[_m], leader_dates[_m] = _leader(_m)
+        leaders[_m], leader_dates[_m], leader_ids[_m] = _leader(_m)
 
     # Default sort (task #187): Weekly Health Span Score first — the same
     # primary ranking the Weekly League uses (None sorts last). Engagement
@@ -8945,6 +8949,7 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
         "entries":   entries,
         "leaders":   leaders,
         "leader_dates": leader_dates,   # which calendar day each medal was decided on
+        "leader_ids": leader_ids,       # everyone sharing the top value (ties → 2+)
         "common_bands": _common_bands,  # Health Span bands every scored player shares
         "community": community,
         "date":      today_str,

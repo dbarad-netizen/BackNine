@@ -60,13 +60,20 @@ function freshnessLabel(anchor: string, todayStr: string): string | null {
 }
 
 /** Count of metrics each entry is leading. Returns map of user_id → count. */
-function leaderTally(leaders: LeaderboardResponse["leaders"]): Record<string, number> {
+function leaderTally(data: LeaderboardResponse): Record<string, number> {
   const out: Record<string, number> = {};
-  for (const id of Object.values(leaders)) {
-    if (!id) continue;
-    out[id] = (out[id] ?? 0) + 1;
+  for (const m of ["steps", "sleep", "activity"] as MetricKey[]) {
+    for (const id of leaderIdsFor(data, m)) out[id] = (out[id] ?? 0) + 1;
   }
   return out;
+}
+
+/** Everyone holding the medal for a metric — one id normally, 2+ on a tie. */
+function leaderIdsFor(data: LeaderboardResponse, m: MetricKey): string[] {
+  const ids = data.leader_ids?.[m];
+  if (ids && ids.length) return ids;
+  const single = data.leaders[m];
+  return single ? [single] : [];
 }
 
 
@@ -186,7 +193,7 @@ export default function FriendLeaderboard({ onInvite, onSeeMore }: Props = {}) {
     );
   }
 
-  const tally = leaderTally(data.leaders);
+  const tally = leaderTally(data);
   // Top Health Span Score — used to crown the leader. Same primary
   // metric as the Weekly League (task #187); engagement points are
   // now a tiebreaker only.
@@ -198,7 +205,7 @@ export default function FriendLeaderboard({ onInvite, onSeeMore }: Props = {}) {
   // ── Header line: how many metrics am I leading? ──
   const me = data.entries.find(e => e.is_me);
   const myWins = me ? (tally[me.user_id] ?? 0) : 0;
-  const totalContested = Object.values(data.leaders).filter(Boolean).length;
+  const totalContested = (["steps", "sleep", "activity"] as MetricKey[]).filter(m => leaderIdsFor(data, m).length > 0).length;
   // Medals are decided on the most recent day where 2+ people have the
   // metric (David 2026-10-16) — which is often yesterday, since today is
   // still in progress. Say so instead of claiming "today".
@@ -425,7 +432,9 @@ export default function FriendLeaderboard({ onInvite, onSeeMore }: Props = {}) {
                 <div className="grid grid-cols-3 gap-2 mb-2">
                   {(["steps", "sleep", "activity"] as MetricKey[]).map(m => {
                     const mv = e[m];
-                    const isLeader = data.leaders[m] === e.user_id;
+                    const holders = leaderIdsFor(data, m);
+                    const isLeader = holders.includes(e.user_id);
+                    const isTie = isLeader && holders.length > 1;
                     const has = mv.value != null && mv.value > 0;
                     const fresh = has ? freshnessLabel(mv.anchor, data.date) : null;
                     return (
@@ -441,7 +450,7 @@ export default function FriendLeaderboard({ onInvite, onSeeMore }: Props = {}) {
                           isLeader ? "text-amber-700" : "text-gray-600"
                         }`}>
                           {METRIC_LABELS[m]}
-                          {isLeader && " 🏅"}
+                          {isLeader && (isTie ? " 🏅 tie" : " 🏅")}
                         </p>
                         <p
                           className={`text-[13px] font-bold leading-tight tabular-nums ${

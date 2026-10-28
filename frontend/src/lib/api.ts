@@ -3707,6 +3707,8 @@ export interface LeaderboardResponse {
   leaders: { steps: string | null; sleep: string | null; activity: string | null };
   /** Calendar day each medal was decided on — medals only compare the same day. */
   leader_dates?: { steps: string | null; sleep: string | null; activity: string | null };
+  /** Everyone sharing the top value for each metric — 2+ entries means a tie (both get the medal). */
+  leader_ids?: { steps: string[]; sleep: string[]; activity: string[] };
   /** Health Span bands every scored player shares — scores above are judged on these. */
   common_bands?: string[];
   /** David 2026-07-09: aggregate averages across the leaderboard so a user
