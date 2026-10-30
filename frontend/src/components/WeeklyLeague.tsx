@@ -15,7 +15,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { api, type LeagueResponse, type LeagueBreakdownItem, type LeagueCategory } from "@/lib/api";
+import { api, type LeagueResponse, type LeagueBreakdownItem, type LeagueCategory, type WeekPace } from "@/lib/api";
 
 interface Props {
   /** Open the share/invite sheet — surfaced when the league is sparse. */
@@ -81,6 +81,24 @@ export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
   // Show-your-math (David 2026-10-16): tap a player to see the bands
   // behind their score, and which bands the League is judged on.
   const [openUid, setOpenUid] = useState<string | null>(null);
+  // Week pace (David 2026-10-30): the week as a bank account, not seven
+  // pass/fail days. Fetched when opened — it walks the week's raw data.
+  // The Friday text links backnine.health/league?from=friday → open this
+  // section straight away so the tap lands on the thing the text promised.
+  const [showPace, setShowPace] = useState<boolean>(() => {
+    try { return typeof window !== "undefined" && new URLSearchParams(window.location.search).get("from") === "friday"; }
+    catch { return false; }
+  });
+  const [pace, setPace] = useState<WeekPace | null>(null);
+  const [paceLoading, setPaceLoading] = useState(false);
+  useEffect(() => {
+    if (!showPace || pace || paceLoading) return;
+    setPaceLoading(true);
+    api.friends.pace()
+      .then(setPace)
+      .catch(() => { /* soft-fail */ })
+      .finally(() => setPaceLoading(false));
+  }, [showPace, pace, paceLoading]);
 
   useEffect(() => {
     // Refetch on foreground, not just mount (David 2026-09-11): the iOS
@@ -280,6 +298,29 @@ export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
         )}
       </div>
 
+      {/* Your week — pace chart, expandable */}
+      <button
+        onClick={() => setShowPace(v => !v)}
+        className="w-full px-4 py-2.5 border-t border-gray-100 flex items-center justify-between text-left hover:bg-gray-50 transition-colors"
+        aria-expanded={showPace}
+      >
+        <span className="text-xs font-semibold text-[#1B3829] flex items-center gap-1.5">
+          <span>📈</span> Your week vs par
+        </span>
+        <span className={`text-gray-600 text-xs transition-transform ${showPace ? "rotate-180" : ""}`}>⌄</span>
+      </button>
+      {showPace && (
+        <div className="px-4 pb-4 pt-2 bg-gray-50/60 border-t border-gray-100">
+          {paceLoading && !pace ? (
+            <div className="h-24 bg-gray-100 rounded-xl animate-pulse" />
+          ) : pace && pace.days.length ? (
+            <WeekPaceChart pace={pace} />
+          ) : (
+            <p className="text-[11px] text-gray-500">Nothing scored this week yet.</p>
+          )}
+        </div>
+      )}
+
       {/* How scoring works — expandable */}
       <button
         onClick={() => setShowScoring(v => !v)}
@@ -333,5 +374,87 @@ export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
         </div>
       )}
     </section>
+  );
+}
+
+
+/** Daily Health Span snapshots so far (bars), par (dashed), and the
+ *  same-pace projection to Sunday (dotted). One target line — par is
+ *  already "your best recent month", so no second maintenance band. */
+function WeekPaceChart({ pace }: { pace: WeekPace }) {
+  const W = 320, H = 110, padL = 8, padR = 30, padT = 10, padB = 18;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const lo = 40, hi = 100;
+  const y = (v: number) => padT + innerH * (1 - (Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo));
+  const slot = innerW / 7;
+  const x = (i: number) => padL + slot * i + slot / 2;
+  const scored = pace.days.map((d, i) => ({ ...d, i })).filter(d => d.score != null);
+  const lastIdx = scored.length ? scored[scored.length - 1].i : -1;
+  const linePts = scored.map(d => `${x(d.i)},${y(d.score as number)}`).join(" ");
+  const projY = pace.projected != null ? y(pace.projected) : null;
+  const parY = pace.par != null ? y(pace.par) : null;
+  const net = pace.projected_net;
+  const tone = net == null ? "text-gray-700" : net >= 2 ? "text-emerald-700" : net <= -2 ? "text-red-600" : "text-gray-700";
+  const sf = pace.so_far;
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-2 mb-1">
+        <p className="text-sm font-bold text-[#1B3829]">
+          {pace.projected != null ? <>On pace for <span className={tone}>≈{pace.projected}</span></> : "This week"}
+          {pace.par != null && <span className="text-[11px] font-semibold text-gray-500"> · par {pace.par}{pace.par_provisional ? "≈" : ""}</span>}
+        </p>
+        {pace.days_left != null && (
+          <span className="text-[10px] text-gray-500">{pace.days_left === 0 ? "final day" : `${pace.days_left}d left`}</span>
+        )}
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="Week pace chart">
+        {/* bars: daily snapshots */}
+        {pace.days.map((d, i) => d.score != null ? (
+          <rect key={d.date} x={x(i) - slot * 0.28} y={y(d.score)} width={slot * 0.56} height={padT + innerH - y(d.score)}
+                rx={3} fill="#1B3829" opacity={0.18} />
+        ) : null)}
+        {/* par */}
+        {parY != null && (
+          <>
+            <line x1={padL} x2={W - padR + 4} y1={parY} y2={parY} stroke="#9CA3AF" strokeWidth={1} strokeDasharray="4 3" />
+            <text x={W - padR + 6} y={parY + 3} fontSize={9} fill="#6B7280">par</text>
+          </>
+        )}
+        {/* path so far */}
+        {scored.length > 1 && <polyline points={linePts} fill="none" stroke="#1B3829" strokeWidth={2} strokeLinejoin="round" />}
+        {/* projection to Sunday */}
+        {lastIdx >= 0 && projY != null && lastIdx < 6 && (
+          <line x1={x(lastIdx)} y1={y(scored[scored.length - 1].score as number)} x2={x(6)} y2={projY}
+                stroke="#1B3829" strokeWidth={1.5} strokeDasharray="2 4" opacity={0.7} />
+        )}
+        {lastIdx >= 0 && (
+          <circle cx={x(lastIdx)} cy={y(scored[scored.length - 1].score as number)} r={3.5} fill="#1B3829" />
+        )}
+        {/* day labels */}
+        {pace.days.map((d, i) => (
+          <text key={d.date} x={x(i)} y={H - 4} fontSize={9} textAnchor="middle"
+                fill={i === lastIdx ? "#1B3829" : "#9CA3AF"} fontWeight={i === lastIdx ? 700 : 400}>{d.dow}</text>
+        ))}
+      </svg>
+      {pace.sentence && <p className="text-[11px] text-gray-700 leading-relaxed mt-1">{pace.sentence}</p>}
+      {sf && (
+        <div className="grid grid-cols-3 gap-1.5 mt-2">
+          {([
+            ["Sleep", sf.sleep_hours.label, `${sf.sleep_hours.nights} night${sf.sleep_hours.nights === 1 ? "" : "s"}`, sf.sleep_hours.target],
+            ["Steps", sf.steps.label, `${sf.steps.days} full day${sf.steps.days === 1 ? "" : "s"}`, sf.steps.target],
+            ["Active", sf.active_days.label, "full days", sf.active_days.target],
+          ] as [string, string, string, string][]).map(([k, v, sub, tgt]) => (
+            <div key={k} className="rounded-lg bg-white border border-gray-100 px-2 py-1.5">
+              <p className="text-[9px] uppercase tracking-wide font-semibold text-gray-500">{k} so far</p>
+              <p className="text-[13px] font-bold text-gray-800 tabular-nums leading-tight">{v}</p>
+              <p className="text-[9px] text-gray-500">{sub} · goal {tgt}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="text-[10px] text-gray-500 mt-2">
+        Bars are each day&apos;s Health Span so far this week; the dotted line is where Sunday lands at the same pace. Steps and active days count full days only.
+      </p>
+    </div>
   );
 }

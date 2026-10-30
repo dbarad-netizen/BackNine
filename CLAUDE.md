@@ -46,6 +46,10 @@ wrapped in Capacitor for iOS (TestFlight). Backend: FastAPI on Render
   comparative consumer; pass `raw=True` only for the pre/post note and the
   history chart. The readiness override fires only when BackNine > Oura by
   8+ within 60 days of the reset (Oura-too-high is never the failure mode).
+- **The week is a bank account** (`week_pace.py`, "Your week vs par" on the
+  League card). Sunday's score is built from Mon–Sun only, so the pace view
+  shows what's banked, a same-pace projection, and what the days left need.
+  Par is the only target line — never add a second "maintenance" band.
 - **Show your math.** Every score has an "Under the hood" or tap-to-see-bands.
   Competitor facts on the landing page are dated and re-checked quarterly.
 

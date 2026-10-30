@@ -3311,6 +3311,10 @@ export const api = {
     league(): Promise<LeagueResponse> {
       return request("/api/leagues/current");
     },
+    /** Week pace: snapshots so far, par, same-pace projection, what it takes. */
+    pace(): Promise<WeekPace> {
+      return request(`/api/leagues/pace?date=${localToday()}`);
+    },
     /** Stable, reusable referral code for shareable invite cards. */
     referral(): Promise<ReferralCode> {
       return request("/api/friends/referral");
@@ -3699,6 +3703,28 @@ export interface LeagueResponse {
   /** Band keys every scored player shares (math view). */
   common_bands?: string[];
   scoring?: { mode: "net" | "gross"; par_rule: string; scratch_par: number };
+}
+
+export interface WeekPaceBand { points: number; max: number }
+export interface WeekPace {
+  week_start?: string;
+  week_end?: string;
+  today?: string;
+  days: { date: string; dow: string; score: number | null; played: boolean }[];
+  latest?: number | null;
+  par: number | null;
+  par_provisional?: boolean | null;
+  projected: number | null;
+  projected_net?: number | null;
+  days_left?: number;
+  sentence: string | null;
+  lever?: string | null;
+  so_far?: {
+    sleep_hours: { value: number | null; nights: number; label: string; target: string };
+    steps:       { value: number | null; days: number;   label: string; target: string };
+    active_days: { value: number | null; days: number;   label: string; target: string };
+  };
+  bands?: Record<string, WeekPaceBand>;
 }
 
 export interface LeaderboardResponse {

@@ -7845,6 +7845,26 @@ def get_current_league(request: Request):
         return {"league": None, "standings": [], "me_rank": None, "days_left": None, "member_count": 0}
 
 
+@app.get("/api/leagues/pace")
+def get_week_pace(request: Request, date: Optional[str] = None):
+    """Where this week lands if you keep going like this (David 2026-10-30,
+    after Oura's weekly Cardio Effort card). Daily snapshots so far, par,
+    a same-pace projection, and what it takes over the days left — all
+    precomputed in week_pace.py. Soft-fails to an empty payload."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        today_iso = date if date and len(date) == 10 else None
+        if not today_iso:
+            from zoneinfo import ZoneInfo
+            today_iso = datetime.now(tz=ZoneInfo("America/New_York")).date().isoformat()
+        import week_pace as wp
+        return wp.compute(user_id, today_iso)
+    except Exception as e:
+        log.warning("week_pace failed for %s: %s", user_id, e)
+        return {"days": [], "par": None, "projected": None, "sentence": None}
+
+
 # ── Groups (Crews) ────────────────────────────────────────────────────────────
 
 @app.get("/api/groups")
