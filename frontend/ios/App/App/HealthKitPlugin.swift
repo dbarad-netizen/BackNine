@@ -39,6 +39,7 @@ public class HealthKitPlugin: CAPPlugin {
         case "bloodPressureSystolic":  return HKQuantityType.quantityType(forIdentifier: .bloodPressureSystolic)
         case "bloodPressureDiastolic": return HKQuantityType.quantityType(forIdentifier: .bloodPressureDiastolic)
         case "sleepAnalysis":          return HKCategoryType.categoryType(forIdentifier: .sleepAnalysis)
+        case "workouts":               return HKObjectType.workoutType()   // 2026-10-30: walks/runs/strength as events
         default:                       return nil
         }
     }
@@ -145,6 +146,35 @@ public class HealthKitPlugin: CAPPlugin {
             call.resolve(["resultData": results])
         }
         healthStore.execute(query)
+    }
+
+    // ── Public: queryWorkouts (2026-10-30) ──────────────────────────
+    //
+    // David: "why does BackNine not pick up my walks from Apple Health?"
+    // Daily totals never carried the workout records. Each HKWorkout
+    // becomes one event row (same shape the Oura /workout import uses)
+    // so Watch users get walks, runs and strength in This Week's
+    // Activity and toward active days. Mirrored in BackgroundHealthSync.
+
+    @objc func queryWorkouts(_ call: CAPPluginCall) {
+        guard let startISO = call.getString("startDate"),
+              let endISO   = call.getString("endDate") else {
+            call.reject("startDate and endDate are required")
+            return
+        }
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let isoNoFrac = ISO8601DateFormatter()
+        isoNoFrac.formatOptions = [.withInternetDateTime]
+        let startDate = iso.date(from: startISO) ?? isoNoFrac.date(from: startISO) ?? Date.distantPast
+        let endDate   = iso.date(from: endISO)   ?? isoNoFrac.date(from: endISO)   ?? Date.distantFuture
+        HealthKitWorkouts.fetch(store: healthStore, start: startDate, end: endDate) { rows, error in
+            if let error = error {
+                call.reject("Workout query failed: \(error.localizedDescription)")
+                return
+            }
+            call.resolve(["workouts": rows])
+        }
     }
 
     // ── Public: background sync (2026-10-14) ────────────────────────

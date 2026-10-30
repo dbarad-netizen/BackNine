@@ -321,7 +321,7 @@ def _load_active_days(user_id: str, today_iso: str, oura_am: dict) -> Optional[i
                 # fixed 2026-10-30). A detected 8-minute walk is not an
                 # active day; a hand-logged workout still is. Device-detected
                 # rows need 30+ minutes to count.
-                if (r.get("source") == "oura") and (r.get("duration_min") or 0) < 30:
+                if (r.get("source") in ("oura", "apple_health")) and (r.get("duration_min") or 0) < 30:
                     continue
                 have_any_data = True
                 qualifying.add(d)

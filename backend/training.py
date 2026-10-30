@@ -680,6 +680,66 @@ def import_oura_events(user_id: str, workouts: list[dict], sessions: list[dict])
         return 0
 
 
+def import_apple_health_workouts(user_id: str, workouts: list[dict]) -> int:
+    """Import HKWorkout records (from HealthKitWorkouts.swift, via the
+    foreground sync or BackgroundHealthSync) as training_workouts rows,
+    source='apple_health', external_id=HealthKit UUID. Idempotent.
+    Same shape as the Oura import so every consumer (activity timeline,
+    active days, training load) treats them alike. 2026-10-30."""
+    if not user_id or not workouts:
+        return 0
+    try:
+        sb = _sb()
+        seen_res = (sb.table("training_workouts").select("external_id")
+                      .eq("user_id", user_id).eq("source", "apple_health").execute())
+        seen = {str(r["external_id"]) for r in (seen_res.data or []) if r.get("external_id")}
+    except Exception as exc:
+        log.warning("apple health workouts: seen-lookup failed for %s: %s", user_id, exc)
+        return 0
+
+    new_rows: list[dict] = []
+    for w in workouts:
+        if not isinstance(w, dict):
+            continue
+        wid = str(w.get("id") or "").strip()
+        start = w.get("startDate") or w.get("start_datetime")
+        if not wid or not start or wid in seen:
+            continue
+        seen.add(wid)
+        day = str(start)[:10]
+        activity = (str(w.get("activity") or "workout")).strip().lower()[:40]
+        dur = w.get("durationMin")
+        if dur is None:
+            dur = _duration_min_between(start, w.get("endDate"))
+        new_rows.append({
+            "id":              f"ah_w_{wid}"[:64],
+            "user_id":         user_id,
+            "date":            day,
+            "type":            activity.replace("_", " ").title() or "Workout",
+            "kind":            "cardio",
+            "source":          "apple_health",
+            "external_id":     wid,
+            "activity":        activity,
+            "duration_min":    _int_or_none(dur),
+            "distance_meters": w.get("distanceMeters"),
+            "avg_hr":          _int_or_none(w.get("avgHr")),
+            "calories_kcal":   _int_or_none(w.get("calories")),
+            "exercises":       [],
+            "muscle_groups":   [],
+            "logged_at":       start,
+            "notes":           (f"via {w['sourceName']}" if w.get("sourceName") else None),
+        })
+    if not new_rows:
+        return 0
+    try:
+        sb.table("training_workouts").insert(new_rows).execute()
+        log.info("apple health workouts: imported %d rows for %s", len(new_rows), user_id)
+        return len(new_rows)
+    except Exception as exc:
+        log.warning("apple health workouts: insert of %d rows FAILED for %s: %s", len(new_rows), user_id, exc)
+        return 0
+
+
 # ── Reusable routines / templates ─────────────────────────────────────────────
 
 def get_templates(user_id: str) -> List[dict]:

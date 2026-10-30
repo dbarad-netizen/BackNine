@@ -97,7 +97,13 @@ wrapped in Capacitor for iOS (TestFlight). Backend: FastAPI on Render
   is text.
 - HealthKit: sum per source, union sleep intervals per source, then MAX across
   sources — never add sources together. The native sync mirrors
-  `healthkit.ts` exactly; keep them in lockstep.
+  `healthkit.ts` exactly; keep them in lockstep. Workouts are events
+  (`HealthKitWorkouts.swift` → `/api/apple-health/workouts`), same shape as
+  the Oura `/workout` import; device-detected rows under 30 min never make
+  an active day on their own.
+- **Never swallow an insert error.** The Oura workout import failed on every
+  batch for months (float into an integer column) and returned 0 quietly.
+  Log it; `recorded_at`/`logged_at` tell you when a row actually arrived.
 
 ## Build gates (the sandbox can't run `next build` or install packages)
 

@@ -25,6 +25,7 @@
 		DBBA18AF30250CC50084F493 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBBA18AE30250CC50084F493 /* SceneDelegate.swift */; };
 		DBBA18B130250CDD0084F493 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBBA18B030250CDD0084F493 /* ViewController.swift */; };
 		DBBA18C13025A0010084F493 /* BackgroundHealthSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBBA18C03025A0010084F493 /* BackgroundHealthSync.swift */; };
+		DBBA18D13025B0010084F493 /* HealthKitWorkouts.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBBA18D03025B0010084F493 /* HealthKitWorkouts.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -50,6 +51,7 @@
 		DBBA18AE30250CC50084F493 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		DBBA18B030250CDD0084F493 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
 		DBBA18C03025A0010084F493 /* BackgroundHealthSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundHealthSync.swift; sourceTree = "<group>"; };
+		DBBA18D03025B0010084F493 /* HealthKitWorkouts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitWorkouts.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -90,6 +92,7 @@
 				DBBA18AC30250CB20084F493 /* AppDelegate.swift */,
 				DBBA18A23024FFB90084F493 /* HealthKitPlugin.swift */,
 				DBBA18C03025A0010084F493 /* BackgroundHealthSync.swift */,
+				DBBA18D03025B0010084F493 /* HealthKitWorkouts.swift */,
 				DBBA18A03023A09D0084F493 /* App.entitlements */,
 				DBBA18B030250CDD0084F493 /* ViewController.swift */,
 				DBBA18A830250C770084F493 /* HealthKitPlugin.swift */,
@@ -197,6 +200,7 @@
 				DBBA18AB30250C900084F493 /* HealthKitPlugin.m in Sources */,
 				DBBA18A33024FFB90084F493 /* HealthKitPlugin.swift in Sources */,
 				DBBA18C13025A0010084F493 /* BackgroundHealthSync.swift in Sources */,
+				DBBA18D13025B0010084F493 /* HealthKitWorkouts.swift in Sources */,
 				DBBA18A43024FFB90084F493 /* HealthKitPlugin.m in Sources */,
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,

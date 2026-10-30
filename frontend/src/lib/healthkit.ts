@@ -106,6 +106,20 @@ interface HealthKitPlugin {
   // than iOS build 5; always optional-call.
   configureBackgroundSync?(opts: { token: string; baseUrl: string }): Promise<{ configured: boolean; lastBackgroundSync?: string }>;
   clearBackgroundSync?(): Promise<{ configured: boolean }>;
+  // Workouts as events (2026-10-30) — absent on builds before iOS build 5.
+  queryWorkouts?(opts: { startDate: string; endDate: string }): Promise<{ workouts: HealthKitWorkout[] }>;
+}
+
+export interface HealthKitWorkout {
+  id: string;
+  activity: string;
+  startDate: string;
+  endDate: string;
+  durationMin: number;
+  calories?: number;
+  distanceMeters?: number;
+  avgHr?: number;
+  sourceName: string;
 }
 
 function getHealthKitPlugin(): HealthKitPlugin | null {
@@ -124,7 +138,8 @@ export async function isHealthKitAvailable(): Promise<boolean> {
 
 // ── Permissions ─────────────────────────────────────────────────────────
 
-const READ_TYPES = METRICS.map(m => m.plugin);
+// "workouts" = HKWorkout records (walks, runs, strength) — 2026-10-30.
+const READ_TYPES = [...METRICS.map(m => m.plugin), "workouts"];
 
 export interface HealthKitAuthResult {
   granted: boolean;
@@ -525,6 +540,9 @@ export async function syncRecent(days = 7, quick = false): Promise<SyncResult> {
   const { api } = await import("./api");
   try {
     const r = await api.appleHealthImportAggregated(daily);
+    // Workouts ride along after the daily post (mirrored in
+    // BackgroundHealthSync.swift). Best-effort: never fails the sync.
+    syncWorkouts(days).catch(() => { /* silent */ });
     return { days_synced: r.days_imported };
   } catch (e) {
     return {
@@ -532,6 +550,26 @@ export async function syncRecent(days = 7, quick = false): Promise<SyncResult> {
       error:       e instanceof Error ? e.message : "Sync upload failed",
     };
   }
+}
+
+
+/**
+ * Pull HKWorkout records for the last `days` days and POST them as
+ * events (David 2026-10-30: "why does BackNine not pick up my walks
+ * from Apple Health?"). Daily totals never carried the workouts; this
+ * is what puts a Watch walk in This Week's Activity and toward active
+ * days. Idempotent server-side on the HealthKit UUID.
+ */
+export async function syncWorkouts(days = 30): Promise<number> {
+  const plugin = getHealthKitPlugin();
+  if (!plugin?.queryWorkouts) return 0;
+  const now = new Date();
+  const start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  const { workouts } = await plugin.queryWorkouts({ startDate: start.toISOString(), endDate: now.toISOString() });
+  if (!workouts?.length) return 0;
+  const { api } = await import("./api");
+  const r = await api.appleHealthImportWorkouts(workouts);
+  return r.imported;
 }
 
 

@@ -295,3 +295,21 @@ Console.app → filter `BACKNINE bgsync`.
 Limits: iOS throttles to roughly hourly; nothing is delivered if the
 user force-quits the app (swipe-up kill) until they open it again; and
 nothing happens before the first unlock after a reboot.
+
+### Apple Health workouts (added 2026-10-30)
+
+HealthKit workout records (walks, runs, strength, yoga…) now import as
+events, the same way Oura's do. `HealthKitWorkouts.swift` is the one
+query, used by the plugin's `queryWorkouts` (foreground sync, after the
+daily post) and by `BackgroundHealthSync` (observer on the workout type
++ a post to `/api/apple-health/workouts` after each background sync).
+Rows land in `training_workouts` with `source='apple_health'`,
+idempotent on the HealthKit UUID.
+
+Needs a new build (iOS build 5+): the new Swift file is registered in
+the Xcode project; nothing to tick in Capabilities. On first open the
+HealthKit permission sheet will ask for **Workouts** in addition to the
+existing types — existing users see it once.
+
+Rule shared with Oura: a device-detected workout under 30 minutes shows
+in This Week's Activity but does not by itself count as an active day.

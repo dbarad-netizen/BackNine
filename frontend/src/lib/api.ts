@@ -2948,6 +2948,13 @@ export const api = {
    *  parsed the export.xml locally, so we post only a small (~200 KB)
    *  JSON blob instead of the raw multi-hundred-MB file.
    *  See frontend/src/lib/appleHealthParser.ts for the parser. */
+  /** HealthKit workout records → training_workouts events (2026-10-30). */
+  appleHealthImportWorkouts(workouts: unknown[]): Promise<{ imported: number; received: number }> {
+    return request("/api/apple-health/workouts", {
+      method: "POST",
+      body: JSON.stringify({ workouts }),
+    });
+  },
   appleHealthImportAggregated(daily: Record<string, Record<string, number | string>>, sinceDate?: string): Promise<{
     days_imported: number;
     earliest_date: string | null;

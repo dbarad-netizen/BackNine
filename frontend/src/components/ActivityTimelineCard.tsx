@@ -88,9 +88,9 @@ export default function ActivityTimelineCard() {
                   </div>
                   <span
                     className="text-[9px] shrink-0 opacity-60"
-                    title={it.source === "oura" ? "From your Oura Ring" : "Logged manually"}
+                    title={it.source === "oura" ? "From your Oura Ring" : it.source === "apple_health" ? "From Apple Health" : "Logged manually"}
                   >
-                    {it.source === "oura" ? "💍" : "✍️"}
+                    {it.source === "oura" ? "💍" : it.source === "apple_health" ? "⌚" : "✍️"}
                   </span>
                 </div>
               ))}

@@ -98,6 +98,9 @@ final class BackgroundHealthSync {
         if let sleep = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) {
             out.append(Metric(type: sleep, field: "sleep_hours", unit: nil, strategy: "sleep"))
         }
+        // Workouts (2026-10-30): observed so a finished Watch walk wakes a
+        // sync; not aggregated into daily — posted as events after it.
+        out.append(Metric(type: HKObjectType.workoutType(), field: "workouts", unit: nil, strategy: "workouts"))
         return out
     }
 
@@ -172,7 +175,7 @@ final class BackgroundHealthSync {
         func dayKey(_ d: Date) -> String { return String(iso.string(from: d).prefix(10)) }
 
         let group = DispatchGroup()
-        for m in metrics {
+        for m in metrics where m.strategy != "workouts" {   // workouts are posted separately
             group.enter()
             let q = HKSampleQuery(sampleType: m.type, predicate: predicate,
                                   limit: HKObjectQueryNoLimit, sortDescriptors: sort) { _, samples, error in
@@ -252,8 +255,43 @@ final class BackgroundHealthSync {
             for (date, ms) in bedtime where daily[date]?["sleep_hours"] != nil {
                 daily[date, default: [:]]["sleep_start"] = isoOut.string(from: Date(timeIntervalSince1970: ms / 1000))
             }
-            guard !daily.isEmpty else { completion(0); return }
-            self.post(daily: daily, token: token, base: base, completion: completion)
+            let finish: (Int) -> Void = { n in
+                // Workouts ride along after the daily post (mirrors healthkit.ts).
+                self.postWorkouts(days: days, token: token, base: base) { completion(n) }
+            }
+            guard !daily.isEmpty else { finish(0); return }
+            self.post(daily: daily, token: token, base: base, completion: finish)
+        }
+    }
+
+    private func postWorkouts(days: Int, token: String, base: String, completion: @escaping () -> Void) {
+        let now = Date()
+        let start = now.addingTimeInterval(-Double(days) * 86400)
+        HealthKitWorkouts.fetch(store: store, start: start, end: now) { rows, error in
+            if let error = error {
+                NSLog("BACKNINE bgsync: workout query failed: \(error.localizedDescription)")
+                completion(); return
+            }
+            guard !rows.isEmpty,
+                  let url = URL(string: base.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                                      + "/api/apple-health/workouts") else { completion(); return }
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.timeoutInterval = 25
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            req.setValue("backnine-ios-bgsync", forHTTPHeaderField: "X-BackNine-Sync-Source")
+            do {
+                req.httpBody = try JSONSerialization.data(withJSONObject: ["workouts": rows], options: [])
+            } catch { completion(); return }
+            URLSession.shared.dataTask(with: req) { _, resp, err in
+                if let err = err {
+                    NSLog("BACKNINE bgsync: workouts POST failed: \(err.localizedDescription)")
+                } else {
+                    NSLog("BACKNINE bgsync: posted \(rows.count) workout(s), status \((resp as? HTTPURLResponse)?.statusCode ?? 0)")
+                }
+                completion()
+            }.resume()
         }
     }
 

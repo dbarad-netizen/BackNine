@@ -4508,6 +4508,9 @@ def get_activity_timeline(request: Request, days: int = 7):
                     "breathing": "😮‍💨", "walking": "🚶", "running": "🏃",
                     "cycling": "🚴", "swimming": "🏊", "pilates": "🤸",
                     "strength_training": "🏋️", "yoga": "🧘",
+                    "hiking": "🥾", "golf": "⛳", "tennis": "🎾", "rowing": "🚣",
+                    "elliptical": "🏃", "hiit": "🔥", "stair_climbing": "🪜",
+                    "pickleball": "🏓", "dance": "💃", "core_training": "🧘",
                 }.get(str(activity).lower(), "💪" if kind != "session" else "✨")
                 items.append({
                     "date":       r.get("date"),
@@ -9449,6 +9452,27 @@ async def get_apple_health_data(request: Request, days: int = 30):
         return ah.get_summary(user_id, days=days)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/apple-health/workouts")
+async def apple_health_import_workouts(request: Request):
+    """HKWorkout records → training_workouts events (2026-10-30). Posted
+    by the foreground HealthKit sync and by BackgroundHealthSync after
+    each daily post. Idempotent on the HealthKit UUID."""
+    session = _require_session(request)
+    user_id = session["user_id"]
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    workouts = body.get("workouts") or []
+    if not isinstance(workouts, list):
+        raise HTTPException(status_code=400, detail="`workouts` must be a list")
+    workouts = workouts[:500]
+    _src = request.headers.get("X-BackNine-Sync-Source", "foreground")
+    n = trn.import_apple_health_workouts(user_id, workouts)
+    log.info("apple health workouts: user=%s source=%s received=%d imported=%d", user_id[:12], _src, len(workouts), n)
+    return {"imported": n, "received": len(workouts)}
 
 
 @app.post("/api/apple-health/import-aggregated")
