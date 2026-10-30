@@ -308,16 +308,23 @@ def _load_active_days(user_id: str, today_iso: str, oura_am: dict) -> Optional[i
         try:
             since = (today - timedelta(days=6)).isoformat()
             res = (sb.table("training_workouts")
-                     .select("date")
+                     .select("date, source, duration_min")
                      .eq("user_id", user_id)
                      .gte("date", since)
                      .lte("date", today.isoformat())
                      .execute())
             for r in (res.data or []):
                 d = str(r.get("date"))
-                if d in window:
-                    have_any_data = True
-                    qualifying.add(d)
+                if d not in window:
+                    continue
+                # Oura auto-detects walks as short as a few minutes (import
+                # fixed 2026-10-30). A detected 8-minute walk is not an
+                # active day; a hand-logged workout still is. Device-detected
+                # rows need 30+ minutes to count.
+                if (r.get("source") == "oura") and (r.get("duration_min") or 0) < 30:
+                    continue
+                have_any_data = True
+                qualifying.add(d)
         except Exception:
             pass
 

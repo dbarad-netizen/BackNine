@@ -68,9 +68,11 @@ def _workout_days(user_id: str, lo: str, hi: str) -> set:
     if not sb:
         return set()
     try:
-        res = (sb.table("training_workouts").select("date")
+        res = (sb.table("training_workouts").select("date, source, duration_min")
                  .eq("user_id", user_id).gte("date", lo).lte("date", hi).execute())
-        return {str(r.get("date"))[:10] for r in (res.data or [])}
+        # Same rule as healthspan._load_active_days: device-detected rows need 30+ min.
+        return {str(r.get("date"))[:10] for r in (res.data or [])
+                if not (r.get("source") == "oura" and (r.get("duration_min") or 0) < 30)}
     except Exception:
         return set()
 

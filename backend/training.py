@@ -14,6 +14,8 @@ import json
 import uuid
 from datetime import datetime, date, timedelta
 from pathlib import Path
+import logging
+log = logging.getLogger(__name__)
 from typing import Optional, List, Dict, Any
 
 DATA_DIR   = Path.home() / ".backnine"
@@ -564,6 +566,20 @@ def delete_workout(user_id: str, workout_id: str) -> bool:
 
 # ── Oura imports (workouts + sessions) ─────────────────────────────────────────
 
+def _int_or_none(v) -> Optional[int]:
+    """Oura returns floats for calories / average_heart_rate; the columns
+    are integer. A float in a batch insert made Postgres reject the WHOLE
+    batch, the except swallowed it, and not one Oura workout was ever
+    stored for anyone (David 2026-10-30: "why does BackNine not pick up
+    my walks from Oura"). Round, never pass a float."""
+    if v is None:
+        return None
+    try:
+        return int(round(float(v)))
+    except Exception:
+        return None
+
+
 def _duration_min_between(start_iso: Optional[str], end_iso: Optional[str]) -> Optional[int]:
     """Minutes between two ISO timestamps, rounded down. None if either is bad."""
     if not start_iso or not end_iso:
@@ -621,8 +637,8 @@ def import_oura_events(user_id: str, workouts: list[dict], sessions: list[dict])
             "activity":        activity,
             "duration_min":    _duration_min_between(w.get("start_datetime"), w.get("end_datetime")),
             "distance_meters": w.get("distance"),
-            "avg_hr":          w.get("average_heart_rate"),
-            "calories_kcal":   w.get("calories"),
+            "avg_hr":          _int_or_none(w.get("average_heart_rate")),
+            "calories_kcal":   _int_or_none(w.get("calories")),
             "exercises":       [],
             "muscle_groups":   [],
             "logged_at":       w.get("start_datetime") or None,
@@ -646,7 +662,7 @@ def import_oura_events(user_id: str, workouts: list[dict], sessions: list[dict])
             "external_id":   sid,
             "activity":      stype,
             "duration_min":  _duration_min_between(s.get("start_datetime"), s.get("end_datetime")),
-            "avg_hr":        avg_hr,
+            "avg_hr":        _int_or_none(avg_hr),
             "exercises":     [],
             "muscle_groups": [],
             "logged_at":     s.get("start_datetime") or None,
@@ -656,8 +672,11 @@ def import_oura_events(user_id: str, workouts: list[dict], sessions: list[dict])
         return 0
     try:
         sb.table("training_workouts").insert(new_rows).execute()
+        log.info("oura events: imported %d rows for %s", len(new_rows), user_id)
         return len(new_rows)
-    except Exception:
+    except Exception as exc:
+        # Never swallow this silently again — it hid a total outage for months.
+        log.warning("oura events: insert of %d rows FAILED for %s: %s", len(new_rows), user_id, exc)
         return 0
 
 

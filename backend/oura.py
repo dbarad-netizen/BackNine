@@ -2,6 +2,8 @@
 Oura OAuth 2.0 + API client
 """
 import httpx
+import logging
+log = logging.getLogger(__name__)
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -101,7 +103,8 @@ async def fetch_workouts(access_token: str, days: int = 30) -> list[dict]:
             r = await client.get(url, headers=headers)
             r.raise_for_status()
             return (r.json() or {}).get("data", []) or []
-    except Exception:
+    except Exception as exc:
+        log.warning("oura /workout fetch failed: %s", exc)
         return []
 
 
