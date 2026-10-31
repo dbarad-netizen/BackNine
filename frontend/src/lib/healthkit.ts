@@ -667,8 +667,12 @@ export async function maybeAutoSync(): Promise<void> {
   // it — he could hold the phone and look at six-hour-old steps. Now
   // every open pulls the last 3 days (cheap: a few hundred samples),
   // throttled to once per 10 minutes.
+  // 7 days, not 3 (Chris 2026-10-30): he charged the watch Tuesday
+  // night, the watch handed Tuesday to Health a day late, and a 3-day
+  // window had already moved on — the blank Tuesday sat in the Friday
+  // text. A week catches every late-flushing device; still cheap.
   if (!isRecentQuickSync(10)) {
-    const res = await syncRecent(3, true);
+    const res = await syncRecent(7, true);
     if (res.days_synced > 0) markQuickSyncedNow();
   }
 }

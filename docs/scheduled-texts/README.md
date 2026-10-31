@@ -12,6 +12,6 @@ with the contents of the matching file → save.
 | BackNine Tuesday midweek check-in text      | `tuesday-turn.md`       | Tue 4:00 PM    |
 | BackNine Friday weekend game plan text      | `friday-weekend-plan.md`| Fri 4:00 PM    |
 
-Last change: 2026-10-30 — Josh added to all three (three-player field,
+Last change: 2026-10-30 — Tuesday and Friday now rank by NET like Sunday; Josh added to all three (three-player field,
 🥉, ties share a medal); Friday text now does the week-as-bank-account
 math and ends with a `Your week:` link that opens the pace chart.

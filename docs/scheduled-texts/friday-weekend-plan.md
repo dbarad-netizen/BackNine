@@ -10,7 +10,12 @@ Wherever a query below says '<all ids>', include all three user_ids.
 
 STEP 1 — Headline scores. From `weekly_healthspan_history` (user_id, date, score, grade), most recent row per user this week (Monday through today):
   select user_id, date, score from weekly_healthspan_history where user_id in ('<all ids>') and date >= '<this Monday YYYY-MM-DD>' order by date desc;
-No row this week → "—". If a Tuesday row exists, note the move since Tuesday. Players tied on score share the place.
+No row this week → "—". If a Tuesday row exists, note the move since Tuesday.
+
+STEP 1b — PAR and NET (the texts and the League board must tell the same story; Sunday plays net, so do we). For each user, PAR = average of the BEST 40% (at least 3) of that user's daily `score` values in the 28 days BEFORE this Monday, capped at 90:
+  select user_id, score from weekly_healthspan_history where user_id in ('<all ids>') and date >= '<Monday minus 28 days>' and date < '<this Monday>';
+  Sort each user's scores descending, take the top max(3, round(0.4 × count)), average, round, then min(90, result). Fewer than 3 scores → no par (show gross only, say so). Fewer than 10 → provisional, write "par 84≈". Also: select user_id, league_hold_until from user_profiles where user_id in ('<all ids>'); league_hold_until >= today → "(medical hold)", listed last, no medal.
+NET = current score − PAR, written "+4" / "−2" / "E". Rank by NET, highest first; ties share the place. Headline each player as "<Name "Nickname" Surname> — +4 (gross 94, par 90)". Par gets at most one short clause once ("par is your best recent month"), never a lecture.
 
 STEP 2 — The week so far, as a bank account (this is the Friday angle: Sunday's score is built from Monday through Sunday only, so what's banked Mon–Thu plus what happens Fri–Sun IS the final card). Use this week's days only — Monday through yesterday for steps and active days (today is partial at 4 PM), Monday through this morning for sleep.
 - David and Josh, from `oura_daily_cache`: sleep hours per night = (sleep_model->>'total')::numeric/3600 where total > 0; steps per day = (activity->>'steps')::numeric; active day = (activity->>'active_cal')::numeric >= 300.
@@ -20,16 +25,16 @@ Then compute what the remaining days need, arithmetic done by you here, never le
 
 STEP 3 — Weekend targets. For each player pick the single best lever from STEP 2 — the target that is still reachable and worth the most points (active days 15, sleep hours 15, steps 10) — and state it as one specific weekend number: "8,900 steps a day through Sunday", "7.4 h both nights", "two more 300-cal days". Weekends are where bedtimes drift and steps drop — call that out.
 
-STEP 4 — VOICE: a mix of David Letterman and Chris Berman. Letterman = dry, deadpan, a little self-deprecating, one sardonic aside per person. Berman = booming sportscaster energy: give each player a fresh invented nickname in quotes derived from THIS run's numbers, and use play-by-play cadence with dramatic ellipses. Golf is the house metaphor (the app is BackNine); for Friday lean on "the weekend is the back nine / don't give strokes back / protect the lead / Saturday tee time" framing. Trash talk aims at the lowest score and is affectionate, never cruel; the leader gets a backhanded compliment; the middle player gets one line. No exclamation points. Emojis only: ⛳ in the header and 🥇🥈🥉.
+STEP 4 — VOICE: a mix of David Letterman and Chris Berman. Letterman = dry, deadpan, a little self-deprecating, one sardonic aside per person. Berman = booming sportscaster energy: give each player a fresh invented nickname in quotes derived from THIS run's numbers, and use play-by-play cadence with dramatic ellipses. Golf is the house metaphor (the app is BackNine); for Friday lean on "the weekend is the back nine / don't give strokes back / protect the lead / Saturday tee time" framing. Trash talk aims at the lowest net and is affectionate, never cruel; the leader gets a backhanded compliment; the middle player gets one line. No exclamation points. Emojis only: ⛳ in the header and 🥇🥈🥉.
 
-STEP 5 — FORMAT (players ordered by score, highest first):
+STEP 5 — FORMAT (players ordered by NET, highest first):
 
 ⛳ BackNine — Weekend Game Plan
 <one-line Letterman cold open, varies each time>
 
-🥇 <Name "Nickname" Surname> — <score>
-🥈 <Name "Nickname" Surname> — <score>
-🥉 <Name "Nickname" Surname> — <score>
+🥇 <Name "Nickname" Surname> — <net> (gross <gross>, par <par>)
+🥈 <Name "Nickname" Surname> — <net> (gross <gross>, par <par>)
+🥉 <Name "Nickname" Surname> — <net> (gross <gross>, par <par>)
 
 <1 sentence read on player 1: what's banked so far with one real number, ending in their weekend target>
 
@@ -37,7 +42,9 @@ STEP 5 — FORMAT (players ordered by score, highest first):
 
 <1 sentence read on player 3: same>
 
-<one-line closer: what's at stake for Sunday's scoreboard>.
+<one-line closer: what's at stake for Sunday's scoreboard — who's buying coffee at the current nets>.
 Your week: backnine.health/league?from=friday&w=<this Monday YYYY-MM-DD>
 
 Keep the whole thing under 150 words. At most two numbers per player. A player with no data gets one roast line ("connect your watch" / "the ring only works if you wear it") instead of a read and is listed last without a medal. If a query fails, add one plain line under the message saying which data is missing — above the Your week line, never after it.
+
+OUTPUT RULE (read last, obey first): your FINAL reply in this run must be the message itself and nothing else. No preamble, no "here is the text", no summary of what you did, no bullet recap of targets, no "ready to paste", no notes after the last line. If you need to report a data problem, it goes as the one plain caveat line inside the message, as described above. The last characters you output are the last line of the message.

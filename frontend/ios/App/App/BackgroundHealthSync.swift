@@ -128,7 +128,7 @@ final class BackgroundHealthSync {
                         return
                     }
                     self.lastSyncAt = Date()
-                    self.syncRecent(days: 3) { _ in completion() }
+                    self.syncRecent(days: 7) { _ in completion() }   // 7 not 3: late-flushing watch (2026-10-30)
                 }
             }
             store.execute(query)
