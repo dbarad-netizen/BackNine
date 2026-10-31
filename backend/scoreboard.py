@@ -77,7 +77,20 @@ def _one_true_line(name: str, comps: dict) -> str:
 
 # ── Build ──────────────────────────────────────────────────────────────
 
-def build(today: Optional[date] = None) -> dict:
+def league_member_ids(sb, monday_iso: str, tier: int = 1) -> list[str]:
+    """Everyone in that week's league — the roster the final card uses
+    (SCOREBOARD_RECIPIENTS is the SMS whitelist, not the field)."""
+    try:
+        lgres = sb.table("leagues").select("id").eq("tier", tier).eq("week_start", monday_iso).limit(1).execute()
+        if not lgres.data:
+            return []
+        mres = sb.table("league_members").select("user_id").eq("league_id", lgres.data[0]["id"]).execute()
+        return sorted({r["user_id"] for r in (mres.data or []) if r.get("user_id")})
+    except Exception:
+        return []
+
+
+def build(today: Optional[date] = None, ids: Optional[list[str]] = None) -> dict:
     """Compute standings + lines for every recipient. Returns
     {"week_label", "text", "rows": [...]}.
 
@@ -90,15 +103,19 @@ def build(today: Optional[date] = None) -> dict:
     today_iso = today.isoformat()
 
     sb = lg._sb()
-    recips = recipients()
-    ids = [uid for uid, _ in recips]
+    if ids is None:
+        ids = [uid for uid, _ in recipients()]
     names = lg._names_for(sb, ids) if sb else {}
 
     rows = []
     for uid in ids:
         name = (names.get(uid) or "Friend").split(" ")[0]
         try:
-            _rm, _slm, am, smm = oc.get_days(uid, days=8)
+            # get_days windows from the real today; when building a past
+            # week (Monday close, or a manual re-close later) reach back
+            # far enough to cover it.
+            back = max(0, (date.today() - today).days) + 8
+            _rm, _slm, am, smm = oc.get_days(uid, days=back)
         except Exception:
             am, smm = {}, {}
         try:

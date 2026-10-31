@@ -1,9 +1,11 @@
-# Coffee Tab — record this week's loser/winner at 3:30pm Pacific Sunday
-# (22:30 UTC in PDT; 23:30 in PST), before the 4pm Sunday text reads it.
-name: Coffee ledger
+# Week close — backup for the in-process close (main.py _maybe_close_week,
+# Monday 6am Pacific). Runs Monday 7:00am Pacific (14:00 UTC in PST; 15:00
+# in PDT — either is after the server's own close). Idempotent: a closed
+# week is left alone.
+name: Week close (backup)
 on:
   schedule:
-    - cron: "30 22 * * 0"
+    - cron: "0 14 * * 1"
   workflow_dispatch:
 jobs:
   record:

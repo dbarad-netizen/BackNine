@@ -1,10 +1,11 @@
-# Daily Health Span snapshot — 3:00pm Pacific (22:00 UTC in PDT), after
-# the day's wearable data has synced and before any evening text reads it.
-# Scores for everyone with recent sensor data, no app open required.
-name: Health Span snapshot
+# Health Span snapshot — BACKUP. The server's 20-minute loop writes
+# yesterday + today for everyone on its own (main.py _snapshot_healthspan_all);
+# this cron just re-runs it once a day at 1:00am Pacific in case the service
+# was down. GitHub cron drops runs — never rely on it as the clock.
+name: Health Span snapshot (backup)
 on:
   schedule:
-    - cron: "0 22 * * *"
+    - cron: "0 9 * * *"
   workflow_dispatch:
 jobs:
   snapshot:

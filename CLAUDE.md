@@ -11,10 +11,16 @@ wrapped in Capacitor for iOS (TestFlight). Backend: FastAPI on Render
 
 ## What the product is
 
-- **The text is the product; the app is the back office.** A Sunday scoreboard
-  text (Letterman × Berman voice) and a midweek "Making the Turn" text drive
-  the foursome. The app is where the stakes live (Coffee Tab) and where you
-  go when the text makes you curious.
+- **The text is the product; the app is the back office.** A Monday-morning
+  final card (Letterman × Berman voice), a Tuesday "Making the Turn" and a
+  Friday game plan drive the foursome. The app is where the stakes live
+  (Coffee Tab) and where you go when the text makes you curious.
+- **The week closes Monday 6 AM Pacific, not Sunday afternoon.** A Sunday
+  4 PM card posted the score with a seventh of the week still being played.
+  `_maybe_close_week` (in the 20-min loop) freezes `coffee_ledger.
+  final_standings` once Sunday is complete; the Monday text and the
+  `/league?w=<last Monday>` link read that frozen card. Never read a week
+  as final before `closed_at` is set. `LEAGUE_TZ` is the clock.
 - **The competition is the hook.** The Weekly League plays *net*, like golf:
   par = best 40% of your daily Health Span scores over the 28 days before
   Monday (capped at 90, can drop at most 3/week, median while history < 20
@@ -76,8 +82,9 @@ wrapped in Capacitor for iOS (TestFlight). Backend: FastAPI on Render
 ## Data plumbing doctrine
 
 - **The server owns the clock.** Nothing depends on a user opening the app:
-  in-process Oura refresh every 20 min (`_start_inproc_oura_refresh`), daily
-  Health Span snapshot, HealthKit *background delivery* on iOS
+  in-process Oura refresh every 20 min (`_start_inproc_oura_refresh`), Health
+  Span snapshot for yesterday + today in the same loop
+  (`_snapshot_healthspan_all`), HealthKit *background delivery* on iOS
   (`BackgroundHealthSync.swift`). GitHub Actions cron is best-effort (it
   dropped ~85% of runs) — use it only as an alarm that goes red.
 - **Oura's document endpoints treat `end_date` as exclusive** and Render runs
@@ -118,10 +125,11 @@ wrapped in Capacitor for iOS (TestFlight). Backend: FastAPI on Render
   auto-deploy from `main` (iOS needs an Xcode archive → TestFlight).
 - Never paste secrets in chat. Keys live in Render env vars; the APNs `.p8`
   was once committed by mistake (revoked 2026-10-26) — `*.p8` is now ignored.
-- Cowork scheduled tasks compose the Sunday/Tuesday/Friday texts from
-  Supabase; their prompts carry the fair/net scoring rules and the player
-  roster (David, Chris, Josh as of 2026-10-27) — update them when scoring
-  changes or a player joins/leaves.
+- Cowork scheduled tasks compose the Monday/Tuesday/Friday texts from
+  Supabase. Claude cannot edit the live tasks: prompts live in
+  `docs/scheduled-texts/` and David pastes them in. They carry the net
+  scoring rules and the roster (David, Chris, Josh as of 2026-10-27) —
+  update them when scoring changes or a player joins/leaves.
 
 ## People (ids in `user_profiles`)
 
@@ -134,7 +142,8 @@ wrapped in Capacitor for iOS (TestFlight). Backend: FastAPI on Render
 
 ## Voice
 
-- The Sunday text: Letterman dry + Berman play-by-play, golf as the house
-  metaphor, affectionate trash talk at the lower net, backhanded compliment to
-  the leader, no exclamation points, ends with the tagged `Full board:` link.
+- The Monday final card: Letterman dry + Berman play-by-play, golf as the
+  house metaphor, affectionate trash talk at the lower net, backhanded
+  compliment to the leader, no exclamation points, ends with the tagged
+  `Full board:` link.
 - Copy on the site promises only what has a face in the app.

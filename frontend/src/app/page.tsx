@@ -149,7 +149,7 @@ export default function LandingPage() {
           </h2>
           <p className="mt-4 text-lg text-zinc-300 max-w-2xl leading-relaxed">
             Invite your spouse, workout partners, or the guys you tee off with
-            Saturday. A weekly league, a Sunday scoreboard, and a coffee tab
+            Saturday. A weekly league, a Monday-morning final card, and a coffee tab
             for whoever finishes last. People quit alone. Nobody quits the
             week the coffee&rsquo;s on them.
           </p>
@@ -302,7 +302,7 @@ export default function LandingPage() {
               { emoji: "🏋️", title: "Training",  body: "One workout a day tuned to how you slept and what you did yesterday." },
               { emoji: "🥗", title: "Nutrition", body: "Protein streak, meal photos, meds + supplement adherence." },
               { emoji: "💡", title: "Insight",   body: "Coach Al’s morning read — what last night means for today, in plain English." },
-              { emoji: "🤝", title: "Community", body: "Your foursome: the Weekly League, the Sunday scoreboard, the Coffee Tab." },
+              { emoji: "🤝", title: "Community", body: "Your foursome: the Weekly League, the Monday final card, the Coffee Tab." },
             ].map(p => (
               <li key={p.title} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
                 <p className="text-2xl mb-2">{p.emoji}</p>

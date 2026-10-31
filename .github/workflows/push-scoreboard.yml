@@ -1,8 +1,10 @@
-# Sunday scoreboard push — 5:00pm Pacific Sunday (00:00 UTC Monday in PDT).
-name: Push — Sunday scoreboard
+# Final-card push — Monday 7:30am Pacific (15:30 UTC in PDT; 14:30 in PST),
+# after the week has closed with a full Sunday. Was 5pm Sunday, which pushed
+# a card with a seventh of the week still being played (David 2026-10-31).
+name: Push — final card
 on:
   schedule:
-    - cron: "0 0 * * 1"
+    - cron: "30 15 * * 1"
   workflow_dispatch:
 jobs:
   send:

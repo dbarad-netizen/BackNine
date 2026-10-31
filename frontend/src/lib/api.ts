@@ -3318,6 +3318,10 @@ export const api = {
     league(): Promise<LeagueResponse> {
       return request("/api/leagues/current");
     },
+    /** Frozen final card for the week starting `w` (Monday). Null standings when not closed yet. */
+    finalCard(w?: string): Promise<FinalCard> {
+      return request(`/api/leagues/final${w ? `?w=${encodeURIComponent(w)}` : ""}`);
+    },
     /** Week pace: snapshots so far, par, same-pace projection, what it takes. */
     pace(): Promise<WeekPace> {
       return request(`/api/leagues/pace?date=${localToday()}`);
@@ -3710,6 +3714,21 @@ export interface LeagueResponse {
   /** Band keys every scored player shares (math view). */
   common_bands?: string[];
   scoring?: { mode: "net" | "gross"; par_rule: string; scratch_par: number };
+}
+
+export interface FinalCardRow {
+  user_id: string; name: string; is_me?: boolean;
+  score: number | null; par: number | null; par_provisional?: boolean | null;
+  net: number | null; on_hold?: boolean;
+  bands?: Record<string, { points: number | null; max: number | null; value?: string; label?: string }>;
+}
+export interface FinalCard {
+  week_start: string | null;
+  closed_at?: string | null;
+  standings: FinalCardRow[] | null;
+  loser_user_id?: string | null;
+  winner_user_id?: string | null;
+  settled?: boolean;
 }
 
 export interface WeekPaceBand { points: number; max: number }

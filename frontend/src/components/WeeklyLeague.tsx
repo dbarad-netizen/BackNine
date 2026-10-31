@@ -15,7 +15,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { api, type LeagueResponse, type LeagueBreakdownItem, type LeagueCategory, type WeekPace } from "@/lib/api";
+import { api, type LeagueResponse, type LeagueBreakdownItem, type LeagueCategory, type WeekPace, type FinalCard } from "@/lib/api";
 
 interface Props {
   /** Open the share/invite sheet — surfaced when the league is sparse. */
@@ -85,6 +85,21 @@ export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
   // pass/fail days. Fetched when opened — it walks the week's raw data.
   // The Friday text links backnine.health/league?from=friday → open this
   // section straight away so the tap lands on the thing the text promised.
+  // Final card (David 2026-10-31): the week closes Monday morning, so the
+  // Monday text links /league?w=<last Monday>. When `w` names a finished
+  // week we show that week's frozen card on top, not the fresh empty one.
+  const [finalCard, setFinalCard] = useState<FinalCard | null>(null);
+  const [showFinal, setShowFinal] = useState(true);
+  useEffect(() => {
+    let w = "";
+    try { w = new URLSearchParams(window.location.search).get("w") || ""; } catch { /* noop */ }
+    if (!w) return;
+    // Only a week that has already ended can have a final card.
+    const monday = new Date(w + "T12:00:00");
+    const sunday = new Date(monday.getTime() + 6 * 86400_000);
+    if (isNaN(monday.getTime()) || sunday.getTime() > Date.now()) return;
+    api.friends.finalCard(w).then(fc => { if (fc?.standings) setFinalCard(fc); }).catch(() => { /* soft */ });
+  }, []);
   const [showPace, setShowPace] = useState<boolean>(() => {
     try { return typeof window !== "undefined" && new URLSearchParams(window.location.search).get("from") === "friday"; }
     catch { return false; }
@@ -160,6 +175,9 @@ export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
 
   return (
     <section className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+      {finalCard?.standings && showFinal && (
+        <FinalCardPanel card={finalCard} onDismiss={() => setShowFinal(false)} />
+      )}
       {/* Header */}
       <div
         className="px-5 py-3.5 flex items-center justify-between"
@@ -455,6 +473,51 @@ function WeekPaceChart({ pace }: { pace: WeekPace }) {
       <p className="text-[10px] text-gray-500 mt-2">
         Bars are each day&apos;s Health Span so far this week; the dotted line is where Sunday lands at the same pace. Steps and active days count full days only.
       </p>
+    </div>
+  );
+}
+
+
+/** Last week's frozen card — what the Monday text links to. */
+function FinalCardPanel({ card, onDismiss }: { card: FinalCard; onDismiss: () => void }) {
+  const rows = card.standings ?? [];
+  const monday = card.week_start ? new Date(card.week_start + "T12:00:00") : null;
+  const label = monday ? `Week of ${monday.toLocaleDateString(undefined, { month: "short", day: "numeric" })}` : "Last week";
+  const loser = rows.find(r => r.user_id === card.loser_user_id);
+  return (
+    <div className="border-b border-gray-100 bg-[#f5f3ee]">
+      <div className="px-5 py-3 flex items-center justify-between">
+        <div>
+          <p className="text-[10px] uppercase tracking-widest text-gray-500 font-semibold">Final card · {label}</p>
+          <p className="text-xs text-gray-600">Seven full days, closed Monday morning</p>
+        </div>
+        <button onClick={onDismiss} className="text-[11px] font-semibold text-[#1B3829] hover:underline">This week →</button>
+      </div>
+      <div className="divide-y divide-gray-100 border-t border-gray-100 bg-white/60">
+        {rows.map((r, i) => (
+          <div key={r.user_id} className={`flex items-center gap-3 px-4 py-2 ${r.is_me ? "bg-[#1B3829]/5" : ""}`}>
+            <span className="w-7 text-center text-sm font-bold">{i < 3 && !r.on_hold && r.score != null ? MEDAL[i] : ""}</span>
+            <span className={`flex-1 text-sm truncate ${r.is_me ? "font-bold text-[#1B3829]" : "text-gray-700"}`}>{r.is_me ? "You" : r.name}</span>
+            {r.on_hold ? (
+              <span className="text-[11px] font-semibold text-gray-500">medical hold</span>
+            ) : r.net != null ? (
+              <span className={`text-sm font-bold tabular-nums ${r.net > 0 ? "text-emerald-700" : r.net < 0 ? "text-red-600" : "text-gray-700"}`}>
+                {r.net > 0 ? "+" : ""}{r.net}
+              </span>
+            ) : (
+              <span className="text-sm font-semibold text-gray-400">—</span>
+            )}
+            <span className="text-[11px] text-gray-600 tabular-nums">
+              {r.score != null ? `${r.score} HS` : "— HS"}{r.par != null ? ` · par ${r.par}${r.par_provisional ? "≈" : ""}` : ""}
+            </span>
+          </div>
+        ))}
+      </div>
+      {loser && (
+        <p className="px-5 py-2 text-[11px] text-gray-700">
+          Coffee&apos;s on {loser.is_me ? "you" : loser.name}{card.settled ? " — settled" : ""}.
+        </p>
+      )}
     </div>
   );
 }

@@ -1501,20 +1501,29 @@ async def push_morning(request: Request):
 
 @app.post("/admin/push/scoreboard")
 async def push_scoreboard(request: Request):
-    """Sunday: push the scoreboard headline to every SCOREBOARD_RECIPIENT."""
+    """Monday morning: push the final card for the week that just
+    ended, net of par, to that week's league members."""
     _check_admin(request)
     import push
     import scoreboard as scb
-    built = scb.build()
+    t = _league_today()
+    sunday = t - timedelta(days=(t.weekday() + 1) % 7)
+    week_start = (sunday - timedelta(days=6)).isoformat()
+    ids = scb.league_member_ids(get_supabase(), week_start) or None
+    built = scb.build(today=sunday, ids=ids)
     rows = built["rows"]
     if not rows:
         raise HTTPException(status_code=400, detail="no recipients")
-    standings = " · ".join(f"{r['name']} {r['score'] if r['score'] is not None else '—'}" for r in rows)
+    def _h(r):
+        if r.get("net") is None:
+            return f"{r['name']} {r['score'] if r['score'] is not None else '—'}"
+        return f"{r['name']} {'+' if r['net'] > 0 else ''}{r['net']}"
+    standings = " · ".join(_h(r) for r in rows)
     results = {}
     for r in rows:
         results[r["name"]] = await push.send_to_user(
-            r["user_id"], f"Sunday scoreboard — {built['week_label']}",
-            f"{standings}. {r['line']}", data={"route": "league"}, collapse_id="scoreboard",
+            r["user_id"], f"Final card — {built['week_label']}",
+            f"{standings}. {r['line']}", data={"route": "league", "w": week_start}, collapse_id="scoreboard",
         )
     return {"week_label": built["week_label"], "results": results}
 
@@ -1645,21 +1654,26 @@ async def healthspan_backfill(request: Request, user_id: Optional[str] = None, d
     return {"users": len(ids), "written": out}
 
 
-@app.post("/admin/healthspan/snapshot")
-async def healthspan_snapshot(request: Request):
-    """Daily cron (David 2026-10-07): persist today's Health Span for
-    every user with recent sensor data, whether or not they opened the
-    app. Before this, weekly_healthspan_history only got a row on a
-    dashboard load — so the Tuesday text showed Chris as '—' because he
-    hadn't opened BackNine since Sunday. The texts exist precisely so
-    nobody has to open anything; the scores have to keep up."""
-    _check_admin(request)
+LEAGUE_TZ = "America/Los_Angeles"   # the clock the week closes on (David 2026-10-31)
+
+
+def _league_today() -> date:
+    from zoneinfo import ZoneInfo
+    return datetime.now(tz=ZoneInfo(LEAGUE_TZ)).date()
+
+
+def _snapshot_healthspan_all(dates: list[str]) -> dict:
+    """Persist the Health Span snapshot for every user with recent
+    sensor data, for each date given — no app open required. Runs
+    from the 20-minute server loop for yesterday and today (David
+    2026-10-31: the Sunday card used to be frozen at 3 PM by a GitHub
+    cron, with a seventh of the week still being played; now Sunday's
+    row keeps updating until the week is actually over and the Monday
+    text reads a finished day). Each date is an as-of computation."""
     db = get_supabase()
-    if not db:
-        raise HTTPException(status_code=500, detail="db unavailable")
-    from datetime import date as _d
-    today = _d.today()
-    since = (today - timedelta(days=7)).isoformat()
+    if not db or not dates:
+        return {}
+    since = (date.fromisoformat(max(dates)) - timedelta(days=7)).isoformat()
     ids: set[str] = set()
     for table in ("apple_health_daily", "oura_daily_cache"):
         try:
@@ -1667,20 +1681,30 @@ async def healthspan_snapshot(request: Request):
             ids |= {r["user_id"] for r in (res.data or []) if r.get("user_id")}
         except Exception:
             pass
-    results = {}
+    results: dict = {}
     for uid in sorted(ids):
         try:
-            _rm, _slm, am, smm = oc.get_days(uid, days=8)
+            _rm, _slm, am, smm = oc.get_days(uid, days=10)
         except Exception:
             am, smm = {}, {}
-        try:
-            snap = hspan.compute(uid, today.isoformat(), am or {}, smm or {}, {})
-            if snap.get("score") is not None:
-                hspan.persist_and_delta(uid, today.isoformat(), snap)
-            results[uid[:8]] = snap.get("score")
-        except Exception as e:
-            results[uid[:8]] = f"error: {str(e)[:80]}"
-    return {"date": today.isoformat(), "users": len(ids), "scores": results}
+        for d in dates:
+            try:
+                snap = hspan.compute(uid, d, am or {}, smm or {}, {})
+                if snap.get("score") is not None:
+                    hspan.persist_and_delta(uid, d, snap)
+                results[f"{uid[:8]}@{d}"] = snap.get("score")
+            except Exception as e:
+                results[f"{uid[:8]}@{d}"] = f"error: {str(e)[:80]}"
+    return {"users": len(ids), "dates": dates, "scores": results}
+
+
+@app.post("/admin/healthspan/snapshot")
+async def healthspan_snapshot(request: Request):
+    """Alarm/backup for the in-process snapshot (GitHub cron drops runs;
+    the loop is the real clock). Writes yesterday + today, League time."""
+    _check_admin(request)
+    t = _league_today()
+    return _snapshot_healthspan_all([(t - timedelta(days=1)).isoformat(), t.isoformat()])
 
 
 @app.post("/admin/oura/refresh")
@@ -1885,6 +1909,21 @@ async def _start_inproc_oura_refresh() -> None:
                     log.error("in-process oura refresh: stale after run: %s", body["stale_after_run"])
             except Exception:
                 log.exception("in-process oura refresh failed")
+            # Health Span snapshot for yesterday + today (League time),
+            # right after the Oura cache is fresh. Server owns the clock.
+            try:
+                t = _league_today()
+                await asyncio.to_thread(_snapshot_healthspan_all,
+                                        [(t - timedelta(days=1)).isoformat(), t.isoformat()])
+            except Exception:
+                log.exception("in-process healthspan snapshot failed")
+            # Close the week once, Monday morning League time, after the
+            # Sunday snapshot above is final: freeze the final card and
+            # record the coffee.
+            try:
+                await asyncio.to_thread(_maybe_close_week)
+            except Exception:
+                log.exception("week close failed")
             await asyncio.sleep(_INPROC_REFRESH_MINUTES * 60)
 
     asyncio.create_task(_loop())
@@ -1938,27 +1977,100 @@ async def food_plan_day(request: Request):
     return {"ok": ok}
 
 
-@app.post("/admin/coffee/record")
-async def coffee_record(request: Request):
-    """Sunday cron: write this week's loser/winner from the scoreboard
-    standings. Idempotent per week_start."""
-    _check_admin(request)
+WEEK_CLOSE_HOUR = 6   # Monday, League time — after Sunday's last snapshot
+
+
+def _close_week(sunday: date, force: bool = False) -> dict:
+    """Freeze the final card for the week ending `sunday`: standings as
+    of Sunday (full seven days), coffee loser/winner, closed_at.
+    Idempotent — a closed week is never re-closed unless forced."""
     import scoreboard as scb
-    built = scb.build()
-    scored = [r for r in built["rows"] if r.get("score") is not None]
-    if len(scored) < 2:
-        return {"recorded": False, "reason": "fewer than 2 scored players"}
-    winner, loser = scored[0], scored[-1]
-    from datetime import date as _d
-    today = _d.today()
-    week_start = (today - timedelta(days=today.weekday())).isoformat()
     db = get_supabase()
+    if not db:
+        return {"closed": False, "reason": "db unavailable"}
+    week_start = (sunday - timedelta(days=6)).isoformat()
+    try:
+        ex = db.table("coffee_ledger").select("closed_at").eq("week_start", week_start).limit(1).execute()
+        if ex.data and ex.data[0].get("closed_at") and not force:
+            return {"closed": False, "reason": "already closed", "week_start": week_start}
+    except Exception:
+        pass
+    ids = scb.league_member_ids(db, week_start) or None   # that week's field; env whitelist as fallback
+    built = scb.build(today=sunday, ids=ids)
+    rows = built["rows"]
+    scored = [r for r in rows if r.get("score") is not None and not r.get("on_hold")]
+    if len(scored) < 2:
+        return {"closed": False, "reason": "fewer than 2 scored players", "week_start": week_start}
+    winner, loser = scored[0], scored[-1]
+    final = [{
+        "user_id": r["user_id"], "name": r["name"], "score": r.get("score"),
+        "par": r.get("par"), "par_provisional": r.get("par_provisional"),
+        "net": r.get("net"), "on_hold": r.get("on_hold", False),
+        "bands": {k: {"points": v.get("points"), "max": v.get("max"), "value": v.get("value"), "label": v.get("label")}
+                  for k, v in (r.get("_components") or {}).items()},
+    } for r in rows]
     db.table("coffee_ledger").upsert({
         "week_start": week_start,
         "loser_user_id": loser["user_id"], "winner_user_id": winner["user_id"],
         "loser_score": loser["score"], "winner_score": winner["score"],
+        "final_standings": final,
+        "closed_at": datetime.now(timezone.utc).isoformat(),
     }, on_conflict="week_start").execute()
-    return {"recorded": True, "week_start": week_start, "loser": loser["name"], "winner": winner["name"]}
+    log.info("week closed: %s loser=%s winner=%s", week_start, loser["name"], winner["name"])
+    return {"closed": True, "week_start": week_start, "loser": loser["name"], "winner": winner["name"], "final": final}
+
+
+def _maybe_close_week() -> None:
+    """Called from the 20-min loop. On Monday at/after WEEK_CLOSE_HOUR
+    (League time) close the week that ended yesterday, once."""
+    from zoneinfo import ZoneInfo
+    now = datetime.now(tz=ZoneInfo(LEAGUE_TZ))
+    if now.weekday() != 0 or now.hour < WEEK_CLOSE_HOUR:
+        return
+    res = _close_week(now.date() - timedelta(days=1))
+    if res.get("closed"):
+        log.info("week close: %s", res)
+
+
+@app.post("/admin/coffee/record")
+async def coffee_record(request: Request, week_end: Optional[str] = None, force: bool = False):
+    """Close a week (default: the most recent Sunday, League time) —
+    freeze the final card + coffee. The loop does this on its own
+    Monday morning; this endpoint is the manual/backup path."""
+    _check_admin(request)
+    if week_end:
+        sunday = date.fromisoformat(week_end)
+    else:
+        t = _league_today()
+        sunday = t - timedelta(days=(t.weekday() + 1) % 7)   # most recent Sunday (today if Sunday)
+    return _close_week(sunday, force=force)
+
+
+@app.get("/api/leagues/final")
+def get_final_card(request: Request, w: Optional[str] = None):
+    """The frozen final card for the week starting `w` (Monday). The
+    Monday text links here; without this the link landed on a fresh,
+    empty week (David 2026-10-31)."""
+    session = _require_session(request)
+    me = session["user_id"]
+    db = get_supabase()
+    if not db:
+        return {"week_start": w, "standings": None}
+    try:
+        q = db.table("coffee_ledger").select("week_start, final_standings, closed_at, loser_user_id, winner_user_id, settled_at")
+        q = q.eq("week_start", w) if w else q.order("week_start", desc=True)
+        res = q.limit(1).execute()
+    except Exception:
+        return {"week_start": w, "standings": None}
+    row = (res.data or [None])[0]
+    if not row or not row.get("final_standings"):
+        return {"week_start": w, "standings": None}
+    standings = [{**r, "is_me": r.get("user_id") == me} for r in row["final_standings"]]
+    return {
+        "week_start": str(row["week_start"]), "closed_at": row.get("closed_at"),
+        "standings": standings, "loser_user_id": row.get("loser_user_id"),
+        "winner_user_id": row.get("winner_user_id"), "settled": bool(row.get("settled_at")),
+    }
 
 
 @app.post("/admin/scoreboard/send")
