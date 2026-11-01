@@ -276,9 +276,11 @@ def sync_day(user_id: str, payload: dict) -> dict:
             "blood_pressure_systolic": ("blood_pressure_systolic","mmHg"),
             "blood_pressure_diastolic":("blood_pressure_diastolic","mmHg"),
         }
-        for ah_key, (metric, unit) in _AH_TO_METRIC.items():
-            if ah_key in row and row[ah_key] is not None:
-                _dr.upsert_reading(user_id, "apple_health", metric, date_str, row[ah_key], unit)
+        _dr.upsert_batch([
+            {"user_id": user_id, "source": "apple_health", "metric": metric, "date": date_str,
+             "value": row.get(ah_key), "unit": unit}
+            for ah_key, (metric, unit) in _AH_TO_METRIC.items() if row.get(ah_key) is not None
+        ])
     except Exception:
         pass
 

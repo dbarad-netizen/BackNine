@@ -68,20 +68,21 @@ def store_days(user_id: str, rm: dict, slm: dict, am: dict, smm: dict) -> int:
     # readers walk); device_readings is the cross-source resolver. Best-effort.
     try:
         import device_readings as _dr
+        batch = []
         for d in all_dates:
             a  = am.get(d) or {}
             sm = smm.get(d) or {}
-            # Steps + active calories from activity model
-            _dr.upsert_reading(user_id, "oura", "steps",           d, a.get("steps"),       "count")
-            _dr.upsert_reading(user_id, "oura", "active_calories", d, a.get("active_cal"),  "kcal")
-            # Sleep hours from total_sleep_duration (seconds → hours)
             sleep_sec = sm.get("total")
-            if sleep_sec:
-                _dr.upsert_reading(user_id, "oura", "sleep_hours", d,
-                                   round(float(sleep_sec) / 3600, 2), "hours")
-            # HRV + RHR from the per-night summary
-            _dr.upsert_reading(user_id, "oura", "hrv",        d, sm.get("hrv"), "ms")
-            _dr.upsert_reading(user_id, "oura", "resting_hr", d, sm.get("rhr"), "bpm")
+            batch += [
+                {"user_id": user_id, "source": "oura", "metric": "steps",           "date": d, "value": a.get("steps"),      "unit": "count"},
+                {"user_id": user_id, "source": "oura", "metric": "active_calories", "date": d, "value": a.get("active_cal"), "unit": "kcal"},
+                {"user_id": user_id, "source": "oura", "metric": "sleep_hours",     "date": d,
+                 "value": (round(float(sleep_sec) / 3600, 2) if sleep_sec else None), "unit": "hours"},
+                {"user_id": user_id, "source": "oura", "metric": "hrv",             "date": d, "value": sm.get("hrv"),       "unit": "ms"},
+                {"user_id": user_id, "source": "oura", "metric": "resting_hr",      "date": d, "value": sm.get("rhr"),       "unit": "bpm"},
+            ]
+        # One request per 200 rows instead of one per reading (2026-11-01).
+        _dr.upsert_batch(batch)
     except Exception:
         pass
 

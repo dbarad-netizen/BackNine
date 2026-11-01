@@ -144,6 +144,52 @@ def upsert_reading(
         pass
 
 
+def upsert_batch(rows: List[Dict[str, Any]]) -> int:
+    """Write many readings in a few requests instead of one request each.
+    2026-11-01: the Oura cache dual-write was 5 metrics × 14 days × every
+    user = 300+ sequential HTTP upserts per refresh, run on the event
+    loop — the app froze for a minute every 20 min and the dashboard
+    wouldn't load. Rows: {user_id, source, metric, date, value, unit?,
+    metadata?}; None/NaN values are dropped. Returns rows written."""
+    clean: List[Dict[str, Any]] = []
+    for r in rows or []:
+        v = r.get("value")
+        if v is None:
+            continue
+        try:
+            v = float(v)
+        except (TypeError, ValueError):
+            continue
+        if v != v:
+            continue
+        if not (r.get("user_id") and r.get("source") and r.get("metric") and r.get("date")):
+            continue
+        clean.append({
+            "user_id": r["user_id"], "source": r["source"], "metric": r["metric"],
+            "date": r["date"], "value": v, "unit": r.get("unit"),
+            "metadata": r.get("metadata") or {}, "updated_at": "now()",
+        })
+    if not clean:
+        return 0
+    # Dedupe on the conflict key (a batch upsert with two rows for the same
+    # key is a Postgres error, not a merge).
+    seen: Dict[tuple, Dict[str, Any]] = {}
+    for r in clean:
+        seen[(r["user_id"], r["source"], r["metric"], r["date"])] = r
+    clean = list(seen.values())
+    try:
+        sb = _sb()
+        for i in range(0, len(clean), 200):
+            sb.table("device_readings").upsert(
+                clean[i:i + 200], on_conflict="user_id,source,metric,date"
+            ).execute()
+        return len(clean)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("device_readings batch upsert failed (%d rows): %s", len(clean), exc)
+        return 0
+
+
 def upsert_many(
     user_id:  str,
     source:   str,

@@ -157,6 +157,11 @@ def _source_is_active(sb: Client, table: str, user_id: str,
         return False
 
 
+def _looks_like_uuid(v: str) -> bool:
+    import re
+    return bool(re.fullmatch(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", v or ""))
+
+
 def is_oura_paused(user_id: str) -> bool:
     """Has the user marked Oura as intentionally paused? Reads
     profiles.oura_paused_at — any non-null timestamp means "paused."
@@ -164,6 +169,11 @@ def is_oura_paused(user_id: str) -> bool:
     suppress the freshness signal if we can't check)."""
     sb = _sb()
     if not sb or not user_id:
+        return False
+    # profiles.id is a UUID; Oura text ids ("oura_…") can't be paused there
+    # and were producing a 400 on every call — 48 per dashboard load
+    # (2026-11-01 Supabase logs). Skip the round trip.
+    if not _looks_like_uuid(user_id):
         return False
     try:
         res = (sb.table("profiles")

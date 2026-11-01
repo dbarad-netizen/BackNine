@@ -1802,7 +1802,10 @@ async def _oura_refresh_all_users() -> dict:
                 report[key + " note"] = "token force-refreshed"
             r14, s14, a14, m14 = parse_oura_data(raw)
             if r14 or s14 or a14 or m14:
-                oc.store_days(uid, r14, s14, a14, m14)
+                # Off the event loop (2026-11-01): store_days is synchronous
+                # HTTP; running it inline froze every request for the
+                # duration of the write, and the dashboard "wouldn't load".
+                await asyncio.to_thread(oc.store_days, uid, r14, s14, a14, m14)
                 latest = max(list(r14) + list(s14) + list(a14) + list(m14))
                 report[key] = f"ok through {latest}"
             else:
@@ -2268,7 +2271,7 @@ async def _refresh_oura_cache_bg(user_id: str, access_token: str, days: int) -> 
             raw14 = await fetch_all(access_token, days=14)
             r14, s14, a14, m14 = parse_oura_data(raw14)
             if r14 or s14 or a14 or m14:
-                oc.store_days(user_id, r14, s14, a14, m14)
+                await asyncio.to_thread(oc.store_days, user_id, r14, s14, a14, m14)
         except Exception as _e:
             # Oct 9: David's cache sat untouched for 24h+ (last write Oct 8
             # 14:04 UTC) while the dashboard served it as "fresh". This
@@ -2279,7 +2282,7 @@ async def _refresh_oura_cache_bg(user_id: str, access_token: str, days: int) -> 
             live_rm, live_slm, live_am, live_smm = parse_oura_data(raw)
             if live_rm or live_slm or live_am or live_smm:
                 try:
-                    oc.store_days(user_id, live_rm, live_slm, live_am, live_smm)
+                    await asyncio.to_thread(oc.store_days, user_id, live_rm, live_slm, live_am, live_smm)
                 except Exception:
                     pass
         try:
@@ -2746,7 +2749,7 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
                 oura_vo2_max = parse_oura_vo2_max(raw)
                 # Upsert only the freshly-fetched days into the cache.
                 try:
-                    oc.store_days(user_id, live_rm, live_slm, live_am, live_smm)
+                    await asyncio.to_thread(oc.store_days, user_id, live_rm, live_slm, live_am, live_smm)
                 except Exception:
                     pass
                 # Deep history refresh happens off the request path.
