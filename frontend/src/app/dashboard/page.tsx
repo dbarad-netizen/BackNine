@@ -2448,8 +2448,12 @@ export default function DashboardPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-600">{e.date}</span>
-                        <button onClick={() => handleDeleteWeight(e.id)}
-                          className="text-gray-600 hover:text-red-400 transition-colors text-lg leading-none">×</button>
+                        {e.source === "apple_health" ? (
+                          <span className="text-xs" title="From Apple Health (InBody, Withings, etc.) — remove it there">⌚</span>
+                        ) : (
+                          <button onClick={() => handleDeleteWeight(e.id)}
+                            className="text-gray-600 hover:text-red-400 transition-colors text-lg leading-none">×</button>
+                        )}
                       </div>
                     </div>
                   ))}

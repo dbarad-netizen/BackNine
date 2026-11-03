@@ -1291,6 +1291,8 @@ export interface WeightEntry {
   date:                     string;
   weight_lbs:               number;
   logged_at:                string;
+  /** "manual" (incl. hand-entered InBody) or "apple_health" (InBody → Health → BackNine). AH rows can't be deleted here. */
+  source?:                  "manual" | "apple_health";
   // Optional body comp
   body_fat_pct?:             number;
   fat_mass_lbs?:             number;

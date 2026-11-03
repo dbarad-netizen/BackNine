@@ -226,9 +226,46 @@ def recent_foods(user_id: str, limit: int = 12) -> List[dict]:
 # ── Weight / body composition ─────────────────────────────────────────────────
 
 def get_weight_entries(user_id: str = "default") -> List[dict]:
+    """Manual/InBody entries merged with Apple Health body composition.
+
+    David 2026-11-03: InBody writes weight + body fat to Apple Health,
+    the HealthKit sync stored them in apple_health_daily (Oct 19, Nov 1),
+    and the Nutrition tab never looked there — it only read this table,
+    which stopped at a hand-entered Sept 15. Read-time merge: an Apple
+    Health day fills in only when no manual entry exists for that date
+    (manual wins — it carries the segmental InBody detail). Synthetic
+    ids ("ah_<date>") are not deletable; the UI hides the button."""
     sb = _sb()
     res = sb.table("nutrition_weight").select("*").eq("user_id", user_id).order("date").execute()
-    return res.data or []
+    manual = res.data or []
+    for r in manual:
+        r.setdefault("source", "manual")
+    have = {str(r.get("date"))[:10] for r in manual}
+    merged = list(manual)
+    try:
+        ah = (sb.table("apple_health_daily")
+                .select("date, weight_kg, body_fat_percentage, lean_body_mass_kg, updated_at")
+                .eq("user_id", user_id)
+                .not_.is_("weight_kg", "null")
+                .order("date").execute())
+        for r in (ah.data or []):
+            d = str(r.get("date"))[:10]
+            if d in have or not r.get("weight_kg"):
+                continue
+            lbs = round(float(r["weight_kg"]) / 0.45359237, 1)
+            bf = float(r["body_fat_percentage"]) if r.get("body_fat_percentage") is not None else None
+            lean = (round(float(r["lean_body_mass_kg"]) / 0.45359237, 1) if r.get("lean_body_mass_kg")
+                    else (round(lbs * (1 - bf / 100), 1) if bf is not None else None))
+            merged.append({
+                "id": f"ah_{d}", "user_id": user_id, "date": d, "source": "apple_health",
+                "weight_lbs": lbs, "body_fat_pct": bf,
+                "fat_mass_lbs": (round(lbs * bf / 100, 1) if bf is not None else None),
+                "lean_mass_lbs": lean, "logged_at": r.get("updated_at"),
+            })
+    except Exception:
+        pass
+    merged.sort(key=lambda r: str(r.get("date")))
+    return merged
 
 
 def add_weight_entry(
