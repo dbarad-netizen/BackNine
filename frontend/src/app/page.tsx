@@ -224,6 +224,15 @@ export default function LandingPage() {
           <p className="mt-6 text-sm text-zinc-500">
             If all you want is a prettier recovery dashboard, there are good free ones. That&rsquo;s not this.
           </p>
+          {/* Apple Fitness+ Gym Strength (announced 2026-11-03): an input,
+              not a competitor. Its Watch-logged sessions arrive as HealthKit
+              workouts, which BackNine imports as events. Re-check the claim
+              quarterly with the rest of the competitor facts. */}
+          <p className="mt-3 text-sm text-zinc-500">
+            Using Apple Fitness+ Gym Strength? Good — every session you log on the Watch
+            counts as a workout here and toward your active days. We don&rsquo;t build
+            training plans; we keep score. <span className="text-zinc-600">(Checked Nov 2026.)</span>
+          </p>
         </div>
       </section>
 
