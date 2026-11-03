@@ -250,6 +250,11 @@ def sync_day(user_id: str, payload: dict) -> dict:
     sb.table("apple_health_daily").upsert(
         row, on_conflict="user_id,date"
     ).execute()
+    try:
+        import readcache
+        readcache.invalidate(user_id)
+    except Exception:
+        pass
 
     # Dual-write to the unified device_readings table. AH stays the canonical
     # AH-specific store for now (some queries still hit it); device_readings
@@ -316,17 +321,25 @@ def get_data(user_id: str, days: int = 30, end_date: Optional[str] = None) -> Li
     # history their watch already has, instead of a provisional first week.
     _end = date.fromisoformat(end_date[:10]) if end_date else date.today()
     since = (_end - timedelta(days=days - 1)).isoformat()
-    sb = _sb()
-    res = (
-        sb.table("apple_health_daily")
-        .select("*")
-        .eq("user_id", user_id)
-        .gte("date", since)
-        .lte("date", _end.isoformat())
-        .order("date", desc=True)
-        .execute()
-    )
-    rows = res.data or []
+
+    def _load():
+        sb = _sb()
+        res = (
+            sb.table("apple_health_daily")
+            .select("*")
+            .eq("user_id", user_id)
+            .gte("date", since)
+            .lte("date", _end.isoformat())
+            .order("date", desc=True)
+            .execute()
+        )
+        return res.data or []
+
+    # 60-second memo (readcache, 2026-11-03): one dashboard open issued this
+    # exact read 325 times. Writes (sync_day, the aggregated import)
+    # invalidate the user's entries.
+    import readcache
+    rows = readcache.get_or_load(user_id, ("ah_data", since, _end.isoformat()), _load)
     # Sanity clamps — multi-source HealthKit overlap (iPhone + Apple
     # Watch + third-party apps all writing the same day's activity to
     # Apple Health) can inflate these values 2-3x. Values above the

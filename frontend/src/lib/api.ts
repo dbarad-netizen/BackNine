@@ -183,7 +183,12 @@ export function clearToken(): void {
 // Cache is cleared on logout (above) so a previous user's dashboard never
 // leaks into a new session.
 const DASHBOARD_CACHE_KEY = "bn_dashboard_cache";
-const DASHBOARD_CACHE_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour — older than this, don't pretend it's fresh
+// 24 h, not 1 h (David 2026-11-03, "speed could be a killer"): after an hour
+// the user got the spinner again. The payload carries its own honesty —
+// "Last scored Oct 8", "Waiting on Oura", synced-at stamps — so painting
+// yesterday's card for the second it takes to refresh is honest. Past a
+// day it's a different person's week; start clean.
+const DASHBOARD_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 export function readDashboardCache(): unknown {
   if (typeof window === "undefined") return null;
@@ -211,7 +216,30 @@ export function writeDashboardCache(data: unknown): void {
 
 export function clearDashboardCache(): void {
   if (typeof window === "undefined") return;
-  try { localStorage.removeItem(DASHBOARD_CACHE_KEY); } catch { /* noop */ }
+  try { localStorage.removeItem(DASHBOARD_CACHE_KEY); localStorage.removeItem(BRIEFING_CACHE_KEY); } catch { /* noop */ }
+}
+
+// ── Briefing cache (same pattern, keyed by local day) ─────────────────────
+// The briefing never had an instant paint: every mount waited on the
+// network, and on a cold server that is the long blank card at the top
+// of the Scorecard. Today's briefing is the same text all day, so paint
+// it from cache and refresh behind it.
+const BRIEFING_CACHE_KEY = "bn_briefing_cache";
+
+export function readBriefingCache(): unknown {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(BRIEFING_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || parsed.day !== localToday()) return null;
+    return parsed.data ?? null;
+  } catch { return null; }
+}
+
+export function writeBriefingCache(data: unknown): void {
+  if (typeof window === "undefined") return;
+  try { localStorage.setItem(BRIEFING_CACHE_KEY, JSON.stringify({ day: localToday(), data })); } catch { /* noop */ }
 }
 
 // ── Pending referral (shareable invite cards) ───────────────────────────────────

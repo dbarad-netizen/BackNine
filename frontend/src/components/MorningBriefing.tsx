@@ -9,7 +9,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { api, type BriefingResponse, type Mood } from "@/lib/api";
+import { api, readBriefingCache, writeBriefingCache, type BriefingResponse, type Mood } from "@/lib/api";
 import CoachAlAvatar from "@/components/CoachAlAvatar";
 
 const MOODS: { value: Mood; emoji: string; label: string }[] = [
@@ -45,12 +45,15 @@ export default function MorningBriefing({ onOpenChat }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    // Instant paint from today's cached briefing (2026-11-03); the network
+    // result swaps in behind it. No cache → the usual loading state.
+    const cached = readBriefingCache() as BriefingResponse | null;
+    if (cached) { setData(cached); setLoading(false); } else { setLoading(true); }
     Promise.allSettled([api.briefing(), api.getCheckinToday()])
       .then(([brRes, ckRes]) => {
         if (cancelled) return;
-        if (brRes.status === "fulfilled") setData(brRes.value);
-        else setError(brRes.reason instanceof Error ? brRes.reason.message : "Briefing unavailable");
+        if (brRes.status === "fulfilled") { setData(brRes.value); writeBriefingCache(brRes.value); }
+        else if (!cached) setError(brRes.reason instanceof Error ? brRes.reason.message : "Briefing unavailable");
         if (ckRes.status === "fulfilled") {
           const m = ckRes.value.today?.mood ?? undefined;
           setTodayMood(m);
@@ -97,7 +100,7 @@ export default function MorningBriefing({ onOpenChat }: Props) {
     if (checking) return;
     setChecking(true);
     try {
-      const fresh = await api.briefing();
+      const fresh = await api.briefing(); writeBriefingCache(fresh);
       setData(fresh);
     } catch {
       /* keep showing the syncing state */
@@ -110,7 +113,7 @@ export default function MorningBriefing({ onOpenChat }: Props) {
     if (checking) return;
     setChecking(true);
     try {
-      const fresh = await api.briefing(false, undefined, true);
+      const fresh = await api.briefing(false, undefined, true); writeBriefingCache(fresh);
       setData(fresh);
     } catch {
       /* keep showing the syncing state */
@@ -126,7 +129,7 @@ export default function MorningBriefing({ onOpenChat }: Props) {
     if (regenerating) return;
     setRegenerating(true);
     try {
-      const fresh = await api.briefing(true);
+      const fresh = await api.briefing(true); writeBriefingCache(fresh);
       setData(fresh);
     } catch {
       // Keep the old briefing visible if regenerate fails

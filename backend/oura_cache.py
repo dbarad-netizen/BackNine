@@ -56,12 +56,25 @@ def store_days(user_id: str, rm: dict, slm: dict, am: dict, smm: dict) -> int:
         by_shape[tuple(sorted(row.keys()))].append(row)
 
     sb = _sb()
+    try:
+        import readcache
+        readcache.invalidate(user_id)
+    except Exception:
+        pass
     # Upsert in batches of 100 per column-shape to stay within limits
     for shaped_rows in by_shape.values():
         for i in range(0, len(shaped_rows), 100):
             sb.table("oura_daily_cache").upsert(
                 shaped_rows[i : i + 100], on_conflict="user_id,date"
             ).execute()
+
+    # Invalidate again AFTER the write so a read that slipped in between
+    # can't pin stale rows for the next 60 s.
+    try:
+        import readcache
+        readcache.invalidate(user_id)
+    except Exception:
+        pass
 
     # Dual-write to the unified device_readings table. oura_daily_cache stays
     # the canonical Oura-specific store (it holds JSON blobs that downstream
@@ -95,15 +108,22 @@ def get_days(user_id: str, days: int = 120, raw: bool = False) -> tuple[dict, di
     Returns four empty dicts if the cache is empty.
     """
     since = (date.today() - timedelta(days=days - 1)).isoformat()
-    sb = _sb()
-    res = (
-        sb.table("oura_daily_cache")
-        .select("date, readiness, sleep_score, activity, sleep_model")
-        .eq("user_id", user_id)
-        .gte("date", since)
-        .execute()
-    )
-    rows = res.data or []
+
+    def _load():
+        sb = _sb()
+        res = (
+            sb.table("oura_daily_cache")
+            .select("date, readiness, sleep_score, activity, sleep_model")
+            .eq("user_id", user_id)
+            .gte("date", since)
+            .execute()
+        )
+        return res.data or []
+
+    # 60-second memo (readcache, 2026-11-03): the dashboard, the bands, the
+    # Clubhouse and the loop all read this; one round trip per minute.
+    import readcache
+    rows = readcache.get_or_load(user_id, ("oura_days", since), _load)
 
     rm, slm, am, smm = {}, {}, {}, {}
     for row in rows:

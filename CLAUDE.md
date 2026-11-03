@@ -99,6 +99,13 @@ wrapped in Capacitor for iOS (TestFlight). Backend: FastAPI on Render
   Supabase; only Render does.
 - **`device_readings.recorded_at` ("first seen") is the best debugger** you
   have for "when did this number actually arrive".
+- **Speed is a feature** (David 2026-11-03: "speed could be a killer").
+  `readcache.py` memoises `oura_cache.get_days` and `apple_health.get_data`
+  for 60 s (writes invalidate the user); never add a per-row HTTP write
+  (batch via `device_readings.upsert_batch`); sync Supabase calls inside
+  async code go through `asyncio.to_thread`. Every API response carries
+  `Server-Timing: app;dur=…`; requests over 2 s log as `slow request`.
+  The client paints from cache first (dashboard 24 h, briefing today).
 - Mixed user id types: Oura users are `oura_…` text ids, Supabase-auth users
   are UUIDs. `profiles.id` is a UUID FK to auth.users; `user_profiles.user_id`
   is text.

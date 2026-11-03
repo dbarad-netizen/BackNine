@@ -315,7 +315,32 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Server-Timing", "X-BackNine-Ms"],
 )
+
+
+@app.middleware("http")
+async def _server_timing(request: Request, call_next):
+    """Server time on every API response (2026-11-03, "speed could be a
+    killer"): `Server-Timing: app;dur=…` shows in any browser's Network
+    tab, and slow requests (>2 s) are logged with their path so Render
+    logs answer "what was slow" without guessing."""
+    import time as _t
+    t0 = _t.perf_counter()
+    response = await call_next(request)
+    ms = (_t.perf_counter() - t0) * 1000
+    try:
+        response.headers["Server-Timing"] = f"app;dur={ms:.0f}"
+        response.headers["X-BackNine-Ms"] = f"{ms:.0f}"
+    except Exception:
+        pass
+    if ms > 2000 and request.url.path.startswith("/api/"):
+        try:
+            import readcache as _rc
+            log.warning("slow request: %s %s %.0f ms (readcache %s)", request.method, request.url.path, ms, _rc.stats())
+        except Exception:
+            log.warning("slow request: %s %s %.0f ms", request.method, request.url.path, ms)
+    return response
 
 @app.exception_handler(Exception)
 async def debug_exception_handler(request: Request, exc: Exception):
@@ -9681,6 +9706,11 @@ async def apple_health_import_aggregated(request: Request):
     written = 0
     batch_errors: list[str] = []
     BATCH = 500
+    try:
+        import readcache
+        readcache.invalidate(user_id)
+    except Exception:
+        pass
     for i in range(0, len(rows), BATCH):
         chunk = rows[i:i + BATCH]
         try:
