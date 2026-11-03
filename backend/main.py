@@ -332,6 +332,7 @@ async def _server_timing(request: Request, call_next):
     try:
         response.headers["Server-Timing"] = f"app;dur={ms:.0f}"
         response.headers["X-BackNine-Ms"] = f"{ms:.0f}"
+        response.headers["Timing-Allow-Origin"] = "*"   # lets the browser expose Server-Timing cross-origin
     except Exception:
         pass
     if ms > 2000 and request.url.path.startswith("/api/"):
@@ -2407,10 +2408,28 @@ async def _force_refresh_oura_token(user_id: str, session: dict) -> Optional[str
         return fresh["access_token"]
     return None
 
+class _Tick:
+    """Phase timer for the dashboard (2026-11-03): where do 5.5 s go?"""
+    def __init__(self):
+        import time as _t
+        self._t = _t
+        self.t0 = _t.perf_counter(); self.last = self.t0; self.rows = []
+    def tick(self, label):
+        now = self._t.perf_counter()
+        self.rows.append((label, round((now - self.last) * 1000)))
+        self.last = now
+    def total_ms(self):
+        return round((self._t.perf_counter() - self.t0) * 1000)
+    def report(self):
+        top = sorted(self.rows, key=lambda r: -r[1])[:12]
+        return {"total_ms": self.total_ms(), "phases": [{"before": a, "ms": m} for a, m in top]}
+
+
 @app.get("/api/dashboard")
 async def get_dashboard(request: Request, background_tasks: BackgroundTasks, days: int = 365):
     session = _require_session(request)
     user_id = session["user_id"]
+    _tt = _Tick()   # phase timings → payload["_timing"] with ?debug_timing=1 (2026-11-03)
 
     # ── Resolve Oura access token ─────────────────────────────────────────────
     # Supabase-auth users may not have Oura in their session cookie — look it
@@ -2631,6 +2650,7 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
     if refreshed_session:
         session = refreshed_session
 
+    _tt.tick("Load cache as a baseline then refresh li")
     # ── Load cache as a baseline, then refresh live if stale ──────────────────
     # We ALWAYS read the cache first so it can serve as a fallback. A live fetch
     # only *replaces* the cache when it returns real data — a transient empty or
@@ -2698,6 +2718,7 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
         except Exception:
             pass
 
+    _tt.tick("Stalewhilerevalidate")
     # ── Stale-while-revalidate ─────────────────────────────────────────────────
     # If we missed the strict 30-min freshness window but the cache is still
     # under 2 hours old, serve cache immediately and refresh Oura in the
@@ -2805,6 +2826,7 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
             elif not (rm or slm or am or smm):
                 raise HTTPException(status_code=502, detail=f"Oura API error: {exc}")
 
+    _tt.tick("Today  anchor to the most recent availab")
     # ── "Today" — anchor to the most recent available data ───────────────────
     # Oura sleep scores can lag — prefer today, then yesterday, then most recent.
     # All data sources (readiness, sleep, activity) use the same anchor date
@@ -2858,6 +2880,7 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
     t_rdy = _scored_row(rm, anchor)
     t_act = _scored_row(am, anchor)
 
+    _tt.tick("Live activity metrics todays steps  acti")
     # ── Live activity metrics (today's steps / active calories from Apple Health) ──
     # Oura's activity summary closes at midnight — t_act.steps/active_cal are
     # from the anchor date (usually yesterday).  Apple Health accumulates live
@@ -2935,6 +2958,7 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
     # Trend (last 30 days)
     trend = _build_trend(rm, slm, am, smm, days=30)
 
+    _tt.tick("Training Load ACWR")
     # ── Training Load (ACWR) ──────────────────────────────────────────────────
     # Acute:Chronic Workload Ratio using active calories as load proxy.
     # Zones: <0.8 under-trained | 0.8–1.3 optimal | 1.3–1.5 caution | >1.5 high risk
@@ -2980,6 +3004,7 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
         "chronic_days": 28,
     }
 
+    _tt.tick("Readiness Forecast")
     # ── Readiness Forecast ────────────────────────────────────────────────────
     # Predict tomorrow's readiness from recent trend, HRV trajectory, sleep debt.
     recent_rdy = [rm[d]["score"] for d in sorted(rm)[-5:] if rm[d].get("score") is not None]
@@ -3019,6 +3044,7 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
         "base":       round(base),
     }
 
+    _tt.tick("Longevity Score")
     # ── Longevity Score ───────────────────────────────────────────────────────
     try:
         _profile = _get_profile(user_id)
@@ -3178,6 +3204,7 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
     except Exception:
         longevity_score = {"score": None, "grade": None, "components": {}}
 
+    _tt.tick("Manual sleep David 20260812 185  the Jul")
     # ── Manual sleep (David 2026-08-12, #185 — the Julie bug) ────────────
     # Manual sleep entries land in device_readings but nothing read them
     # back, so the SleepQuickLogCard kept re-prompting after a successful
@@ -3207,6 +3234,7 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
     except Exception:
         manual_sleep = None
 
+    _tt.tick("Weekly Health Span Score David 20260811")
     # ── Weekly Health Span Score (David 2026-08-11) ──────────────────────
     # Behavioral/process score — sleep habits, movement, adherence,
     # check-in, hydration, CPAP. Distinct from Biological Age (which
@@ -3232,6 +3260,7 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
             "trend": None,
         }
 
+    _tt.tick("Biological Age David 20260807")
     # ── Biological Age (David 2026-08-07) ─────────────────────────────────
     # Hybrid heuristic — combines wearable + lab markers into a single
     # "your body looks like a X-year-old" number. See backend/biological_age.py
@@ -3294,6 +3323,7 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
             "components": [], "caveat": "",
         }
 
+    _tt.tick("Prediction tracking")
     # ── Prediction tracking ───────────────────────────────────────────────────
     # Save today's forecast as tomorrow's prediction, fill in any past actuals,
     # then compute accuracy history for the gamification card.
@@ -3390,6 +3420,11 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
         _set_session_cookie(resp, refreshed_session)
         return resp
 
+    _tt.tick("end")
+    if request.query_params.get("debug_timing"):
+        payload["_timing"] = _tt.report()
+    if _tt.total_ms() > 2000:
+        log.warning("dashboard slow for %s: %s", user_id[:12], _tt.report())
     return payload
 
 
