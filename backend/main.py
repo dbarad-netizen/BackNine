@@ -11,6 +11,7 @@ Routes:
 """
 import asyncio
 import io, logging, os, secrets
+import sbpool  # noqa: F401  — one Supabase client per process (2026-11-03); must precede every other local import
 from datetime import datetime, timedelta, timezone, date
 
 log = logging.getLogger(__name__)
@@ -327,10 +328,11 @@ async def _server_timing(request: Request, call_next):
     logs answer "what was slow" without guessing."""
     import time as _t
     t0 = _t.perf_counter()
+    _acct = sbpool.begin_request()
     response = await call_next(request)
     ms = (_t.perf_counter() - t0) * 1000
     try:
-        response.headers["Server-Timing"] = f"app;dur={ms:.0f}"
+        response.headers["Server-Timing"] = f'app;dur={ms:.0f}, db;dur={_acct["ms"]:.0f};desc="{_acct["n"]} calls"'
         response.headers["X-BackNine-Ms"] = f"{ms:.0f}"
         response.headers["Timing-Allow-Origin"] = "*"   # lets the browser expose Server-Timing cross-origin
     except Exception:
@@ -338,7 +340,7 @@ async def _server_timing(request: Request, call_next):
     if ms > 2000 and request.url.path.startswith("/api/"):
         try:
             import readcache as _rc
-            log.warning("slow request: %s %s %.0f ms (readcache %s)", request.method, request.url.path, ms, _rc.stats())
+            log.warning("slow request: %s %s %.0f ms (db %d calls %.0f ms; readcache %s)", request.method, request.url.path, ms, _acct["n"], _acct["ms"], _rc.stats())
         except Exception:
             log.warning("slow request: %s %s %.0f ms", request.method, request.url.path, ms)
     return response

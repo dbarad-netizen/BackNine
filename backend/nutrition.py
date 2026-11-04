@@ -405,10 +405,22 @@ def weekly_summary(active_calories_by_date: Optional[dict] = None, user_id: str 
         today = date.today()
     week_start = today - timedelta(days=6)
 
+    # One range query for the week, not seven (2026-11-03 speed pass).
+    by_day: dict[str, list] = {}
+    try:
+        res = (_sb().table("nutrition_meals").select("*")
+                 .eq("user_id", user_id)
+                 .gte("date", week_start.isoformat()).lte("date", today.isoformat())
+                 .order("logged_at").execute())
+        for m in (res.data or []):
+            by_day.setdefault(str(m.get("date"))[:10], []).append(m)
+    except Exception:
+        by_day = {}
+
     daily = []
     for i in range(7):
         d     = (week_start + timedelta(days=i)).isoformat()
-        meals = get_meals(d, user_id)
+        meals = by_day.get(d, [])
         cals  = sum(m["calories"] for m in meals)
         prot  = round(sum(m["protein"] for m in meals), 1)
         carbs = round(sum(m["carbs"]   for m in meals), 1)
