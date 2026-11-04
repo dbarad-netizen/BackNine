@@ -9086,9 +9086,13 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
         pass
 
     _lt.tick("healthspan+par")
-    entries: list[dict] = [_entry_for(user_id, _display_name_for(user_id), True)]
-    for f in friends:
-        entries.append(_entry_for(f["user_id"], f.get("name") or "Friend", False))
+    # Members in parallel (2026-11-03): eight sequential per-member reads
+    # were 1.3 s of the Clubhouse; each member's reads are independent.
+    from concurrent.futures import ThreadPoolExecutor
+    _jobs = [(user_id, _display_name_for(user_id), True)] + \
+            [(f["user_id"], f.get("name") or "Friend", False) for f in friends]
+    with ThreadPoolExecutor(max_workers=min(8, max(1, len(_jobs)))) as _ex:
+        entries: list[dict] = list(_ex.map(lambda j: _entry_for(*j), _jobs))
     _lt.tick("entries")
 
     # Per-metric leader (David 2026-10-16: "you're giving Josh 3 medals
