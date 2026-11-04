@@ -8768,6 +8768,7 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
     # one apple_health_daily fetch each, reused across metrics and
     # the head-to-head tally.
     _ah_est_cache: dict[str, dict] = {}
+    _lb_errors: list[str] = []   # swallowed loader errors, surfaced with ?debug_timing=1 (2026-11-03)
     # Request-scoped memo (David 2026-10-27: "Today's Leaderboard took a
     # really long time to load"): the board was reloading each friend's
     # Oura cache 3-4 times and hitting Apple Health day-by-day. One read
@@ -8779,7 +8780,9 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
         if uid not in _days_memo:
             try:
                 _days_memo[uid] = oc.get_days(uid, days=10)
-            except Exception:
+            except Exception as exc:
+                _lb_errors.append(f"_days {uid[:8]}: {type(exc).__name__}: {str(exc)[:160]}")
+                log.warning("leaderboard _days failed for %s: %r", uid[:8], exc)
                 _days_memo[uid] = ({}, {}, {}, {})
         return _days_memo[uid]
 
@@ -8787,7 +8790,9 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
         if uid not in _ah_rows_memo:
             try:
                 _ah_rows_memo[uid] = {str(r.get("date")): r for r in ah.get_data(uid, days=10)}
-            except Exception:
+            except Exception as exc:
+                _lb_errors.append(f"_ah_day {uid[:8]}: {type(exc).__name__}: {str(exc)[:160]}")
+                log.warning("leaderboard _ah_day failed for %s: %r", uid[:8], exc)
                 _ah_rows_memo[uid] = {}
         return _ah_rows_memo[uid].get(d)
 
@@ -8808,8 +8813,9 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
                         "sleep":    float(sl) if sl else None,
                         "activity": float(ac) if ac else None,
                     }
-        except Exception:
-            pass
+        except Exception as exc:
+            _lb_errors.append(f"_ah_est {uid[:8]}: {type(exc).__name__}: {str(exc)[:160]}")
+            log.warning("leaderboard _ah_est failed for %s: %r", uid[:8], exc)
         _ah_est_cache[uid] = out
         return out
 
@@ -9170,7 +9176,7 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
     _lt.tick("leaders+averages")
     if _lt.total_ms() > 2000:
         log.warning("leaderboard slow for %s: %s", user_id[:12], _lt.report())
-    _lb_timing = _lt.report() if request.query_params.get("debug_timing") else None
+    _lb_timing = ({**_lt.report(), "errors": _lb_errors} if request.query_params.get("debug_timing") else None)
     return {
         "_timing": _lb_timing,
         "entries":   entries,
