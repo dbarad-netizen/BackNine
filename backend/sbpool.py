@@ -41,6 +41,36 @@ def _cached_create_client(supabase_url: str, supabase_key: str, options=None):
     return c
 
 
+# Pooled connections must not outlive PostgREST's idle timeout. Supabase's
+# PostgREST (Warp) kills idle keepalive sockets ("Thread killed by timeout
+# manager" in the logs); a client that reuses one of those hangs until its
+# read timeout. With a fresh client per query this never showed; with one
+# shared client it did, within minutes of the first deploy. So: idle
+# connections expire after 5 s, and no Supabase call may take more than
+# 20 s. Applied by wrapping httpx.Client.__init__ (supabase-py doesn't
+# expose Limits).
+_orig_client_init = _httpx_Client_init = None
+
+
+def _install_httpx_defaults():
+    global _orig_client_init
+    import httpx
+    if _orig_client_init is not None:
+        return
+    _orig_client_init = httpx.Client.__init__
+
+    def _init(self, *args, **kwargs):
+        if "limits" not in kwargs:
+            kwargs["limits"] = httpx.Limits(max_connections=50, max_keepalive_connections=10, keepalive_expiry=5.0)
+        t = kwargs.get("timeout")
+        if t is None or (isinstance(t, (int, float)) and t > 20):
+            kwargs["timeout"] = httpx.Timeout(20.0, connect=10.0)
+        _orig_client_init(self, *args, **kwargs)
+
+    httpx.Client.__init__ = _init
+
+
+_install_httpx_defaults()
 _pkg.create_client = _cached_create_client
 try:  # some modules import the submodule path
     import supabase._sync.client as _sc  # type: ignore
