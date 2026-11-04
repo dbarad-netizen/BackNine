@@ -153,4 +153,9 @@ wrapped in Capacitor for iOS (TestFlight). Backend: FastAPI on Render
   house metaphor, affectionate trash talk at the lower net, backhanded
   compliment to the leader, no exclamation points, ends with the tagged
   `Full board:` link.
+- Texts obey the Coach Al number rules: one number per player's read,
+  rounded like a person talks ("7.6 hours", "8,700 a day", "six days out
+  of seven"), never a bedtime "spread" in minutes, never decimals past one
+  place, the joke lands on the number. The 2026-11-03 Tuesday text
+  ("5.95 hours", "130-minute bedtime spread") is the counter-example.
 - Copy on the site promises only what has a face in the app.

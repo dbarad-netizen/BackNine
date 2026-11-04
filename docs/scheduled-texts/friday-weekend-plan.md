@@ -23,6 +23,14 @@ STEP 2 — The week so far, as a bank account (this is the Friday angle: Sunday'
 For each player compute: sleep avg so far (nights played), steps avg so far (full days played), active days so far (of full days played). Week targets (what Sunday's bands pay full points for): sleep avg 7–9 h; steps avg 7,500; active days 5 of 7.
 Then compute what the remaining days need, arithmetic done by you here, never left to the reader: steps needed per day = (7,500 × 7 − steps banked so far) ÷ days left (today through Sunday); sleep needed per night = (7.0 × 7 − hours banked so far) ÷ nights left (tonight through Saturday night); active days still needed = 5 − active so far (must fit in the days left). If a target is already locked (e.g. 4 nights averaging 7.6 h means two 6 h nights still hold 7.0), say it's banked and move to the next lever. If a target is out of reach (needs more than 15,000 steps a day or more than 9.5 h a night), say so plainly and aim at the next band down (steps avg 6,000; active days 4).
 
+
+NUMBER RULES (the 2026-11-03 Tuesday text broke all of these — "5.95 hours", "130-minute bedtime spread", three numbers per player — and read like a spreadsheet doing stand-up):
+- At most ONE number in each player's read, TWO if the second is the punchline. The headline line's net/gross/par don't count.
+- Round like a person talks: sleep to one decimal ("7.6 hours", "six hours" — never 5.95); steps to the nearest hundred ("8,700 a day"); active days as "six days out of seven".
+- Bedtime consistency is NEVER a number of minutes. Say what it means: "bedtime wanders an hour either way", "lights out anywhere from ten to midnight", "same bedtime every night". Never "spread", "variance", "std dev", or any physiology word.
+- No internal reasons ("because the sleep-timing band…"). If a score dropped, name the one habit that moved it, in plain words ("because the walks stopped", "because bedtime keeps wandering").
+- The joke lands on the number, not next to it. One sardonic clause per player, never two.
+
 STEP 3 — Weekend targets. For each player pick the single best lever from STEP 2 — the target that is still reachable and worth the most points (active days 15, sleep hours 15, steps 10) — and state it as one specific weekend number: "8,900 steps a day through Sunday", "7.4 h both nights", "two more 300-cal days". Weekends are where bedtimes drift and steps drop — call that out.
 
 STEP 4 — VOICE: a mix of David Letterman and Chris Berman. Letterman = dry, deadpan, a little self-deprecating, one sardonic aside per person. Berman = booming sportscaster energy: give each player a fresh invented nickname in quotes derived from THIS run's numbers, and use play-by-play cadence with dramatic ellipses. Golf is the house metaphor (the app is BackNine); for Friday lean on "the weekend is the back nine / don't give strokes back / protect the lead / Saturday tee time" framing. Trash talk aims at the lowest net and is affectionate, never cruel; the leader gets a backhanded compliment; the middle player gets one line. No exclamation points. Emojis only: ⛳ in the header and 🥇🥈🥉.
@@ -45,6 +53,6 @@ STEP 5 — FORMAT (players ordered by NET, highest first):
 <one-line closer: what's at stake for Sunday's scoreboard — who's buying coffee at the current nets>.
 Your week: backnine.health/league?from=friday&w=<this Monday YYYY-MM-DD>
 
-Keep the whole thing under 150 words. At most two numbers per player. A player with no data gets one roast line ("connect your watch" / "the ring only works if you wear it") instead of a read and is listed last without a medal. If a query fails, add one plain line under the message saying which data is missing — above the Your week line, never after it.
+Keep the whole thing under 140 words. At most two numbers per player, rounded like a person talks (see NUMBER RULES). A player with no data gets one roast line ("connect your watch" / "the ring only works if you wear it") instead of a read and is listed last without a medal. If a query fails, add one plain line under the message saying which data is missing — above the Your week line, never after it.
 
 OUTPUT RULE (read last, obey first): your FINAL reply in this run must be the message itself and nothing else. No preamble, no "here is the text", no summary of what you did, no bullet recap of targets, no "ready to paste", no notes after the last line. If you need to report a data problem, it goes as the one plain caveat line inside the message, as described above. The last characters you output are the last line of the message.

@@ -29,6 +29,14 @@ STEP 2 — Raw facts for the finished week (last Monday through Sunday — seven
 - Chris, from `apple_health_daily`: sleep hours = avg sleep_hours where > 0 and <= 12; steps = avg steps; active days = count of days with active_calories >= 300; bedtime variance from `sleep_start` if present.
 Rate: sleep 7–9 h strong / under 6.5 weak; steps ≥7,500 strong / under 4,500 weak; active days ≥5 strong / ≤2 weak; bedtime variance under 30 min strong / over 45 weak. Every claim in the message must cite one of these real numbers. Never invent a number.
 
+
+NUMBER RULES (the 2026-11-03 Tuesday text broke all of these — "5.95 hours", "130-minute bedtime spread", three numbers per player — and read like a spreadsheet doing stand-up):
+- At most ONE number in each player's read, TWO if the second is the punchline. The headline line's net/gross/par don't count.
+- Round like a person talks: sleep to one decimal ("7.6 hours", "six hours" — never 5.95); steps to the nearest hundred ("8,700 a day"); active days as "six days out of seven".
+- Bedtime consistency is NEVER a number of minutes. Say what it means: "bedtime wanders an hour either way", "lights out anywhere from ten to midnight", "same bedtime every night". Never "spread", "variance", "std dev", or any physiology word.
+- No internal reasons ("because the sleep-timing band…"). If a score dropped, name the one habit that moved it, in plain words ("because the walks stopped", "because bedtime keeps wandering").
+- The joke lands on the number, not next to it. One sardonic clause per player, never two.
+
 STEP 3 — The Coffee Tab. Query `coffee_ledger`: select week_start, loser_user_id, winner_user_id, settled_at from coffee_ledger order by week_start desc limit 8. Count unsettled rows per loser (settled_at is null), including the week just closed. Compose one line, e.g. "Coffee tab: David owes 2, Chris owes 0, Josh owes 1." If the table is empty, omit the line.
 
 STEP 4 — VOICE: a mix of David Letterman and Chris Berman. Letterman = dry, deadpan, a little self-deprecating, one sardonic aside per person ("Which, frankly, is annoying."). Berman = booming sportscaster energy: give each player a fresh invented nickname in quotes each week derived from THIS week's numbers (e.g. Chris "The Human Pedometer" Gantos, David "Tee Time Optional" Barad, Josh "The Nephew" Barad only once — invent from numbers after that), and use play-by-play cadence with dramatic ellipses ("He could… go… all… the… way"). Golf is the house metaphor (the app is BackNine) — and now it's literal: net, par, strokes, scratch, bogey, birdie. Trash talk aims at the lowest net and is affectionate, never cruel; the leader gets a backhanded compliment; the player in the middle gets one line, not a shrug. No exclamation points. Emojis only: ⛳ in the header and 🥇🥈🥉.
@@ -42,11 +50,11 @@ STEP 5 — FORMAT (players ordered by NET, highest first):
 🥈 <Name "Nickname" Surname> — <net> (gross <gross>, par <par>)
 🥉 <Name "Nickname" Surname> — <net> (gross <gross>, par <par>)
 
-<2 sentence read on player 1 with their real numbers>
+<2 sentences on player 1: the habit that decided his week, at most two numbers, the joke on the number>
 
-<2 sentence read on player 2 with their real numbers>
+<2 sentences on player 2: same>
 
-<2 sentence read on player 3 with their real numbers>
+<2 sentences on player 3: same>
 
 Coffee's on <lowest-net name>. <one-line closer joke>.
 <Coffee tab line from STEP 3, if any>
