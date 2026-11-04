@@ -46,7 +46,7 @@ def _cached_create_client(supabase_url: str, supabase_key: str, options=None):
 # manager" in the logs); a client that reuses one of those hangs until its
 # read timeout. With a fresh client per query this never showed; with one
 # shared client it did, within minutes of the first deploy. So: idle
-# connections expire after 5 s, and no Supabase call may take more than
+# connections expire after 2 s, and no Supabase call may take more than
 # 20 s. Applied by wrapping httpx.Client.__init__ (supabase-py doesn't
 # expose Limits).
 _orig_client_init = _httpx_Client_init = None
@@ -61,7 +61,7 @@ def _install_httpx_defaults():
 
     def _init(self, *args, **kwargs):
         if "limits" not in kwargs:
-            kwargs["limits"] = httpx.Limits(max_connections=50, max_keepalive_connections=10, keepalive_expiry=5.0)
+            kwargs["limits"] = httpx.Limits(max_connections=50, max_keepalive_connections=10, keepalive_expiry=2.0)
         t = kwargs.get("timeout")
         if t is None or (isinstance(t, (int, float)) and t > 20):
             kwargs["timeout"] = httpx.Timeout(20.0, connect=10.0)
@@ -80,7 +80,7 @@ except Exception:
 
 
 def stats() -> dict:
-    return {"clients": len(_clients)}
+    return {"clients": len(_clients), "retries": _retries}
 
 
 # ── Per-request DB accounting ────────────────────────────────────────────
@@ -98,13 +98,39 @@ _ctx: contextvars.ContextVar = contextvars.ContextVar("bn_db_acct", default=None
 _orig_send = _httpx.Client.send
 
 
+_RETRYABLE = (_httpx.RemoteProtocolError, _httpx.ConnectError, _httpx.ReadError, _httpx.WriteError, _httpx.PoolTimeout)
+_retries = 0
+
+
+def _send_with_retry(self, request, *args, **kwargs):
+    """A pooled connection the server has already closed fails with
+    "Server disconnected" before the request is sent (seen 2026-11-03
+    minutes after moving to one shared client: a member's Clubhouse
+    row went blank, and once the whole friends list). Nothing reached
+    the server, so retrying on a fresh connection is safe for any
+    method. Two attempts, then raise."""
+    global _retries
+    last = None
+    for attempt in range(3):
+        try:
+            return _orig_send(self, request, *args, **kwargs)
+        except _RETRYABLE as exc:
+            last = exc
+            _retries += 1
+            if attempt == 2:
+                raise
+            import logging
+            logging.getLogger(__name__).warning("supabase connection error (%s), retrying %s %s", type(exc).__name__, request.method, request.url.path)
+    raise last  # pragma: no cover
+
+
 def _counting_send(self, request, *args, **kwargs):
     acct = _ctx.get()
     if acct is None:
-        return _orig_send(self, request, *args, **kwargs)
+        return _send_with_retry(self, request, *args, **kwargs)
     t0 = _time.perf_counter()
     try:
-        return _orig_send(self, request, *args, **kwargs)
+        return _send_with_retry(self, request, *args, **kwargs)
     finally:
         acct["n"] += 1
         acct["ms"] += (_time.perf_counter() - t0) * 1000
