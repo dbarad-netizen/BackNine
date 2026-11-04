@@ -2661,7 +2661,7 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
     rm, slm, am, smm = {}, {}, {}, {}
     oura_vo2_max: float | None = None
     try:
-        rm, slm, am, smm = oc.get_days(user_id, days=days)
+        rm, slm, am, smm = await asyncio.to_thread(oc.get_days, user_id, days)   # off the loop (365 rows)
     except Exception:
         pass
     have_cache = bool(rm or slm or am or smm)
@@ -3046,9 +3046,31 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
 
     _tt.tick("Longevity Score")
     # ── Longevity Score ───────────────────────────────────────────────────────
+    # Independent reads fetched concurrently (2026-11-03: each was a
+    # sequential ~100 ms round trip on the event loop; together they were
+    # a full second of the dashboard).
+    async def _pf(fn, *a, **k):
+        try:
+            return await asyncio.to_thread(fn, *a, **k)
+        except Exception:
+            return None
+    def _bp_systolic():
+        rows = bp.list_readings(user_id, days=7)
+        vals = [r["systolic"] for r in rows if r.get("systolic") is not None]
+        if vals:
+            return round(sum(vals) / len(vals))
+        rows30 = bp.list_readings(user_id, days=30, limit=1)
+        return rows30[0]["systolic"] if rows30 and rows30[0].get("systolic") is not None else None
+    _pf_profile, _pf_ah_sum, _pf_we, _pf_labs, _pf_bp = await asyncio.gather(
+        _pf(_get_profile, user_id),
+        _pf(ah.get_summary, user_id, days=30),
+        _pf(nutr.get_weight_entries, user_id),
+        _pf(bioage.latest_labs, user_id),
+        _pf(_bp_systolic),
+    )
     try:
-        _profile = _get_profile(user_id)
-        _ah_sum  = ah.get_summary(user_id, days=30)
+        _profile = _pf_profile or {}
+        _ah_sum  = _pf_ah_sum or {}
 
         # Body fat: most recent manual weight log (BackNine Body & Weight card)
         # wins over Apple Health. Same precedence model as VO2 max — when a user
@@ -3057,7 +3079,7 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
         # by an older AH reading from a scale sync.
         _we_body_fat: Optional[float] = None
         try:
-            _we = nutr.get_weight_entries(user_id)
+            _we = _pf_we or []
             _we_with_bf = [e for e in reversed(_we) if e.get("body_fat_pct") is not None]
             _we_body_fat = _we_with_bf[0]["body_fat_pct"] if _we_with_bf else None
         except Exception:
@@ -3093,10 +3115,7 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
 
         # Pull latest lab markers for the new cardiometabolic band.
         # Same source biological_age uses — one round-trip either way.
-        try:
-            _cardio_labs = bioage.latest_labs(user_id)
-        except Exception:
-            _cardio_labs = {}
+        _cardio_labs = _pf_labs or {}
 
         # Source-priority resolver (David 2026-08-11).
         # Oura wins where Oura measures. Apple Health fills in for
@@ -3239,89 +3258,65 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
     # Behavioral/process score — sleep habits, movement, adherence,
     # check-in, hydration, CPAP. Distinct from Biological Age (which
     # measures clinical state). See backend/healthspan.py for design.
-    try:
-        _capabilities = (_profile.get("enabled_capabilities") or []) if _profile else []
-        weekly_healthspan = hspan.compute(
-            user_id, oura_today, am, smm, _profile, capabilities=_capabilities,
-        )
-        # Persist today + attach 7-day trend. Never fails the payload.
+    def _healthspan_block():
         try:
-            weekly_healthspan["trend"] = hspan.persist_and_delta(
-                user_id, oura_today, weekly_healthspan
+            _capabilities = (_profile.get("enabled_capabilities") or []) if _profile else []
+            out = hspan.compute(
+                user_id, oura_today, am, smm, _profile, capabilities=_capabilities,
             )
+            try:
+                out["trend"] = hspan.persist_and_delta(user_id, oura_today, out)
+            except Exception:
+                out["trend"] = None
+            return out
         except Exception:
-            weekly_healthspan["trend"] = None
-    except Exception:
-        log.exception("healthspan compute failed for %s", user_id)
-        weekly_healthspan = {
-            "score": None, "grade": "No data",
-            "components": {}, "bands_present": 0,
-            "max_possible": 0, "caveat": "",
-            "trend": None,
-        }
+            log.exception("healthspan compute failed for %s", user_id)
+            return {
+                "score": None, "grade": "No data",
+                "components": {}, "bands_present": 0,
+                "max_possible": 0, "caveat": "",
+                "trend": None,
+            }
+
+    def _bioage_block():
+        try:
+            _bio_metrics = {
+                "hrv":                     _lon_metrics.get("hrv"),
+                "rhr":                     _lon_metrics.get("rhr"),
+                "vo2_max":                 _lon_metrics.get("vo2_max"),
+                "body_fat_percentage":     _lon_metrics.get("body_fat_percentage"),
+                "sleep_hours":             _lon_metrics.get("sleep_hours"),
+                "blood_pressure_systolic": _pf_bp,
+            }
+            out = bioage.compute(_bio_metrics, _profile, labs=(_pf_labs or {}))
+            try:
+                out["trend"] = bioage.persist_and_delta(user_id, oura_today, out)
+            except Exception:
+                out["trend"] = None
+            return out
+        except Exception:
+            log.exception("biological_age compute failed for %s", user_id)
+            return {
+                "biological_age": None, "chronological_age": None,
+                "delta_years": None, "confidence": "low", "n_markers": 0,
+                "components": [], "caveat": "",
+            }
+
+    # Health Span and Bio Age are independent until the projection —
+    # run both at once (2026-11-03: ~1 s each, sequential, on the loop).
+    weekly_healthspan, biological_age = await asyncio.gather(
+        asyncio.to_thread(_healthspan_block), asyncio.to_thread(_bioage_block),
+    )
 
     _tt.tick("Biological Age David 20260807")
-    # ── Biological Age (David 2026-08-07) ─────────────────────────────────
-    # Hybrid heuristic — combines wearable + lab markers into a single
-    # "your body looks like a X-year-old" number. See backend/biological_age.py
-    # for the formula and rationale. Never breaks the dashboard on
-    # compute error — degrades to null and the frontend hides the card.
+    # ── Biological Age (David 2026-08-07) — computed above alongside Health
+    # Span; only the Age Projection (needs the Health Span score) is here.
     try:
-        # BP for Bio Age (fixed 2026-08-31): this used to iterate `am` —
-        # the OURA activity map, which never carries BP — so _latest_bp
-        # was always None and BP silently never reached Bio Age despite
-        # Withings readings flowing in. Now: 7-day average systolic from
-        # blood_pressure_log (fed by manual entries AND the Withings →
-        # Apple Health mirror), falling back to the latest single
-        # reading in the last 30 days. Averaging beats a single reading
-        # — BP is the noisiest marker we score.
-        _latest_bp = None
-        try:
-            _bp_rows = bp.list_readings(user_id, days=7)
-            _sys_vals = [r["systolic"] for r in _bp_rows if r.get("systolic") is not None]
-            if _sys_vals:
-                _latest_bp = round(sum(_sys_vals) / len(_sys_vals))
-            else:
-                _bp_rows30 = bp.list_readings(user_id, days=30, limit=1)
-                if _bp_rows30 and _bp_rows30[0].get("systolic") is not None:
-                    _latest_bp = _bp_rows30[0]["systolic"]
-        except Exception:
-            pass
-
-        _bio_metrics = {
-            "hrv":                     _lon_metrics.get("hrv"),
-            "rhr":                     _lon_metrics.get("rhr"),
-            "vo2_max":                 _lon_metrics.get("vo2_max"),
-            "body_fat_percentage":     _lon_metrics.get("body_fat_percentage"),
-            "sleep_hours":             _lon_metrics.get("sleep_hours"),
-            "blood_pressure_systolic": _latest_bp,
-        }
-
-        _bio_labs = bioage.latest_labs(user_id)
-        biological_age = bioage.compute(_bio_metrics, _profile, labs=_bio_labs)
-        # Persist today + attach 30-day trend. Never fails the payload.
-        try:
-            biological_age["trend"] = bioage.persist_and_delta(
-                user_id, oura_today, biological_age
-            )
-        except Exception:
-            biological_age["trend"] = None
-        # Age Projection — Bio Age (outcome) projected 90 days forward
-        # from the Weekly Health Span Score (process). The effort→
-        # outcome loop. David 2026-08-11.
-        try:
-            biological_age["projection"] = bioage.project(
-                biological_age, weekly_healthspan.get("score")
-            )
-        except Exception:
-            biological_age["projection"] = None
+        biological_age["projection"] = bioage.project(
+            biological_age, weekly_healthspan.get("score")
+        )
     except Exception:
-        log.exception("biological_age compute failed for %s", user_id)
-        biological_age = {
-            "biological_age": None, "chronological_age": None,
-            "delta_years": None, "confidence": "low", "n_markers": 0,
-            "components": [], "caveat": "",
-        }
+        biological_age["projection"] = None
 
     _tt.tick("Prediction tracking")
     # ── Prediction tracking ───────────────────────────────────────────────────
@@ -3332,27 +3327,46 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
     oura_tomorrow_str = (
         datetime.strptime(oura_today, "%Y-%m-%d") + timedelta(days=1)
     ).strftime("%Y-%m-%d")
-    prd.save_prediction(user_id, oura_tomorrow_str, forecast_score)
-    prd.fill_actuals(user_id, rm)
-    pred_history = prd.get_history(user_id, days=60)
-    pred_accuracy = prd.compute_accuracy(pred_history)
+
+    def _pred_block():
+        prd.save_prediction(user_id, oura_tomorrow_str, forecast_score)
+        prd.fill_actuals(user_id, rm)
+        return prd.compute_accuracy(prd.get_history(user_id, days=60))
+
+    def _freshness_block():
+        out = {"oura_age": None, "oura_sync": None, "ah_age": None, "any_fresh": False, "within_yellow": True}
+        try:
+            out["oura_age"] = freshness.oura_data_age_hours(user_id)
+            out["oura_sync"] = freshness.oura_last_sync_iso(user_id)
+        except Exception:
+            pass
+        try:
+            out["ah_age"] = freshness.apple_health_data_age_hours(user_id)
+        except Exception:
+            pass
+        try:
+            out["any_fresh"] = freshness.any_source_fresh(user_id)
+            out["within_yellow"] = freshness.any_source_within_yellow(user_id)
+        except Exception:
+            pass
+        return out
+
+    # The tail used to be ~40 sequential round trips (4.3 s measured
+    # 2026-11-03). Everything here is independent — run it concurrently.
+    _tail = await asyncio.gather(
+        _pf(_pred_block),
+        _pf(_freshness_block),
+        _pf(oc.last_fetched_at, user_id),
+        _pf(_ah_last_synced_at, user_id),
+    )
+    pred_accuracy = _tail[0] or {}
+    _fr = _tail[1] or {}
+    _oura_synced_at, _ah_synced_at = _tail[2], _tail[3]
+    oura_age, oura_sync, ah_age = _fr.get("oura_age"), _fr.get("oura_sync"), _fr.get("ah_age")
 
     # Latest data date
     all_days = sorted(set(list(rm) + list(slm) + list(am)))
     data_through = all_days[-1] if all_days else today_str
-
-    # Freshness metadata — Fable IMPROVE #2. Frontend tiles use this
-    # to display "as of X ago" when data is stale, instead of pretending
-    # 9-day-old readings are "today's."
-    try:
-        oura_age = freshness.oura_data_age_hours(user_id)
-        oura_sync = freshness.oura_last_sync_iso(user_id)
-    except Exception:
-        oura_age, oura_sync = None, None
-    try:
-        ah_age = freshness.apple_health_data_age_hours(user_id)
-    except Exception:
-        ah_age = None
 
     payload = {
         "generated":    datetime.now(timezone.utc).isoformat(),
@@ -3362,8 +3376,8 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
             "date":               anchor,             # Oura data anchor (often yesterday)
             "calendar_today":     oura_today,         # Timezone-safe "today" from Oura data
             "local_today":        _user_local_today_iso(request),  # user's actual calendar date (X-User-Local-Date)
-            "oura_synced_at":     oc.last_fetched_at(user_id),     # last cache write — shown on the Scorecard
-            "apple_health_synced_at": _ah_last_synced_at(user_id),  # last apple_health_daily write (Chris 2026-10-27)
+            "oura_synced_at":     _oura_synced_at,     # last cache write — shown on the Scorecard
+            "apple_health_synced_at": _ah_synced_at,  # last apple_health_daily write (Chris 2026-10-27)
             "refreshing":         bg_refreshing,                   # client should re-pull once in ~15s
             "readiness":          t_rdy,
             "sleep":              t_sl,
@@ -3404,15 +3418,16 @@ async def get_dashboard(request: Request, background_tasks: BackgroundTasks, day
             # data flowing in from other sources. Frontend gates the
             # big banner on `all_sources_stale` instead of the per-
             # source `is_stale`.
-            "any_source_fresh":   freshness.any_source_fresh(user_id),
-            "all_sources_stale":  not freshness.any_source_within_yellow(user_id),
+            "any_source_fresh":   bool(_fr.get("any_fresh")),
+            "all_sources_stale":  not _fr.get("within_yellow", True),
             "stale_threshold_hours": freshness.STALE_THRESHOLD_HOURS,
             "fresh_threshold_hours": freshness.FRESH_THRESHOLD_HOURS,
         },
     }
 
-    _attach_provisional_qyl(payload, user_id)
-    _apply_baseline_reset(payload, user_id, smm, anchor)
+    # Both read Supabase; run them off the event loop (they mutate payload in place).
+    await asyncio.to_thread(_attach_provisional_qyl, payload, user_id)
+    await asyncio.to_thread(_apply_baseline_reset, payload, user_id, smm, anchor)
 
     # If tokens were just refreshed, write the new JWT cookie in the response
     if refreshed_session:
@@ -4610,20 +4625,18 @@ async def get_nutrition_summary(request: Request, date: Optional[str] = None):
     # Oura is optional here — the endpoint returns useful data even for
     # users without a ring. Fetch active calories only when we have a
     # valid token; otherwise skip the Oura call entirely.
+    # Active calories from the Oura CACHE, not a live Oura API call. This
+    # endpoint was hitting Oura for 14 days on every Scorecard open —
+    # 2.2 s of server time measured 2026-11-03 — for a number the
+    # 20-minute refresh loop already keeps current.
     active_cals: dict[str, int] = {}
     try:
-        access_token, _ = await _ensure_valid_token(session)
+        _, _, am, _ = await asyncio.to_thread(oc.get_days, uid, 14)
+        active_cals = {d: am[d].get("active_cal", 0) for d in am if am[d].get("active_cal")}
     except Exception:
-        access_token = None
-    if access_token:
-        try:
-            raw = await fetch_all(access_token, days=14)
-            _, _, am, _ = parse_oura_data(raw)
-            active_cals = {d: am[d].get("active_cal", 0) for d in am if am[d].get("active_cal")}
-        except Exception:
-            active_cals = {}
+        active_cals = {}
     today_str = date if (date and _valid_ymd(date)) else None
-    return nutr.weekly_summary(active_cals, uid, today_str=today_str)
+    return await asyncio.to_thread(nutr.weekly_summary, active_cals, uid, today_str)
 
 
 # ── Training ──────────────────────────────────────────────────────────────────
@@ -9025,10 +9038,12 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
             "head_to_head": h2h,
         }
 
+    _lt = _Tick()
     try:
         friends = frd.list_friends(user_id)
     except Exception:
         friends = []
+    _lt.tick("friends")
 
     # Weekly engagement points for everyone in one batched pass (works for
     # non-wearable users too). _entry_for reads points_map from this scope.
@@ -9037,6 +9052,7 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
         points_map = lg.weekly_points(all_uids, today_str)
     except Exception:
         points_map = {}
+    _lt.tick("points")
 
     # Weekly Health Span Score per person — latest snapshot from
     # weekly_healthspan_history within this week (Mon-anchored, same
@@ -9067,9 +9083,11 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
     except Exception:
         pass
 
+    _lt.tick("healthspan+par")
     entries: list[dict] = [_entry_for(user_id, _display_name_for(user_id), True)]
     for f in friends:
         entries.append(_entry_for(f["user_id"], f.get("name") or "Friend", False))
+    _lt.tick("entries")
 
     # Per-metric leader (David 2026-10-16: "you're giving Josh 3 medals
     # but all his data is from yesterday and my steps yesterday beat
@@ -9143,7 +9161,12 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
         "total_users": len(entries),
     }
 
+    _lt.tick("leaders+averages")
+    if _lt.total_ms() > 2000:
+        log.warning("leaderboard slow for %s: %s", user_id[:12], _lt.report())
+    _lb_timing = _lt.report() if request.query_params.get("debug_timing") else None
     return {
+        "_timing": _lb_timing,
         "entries":   entries,
         "leaders":   leaders,
         "leader_dates": leader_dates,   # which calendar day each medal was decided on
