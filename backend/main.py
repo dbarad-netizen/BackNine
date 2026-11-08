@@ -7153,6 +7153,48 @@ def clear_chat_history(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+def _sleep_week_facts(smm: dict, recent_days: list) -> dict:
+    """Precomputed sleep facts for Coach Al (2026-11-08): the briefing said
+    "you went out between 9:30 and 10:15 most nights" and "nine hours is
+    rare for you" in a week with bedtimes from 6:56 to 10:57 PM and three
+    nights over 8.5 h. The model does no arithmetic — it gets these."""
+    out: dict = {}
+    beds = []
+    longs = shorts = 0
+    for d in recent_days:
+        sm = smm.get(d) or {}
+        tot = sm.get("total")
+        if tot:
+            h = tot / 3600
+            if h >= 8.5: longs += 1
+            if h < 6.0:  shorts += 1
+        bs = sm.get("bedtime_start")
+        if bs and len(str(bs)) >= 16:
+            try:
+                hh, mm = int(str(bs)[11:13]), int(str(bs)[14:16])
+                mins = hh * 60 + mm
+                if mins < 12 * 60: mins += 24 * 60      # after midnight → same night
+                beds.append(mins)
+            except Exception:
+                pass
+    def _clock(m):
+        m %= 24 * 60
+        hh, mm = divmod(m, 60)
+        ap = "AM" if hh < 12 else "PM"
+        hh12 = hh % 12 or 12
+        return f"{hh12}:{mm:02d} {ap}"
+    if beds:
+        out["bedtime_earliest"] = _clock(min(beds))
+        out["bedtime_latest"]   = _clock(max(beds))
+        out["bedtime_typical"]  = _clock(sorted(beds)[len(beds)//2])
+        out["bedtime_range_min"] = max(beds) - min(beds)
+    out["nights"] = len([d for d in recent_days if (smm.get(d) or {}).get("total")])
+    out["long_nights"]  = longs
+    out["short_nights"] = shorts
+    return out
+
+
 @app.post("/api/chat")
 async def health_chat(request: Request):
     session = _require_session(request)
@@ -7215,6 +7257,7 @@ async def health_chat(request: Request):
             "hrv_direction": hrv_direction,
             "sleep_avg":     round(sum(sleep_vals) / len(sleep_vals) / 3600, 1) if sleep_vals else None,
             "readiness_avg": round(sum(rdy_vals) / len(rdy_vals)) if rdy_vals else None,
+            "sleep_facts":   _sleep_week_facts(smm, recent_days),
         },
         "coaching": {
             "short_term": "; ".join(
@@ -7648,6 +7691,7 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
             "hrv_direction": hrv_direction,
             "sleep_avg":     round(sum(sleep_vals) / len(sleep_vals) / 3600, 1) if sleep_vals else None,
             "readiness_avg": round(sum(rdy_vals) / len(rdy_vals)) if rdy_vals else None,
+            "sleep_facts":   _sleep_week_facts(smm, recent_days),
         },
         "coaching": {"short_term": short_text},
     }

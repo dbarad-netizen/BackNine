@@ -69,9 +69,19 @@ wrapped in Capacitor for iOS (TestFlight). Backend: FastAPI on Render
   killed, Coach Al must never mention it (the prediction game, the forecast,
   Pulse feed, insights, recap, visit prep are all dead). Audit
   `ai_context.build()` keys when you remove a surface.
+- **Notice, don't assign** (David 2026-11-08: "Coach Al is nagging at me
+  rather than supporting me"). Coach Al is the guy in the foursome who reads
+  the data, not a trainer. A good week gets credit with no "but". Paragraph
+  two is what to keep doing, or nothing; a change is floated as an option
+  only when a number got worse in the last two days, never two days running,
+  never as a plan or "for the next two weeks". `briefing.voice_violations`
+  bounces drafts with questions, orders, banned phrases ("the miss",
+  "culprit", "protect"), physiology words, or more than four numbers.
 - **Earn the open.** Verdict first, in coffee-shop words. At most four numbers;
   a "vs usual" comparison counts as two. No fractions ("two-thirds more"),
-  no physiology-speak, no narrating internal rules to the reader.
+  no physiology-speak, no narrating internal rules to the reader. Bedtime
+  facts and "rare for you" claims come precomputed (`_sleep_week_facts`);
+  the model never estimates a range or a frequency itself.
 - **The model does no arithmetic.** Comparisons ("5.2 h vs usual 7.3 h, −29%")
   are precomputed server-side and handed over.
 - **Time order.** Yesterday's check-in mood was shaped by the night *before*

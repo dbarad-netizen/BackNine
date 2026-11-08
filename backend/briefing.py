@@ -110,17 +110,37 @@ def _build_system_prompt(
         "bounce back overnight', not 'recovery is lagging output'. One "
         "idea per sentence. If a reader would have to re-read a sentence, "
         "rewrite it.\n\n"
+        "WHO YOU ARE (David 2026-11-08: 'the briefs feel like Coach Al is "
+        "nagging at me rather than supporting me'): you are the guy in his "
+        "foursome who happens to read the data — not his trainer, not his "
+        "doctor, not his mother. You NOTICE; you do not ASSIGN. He is 58, "
+        "doing well, and did not ask for homework. A good week gets credit "
+        "with no 'but' attached. A rough night gets noticed, not graded. "
+        "The reader should finish feeling seen and a little curious, never "
+        "behind. If a sentence would sound like a checklist item or a "
+        "report card, cut it.\n\n"
         "FORMAT REQUIREMENTS:\n"
-        "• 1–2 short paragraphs. 60–110 words when there is something "
-        "real to say. On a genuinely quiet day — everything in range, "
-        "nothing changed, no prescription to report on — write ONE "
-        "paragraph of 30–50 words that says so plainly and names the "
-        "one thing to protect today. A short honest note beats a long "
-        "manufactured one.\n"
+        "• 1–2 short paragraphs. 50–100 words when there is something "
+        "real to say. On a quiet day — everything in range, nothing "
+        "changed — write ONE paragraph of 30–50 words that says so plainly. "
+        "A short honest note beats a long manufactured one.\n"
         "• Paragraph 1 = the insight (per the bar above), grounded in "
         "one or two specific numbers.\n"
-        "• Paragraph 2 = ONE specific action for today, tied to "
-        "paragraph 1. Skip it on quiet days per the rule above.\n"
+        "• Paragraph 2 = what to KEEP doing, said once, in plain words — "
+        "or nothing. A suggestion to CHANGE something is allowed only "
+        "when a specific number got worse than his usual in the last two "
+        "days AND the lever is obvious; phrase it as an option a friend "
+        "would float ('if you want the easy win tonight, lights out before "
+        "ten'), never as a task, a target, a plan, or a 'for the next two "
+        "weeks'. Never more than one such suggestion, never two days in a "
+        "row (check your past briefings above).\n"
+        "• BANNED WORDS AND SHAPES: 'The miss', 'culprit', 'protect', "
+        "'chase', 'needs', 'won't fix', 'commit', 'challenge', 'homework', "
+        "'the week ahead', 'for the next N days/weeks', any sentence that "
+        "opens with an imperative verb, any closing question. 'Brain "
+        "clearance', 'metabolic recovery' and the rest of the physiology "
+        "catalogue stay out of it — if it belongs in a journal it does not "
+        "belong here.\n"
         "• Address the user by first name once if you have one. Warm but not gushy.\n"
         "• Do not use lists, bullets, or markdown. Plain prose only.\n"
         "• Do not greet with 'Good morning' — the UI already does that.\n"
@@ -349,6 +369,20 @@ def _build_system_prompt(
         rdy_avg = seven.get("readiness_avg")
         if rdy_avg is not None:
             parts.append(f"  • Readiness avg: {rdy_avg}/100")
+        sf = seven.get("sleep_facts") or {}
+        if sf.get("bedtime_earliest"):
+            parts.append(
+                f"  • Bedtimes this week (computed — the ONLY bedtime facts you may state): "
+                f"earliest {sf['bedtime_earliest']}, latest {sf['bedtime_latest']}, typical {sf['bedtime_typical']}, "
+                f"over {sf.get('nights', 0)} nights. Say it in words ('lights out anywhere from "
+                f"{sf['bedtime_earliest']} to {sf['bedtime_latest']}'), never as minutes of swing."
+            )
+        if sf.get("nights"):
+            parts.append(
+                f"  • Nights of 8.5 h or more this week: {sf.get('long_nights', 0)} of {sf['nights']}; "
+                f"nights under 6 h: {sf.get('short_nights', 0)}. Never say a long night is 'rare' "
+                f"or 'unusual' for him unless this count says so."
+            )
 
     longevity = health_context.get("longevity_score") or {}
     if longevity and longevity.get("score") is not None:
@@ -497,6 +531,44 @@ def _build_system_prompt(
     return "\n".join(parts)
 
 
+_BANNED_PHRASES = (
+    "the miss", "culprit", "protect a", "protect the", "chase", "won't fix", "won’t fix",
+    "commit to", "challenge", "homework", "the week ahead", "for the next two weeks",
+    "for the next week", "brain clearance", "metabolic recovery", "glymphatic",
+    "parasympathetic", "autonomic", "swing you", "-minute swing", "minute swing",
+)
+
+
+def voice_violations(text: str) -> list[str]:
+    """Mechanical checks for the things David has flagged as 'nagging'
+    (2026-11-08) and 'spreadsheet' (2026-09-24, 2026-11-04). The model
+    gets the list back once and rewrites; a second miss ships anyway
+    with a log line, so a strict checker can never black out the card."""
+    import re
+    t = text.strip()
+    low = t.lower()
+    out: list[str] = []
+    if "?" in t:
+        out.append("contains a question — briefings never ask")
+    for ph in _BANNED_PHRASES:
+        if ph in low:
+            out.append(f"uses banned phrase '{ph}'")
+    # Numbers: digits groups, percentages, clock times. Allow 5 (the rule is
+    # four; one of slack for a year or a date).
+    nums = re.findall(r"\d[\d,]*(?:\.\d+)?%?", t)
+    if len(nums) > 5:
+        out.append(f"{len(nums)} numbers — at most four; keep the ones that carry the point")
+    if re.search(r"\b\d+\.\d{2,}\b", t):
+        out.append("a number with two decimals — round like a person talks")
+    # Imperative openers in the second paragraph ("Protect…", "Keep…", "Try…")
+    paras = [p for p in re.split(r"\n\s*\n", t) if p.strip()]
+    if len(paras) >= 2:
+        first = paras[-1].strip().split(" ")[0].strip(",.;:").lower()
+        if first in {"protect", "try", "aim", "keep", "hold", "get", "make", "set", "commit", "avoid", "skip", "stop", "start", "push"}:
+            out.append(f"second paragraph opens with an order ('{paras[-1].strip().split(' ')[0]}') — offer, don't assign")
+    return out
+
+
 def generate(
     health_context: dict,
     profile: dict,
@@ -613,4 +685,26 @@ def generate(
     if _truncated(response, text):
         # Never cache a cut-off narrative (same rule as never caching an empty one).
         raise RuntimeError("briefing model output truncated")
+
+    # Voice check (2026-11-08): one rewrite pass with the specific misses.
+    viol = voice_violations(text)
+    if viol:
+        log.warning("briefing: voice violations %s — one rewrite", viol)
+        try:
+            fix_msgs = _msg_kwargs["messages"] + [
+                {"role": "assistant", "content": text},
+                {"role": "user", "content": (
+                    "Your draft broke these rules: " + "; ".join(viol) + ". Rewrite it to fix every one. "
+                    "Same facts, same length or shorter, same warmth, no question, no orders, at most four numbers. "
+                    "Output only the rewritten briefing.")},
+            ]
+            r2 = client.messages.create(model="claude-sonnet-5", timeout=30.0,
+                                        **{**_msg_kwargs, "messages": fix_msgs, "max_tokens": 3200})
+            t2 = first_text(r2).strip()
+            if t2 and not _truncated(r2, t2):
+                text = t2
+                if voice_violations(text):
+                    log.warning("briefing: rewrite still has violations %s — shipping anyway", voice_violations(text))
+        except Exception as e:
+            log.warning("briefing: voice rewrite failed (%s) — shipping first draft", e)
     return text
