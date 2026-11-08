@@ -93,8 +93,12 @@ def _build_system_prompt(
         "nothing. Rules: at most FOUR numbers in the whole briefing — pick "
         "the ones that carry the point and drop the rest — and a 'vs usual' "
         "comparison counts as TWO numbers, so at most one comparison per "
-        "briefing. Baselines, 30-day averages and bedtime-swing minutes are "
-        "almost never worth a slot. Sentence one is "
+        "briefing. Baselines and 30-day averages are almost never worth a "
+        "slot. Bedtime consistency is NEVER a number of minutes ('a "
+        "65-minute swing' is banned) — say what it means: 'lights out "
+        "anywhere from 9:30 to 10:45 this week', 'same bedtime five nights "
+        "running'. Round like a person talks: '7.6 hours', '8,700 steps', "
+        "never '11,628 steps' or '5.95 hours'. Sentence one is "
         "the verdict in words a friend would use over coffee ('You're "
         "spending energy faster than you're getting it back'), THEN the "
         "numbers that show it. No physiology-speak: say 'your body didn't "
@@ -567,6 +571,32 @@ def generate(
     # which is exactly what broke the briefing for two days (2026-09-11).
     from ai_text import first_text
     text = first_text(response).strip()
+
+    def _truncated(resp, txt: str) -> bool:
+        # David 2026-11-08: the briefing ended mid-word ("never got f") —
+        # thinking ate most of the 1,600 tokens and the text hit the cap.
+        # stop_reason says so directly; the punctuation check catches the
+        # same thing when the SDK shape differs.
+        if getattr(resp, "stop_reason", None) == "max_tokens":
+            return True
+        return bool(txt) and txt[-1] not in ".!?)\"'”’…"
+
+    if text and _truncated(response, text):
+        log.warning("briefing: output truncated (stop_reason=%s) — retrying with more headroom",
+                    getattr(response, "stop_reason", None))
+        try:
+            response = client.messages.create(model="claude-sonnet-5", timeout=30.0,
+                                              **{**_msg_kwargs, "max_tokens": 3200})
+            text2 = first_text(response).strip()
+            if text2 and not _truncated(response, text2):
+                text = text2
+            else:
+                raise RuntimeError("still truncated")
+        except Exception as e:
+            log.warning("briefing: retry failed (%s) — falling back to haiku-4-5", e)
+            response = client.messages.create(model="claude-haiku-4-5-20251001", **_msg_kwargs)
+            text = first_text(response).strip()
+
     if not text:
         # All-thinking, no-text response (2026-09-15) — regenerate on
         # the known-good model rather than shipping an empty briefing.
@@ -575,4 +605,7 @@ def generate(
         text = first_text(response).strip()
     if not text:
         raise RuntimeError("briefing model returned no text")
+    if _truncated(response, text):
+        # Never cache a cut-off narrative (same rule as never caching an empty one).
+        raise RuntimeError("briefing model output truncated")
     return text
