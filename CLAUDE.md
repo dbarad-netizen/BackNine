@@ -46,6 +46,10 @@ wrapped in Capacitor for iOS (TestFlight). Backend: FastAPI on Render
   yesterday's numbers under today's date.
 - **Medals and head-to-heads compare the same calendar day only.** Steps and
   activity are judged on the last complete day; sleep on today once scored.
+  The Health Span score follows the same rule: when scoring the live today
+  (`compute(..., live=True)`), steps and active days use the seven days
+  ending yesterday — at 7:38 AM today's 8 steps were being averaged in as a
+  full day (2026-11-08). Backfills and the Monday close pass `live=False`.
 - **A baseline reset is a physiological discontinuity** (`baseline.py`).
   David started CPAP 2026-08-03; pre-CPAP HRV was apnea-inflated and is not
   a baseline. `oura_cache.get_days()` nulls HRV/RHR before the reset for every

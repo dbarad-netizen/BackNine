@@ -119,7 +119,9 @@ def build(today: Optional[date] = None, ids: Optional[list[str]] = None) -> dict
         except Exception:
             am, smm = {}, {}
         try:
-            snap = hspan.compute(uid, today_iso, am or {}, smm or {}, {})
+            # live only when `today` really is today; the Monday close passes
+            # last Sunday, a finished day, so its steps/active days count.
+            snap = hspan.compute(uid, today_iso, am or {}, smm or {}, {}, live=(today >= date.today()))
         except Exception:
             log.exception("scoreboard: healthspan failed for %s", uid)
             snap = {"score": None, "components": {}}

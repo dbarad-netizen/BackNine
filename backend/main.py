@@ -1715,9 +1715,12 @@ def _snapshot_healthspan_all(dates: list[str]) -> dict:
             _rm, _slm, am, smm = oc.get_days(uid, days=10)
         except Exception:
             am, smm = {}, {}
+        _today_league = _league_today().isoformat()
         for d in dates:
             try:
-                snap = hspan.compute(uid, d, am or {}, smm or {}, {})
+                # Yesterday's snapshot is a finished day → live=False (steps and
+                # active days include that day). Today's is still being played.
+                snap = hspan.compute(uid, d, am or {}, smm or {}, {}, live=(d >= _today_league))
                 if snap.get("score") is not None:
                     hspan.persist_and_delta(uid, d, snap)
                 results[f"{uid[:8]}@{d}"] = snap.get("score")

@@ -395,7 +395,8 @@ def persist_and_delta(user_id: str, today_iso: str, snapshot: dict) -> Optional[
 
 def compute(user_id: str, today_iso: str, oura_am: dict, oura_smm: dict,
             profile: dict,
-            capabilities: Optional[list] = None) -> dict:
+            capabilities: Optional[list] = None,
+            live: bool = True) -> dict:
     """Assemble the Weekly Health Span Score — v2, sensor-only.
 
     Four automated bands: sleep hours, sleep timing, steps, active
@@ -414,6 +415,21 @@ def compute(user_id: str, today_iso: str, oura_am: dict, oura_smm: dict,
     total_points = 0
     max_possible = 0
 
+    # Movement is judged on COMPLETE days (David 2026-11-08: at 7:38 AM the
+    # League card read "Daily steps (7d avg) · 7,738" — six full days
+    # averaging 9,026 plus today's 8 steps counted as a seventh day — and
+    # "Active days 6/7" with today scored as a day he hadn't moved yet).
+    # When `live` (scoring the user's actual today), steps and active days
+    # use the seven days ending YESTERDAY. Sleep keeps today: last night is
+    # finished once it's scored. Backfills and the Monday close pass
+    # live=False because every day in their window is already complete.
+    move_as_of = today_iso
+    if live:
+        try:
+            move_as_of = (_date.fromisoformat(today_iso) - timedelta(days=1)).isoformat()
+        except Exception:
+            pass
+
     # --- Sleep bands ---
     sleep_avg = _load_sleep_avg(user_id, oura_smm, as_of=today_iso)
     c = _score_sleep_hours(sleep_avg)
@@ -424,11 +440,11 @@ def compute(user_id: str, today_iso: str, oura_am: dict, oura_smm: dict,
     if c: components["sleep_consistency"] = c; total_points += c["points"]; max_possible += c["max"]
 
     # --- Movement bands ---
-    steps_avg = _load_steps_avg(user_id, oura_am, as_of=today_iso)
+    steps_avg = _load_steps_avg(user_id, oura_am, as_of=move_as_of)
     c = _score_steps(steps_avg)
     if c: components["steps"] = c; total_points += c["points"]; max_possible += c["max"]
 
-    active_n = _load_active_days(user_id, today_iso, oura_am)
+    active_n = _load_active_days(user_id, move_as_of, oura_am)
     c = _score_active_days(active_n)
     if c: components["active_days"] = c; total_points += c["points"]; max_possible += c["max"]
 
@@ -500,7 +516,7 @@ def backfill_history(user_id: str, days: int = 35, end_iso: Optional[str] = None
             iso = d.isoformat()
             if iso not in existing:
                 try:
-                    snap = compute(user_id, iso, am or {}, smm or {}, {})
+                    snap = compute(user_id, iso, am or {}, smm or {}, {}, live=False)
                     if snap.get("score") is not None:
                         sb.table("weekly_healthspan_history").upsert({
                             "user_id": user_id, "date": iso, "score": int(snap["score"]),
