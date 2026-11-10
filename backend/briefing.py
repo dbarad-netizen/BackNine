@@ -134,7 +134,14 @@ def _build_system_prompt(
         "ten'), never as a task, a target, a plan, or a 'for the next two "
         "weeks'. Never more than one such suggestion, never two days in a "
         "row (check your past briefings above).\n"
-        "• BANNED WORDS AND SHAPES: 'The miss', 'culprit', 'protect', "
+        "• DON'T ARGUE WITH YOURSELF (David 2026-11-10): if you tell him a "
+        "reading is one to notice rather than trust, you may not then "
+        "build advice on it. A high HRV after a SHORT night (under 7 h) or "
+        "with readiness below his week's average is never a reason to "
+        "train harder — say it's a nice surprise and leave training alone. "
+        "And if a topic has nothing to say (bedtimes with no pattern), "
+        "skip it; don't write a sentence announcing there's nothing.\n"
+        "• BANNED WORDS AND SHAPES: 'nervous system', 'primed', 'don't let', 'The miss', 'culprit', 'protect', "
         "'chase', 'needs', 'won't fix', 'commit', 'challenge', 'homework', "
         "'the week ahead', 'for the next N days/weeks', any sentence that "
         "opens with an imperative verb, any closing question. 'Brain "
@@ -536,6 +543,7 @@ _BANNED_PHRASES = (
     "commit to", "challenge", "homework", "the week ahead", "for the next two weeks",
     "for the next week", "brain clearance", "metabolic recovery", "glymphatic",
     "parasympathetic", "autonomic", "swing you", "-minute swing", "minute swing",
+    "nervous system", "primed", "don't let", "don’t let",
 )
 
 
