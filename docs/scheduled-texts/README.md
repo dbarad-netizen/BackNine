@@ -12,6 +12,6 @@ with the contents of the matching file → save.
 | BackNine Tuesday midweek check-in text      | `tuesday-turn.md`       | Tue 4:00 PM    |
 | BackNine Friday weekend game plan text      | `friday-weekend-plan.md`| Fri 4:00 PM    |
 
-Last change: 2026-11-04 — NUMBER RULES in all three (one number per read, rounded, no "bedtime spread" or decimals), Tuesday compares to the final card not "Sunday". Earlier: 2026-10-31 — the week now closes Monday morning: the Sunday text becomes the Monday final card (reschedule the task to Monday 7:30 AM and paste the new prompt); it reads the frozen card the server writes at 6 AM Pacific. Earlier: Tuesday and Friday rank by NET like Sunday; Josh added to all three (three-player field,
+Last change: 2026-11-09 — Jenna B. added to all three (four-player field, "4th ·" row, median par for players with under 20 days). Earlier: 2026-11-04 — NUMBER RULES in all three (one number per read, rounded, no "bedtime spread" or decimals), Tuesday compares to the final card not "Sunday". Earlier: 2026-10-31 — the week now closes Monday morning: the Sunday text becomes the Monday final card (reschedule the task to Monday 7:30 AM and paste the new prompt); it reads the frozen card the server writes at 6 AM Pacific. Earlier: Tuesday and Friday rank by NET like Sunday; Josh added to all three (three-player field,
 🥉, ties share a medal); Friday text now does the week-as-bank-account
 math and ends with a `Your week:` link that opens the pace chart.

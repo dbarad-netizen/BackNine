@@ -149,7 +149,7 @@ wrapped in Capacitor for iOS (TestFlight). Backend: FastAPI on Render
 - Cowork scheduled tasks compose the Monday/Tuesday/Friday texts from
   Supabase. Claude cannot edit the live tasks: prompts live in
   `docs/scheduled-texts/` and David pastes them in. They carry the net
-  scoring rules and the roster (David, Chris, Josh as of 2026-10-27) —
+  scoring rules and the roster (David, Chris, Josh, Jenna as of 2026-11-09) —
   update them when scoring changes or a player joins/leaves.
 
 ## People (ids in `user_profiles`)
@@ -157,7 +157,9 @@ wrapped in Capacitor for iOS (TestFlight). Backend: FastAPI on Render
 - David — `oura_6c-…` (Oura; CPAP reset 2026-08-03; amlodipine note).
 - Chris — `11ed8938-…` (Apple Watch; profile name "Gantler", always write
   Chris). His old Oura account `oura_267b…` is dead — don't friend it.
-- Josh — `oura_2d14…` (Oura). Demo accounts for App Review: Sam Demo
+- Josh — `oura_2d14…` (Oura).
+- Jenna — `oura_9fda…` (Oura; David's niece, joined 2026-11-08; profile
+  name "Jenna B"). Demo accounts for App Review: Sam Demo
   (`26082f46-…`) and Pat Demo (`a0000000-…de01`), rolled forward daily.
 - Name David as "David B." on anything public. Never his full surname.
 
