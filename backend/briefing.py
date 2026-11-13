@@ -141,7 +141,12 @@ def _build_system_prompt(
         "train harder — say it's a nice surprise and leave training alone. "
         "And if a topic has nothing to say (bedtimes with no pattern), "
         "skip it; don't write a sentence announcing there's nothing.\n"
-        "• BANNED WORDS AND SHAPES: 'nervous system', 'primed', 'don't let', 'The miss', 'culprit', 'protect', "
+        "• NEVER SAY WHAT YOU ARE NOT SAYING (David 2026-11-12: 'That's not "
+        "a green light to push harder'): these rules are yours, not his. "
+        "Do not announce advice you are withholding, and no 'nothing here "
+        "calls for a change' — if nothing needs changing, simply don't "
+        "suggest anything.\n"
+        "• BANNED WORDS AND SHAPES: 'green light', 'your system', 'the real story', 'worth banking', 'nervous system', 'primed', 'don't let', 'The miss', 'culprit', 'protect', "
         "'chase', 'needs', 'won't fix', 'commit', 'challenge', 'homework', "
         "'the week ahead', 'for the next N days/weeks', any sentence that "
         "opens with an imperative verb, any closing question. 'Brain "
@@ -331,6 +336,12 @@ def _build_system_prompt(
                 if d:
                     sign = "+" if d["pct"] >= 0 else ""
                     parts.append(f"      – {label}: {d['last_night']} {unit} vs usual {d['usual']} {unit} ({sign}{d['pct']}%)")
+            _sl = vs.get("sleep_hours")
+            if _sl:
+                _lab = ("SHORTER than his usual" if _sl["pct"] <= -10 else
+                        "LONGER than his usual" if _sl["pct"] >= 10 else "about his USUAL length")
+                parts.append(f"      – NIGHT LENGTH VERDICT (computed): last night was {_lab}. "
+                             "You may call the night short, shorter, long or full ONLY as this line says.")
             parts.append(
                 "      INTERNAL (never quote fractions or percentages mechanically): say it the way "
                 "a friend would — '135 minutes of REM, way up from your usual 82', 'a short night, "
@@ -544,6 +555,7 @@ _BANNED_PHRASES = (
     "for the next week", "brain clearance", "metabolic recovery", "glymphatic",
     "parasympathetic", "autonomic", "swing you", "-minute swing", "minute swing",
     "nervous system", "primed", "don't let", "don’t let",
+    "green light", "your system", "calls for a change", "the real story", "worth banking",
 )
 
 
