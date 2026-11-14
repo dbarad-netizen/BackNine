@@ -120,8 +120,7 @@ def _build_system_prompt(
         "behind. If a sentence would sound like a checklist item or a "
         "report card, cut it.\n\n"
         "FORMAT REQUIREMENTS:\n"
-        "• 1–2 short paragraphs. 50–100 words when there is something "
-        "real to say. On a quiet day — everything in range, nothing "
+        "• 1–2 short paragraphs, never more than 85 words. On a quiet day — everything in range, nothing "
         "changed — write ONE paragraph of 30–50 words that says so plainly. "
         "A short honest note beats a long manufactured one.\n"
         "• Paragraph 1 = the insight (per the bar above), grounded in "
@@ -141,6 +140,16 @@ def _build_system_prompt(
         "train harder — say it's a nice surprise and leave training alone. "
         "And if a topic has nothing to say (bedtimes with no pattern), "
         "skip it; don't write a sentence announcing there's nothing.\n"
+        "• LEAD WITH WHAT WENT RIGHT (David 2026-11-14: 'incorrect and "
+        "negative and just don't inspire'). He should finish the briefing "
+        "glad he opened it. The WINS block below is the spine: open with "
+        "it. You are never the one who tells him to take it easy — no "
+        "'quiet option', 'rest day', 'easy day', 'nothing that asks much', "
+        "'you earned the rest' — unless readiness is under 70, and then in "
+        "one plain clause. A lower HRV after a big day is normal and is "
+        "not news.\n"
+        "• LENGTH: 35–60 words on an ordinary day. Two or three sentences. "
+        "One paragraph unless there is a real second thing.\n"
         "• NEVER SAY WHAT YOU ARE NOT SAYING (David 2026-11-12: 'That's not "
         "a green light to push harder'): these rules are yours, not his. "
         "Do not announce advice you are withholding, and no 'nothing here "
@@ -374,6 +383,20 @@ def _build_system_prompt(
                 "open the Oura app to nudge the sync."
             )
 
+    wins = health_context.get("wins") or []
+    if wins:
+        parts.append("\n=== WINS (computed, true — OPEN WITH THE FIRST ONE) ===")
+        for w in wins:
+            parts.append(f"  • {w}")
+        parts.append(
+            "  These are verified. Your first sentence states the first win in your own words. "
+            "You may add one more. Anything less flattering gets at most ONE short clause, and only "
+            "if it is the worst reading in two weeks; otherwise leave it out entirely — he can see "
+            "his own numbers."
+        )
+    else:
+        parts.append("\n=== WINS ===\n  • None computed today. Say what's steady, briefly, and stop. Do not go looking for a problem.")
+
     seven = health_context.get("seven_day") or {}
     if seven:
         parts.append("\n=== 7-DAY CONTEXT ===")
@@ -556,6 +579,8 @@ _BANNED_PHRASES = (
     "parasympathetic", "autonomic", "swing you", "-minute swing", "minute swing",
     "nervous system", "primed", "don't let", "don’t let",
     "green light", "your system", "calls for a change", "the real story", "worth banking",
+    "today calls for", "quiet option", "rest day", "easy day", "earned the rest", "asks much",
+    "the opposite of", "stacking another",
 )
 
 
@@ -578,6 +603,8 @@ def voice_violations(text: str) -> list[str]:
     nums = re.findall(r"\d[\d,]*(?:\.\d+)?%?", t)
     if len(nums) > 5:
         out.append(f"{len(nums)} numbers — at most four; keep the ones that carry the point")
+    if len(t.split()) > 85:
+        out.append(f"{len(t.split())} words — 35 to 60 on an ordinary day")
     if re.search(r"\b\d+\.\d{2,}\b", t):
         out.append("a number with two decimals — round like a person talks")
     # Imperative openers in the second paragraph ("Protect…", "Keep…", "Try…")

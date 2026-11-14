@@ -7154,6 +7154,89 @@ def clear_chat_history(request: Request):
 
 
 
+def _briefing_inputs(t_sm: dict, t_sl: dict, t_rdy: dict) -> dict:
+    """Fingerprint of what a briefing was written from (2026-11-14)."""
+    return {
+        "sleep_total": int(t_sm.get("total") or 0),
+        "hrv":         t_sm.get("hrv"),
+        "sleep_score": t_sl.get("score"),
+        "readiness":   t_rdy.get("score"),
+    }
+
+
+def _briefing_inputs_changed(old: dict, new: dict) -> Optional[str]:
+    """Why the cached briefing no longer matches the night, or None.
+    David 2026-11-14: Oura published a 5.2 h session at 3:56 AM when he
+    woke briefly; he went back to sleep, the briefing was written at
+    7:37 AM from that partial night ("your shortest, HRV the lowest of
+    the week") ten minutes before the full 8.1 h / sleep score 92
+    arrived. A briefing is only as good as the night it read."""
+    if not old:
+        return None
+    o, n = int(old.get("sleep_total") or 0), int(new.get("sleep_total") or 0)
+    if n and abs(n - o) >= 20 * 60:
+        return f"sleep total {o//60}→{n//60} min"
+    if new.get("sleep_score") and not old.get("sleep_score"):
+        return "sleep score arrived"
+    if new.get("sleep_score") and old.get("sleep_score") and abs(new["sleep_score"] - old["sleep_score"]) >= 4:
+        return f"sleep score {old['sleep_score']}→{new['sleep_score']}"
+    if new.get("hrv") and old.get("hrv") and abs(float(new["hrv"]) - float(old["hrv"])) >= 5:
+        return f"hrv {old['hrv']}→{new['hrv']}"
+    return None
+
+
+def _briefing_wins(today_str: str, rm: dict, slm: dict, am: dict, smm: dict, yest: str) -> list[str]:
+    """True, checkable good news, ranked — computed so Coach Al can open
+    with a win instead of hunting for a problem (David 2026-11-14: "they
+    are incorrect and negative and just don't inspire"). Each line is a
+    fact the model may state as written."""
+    wins: list[tuple[int, str]] = []
+    def _rank(series: dict, key: str, day: str, days: int):
+        vals = [(d, (series.get(d) or {}).get(key)) for d in sorted(series.keys(), reverse=True)[:days]]
+        vals = [(d, v) for d, v in vals if v]
+        cur = (series.get(day) or {}).get(key)
+        if not cur or len(vals) < 5:
+            return None, None, len(vals)
+        better = sum(1 for _d, v in vals if v > cur)
+        return cur, better + 1, len(vals)
+    cur, rank, n = _rank(slm, "score", today_str, 30)
+    if cur and rank == 1:
+        wins.append((100, f"Sleep score {cur} — his best in the last {n} nights."))
+    elif cur and rank and rank <= 3 and cur >= 85:
+        wins.append((80, f"Sleep score {cur} — top three of the last {n} nights."))
+    elif cur and cur >= 85:
+        wins.append((55, f"Sleep score {cur} — a strong night."))
+    cur, rank, n = _rank(rm, "score", today_str, 30)
+    if cur and rank == 1:
+        wins.append((90, f"Readiness {cur} — his best in the last {n} days."))
+    elif cur and cur >= 85:
+        wins.append((50, f"Readiness {cur} — solidly in the green."))
+    cur, rank, n = _rank(smm, "hrv", today_str, 30)
+    if cur and rank and rank <= 2:
+        wins.append((85, f"HRV {cur} — {'the best' if rank == 1 else 'second best'} of the last {n} nights."))
+    tot = (smm.get(today_str) or {}).get("total")
+    if tot and tot >= 7.5 * 3600:
+        streak = 0
+        for d in sorted(smm.keys(), reverse=True):
+            if d > today_str: continue
+            if ((smm.get(d) or {}).get("total") or 0) >= 7 * 3600: streak += 1
+            else: break
+        if streak >= 3:
+            wins.append((75, f"{streak} nights in a row of seven hours or more."))
+        else:
+            wins.append((45, f"A full night: {round(tot/3600, 1)} hours."))
+    cur, rank, n = _rank(am, "steps", yest, 14)
+    if cur and rank == 1:
+        wins.append((70, f"Yesterday's {round(cur, -2):,} steps was his biggest day in two weeks."))
+    elif cur and cur >= 10000:
+        wins.append((40, f"Yesterday cleared ten thousand steps ({round(cur, -2):,})."))
+    act_days = sum(1 for d in sorted(am.keys(), reverse=True)[1:8] if ((am.get(d) or {}).get("active_cal") or 0) >= 300)
+    if act_days >= 6:
+        wins.append((60, f"Active {act_days} of the last 7 days."))
+    wins.sort(key=lambda w: -w[0])
+    return [w for _s, w in wins[:4]]
+
+
 def _sleep_week_facts(smm: dict, recent_days: list) -> dict:
     """Precomputed sleep facts for Coach Al (2026-11-08): the briefing said
     "you went out between 9:30 and 10:15 most nights" and "nine hours is
@@ -7458,18 +7541,33 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
         today_str = datetime.now(tz=ZoneInfo("America/New_York")).date().isoformat()
 
     db = get_supabase()
+    _auto_regen_count = 0
 
     # Cache hit?
     if db and not refresh:
         try:
             cached = (
                 db.table("daily_briefings")
-                .select("narrative, prediction_streak, prediction_accuracy, generated_at")
+                .select("narrative, prediction_streak, prediction_accuracy, generated_at, inputs")
                 .eq("user_id", user_id)
                 .eq("date", today_str)
                 .execute()
             )
+            _stale_why = None
             if cached.data:
+                # Has the night changed since this was written? (memoised read)
+                try:
+                    _c_in = cached.data[0].get("inputs") or {}
+                    _n_rm, _n_slm, _n_am, _n_smm = await asyncio.to_thread(oc.get_days, user_id, 3)
+                    _now_in = _briefing_inputs(_n_smm.get(today_str) or {}, _n_slm.get(today_str) or {}, _n_rm.get(today_str) or {})
+                    if int(_c_in.get("regen") or 0) < 2:
+                        _stale_why = _briefing_inputs_changed(_c_in, _now_in)
+                    if _stale_why:
+                        _auto_regen_count = int(_c_in.get("regen") or 0) + 1
+                        log.info("briefing: night changed since written for %s (%s) — regenerating", user_id[:12], _stale_why)
+                except Exception:
+                    _stale_why = None
+            if cached.data and not _stale_why:
                 row = cached.data[0]
                 # Layer 2 (David 2026-07-27): even on cache hits, compute
                 # today's type label so the badge is consistent. The
@@ -7509,15 +7607,20 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
     # Last night's sleep is keyed to the wake date = the user's LOCAL today. If
     # it's not in our cache yet, try a live pull — Oura may have just finished
     # processing — so we don't fall back to an older night.
-    if not (smm.get(today_str, {}) or {}).get("total"):
+    # ALWAYS pull live before writing (2026-11-14): the cache can hold a
+    # partial night — a session Oura published when he woke at 4 AM — and
+    # "has a total" is not the same as "is last night". 15 s cap; on any
+    # failure we write from the cache as before.
+    if True:
         try:
             access_token, _ = await _ensure_valid_token(session)
-            raw = await fetch_all(access_token, days=14)
+            raw = await asyncio.wait_for(fetch_all(access_token, days=14), timeout=15)
             l_rm, l_slm, l_am, l_smm = parse_oura_data(raw)
             if l_rm or l_slm or l_am or l_smm:
-                rm, slm, am, smm = l_rm, l_slm, l_am, l_smm
+                # Merge over the 30-day cache (live wins for the days it has).
+                rm, slm, am, smm = {**rm, **l_rm}, {**slm, **l_slm}, {**am, **l_am}, {**smm, **l_smm}
                 try:
-                    oc.store_days(user_id, rm, slm, am, smm)
+                    await asyncio.to_thread(oc.store_days, user_id, l_rm, l_slm, l_am, l_smm)
                 except Exception:
                     pass
                 try:
@@ -7619,6 +7722,21 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
             "has_data":            True,
         }
 
+    # Partial-night guard (2026-11-14): a session much shorter than his usual
+    # with NO sleep score yet is almost always a night still in progress or
+    # not fully synced (Oura scores the night once it's whole). Don't write
+    # about its length or HRV — treat the detail as not in yet.
+    _night_provisional = False
+    try:
+        _prior = [smm[d]["total"] for d in sorted(smm.keys(), reverse=True) if d != today_str and (smm.get(d) or {}).get("total")][:7]
+        if t_sm.get("total") and not t_sl.get("score") and len(_prior) >= 3 \
+           and t_sm["total"] < 0.8 * (sum(_prior) / len(_prior)):
+            log.info("briefing: partial night for %s (%.1f h, no sleep score) — holding sleep detail", user_id[:12], t_sm["total"] / 3600)
+            _night_provisional = True
+            t_sm = {}
+    except Exception:
+        pass
+
     recent_days = sorted(smm.keys(), reverse=True)[:7]
     hrv_vals   = [smm[d]["hrv"]   for d in recent_days if smm[d].get("hrv")]
     sleep_vals = [smm[d]["total"] for d in recent_days if smm[d].get("total")]
@@ -7694,6 +7812,7 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
             "sleep_facts":   _sleep_week_facts(smm, recent_days),
         },
         "coaching": {"short_term": short_text},
+        "wins": _briefing_wins(today_str, rm, slm, am, {**smm, today_str: t_sm} if t_sm else {k: v for k, v in smm.items() if k != today_str}, _yest),
     }
 
     # Data-freshness advisory — critical for the briefing since Fable's
@@ -7910,6 +8029,10 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
                     "user_id":             user_id,
                     "date":                today_str,
                     "narrative":           narrative,
+                    # What it was written from; a later change regenerates it.
+                    # A provisional night stores zeros so the full night always does.
+                    "inputs":              {**_briefing_inputs(t_sm, t_sl, t_rdy), "regen": _auto_regen_count,
+                                            "provisional": _night_provisional},
                     "prediction_streak":   prediction_status.get("streak"),
                     "prediction_accuracy": prediction_status.get("accuracy_pct"),
                 },

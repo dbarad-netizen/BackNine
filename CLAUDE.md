@@ -77,6 +77,16 @@ wrapped in Capacitor for iOS (TestFlight). Backend: FastAPI on Render
   never as a plan or "for the next two weeks". `briefing.voice_violations`
   bounces drafts with questions, orders, banned phrases ("the miss",
   "culprit", "protect"), physiology words, or more than four numbers.
+- **A briefing is only as good as the night it read** (2026-11-14: Oura
+  published a 5.2 h session when David woke at 4 AM; the briefing called it
+  his shortest night ten minutes before the full 8.1 h / sleep score 92
+  arrived). The endpoint always pulls Oura live before writing; a night far
+  shorter than usual with no sleep score is treated as not in yet; every
+  briefing stores its `inputs` and regenerates itself (max twice a day) when
+  the night's numbers change.
+- **Lead with what went right.** `_briefing_wins` hands Coach Al verified good
+  news, ranked; the first sentence is the top win. 35–60 words on an ordinary
+  day. He is never told to take it easy unless readiness is under 70.
 - **Earn the open.** Verdict first, in coffee-shop words. At most four numbers;
   a "vs usual" comparison counts as two. No fractions ("two-thirds more"),
   no physiology-speak, no narrating internal rules to the reader. Bedtime
