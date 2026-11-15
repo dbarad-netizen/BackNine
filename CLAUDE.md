@@ -161,6 +161,10 @@ wrapped in Capacitor for iOS (TestFlight). Backend: FastAPI on Render
   `docs/scheduled-texts/` and David pastes them in. They carry the net
   scoring rules and the roster (David, Chris, Josh, Jenna as of 2026-11-09) —
   update them when scoring changes or a player joins/leaves.
+  Each prompt opens with THE CLOCK: the date comes from
+  `now() at time zone 'America/Los_Angeles'`, never the UTC server date —
+  at 4 PM Pacific UTC is already tomorrow (2026-11-13: "It's Saturday
+  already", and a half-played Friday scored as a full day).
 
 ## People (ids in `user_profiles`)
 
