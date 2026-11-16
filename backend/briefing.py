@@ -383,6 +383,18 @@ def _build_system_prompt(
                 "open the Oura app to nudge the sync."
             )
 
+    if health_context.get("is_oura_user"):
+        parts.append(
+            "\n=== WHERE PLANS LIVE (Oura users only) ===\n"
+            "  The Oura app's Advisor now builds seven-day, one-habit plans with daily check-ins "
+            "(announced Nov 2026). You do not build plans. On the rare day the rules above allow you "
+            "to float a change, you may add ONE short clause pointing there — 'that's a good one to "
+            "hand to Oura's Advisor as a week-long plan' — and leave it at that. Never more than once "
+            "a week (check your past briefings), never as an instruction, never describe how the "
+            "feature works, and never mention it when there is nothing to change. If he is not an "
+            "Oura user this block is absent and Advisor must not be mentioned."
+        )
+
     wins = health_context.get("wins") or []
     if wins:
         parts.append("\n=== WINS (computed, true — OPEN WITH THE FIRST ONE) ===")

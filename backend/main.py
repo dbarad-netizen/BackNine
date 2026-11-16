@@ -7812,6 +7812,7 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
             "sleep_facts":   _sleep_week_facts(smm, recent_days),
         },
         "coaching": {"short_term": short_text},
+        "is_oura_user": bool(_is_oura_user),
         "wins": _briefing_wins(today_str, rm, slm, am, {**smm, today_str: t_sm} if t_sm else {k: v for k, v in smm.items() if k != today_str}, _yest),
     }
 

@@ -84,6 +84,10 @@ wrapped in Capacitor for iOS (TestFlight). Backend: FastAPI on Render
   shorter than usual with no sleep score is treated as not in yet; every
   briefing stores its `inputs` and regenerates itself (max twice a day) when
   the night's numbers change.
+- **Plans live in Oura, not here.** Oura Advisor runs seven-day one-habit
+  plans (Nov 2026). For Oura users only, Coach Al may point there in one
+  clause when a change is worth floating, at most once a week. He never
+  builds a plan himself, and never mentions Advisor to a non-Oura user.
 - **Lead with what went right.** `_briefing_wins` hands Coach Al verified good
   news, ranked; the first sentence is the top win. 35–60 words on an ordinary
   day. He is never told to take it easy unless readiness is under 70.
