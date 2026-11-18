@@ -118,6 +118,10 @@ wrapped in Capacitor for iOS (TestFlight). Backend: FastAPI on Render
 - **Oura's document endpoints treat `end_date` as exclusive** and Render runs
   on UTC, so `end_date` must be tomorrow or today's sleep session only arrives
   at 5pm Pacific. Daily endpoints are inclusive. (`oura.py`)
+- **Split nights are summed; overlapping sessions are not.** Oura sometimes
+  returns a reprocessed copy of the same night next to the original
+  (2026-11-17: two 7.3 h `long_sleep` records → 14.9 h). `parse_oura_data`
+  drops any session whose time in bed mostly overlaps a longer one.
 - **Oura refresh tokens are single-use.** Central store
   (`oura_connections` for text ids, `wearable_connections` for UUIDs); adopt
   newer tokens, retry with the central one, persist to both, force-refresh on

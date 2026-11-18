@@ -388,8 +388,51 @@ def parse_oura_data(raw: dict) -> tuple[dict, dict, dict, dict]:
             "awake":         rec.get("awake_time"),  # seconds
             "efficiency":    rec.get("efficiency"),
             "bedtime_start": rec.get("bedtime_start"),
+            "bedtime_end":   rec.get("bedtime_end"),
+            "id":            rec.get("id"),
             "sleep_need":    sleep_need_sec or None,
         })
+
+    # Overlap dedupe (David 2026-11-18, "Oura double counted my sleep"):
+    # on 2026-11-17 Oura returned TWO long_sleep records for the same night,
+    # 26,220 s each with slightly different stage figures — a reprocessed
+    # copy alongside the original — and summing them made a 7.3 h night
+    # read 14.9 h. Split nights are sequential; duplicates overlap. So:
+    # longest first, and drop any session whose time in bed mostly overlaps
+    # one already kept.
+    def _ts(v):
+        try:
+            return datetime.fromisoformat(str(v).replace("Z", "+00:00")).timestamp()
+        except Exception:
+            return None
+    for _day, _sess in list(_smm_raw.items()):
+        if len(_sess) < 2:
+            continue
+        kept: list = []
+        seen_ids: set = set()
+        for s in sorted(_sess, key=lambda x: -x["total"]):
+            if s.get("id") and s["id"] in seen_ids:
+                continue
+            a0, a1 = _ts(s.get("bedtime_start")), _ts(s.get("bedtime_end"))
+            dup = False
+            for k in kept:
+                b0, b1 = _ts(k.get("bedtime_start")), _ts(k.get("bedtime_end"))
+                if a0 is not None and a1 is not None and b0 is not None and b1 is not None and a1 > a0:
+                    overlap = max(0.0, min(a1, b1) - max(a0, b0))
+                    if overlap >= 0.5 * (a1 - a0):
+                        dup = True; break
+                elif s.get("type") == k.get("type") and s["total"] == k["total"]:
+                    # No timestamps to compare: an identical type+duration is a copy.
+                    dup = True; break
+            if dup:
+                log.warning("oura: dropped overlapping duplicate sleep session on %s (%s, %d s)", _day, s.get("type"), s["total"])
+                continue
+            kept.append(s)
+            if s.get("id"):
+                seen_ids.add(s["id"])
+        # Keep chronological order for the segments display.
+        kept.sort(key=lambda x: _ts(x.get("bedtime_start")) or 0)
+        _smm_raw[_day] = kept
 
     # Aggregate sessions: sum durations, weighted-average HRV, minimum RHR
     for day, sessions in _smm_raw.items():
