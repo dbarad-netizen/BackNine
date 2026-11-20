@@ -7195,6 +7195,24 @@ def clear_chat_history(request: Request):
 
 
 
+def _yesterday_load(am: dict, yest: str, steps) -> Optional[str]:
+    """Was yesterday a light, usual or big day of movement — by steps
+    against his own median, not by Oura's activity score. 2026-11-21: the
+    briefing said "yesterday's 99 activity score barely made a dent" about
+    a 3,982-step day; Oura's score rewards balance, so a rest day can score
+    99. The model must not read that score as effort."""
+    try:
+        import statistics as _st
+        prior = [(am.get(d) or {}).get("steps") for d in sorted(am.keys(), reverse=True) if d < yest][:14]
+        prior = [float(v) for v in prior if v]
+        if not steps or len(prior) < 5:
+            return None
+        ratio = float(steps) / _st.median(prior)
+        return "light" if ratio < 0.6 else "big" if ratio > 1.3 else "usual"
+    except Exception:
+        return None
+
+
 def _briefing_inputs(t_sm: dict, t_sl: dict, t_rdy: dict) -> dict:
     """Fingerprint of what a briefing was written from (2026-11-14)."""
     return {
@@ -7854,6 +7872,7 @@ async def get_morning_briefing(request: Request, refresh: bool = False, date: Op
         },
         "coaching": {"short_term": short_text},
         "is_oura_user": bool(_is_oura_user),
+        "yesterday_load": _yesterday_load(am, _yest, y_act.get("steps")),
         "wins": _briefing_wins(today_str, rm, slm, am, {**smm, today_str: t_sm} if t_sm else {k: v for k, v in smm.items() if k != today_str}, _yest),
     }
 

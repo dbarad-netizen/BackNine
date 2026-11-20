@@ -325,6 +325,14 @@ def _build_system_prompt(
                     parts.append(f"  • {label}: {v:.1f}{unit}")
                 else:
                     parts.append(f"  • {label}: {v}{unit}")
+        _load = health_context.get("yesterday_load")
+        if _load:
+            parts.append(
+                f"  • YESTERDAY'S MOVEMENT VERDICT (computed from steps against his usual): a {_load.upper()} day. "
+                "Oura's activity SCORE measures balance, not effort — a rest day can score 99. Never present the "
+                "activity score as a hard day, a big output, or something his body 'absorbed' or 'shrugged off' "
+                "unless this line says BIG. On a LIGHT day, don't mention the activity score at all."
+            )
         for label, key in (("Deep sleep", "deep_min"), ("REM sleep", "rem_min")):
             v = today.get(key)
             if v is not None:
@@ -591,6 +599,7 @@ _BANNED_PHRASES = (
     "parasympathetic", "autonomic", "swing you", "-minute swing", "minute swing",
     "nervous system", "primed", "don't let", "don’t let",
     "green light", "your system", "calls for a change", "the real story", "worth banking",
+    "needs fixing", "nothing here", "made a dent", "didn't seem to mind", "didn’t seem to mind",
     "today calls for", "quiet option", "rest day", "easy day", "earned the rest", "asks much",
     "the opposite of", "stacking another",
 )
