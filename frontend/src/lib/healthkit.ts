@@ -576,7 +576,11 @@ export async function syncWorkouts(days = 30): Promise<number> {
 // ── Auto-sync scaffolding ───────────────────────────────────────────────
 
 const AUTO_SYNC_KEY       = "bn_hk_last_sync";
-const FIRST_SYNC_DONE_KEY = "bn_hk_first_sync_done";
+// "_v2" (2026-11-20): bumping this key makes every phone run ONE full 90-day
+// sync on its next open. A server bug was erasing Apple Health steps older
+// than a week and sleep older than two on every quick sync; the server is
+// fixed, and this refills the history from the phone, which still has it.
+const FIRST_SYNC_DONE_KEY = "bn_hk_first_sync_done_v2";
 
 // Window sizes tuned for the two cases:
 //   - First-ever sync: 90 days so a new user (or someone reconnecting

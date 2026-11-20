@@ -3558,6 +3558,9 @@ export interface LeaderboardEntry {
   par?: number | null;
   par_provisional?: boolean;
   net?: number | null;
+  net_exact?: number | null;
+  /** Strokes gained per band — what `net` is the sum of (2026-11-20). */
+  strokes?: Record<string, StrokeBand>;
   on_hold?: boolean;
   /** @deprecated Always null — badge/XP/Level layer was removed. Key kept
    *  for response-shape backwards-compat. Safe to remove on next API revision. */
@@ -3681,6 +3684,10 @@ export interface LeagueStanding {
   par_provisional?: boolean;
   par_days?: number;
   net?: number | null;
+  net_exact?: number | null;
+  /** Strokes gained per band — what `net` is the sum of (2026-11-20). */
+  strokes?: Record<string, StrokeBand>;
+  strokes_provisional?: boolean;
   on_hold?: boolean;
   rank:    number;
   is_me:   boolean;
@@ -3743,13 +3750,14 @@ export interface LeagueResponse {
   categories?:   LeagueCategory[];         // column defs for the per-task grid
   /** Band keys every scored player shares (math view). */
   common_bands?: string[];
-  scoring?: { mode: "net" | "gross"; par_rule: string; scratch_par: number };
+  scoring?: { mode: "net" | "gross" | "strokes"; par_rule: string; scratch_par: number };
 }
 
 export interface FinalCardRow {
   user_id: string; name: string; is_me?: boolean;
   score: number | null; par: number | null; par_provisional?: boolean | null;
   net: number | null; on_hold?: boolean;
+  strokes?: Record<string, StrokeBand>;
   bands?: Record<string, { points: number | null; max: number | null; value?: string; label?: string }>;
 }
 export interface FinalCard {
@@ -3761,26 +3769,37 @@ export interface FinalCard {
   settled?: boolean;
 }
 
-export interface WeekPaceBand { points: number; max: number }
+/** One band of the League's strokes-gained score (backend/strokes.py). */
+export interface StrokeBand {
+  label: string;
+  /** Strokes gained (+) or lost (−) so far this week. */
+  strokes: number;
+  /** This week's average (steps, cal, hours) or bedtime wander in minutes. */
+  week: number | null;
+  usual: number | null;
+  days: number;
+  /** "scored", or why the band is playing even ("no usual yet", …). */
+  status: string;
+}
+export interface WeekPaceBandLine {
+  key: string; label: string; strokes: number; status: string; days: number;
+  week_label: string; usual_label: string; unit: string;
+}
 export interface WeekPace {
   week_start?: string;
   week_end?: string;
   today?: string;
-  days: { date: string; dow: string; score: number | null; played: boolean }[];
-  latest?: number | null;
-  par: number | null;
-  par_provisional?: boolean | null;
+  /** Cumulative net strokes after each day so far (null = not played yet). */
+  days: { date: string; dow: string; net: number | null; played: boolean }[];
+  net?: number | null;
+  net_exact?: number | null;
+  /** Where the week lands at the same pace. */
   projected: number | null;
-  projected_net?: number | null;
   days_left?: number;
   sentence: string | null;
-  lever?: string | null;
-  so_far?: {
-    sleep_hours: { value: number | null; nights: number; label: string; target: string };
-    steps:       { value: number | null; days: number;   label: string; target: string };
-    active_days: { value: number | null; days: number;   label: string; target: string };
-  };
-  bands?: Record<string, WeekPaceBand>;
+  bands?: WeekPaceBandLine[];
+  provisional?: boolean;
+  rule?: string;
 }
 
 export interface LeaderboardResponse {

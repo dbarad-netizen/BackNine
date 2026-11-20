@@ -21,10 +21,17 @@ wrapped in Capacitor for iOS (TestFlight). Backend: FastAPI on Render
   final_standings` once Sunday is complete; the Monday text and the
   `/league?w=<last Monday>` link read that frozen card. Never read a week
   as final before `closed_at` is set. `LEAGUE_TZ` is the clock.
-- **The competition is the hook.** The Weekly League plays *net*, like golf:
-  par = best 40% of your daily Health Span scores over the 28 days before
-  Monday (capped at 90, can drop at most 3/week, median while history < 20
-  days). Net = this week − par. Lowest net buys the coffee. See `leagues.py`.
+- **The competition is the hook.** The Weekly League plays *strokes gained*
+  against each player's own usual (`strokes.py`, since 2026-11-20): steps,
+  activity, sleep hours and bedtime, each measured against the eight weeks
+  before Monday, capped at ±6 a week, building day by day. Net = the sum;
+  fewest strokes gained buys the coffee. It replaced Health Span net-of-par
+  because a health score must have ceilings and a game must not — David sat
+  at the ceiling on three of four bands 29 days out of 29, so the whole
+  contest was bedtime. Health Span stays as the health number; it no longer
+  decides the League. Eight weeks, not four: a four-week usual let one bad
+  month pay out for three weeks (backtested). `compute_par` remains in
+  `leagues.py` for reference only.
 - **The doctor layer is the receipt, not the hook.** Oura ships lab upload
   and clinicians now. Don't invest in it as a differentiator.
 - **Cross-device is the moat.** Oura, Apple Watch, phone-only, (WHOOP via
@@ -147,6 +154,13 @@ wrapped in Capacitor for iOS (TestFlight). Backend: FastAPI on Render
   (`HealthKitWorkouts.swift` → `/api/apple-health/workouts`), same shape as
   the Oura `/workout` import; device-detected rows under 30 min never make
   an active day on their own.
+- **A bulk upsert writes NULL for every key a row lacks.** The Apple Health
+  quick sync sends 30 days of rows where only the last 7 carry steps and the
+  last 14 carry sleep; upserted as one batch, each sync erased everything
+  older (found 2026-11-20: Chris blank before Nov 11). Group rows by their
+  key set and upsert each shape separately (`apple_health_import_aggregated`,
+  `oura_cache.store_days`). The fix shipped with a one-time 90-day resync
+  (`FIRST_SYNC_DONE_KEY` bumped to `_v2`).
 - **Never swallow an insert error.** The Oura workout import failed on every
   batch for months (float into an integer column) and returned 0 quietly.
   Log it; `recorded_at`/`logged_at` tell you when a row actually arrived.
@@ -166,9 +180,12 @@ wrapped in Capacitor for iOS (TestFlight). Backend: FastAPI on Render
   was once committed by mistake (revoked 2026-10-26) — `*.p8` is now ignored.
 - Cowork scheduled tasks compose the Monday/Tuesday/Friday texts from
   Supabase. Claude cannot edit the live tasks: prompts live in
-  `docs/scheduled-texts/` and David pastes them in. They carry the net
-  scoring rules and the roster (David, Chris, Josh, Jenna as of 2026-11-09) —
-  update them when scoring changes or a player joins/leaves.
+  `docs/scheduled-texts/` and David pastes them in. They do no arithmetic: the
+  20-minute loop writes finished standings to `league_live_standings`
+  (`_write_live_standings`) and the Monday close freezes
+  `coffee_ledger.final_standings`; the prompts read those rows. They carry
+  the roster (David, Chris, Josh, Jenna as of 2026-11-09) — update them when
+  a player joins/leaves or the standings row changes shape.
   Each prompt opens with THE CLOCK: the date comes from
   `now() at time zone 'America/Los_Angeles'`, never the UTC server date —
   at 4 PM Pacific UTC is already tomorrow (2026-11-13: "It's Saturday

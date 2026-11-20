@@ -15,6 +15,7 @@
  */
 
 import { useEffect, useState } from "react";
+import StrokesMath, { fmtStrokes } from "@/components/StrokesMath";
 import { api, type LeagueResponse, type LeagueBreakdownItem, type LeagueCategory, type WeekPace, type FinalCard } from "@/lib/api";
 
 interface Props {
@@ -217,8 +218,7 @@ export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
       <div className="divide-y divide-gray-50">
         {standings.slice(0, 12).map(s => {
           const top3 = s.rank <= 3;
-          const common = data?.common_bands ?? [];
-          const bandKeys = Object.keys(s.bands ?? {});
+          const bandKeys = Object.keys(s.strokes ?? {});
           const isOpen = openUid === s.user_id;
           return (
             <div key={s.user_id} className={s.is_me ? "bg-[#1B3829]/5" : ""}>
@@ -244,18 +244,17 @@ export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
               ) : s.net != null ? (
                 <span
                   className={`text-sm font-bold tabular-nums shrink-0 ${s.net > 0 ? "text-emerald-700" : s.net < 0 ? "text-red-600" : "text-gray-700"}`}
-                  title={`Net of par · par ${s.par}${s.par_provisional ? " (provisional)" : ""}`}
+                  title="Strokes gained against your own usual — tap for the math"
                 >
                   {s.net > 0 ? "+" : ""}{s.net}
                 </span>
               ) : (
-                <span className="text-sm font-semibold text-gray-400 shrink-0" title="No par yet — needs a few days of history">
+                <span className="text-sm font-semibold text-gray-400 shrink-0" title="No strokes yet — needs a week of history">
                   —
                 </span>
               )}
               <span className="text-[11px] text-gray-600 shrink-0 tabular-nums">
                 {s.healthspan != null ? `${s.healthspan} HS` : "— HS"}
-                {s.par != null ? ` · par ${s.par}${s.par_provisional ? "≈" : ""}` : ""}
               </span>
               <span
                 className="text-[10px] text-gray-500 shrink-0 w-12 text-right"
@@ -266,29 +265,7 @@ export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
             </div>
             {isOpen && (
               <div className="px-4 pb-3 -mt-1">
-                <div className="rounded-xl border border-gray-100 bg-white divide-y divide-gray-50">
-                  {bandKeys.map(k => {
-                    const b = s.bands![k];
-                    const counted = common.length === 0 || common.includes(k);
-                    return (
-                      <div key={k} className={`flex items-center gap-2 px-3 py-1.5 text-[11px] ${counted ? "" : "opacity-50"}`}>
-                        <span className="flex-1 min-w-0">
-                          <span className="font-semibold text-gray-800">{b.label}</span>
-                          <span className="text-gray-500"> · {b.value}</span>
-                          {!counted && <span className="text-gray-400"> · not in League (not everyone has it)</span>}
-                        </span>
-                        <span className="font-mono tabular-nums text-gray-800 shrink-0">{b.points}/{b.max}</span>
-                      </div>
-                    );
-                  })}
-                  <p className="px-3 py-1.5 text-[10px] text-gray-500">
-                    {s.par != null
-                      ? `Par ${s.par}${s.par_provisional ? " (provisional — under 10 days of history)" : ""}: the average of your best 40% of daily scores over the 28 days before Monday, capped at ${data?.scoring?.scratch_par ?? 90}. Net = this week ${s.healthspan ?? "—"} − par.`
-                      : "No par yet — a few more days of history and you'll play net."}
-                    {s.fair_score != null && s.healthspan != null && s.fair_score !== s.healthspan
-                      ? ` On shared bands only you'd be ${s.fair_score}.` : ""}
-                  </p>
-                </div>
+                <StrokesMath strokes={s.strokes} net={s.on_hold ? null : s.net} rule={data?.scoring?.par_rule} />
               </div>
             )}
             </div>
@@ -302,9 +279,9 @@ export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
           {me_rank != null
             ? soloOrTiny
               ? "You're first in — invite friends to make it a race"
-              : `You're #${me_rank} of ${member_count} · ranked net of par, like golf`
-            : "Ranked net of par — everyone plays against their own best recent month"}
-          {(data?.common_bands?.length ?? 0) > 0 && " · tap a player for the math"}
+              : `You're #${me_rank} of ${member_count} · strokes gained against your own usual`
+            : "Strokes gained — everyone plays against their own usual"}
+          {" · tap a player for the math"}
         </p>
         {onInvite && soloOrTiny && (
           <button
@@ -323,7 +300,7 @@ export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
         aria-expanded={showPace}
       >
         <span className="text-xs font-semibold text-[#1B3829] flex items-center gap-1.5">
-          <span>📈</span> Your week vs par
+          <span>📈</span> Your week, stroke by stroke
         </span>
         <span className={`text-gray-600 text-xs transition-transform ${showPace ? "rotate-180" : ""}`}>⌄</span>
       </button>
@@ -357,16 +334,20 @@ export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
               David 2026-08-28 — the old explainer described engagement
               points as "how scoring works", which stopped being true
               when ranking moved to Health Span). ── */}
+          {/* Strokes gained (David 2026-11-20: "the competition just comes
+              down to sleep timing" — three of his four Health Span bands sat
+              at the ceiling every day). The League now scores each band
+              against your own usual, with no ceiling on movement. */}
           <p className="text-[11px] text-gray-600 mb-2 leading-relaxed">
-            <span className="font-semibold text-gray-800">Ranked by Weekly Health Span Score</span> —
-            built automatically from your wearable. Nothing you log (or forget to log) changes it:
+            <span className="font-semibold text-gray-800">Strokes gained against your own usual.</span>{" "}
+            Four things, each measured against your last eight weeks, all from your watch or ring. Beat your usual and you gain strokes; fall short and you give them back:
           </p>
           <div className="flex flex-wrap gap-1.5 mb-2">
             {[
-              { icon: "😴", label: "Sleep hours",  rule: "7–9 h avg · up to 15" },
-              { icon: "🕐", label: "Sleep timing", rule: "±30 min bedtime · up to 10" },
-              { icon: "👟", label: "Daily steps",  rule: "7–8k avg · up to 10" },
-              { icon: "🏃", label: "Active days",  rule: "4+ days moving · up to 15" },
+              { icon: "👟", label: "Steps",       rule: "+1 per 5% over your usual day" },
+              { icon: "🏃", label: "Activity",    rule: "+1 per 5% more active calories" },
+              { icon: "😴", label: "Sleep hours", rule: "+1 per 15 min closer to 7–9 h" },
+              { icon: "🕐", label: "Bedtime",     rule: "+1 per 10 min steadier" },
             ].map(b => (
               <span
                 key={b.label}
@@ -379,9 +360,7 @@ export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
             ))}
           </div>
           <p className="text-[10px] text-gray-500 mb-3 leading-relaxed">
-            Normalized to 100 across whichever bands your devices provide — Oura and
-            Apple Health users compete on equal footing. Walks, classes, and detected
-            activity all count toward active days.
+            Each one is capped at ±6 for the week and builds day by day, so Tuesday&apos;s card is small and Sunday&apos;s is the whole round. Fewest strokes gained buys the coffee. Your Health Span score (HS) is still shown; it measures how healthy the week was, not who won it.
           </p>
 
           {/* Engagement-points tiebreaker section removed entirely
@@ -396,87 +375,76 @@ export default function WeeklyLeague({ onInvite, onSeeMore }: Props) {
 }
 
 
-/** Daily Health Span snapshots so far (bars), par (dashed), and the
- *  same-pace projection to Sunday (dotted). One target line — par is
- *  already "your best recent month", so no second maintenance band. */
+/** The running card: cumulative net strokes after each day (line), the
+ *  even line, the same-pace finish (dotted), and each band against your
+ *  usual. Same numbers the standings rank on (backend/week_pace.py). */
 function WeekPaceChart({ pace }: { pace: WeekPace }) {
-  const W = 320, H = 110, padL = 8, padR = 30, padT = 10, padB = 18;
+  const W = 320, H = 110, padL = 8, padR = 34, padT = 10, padB = 18;
   const innerW = W - padL - padR, innerH = H - padT - padB;
-  const lo = 40, hi = 100;
-  const y = (v: number) => padT + innerH * (1 - (Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo));
+  const played = pace.days.map((d, i) => ({ ...d, i })).filter(d => d.net != null);
+  const vals = played.map(d => d.net as number).concat(pace.projected != null ? [pace.projected] : []).concat([0]);
+  const span = Math.max(4, Math.ceil(Math.max(...vals.map(v => Math.abs(v))) + 1));
+  const y = (v: number) => padT + innerH * (1 - (v + span) / (2 * span));
   const slot = innerW / 7;
   const x = (i: number) => padL + slot * i + slot / 2;
-  const scored = pace.days.map((d, i) => ({ ...d, i })).filter(d => d.score != null);
-  const lastIdx = scored.length ? scored[scored.length - 1].i : -1;
-  const linePts = scored.map(d => `${x(d.i)},${y(d.score as number)}`).join(" ");
-  const projY = pace.projected != null ? y(pace.projected) : null;
-  const parY = pace.par != null ? y(pace.par) : null;
-  const net = pace.projected_net;
-  const tone = net == null ? "text-gray-700" : net >= 2 ? "text-emerald-700" : net <= -2 ? "text-red-600" : "text-gray-700";
-  const sf = pace.so_far;
+  const lastIdx = played.length ? played[played.length - 1].i : -1;
+  const last = played.length ? (played[played.length - 1].net as number) : null;
+  const linePts = played.map(d => `${x(d.i)},${y(d.net as number)}`).join(" ");
+  const f = (v: number | null | undefined) => {
+    if (v == null) return "—";
+    const r = Math.round(v);
+    return r === 0 ? "even" : `${r > 0 ? "+" : "−"}${Math.abs(r)}`;
+  };
+  const tone = (v: number | null | undefined) => v == null ? "text-gray-700" : v >= 0.5 ? "text-emerald-700" : v <= -0.5 ? "text-red-600" : "text-gray-700";
   return (
     <div>
       <div className="flex items-baseline justify-between gap-2 mb-1">
         <p className="text-sm font-bold text-[#1B3829]">
-          {pace.projected != null ? <>On pace for <span className={tone}>≈{pace.projected}</span></> : "This week"}
-          {pace.par != null && <span className="text-[11px] font-semibold text-gray-500"> · par {pace.par}{pace.par_provisional ? "≈" : ""}</span>}
+          {pace.net_exact != null ? <>Net <span className={tone(pace.net_exact)}>{f(pace.net_exact)}</span></> : "This week"}
+          {pace.projected != null && pace.net_exact != null && Math.round(pace.projected) !== Math.round(pace.net_exact) && (
+            <span className="text-[11px] font-semibold text-gray-500"> · on pace for {f(pace.projected)}</span>
+          )}
         </p>
         {pace.days_left != null && (
-          <span className="text-[10px] text-gray-500">{pace.days_left === 0 ? "final day" : `${pace.days_left}d left`}</span>
+          <span className="text-[10px] text-gray-500">{pace.days_left <= 1 ? "final day" : `${pace.days_left}d left`}</span>
         )}
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="Week pace chart">
-        {/* bars: daily snapshots */}
-        {pace.days.map((d, i) => d.score != null ? (
-          <rect key={d.date} x={x(i) - slot * 0.28} y={y(d.score)} width={slot * 0.56} height={padT + innerH - y(d.score)}
-                rx={3} fill="#1B3829" opacity={0.18} />
-        ) : null)}
-        {/* par */}
-        {parY != null && (
-          <>
-            <line x1={padL} x2={W - padR + 4} y1={parY} y2={parY} stroke="#9CA3AF" strokeWidth={1} strokeDasharray="4 3" />
-            <text x={W - padR + 6} y={parY + 3} fontSize={9} fill="#6B7280">par</text>
-          </>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="Running net strokes this week">
+        <line x1={padL} x2={W - padR + 4} y1={y(0)} y2={y(0)} stroke="#9CA3AF" strokeWidth={1} strokeDasharray="4 3" />
+        <text x={W - padR + 6} y={y(0) + 3} fontSize={9} fill="#6B7280">even</text>
+        {played.length > 1 && <polyline points={linePts} fill="none" stroke="#1B3829" strokeWidth={2} strokeLinejoin="round" />}
+        {lastIdx >= 0 && last != null && pace.projected != null && lastIdx < 6 && (
+          <line x1={x(lastIdx)} y1={y(last)} x2={x(6)} y2={y(pace.projected)} stroke="#1B3829" strokeWidth={1.5} strokeDasharray="2 4" opacity={0.7} />
         )}
-        {/* path so far */}
-        {scored.length > 1 && <polyline points={linePts} fill="none" stroke="#1B3829" strokeWidth={2} strokeLinejoin="round" />}
-        {/* projection to Sunday */}
-        {lastIdx >= 0 && projY != null && lastIdx < 6 && (
-          <line x1={x(lastIdx)} y1={y(scored[scored.length - 1].score as number)} x2={x(6)} y2={projY}
-                stroke="#1B3829" strokeWidth={1.5} strokeDasharray="2 4" opacity={0.7} />
-        )}
-        {lastIdx >= 0 && (
-          <circle cx={x(lastIdx)} cy={y(scored[scored.length - 1].score as number)} r={3.5} fill="#1B3829" />
-        )}
-        {/* day labels */}
+        {played.map(d => (
+          <circle key={d.date} cx={x(d.i)} cy={y(d.net as number)} r={d.i === lastIdx ? 3.5 : 2} fill="#1B3829" />
+        ))}
         {pace.days.map((d, i) => (
           <text key={d.date} x={x(i)} y={H - 4} fontSize={9} textAnchor="middle"
                 fill={i === lastIdx ? "#1B3829" : "#9CA3AF"} fontWeight={i === lastIdx ? 700 : 400}>{d.dow}</text>
         ))}
       </svg>
       {pace.sentence && <p className="text-[11px] text-gray-700 leading-relaxed mt-1">{pace.sentence}</p>}
-      {sf && (
-        <div className="grid grid-cols-3 gap-1.5 mt-2">
-          {([
-            ["Sleep", sf.sleep_hours.label, `${sf.sleep_hours.nights} night${sf.sleep_hours.nights === 1 ? "" : "s"}`, sf.sleep_hours.target],
-            ["Steps", sf.steps.label, `${sf.steps.days} full day${sf.steps.days === 1 ? "" : "s"}`, sf.steps.target],
-            ["Active", sf.active_days.label, "full days", sf.active_days.target],
-          ] as [string, string, string, string][]).map(([k, v, sub, tgt]) => (
-            <div key={k} className="rounded-lg bg-white border border-gray-100 px-2 py-1.5">
-              <p className="text-[9px] uppercase tracking-wide font-semibold text-gray-500">{k} so far</p>
-              <p className="text-[13px] font-bold text-gray-800 tabular-nums leading-tight">{v}</p>
-              <p className="text-[9px] text-gray-500">{sub} · goal {tgt}</p>
+      {pace.bands && pace.bands.length > 0 && (
+        <div className="grid grid-cols-2 gap-1.5 mt-2">
+          {pace.bands.map(b => (
+            <div key={b.key} className={`rounded-lg bg-white border border-gray-100 px-2 py-1.5 ${b.status === "scored" ? "" : "opacity-60"}`}>
+              <div className="flex items-baseline justify-between">
+                <p className="text-[9px] uppercase tracking-wide font-semibold text-gray-500">{b.label}</p>
+                <p className={`text-[12px] font-bold tabular-nums ${tone(b.strokes)}`}>{b.status === "scored" ? fmtStrokes(b.strokes) : "E"}</p>
+              </div>
+              <p className="text-[12px] font-semibold text-gray-800 leading-tight">{b.week_label}</p>
+              <p className="text-[9px] text-gray-500">{b.status === "scored" ? `your usual: ${b.usual_label}` : b.status}</p>
             </div>
           ))}
         </div>
       )}
       <p className="text-[10px] text-gray-500 mt-2">
-        Bars are each day&apos;s Health Span so far this week; the dotted line is where Sunday lands at the same pace. Steps and active days count full days only.
+        The line is your running net; the dotted line is where Sunday lands at this pace. Steps and activity count full days only.
       </p>
     </div>
   );
 }
-
 
 /** Last week's frozen card — what the Monday text links to. */
 function FinalCardPanel({ card, onDismiss }: { card: FinalCard; onDismiss: () => void }) {
@@ -496,7 +464,7 @@ function FinalCardPanel({ card, onDismiss }: { card: FinalCard; onDismiss: () =>
       <div className="divide-y divide-gray-100 border-t border-gray-100 bg-white/60">
         {rows.map((r, i) => (
           <div key={r.user_id} className={`flex items-center gap-3 px-4 py-2 ${r.is_me ? "bg-[#1B3829]/5" : ""}`}>
-            <span className="w-7 text-center text-sm font-bold">{i < 3 && !r.on_hold && r.score != null ? MEDAL[i] : ""}</span>
+            <span className="w-7 text-center text-sm font-bold">{i < 3 && !r.on_hold && r.net != null ? MEDAL[i] : ""}</span>
             <span className={`flex-1 text-sm truncate ${r.is_me ? "font-bold text-[#1B3829]" : "text-gray-700"}`}>{r.is_me ? "You" : r.name}</span>
             {r.on_hold ? (
               <span className="text-[11px] font-semibold text-gray-500">medical hold</span>
@@ -508,7 +476,7 @@ function FinalCardPanel({ card, onDismiss }: { card: FinalCard; onDismiss: () =>
               <span className="text-sm font-semibold text-gray-400">—</span>
             )}
             <span className="text-[11px] text-gray-600 tabular-nums">
-              {r.score != null ? `${r.score} HS` : "— HS"}{r.par != null ? ` · par ${r.par}${r.par_provisional ? "≈" : ""}` : ""}
+              {r.score != null ? `${r.score} HS` : "— HS"}
             </span>
           </div>
         ))}

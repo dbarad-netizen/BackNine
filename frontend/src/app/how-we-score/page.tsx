@@ -155,28 +155,35 @@ export default function HowWeScorePage() {
           number your doctor cares about.
         </P>
 
-        {/* ── Net League ── */}
-        <H2>The Weekly League plays net, like golf</H2>
+        {/* ── The League: strokes gained (2026-11-20) ── */}
+        <H2>The Weekly League plays strokes gained</H2>
         <P>
           Four friends — one fit, one carrying extra weight, one much younger, one much
-          older — can&apos;t compete on gross scores: the same person wins every week and
-          the same person buys the coffee. So the League does what golf did a century
-          ago. Everyone plays against <span className="text-white">par</span>, and
-          everyone&apos;s par is their own.
+          older — can&apos;t compete on raw numbers: the same person wins every week and
+          the same person buys the coffee. So the League does what golf does. Everyone
+          plays against <span className="text-white">their own usual</span>.
+        </P>
+        <P>
+          The Health Span score above has ceilings on purpose: 7,500 steps and seven to
+          nine hours of sleep really are enough, and more is not healthier. That makes it
+          a good health score and a poor game, because a fit player sits at the ceiling
+          every day. The League keeps the same four ingredients and removes the ceilings.
         </P>
         <ul className="space-y-2 text-zinc-300 mb-4">
-          <li><span className="text-white font-medium">Par</span> — the average of your best 40% of daily Health Span scores in the 28 days before Monday (golf uses best 8 of 20). Dropping the bad days means a lazy month can&apos;t earn you strokes.</li>
-          <li><span className="text-white font-medium">Scratch</span> — par is capped at 90. The score tops out at 100, so a very fit player&apos;s best days average 99 and he could never beat par. Above 90, the game is holding it.</li>
-          <li><span className="text-white font-medium">Slow up, fast down</span> — par can fall at most 3 points from one week to the next, so a bad patch can&apos;t quietly hand you strokes; it rises as fast as you do.</li>
-          <li><span className="text-white font-medium">Net</span> — this week&apos;s score minus par. +4 means you beat the person you&apos;ve been by four. The League ranks on net; lowest net buys the coffee.</li>
-          <li><span className="text-white font-medium">New members</span> — your watch or ring has been keeping score for months, so we read the 28 days before you joined and hand you a real par on day one.</li>
-          <li><span className="text-white font-medium">No device at all</span> — your iPhone counts steps on its own. Connect Apple Health, log your sleep in ten seconds a day, and a 7,500-step day counts as active. Three days to a provisional par, ten to a full one — and while your history is short, par is your median day, not your best, so a strong first week can&apos;t set you up to fail.</li>
+          <li><span className="text-white font-medium">Your usual</span> — the eight weeks before Monday: your median day for steps and active calories, how far your nights usually sit from 7–9 hours, and how much your bedtime usually wanders in a week.</li>
+          <li><span className="text-white font-medium">Steps</span> — one stroke for every 5% your daily average beats your usual day.</li>
+          <li><span className="text-white font-medium">Activity</span> — one stroke for every 5% more active calories than your usual day.</li>
+          <li><span className="text-white font-medium">Sleep hours</span> — one stroke for every 15 minutes closer to the 7–9 hour range. Already in it? This one plays even.</li>
+          <li><span className="text-white font-medium">Bedtime</span> — one stroke for every 10 minutes steadier than your usual week.</li>
+          <li><span className="text-white font-medium">Caps and pace</span> — each of the four is capped at ±6 for a full week and builds day by day, so one heroic Saturday can&apos;t win it and Tuesday&apos;s card is small.</li>
+          <li><span className="text-white font-medium">Net</span> — the four added up. +4 means you beat the person you&apos;ve been by four. Fewest strokes gained buys the coffee.</li>
+          <li><span className="text-white font-medium">New members</span> — a band needs a week of history before it scores; until then it plays even. Your watch or ring usually has that history on day one.</li>
           <li><span className="text-white font-medium">Medical hold</span> — injured or sick? Set a date in your profile and you sit out until then. Golf has one too.</li>
         </ul>
         <P>
-          Fewer than ten days of history and your par is marked provisional (≈). Tap any
-          player on the League to see their par, their net, and the bands behind the
-          number.
+          Tap any player on the League to see each of the four against their usual and the
+          strokes it earned. Changed 20 November 2026; before that the League ranked the
+          Health Span score against a par.
         </P>
 
         {/* ── QYL ── */}

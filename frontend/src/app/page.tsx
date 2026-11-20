@@ -156,14 +156,14 @@ export default function LandingPage() {
 
           <div className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
             <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold mb-3">
-              Weekly League preview · Health Span score
+              Weekly League preview · strokes gained vs your own usual
             </p>
             <ul className="space-y-2">
               {[
-                { name: "Alex",   pts: 88, mine: false },
-                { name: "You",    pts: 84, mine: true  },
-                { name: "Sam",    pts: 79, mine: false },
-                { name: "Jordan", pts: 71, mine: false },
+                { name: "Alex",   pts: "+6", mine: false },
+                { name: "You",    pts: "+3", mine: true  },
+                { name: "Sam",    pts: "E",  mine: false },
+                { name: "Jordan", pts: "−4", mine: false },
               ].map((r, i) => (
                 <li
                   key={r.name}
@@ -182,7 +182,7 @@ export default function LandingPage() {
               ))}
             </ul>
             <p className="mt-3 text-[11px] text-zinc-500">
-              Scored on sleep, movement and consistency — not on which gadget you own. Lowest score buys the coffee.
+              Scored on sleep, movement and consistency against your own usual — not on which gadget you own, or who was fitter to begin with. Fewest strokes gained buys the coffee.
             </p>
           </div>
         </div>
@@ -211,7 +211,7 @@ export default function LandingPage() {
               structurally can't do — the foursome — and the math. */}
           <div className="mt-8 grid sm:grid-cols-3 gap-4">
             {[
-              ["Your foursome, played net", "A weekly league your friends can join from any watch or ring — scored like golf, against your own par, so the fit guy and the guy getting started play the same game. Lowest net buys the coffee."],
+              ["Your foursome, played net", "A weekly league your friends can join from any watch or ring — scored like golf, in strokes gained against your own usual, so the fit guy and the guy getting started play the same game. Fewest strokes buys the coffee."],
               ["Every score, with the math", "Tap any number and see what moved it. Your ring's app tells you a score; we show you the work, and we'll say out loud when we're not sure."],
               ["Years, not days", "Readiness is about this morning. Your Health Span score, Biological Age and QYL Index are about the next twenty years — and they move when your habits do. The doctor report is the receipt."],
             ].map(([t, d]) => (

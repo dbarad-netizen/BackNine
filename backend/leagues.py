@@ -671,6 +671,10 @@ def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
     # mostly solved by construction; `fair` stays for the math view.
     pars = compute_par(sb, ids, week_start)
     holds = _league_holds(sb, ids, today_str)
+    # Strokes gained (2026-11-20): the League ranks on each band against the
+    # player's own usual, not on Health Span net of par — see strokes.py.
+    import strokes as _sg
+    sg = _sg.for_users(ids, monday, today, live=True)
     for uid in ids:
         healthspan[uid] = (hs_rows.get(uid) or {}).get("score")
     # Refresh cached scores (best-effort) so other surfaces can read them cheaply.
@@ -693,7 +697,10 @@ def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
             "par":            (pars.get(uid) or {}).get("par"),
             "par_provisional": bool((pars.get(uid) or {}).get("provisional", True)),
             "par_days":       (pars.get(uid) or {}).get("days", 0),
-            "net":            None if holds.get(uid) else net_of(healthspan.get(uid), pars.get(uid)),
+            "net":            None if holds.get(uid) else (sg.get(uid) or {}).get("net"),
+            "net_exact":      None if holds.get(uid) else (sg.get(uid) or {}).get("net_exact"),
+            "strokes":        (sg.get(uid) or {}).get("bands") or {},
+            "strokes_provisional": bool((sg.get(uid) or {}).get("provisional", True)),
             "on_hold":        bool(holds.get(uid)),
             # Show the math (David 2026-10-16): each player's bands with
             # points earned / possible, plus the fair (shared-band) score.
@@ -713,7 +720,7 @@ def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
     # Rank: net-of-par first (None/on-hold last), gross as tiebreaker,
     # engagement points, then name.
     standings.sort(key=lambda s: (
-        -(s["net"] if s["net"] is not None else -10_000),
+        -(s["net_exact"] if s.get("net_exact") is not None else -10_000),
         -(s["healthspan"] if s["healthspan"] is not None else -1),
         -s["score"],
         s["name"].lower(),
@@ -741,8 +748,8 @@ def get_current_league(user_id: str, today_str: str, tier: int = 1) -> dict:
         # these only. Empty = stored scores used (no overlap data yet).
         "common_bands": common_bands,
         "scoring": {
-            "mode": "net",
-            "par_rule": f"Par = average of your best {int(PAR_BEST_FRACTION*100)}% of daily Health Span scores in the {PAR_WINDOW_DAYS} days before Monday, capped at {SCRATCH_PAR}. Net = this week − par.",
+            "mode": "strokes",
+            "par_rule": _sg.RULE_TEXT,
             "scratch_par": SCRATCH_PAR,
         },
     }

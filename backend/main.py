@@ -1958,6 +1958,10 @@ async def _start_inproc_oura_refresh() -> None:
                 await asyncio.to_thread(_maybe_close_week)
             except Exception:
                 log.exception("week close failed")
+            try:
+                await asyncio.to_thread(_write_live_standings)
+            except Exception:
+                log.exception("live standings write failed")
             await asyncio.sleep(_INPROC_REFRESH_MINUTES * 60)
 
     asyncio.create_task(_loop())
@@ -2014,6 +2018,46 @@ async def food_plan_day(request: Request):
 WEEK_CLOSE_HOUR = 6   # Monday, League time — after Sunday's last snapshot
 
 
+def _standing_row(r: dict) -> dict:
+    """One player's line as stored on the frozen card and the live table."""
+    return {
+        "user_id": r["user_id"], "name": r["name"], "score": r.get("score"),
+        "par": r.get("par"), "par_provisional": r.get("par_provisional"),
+        "net": r.get("net"), "net_exact": r.get("net_exact"),
+        "on_hold": r.get("on_hold", False),
+        "strokes": r.get("strokes") or {},
+    }
+
+
+def _write_live_standings() -> dict:
+    """Current week's standings → league_live_standings (2026-11-20). The
+    Tuesday and Friday texts read this row; the model does no arithmetic."""
+    import scoreboard as scb
+    import strokes as _sg
+    db = get_supabase()
+    if not db:
+        return {}
+    t = _league_today()
+    week_start = (t - timedelta(days=t.weekday())).isoformat()
+    # The server owns the roster too: make this week's league and carry last
+    # week's members into it, so Monday's standings don't wait for an app open.
+    try:
+        _mon = t - timedelta(days=t.weekday())
+        _lgrow = lg._get_or_create_league(db, 1, week_start, (_mon + timedelta(days=6)).isoformat())
+        if _lgrow.get("id"):
+            lg._carry_forward_members(db, 1, _lgrow["id"], _mon)
+    except Exception:
+        log.exception("live standings: roster carry-forward failed")
+    ids = scb.league_member_ids(db, week_start) or None
+    built = scb.build(today=t, ids=ids, live=True)
+    rows = [_standing_row(r) for r in built["rows"]]
+    db.table("league_live_standings").upsert({
+        "week_start": week_start, "as_of": t.isoformat(), "standings": rows,
+        "rule": _sg.RULE_TEXT, "updated_at": datetime.now(timezone.utc).isoformat(),
+    }, on_conflict="week_start").execute()
+    return {"week_start": week_start, "players": len(rows)}
+
+
 def _close_week(sunday: date, force: bool = False) -> dict:
     """Freeze the final card for the week ending `sunday`: standings as
     of Sunday (full seven days), coffee loser/winner, closed_at.
@@ -2030,23 +2074,20 @@ def _close_week(sunday: date, force: bool = False) -> dict:
     except Exception:
         pass
     ids = scb.league_member_ids(db, week_start) or None   # that week's field; env whitelist as fallback
-    built = scb.build(today=sunday, ids=ids)
+    built = scb.build(today=sunday, ids=ids, live=False)
     rows = built["rows"]
-    scored = [r for r in rows if r.get("score") is not None and not r.get("on_hold")]
+    scored = [r for r in rows if r.get("net") is not None and not r.get("on_hold")]
     if len(scored) < 2:
         return {"closed": False, "reason": "fewer than 2 scored players", "week_start": week_start}
     winner, loser = scored[0], scored[-1]
-    final = [{
-        "user_id": r["user_id"], "name": r["name"], "score": r.get("score"),
-        "par": r.get("par"), "par_provisional": r.get("par_provisional"),
-        "net": r.get("net"), "on_hold": r.get("on_hold", False),
+    final = [_standing_row(r) | {
         "bands": {k: {"points": v.get("points"), "max": v.get("max"), "value": v.get("value"), "label": v.get("label")}
                   for k, v in (r.get("_components") or {}).items()},
     } for r in rows]
     db.table("coffee_ledger").upsert({
         "week_start": week_start,
         "loser_user_id": loser["user_id"], "winner_user_id": winner["user_id"],
-        "loser_score": loser["score"], "winner_score": winner["score"],
+        "loser_score": loser["net"], "winner_score": winner["net"],
         "final_standings": final,
         "closed_at": datetime.now(timezone.utc).isoformat(),
     }, on_conflict="week_start").execute()
@@ -8226,7 +8267,7 @@ def get_week_pace(request: Request, date: Optional[str] = None):
         return wp.compute(user_id, today_iso)
     except Exception as e:
         log.warning("week_pace failed for %s: %s", user_id, e)
-        return {"days": [], "par": None, "projected": None, "sentence": None}
+        return {"days": [], "net": None, "projected": None, "sentence": None, "bands": []}
 
 
 # ── Groups (Crews) ────────────────────────────────────────────────────────────
@@ -9208,7 +9249,9 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
             "fair_score": _fair.get(uid),
             "par":            (pars_map.get(uid) or {}).get("par"),
             "par_provisional": bool((pars_map.get(uid) or {}).get("provisional", True)),
-            "net":            None if holds_map.get(uid) else lg.net_of(healthspan_map.get(uid), pars_map.get(uid)),
+            "net":            None if holds_map.get(uid) else (sg_map.get(uid) or {}).get("net"),
+            "net_exact":      None if holds_map.get(uid) else (sg_map.get(uid) or {}).get("net_exact"),
+            "strokes":        (sg_map.get(uid) or {}).get("bands") or {},
             "on_hold":        bool(holds_map.get(uid)),
             "level":    None,  # gamification layer removed; key kept for backwards-compat
             # If you've taunted this friend today, surface which kind (else None).
@@ -9246,6 +9289,7 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
     hs_rows_map: dict[str, dict] = {}
     _common_bands: list[str] = []
     pars_map: dict[str, dict] = {}
+    sg_map: dict[str, dict] = {}
     holds_map: dict[str, bool] = {}
     _fair: dict[str, Optional[int]] = {}
     try:
@@ -9258,6 +9302,9 @@ def friend_leaderboard(request: Request, metric: Optional[str] = None, date: Opt
             for uid_hs in all_uids:
                 healthspan_map[uid_hs] = (hs_rows_map.get(uid_hs) or {}).get("score")
             pars_map = lg.compute_par(_db_hs, all_uids, _week_start)
+            import strokes as _sg
+            _t = datetime.strptime(today_str, "%Y-%m-%d").date()
+            sg_map = _sg.for_users(all_uids, _t - timedelta(days=_t.weekday()), _t, live=True)
             holds_map = lg._league_holds(_db_hs, all_uids, today_str)
     except Exception:
         pass
@@ -9952,13 +9999,24 @@ async def apple_health_import_aggregated(request: Request):
         readcache.invalidate(user_id)
     except Exception:
         pass
-    for i in range(0, len(rows), BATCH):
-        chunk = rows[i:i + BATCH]
+    # Upsert per column-shape (2026-11-20). A bulk upsert whose rows carry
+    # different keys writes NULL for every key a row lacks — and the quick
+    # sync sends 30 days of rows where only the last 7 have steps and the
+    # last 14 have sleep, so each one ERASED steps older than a week and
+    # sleep older than two (Chris: every day before Nov 11 blank). Rows
+    # with the same keys go together; nothing a row didn't send is touched.
+    _by_shape: dict[tuple, list[dict]] = {}
+    for _r in rows:
+        _by_shape.setdefault(tuple(sorted(_r.keys())), []).append(_r)
+    _chunks = [grp[j:j + BATCH] for grp in _by_shape.values() for j in range(0, len(grp), BATCH)]
+    for i, chunk in enumerate(_chunks):
+        if set(chunk[0].keys()) <= {"user_id", "date", "updated_at"}:
+            continue   # nothing but a timestamp — don't touch the day
         try:
             sb.table("apple_health_daily").upsert(chunk, on_conflict="user_id,date").execute()
             written += len(chunk)
         except Exception as e:
-            msg = f"batch [{i}:{i+BATCH}] failed: {e}"
+            msg = f"batch {i} ({len(chunk)} rows) failed: {e}"
             log.exception("apple_health import-aggregated %s", msg)
             batch_errors.append(msg[:400])
             if i == 0:

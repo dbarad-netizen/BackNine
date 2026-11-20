@@ -13,6 +13,7 @@
  * Silent if no friends connected — Pulse handles that empty state.
  */
 
+import StrokesMath from "@/components/StrokesMath";
 import { useCallback, useEffect, useState } from "react";
 import {
   api,
@@ -214,7 +215,7 @@ export default function FriendLeaderboard({ onInvite, onSeeMore }: Props = {}) {
   const headerLine = totalContested > 0
     ? `You're leading in ${myWins} of ${totalContested}${allToday ? " today" : " — judged on the last full day"}`
     : maxHs > 0
-    ? "Ranked by Weekly Health Span Score"
+    ? "Ranked by strokes gained this week"
     : "Waiting on data — check back later";
 
   return (
@@ -322,7 +323,7 @@ export default function FriendLeaderboard({ onInvite, onSeeMore }: Props = {}) {
                     <button
                       type="button"
                       onClick={() => setMathFor(mathFor === e.user_id ? null : e.user_id)}
-                      title="Weekly Health Span Score — tap to see the math"
+                      title="Strokes gained this week — tap to see the math"
                       className={`text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 ${
                         (maxNet != null ? (e.net === maxNet && !e.on_hold) : (e.healthspan > 0 && e.healthspan === maxHs))
                           ? "bg-amber-100 border border-amber-300 text-amber-800"
@@ -369,33 +370,11 @@ export default function FriendLeaderboard({ onInvite, onSeeMore }: Props = {}) {
                 </div>
 
                 {/* Show-your-math: Health Span bands (David 2026-10-16) */}
-                {mathFor === e.user_id && e.bands && Object.keys(e.bands).length > 0 && (() => {
-                  const common = data.common_bands ?? [];
-                  return (
-                    <div className="mb-2 rounded-xl border border-gray-100 bg-white divide-y divide-gray-50">
-                      {Object.entries(e.bands).map(([k, b]) => {
-                        const counted = common.length === 0 || common.includes(k);
-                        return (
-                          <div key={k} className={`flex items-center gap-2 px-3 py-1.5 text-[11px] ${counted ? "" : "opacity-50"}`}>
-                            <span className="flex-1 min-w-0">
-                              <span className="font-semibold text-gray-800">{b.label}</span>
-                              <span className="text-gray-500"> · {b.value}</span>
-                              {!counted && <span className="text-gray-400"> · not counted (not everyone has it)</span>}
-                            </span>
-                            <span className="font-mono tabular-nums text-gray-800 shrink-0">{b.points}/{b.max}</span>
-                          </div>
-                        );
-                      })}
-                      <p className="px-3 py-1.5 text-[10px] text-gray-500">
-                        {e.par != null
-                          ? `Par ${e.par}${e.par_provisional ? " (provisional)" : ""} = best 40% of daily scores, 28 days before Monday, capped at 90. Net = ${e.healthspan} − ${e.par} = ${e.net != null && e.net > 0 ? "+" : ""}${e.net ?? "—"}. Ranked net of par, like golf.`
-                          : "No par yet — a few more days of history and this player plays net."}
-                        {e.fair_score != null && e.healthspan != null && e.fair_score !== e.healthspan
-                          ? ` On the ${common.length || "shared"} bands everyone has: ${e.fair_score}.` : ""}
-                      </p>
-                    </div>
-                  );
-                })()}
+                {mathFor === e.user_id && e.strokes && Object.keys(e.strokes).length > 0 && (
+                  <div className="mb-2">
+                    <StrokesMath strokes={e.strokes} net={e.on_hold ? null : e.net} />
+                  </div>
+                )}
 
                 {/* Weekly head-to-head — only for friend rows */}
                 {!e.is_me && e.head_to_head && (() => {

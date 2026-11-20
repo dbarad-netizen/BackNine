@@ -90,7 +90,7 @@ def league_member_ids(sb, monday_iso: str, tier: int = 1) -> list[str]:
         return []
 
 
-def build(today: Optional[date] = None, ids: Optional[list[str]] = None) -> dict:
+def build(today: Optional[date] = None, ids: Optional[list[str]] = None, live: Optional[bool] = None) -> dict:
     """Compute standings + lines for every recipient. Returns
     {"week_label", "text", "rows": [...]}.
 
@@ -98,6 +98,10 @@ def build(today: Optional[date] = None, ids: Optional[list[str]] = None) -> dict
     the Sunday text reflects the full week even if someone hasn't
     opened the app — which is the whole point."""
     today = today or date.today()
+    # `live`: is `today` still being played? Callers that know (the League
+    # clock is Pacific; this server is UTC) say so; otherwise guess from UTC.
+    if live is None:
+        live = today >= date.today()
     monday = today - timedelta(days=today.weekday())
     week_label = f"Week of {monday.strftime('%b')} {monday.day}"
     today_iso = today.isoformat()
@@ -121,7 +125,7 @@ def build(today: Optional[date] = None, ids: Optional[list[str]] = None) -> dict
         try:
             # live only when `today` really is today; the Monday close passes
             # last Sunday, a finished day, so its steps/active days count.
-            snap = hspan.compute(uid, today_iso, am or {}, smm or {}, {}, live=(today >= date.today()))
+            snap = hspan.compute(uid, today_iso, am or {}, smm or {}, {}, live=live)
         except Exception:
             log.exception("scoreboard: healthspan failed for %s", uid)
             snap = {"score": None, "components": {}}
@@ -144,10 +148,19 @@ def build(today: Optional[date] = None, ids: Optional[list[str]] = None) -> dict
             r["par"] = p.get("par")
             r["par_provisional"] = bool(p.get("provisional", True))
             r["on_hold"] = bool(holds.get(r["user_id"]))
-            r["net"] = None if r["on_hold"] else lg.net_of(r["score"], p)
+        # Strokes gained (2026-11-20) — see strokes.py. `score`/`par` stay
+        # for reference; `net` is the sum of the four bands' strokes.
+        import strokes as _sg
+        _mon = today - timedelta(days=today.weekday())
+        sg = _sg.for_users(ids, _mon, today, live=live)
+        for r in rows:
+            g = sg.get(r["user_id"]) or {}
+            r["net"] = None if r["on_hold"] else g.get("net")
+            r["net_exact"] = None if r["on_hold"] else g.get("net_exact")
+            r["strokes"] = g.get("bands") or {}
     except Exception:
         log.exception("scoreboard: net scoring failed")
-    rows.sort(key=lambda r: (-(r.get("net") if r.get("net") is not None else -10_000),
+    rows.sort(key=lambda r: (-(r.get("net_exact") if r.get("net_exact") is not None else -10_000),
                              -(r["score"] if r["score"] is not None else -1)))
 
     def _fmt(r):
@@ -158,13 +171,21 @@ def build(today: Optional[date] = None, ids: Optional[list[str]] = None) -> dict
         if r.get("net") is None:
             return f"{r['name']} {r['score']}"
         n = r["net"]
-        return f"{r['name']} {'+' if n > 0 else ''}{n} (gross {r['score']}, par {r['par']}{'≈' if r.get('par_provisional') else ''})"
+        bits = []
+        for k, lab in (("steps", "steps"), ("activity", "activity"), ("sleep", "sleep"), ("bedtime", "bedtime")):
+            b = (r.get("strokes") or {}).get(k) or {}
+            if b.get("status") == "scored" and abs(b.get("strokes") or 0) >= 0.5:
+                v = b["strokes"]
+                bits.append(f"{lab} {'+' if v > 0 else ''}{v:g}")
+        return f"{r['name']} {'+' if n > 0 else ''}{n}" + (f" ({', '.join(bits)})" if bits else "")
     standings = " · ".join(_fmt(r) for r in rows)
     lines = "\n".join(r["line"] for r in rows)
     scored = [r for r in rows if r["score"] is not None]
     closer = ""
     if len(scored) >= 2:
-        closer = f"\nLowest score buys coffee. That's {scored[-1]['name']}."
+        _ranked = [r for r in rows if r.get("net") is not None]
+        if len(_ranked) >= 2:
+            closer = f"\nFewest strokes gained buys coffee. That's {_ranked[-1]['name']}."
     elif scored:
         closer = f"\n{scored[0]['name']} is the only one on the board — everyone else, connect your watch."
 
