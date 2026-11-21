@@ -11,7 +11,7 @@ PLAYERS (user_id → how to write the name):
 - `11ed8938-f146-4e3e-87ec-7a541e301fcc` → Chris Gantos (the data calls him "Gantler" — always write Chris)
 - `oura_2d14bd7c81035110bfca-b59efd96324c1d-` → Josh Barad (David's nephew)
 - `oura_9fdab1001e9-78c8488383dd51d8526afc-2` → Jenna B. (David's niece, joined 2026-11-08; tease her like family)
-Any other user_id in the standings is a real player too: use the `name` in the row.
+Any other user_id in the standings is a real player: if he has a `net`, use the `name` in the row; if his `net` is null, leave him out.
 
 HOW THE LEAGUE IS SCORED (so you describe it correctly; you never compute it): strokes gained against each player's OWN usual over the previous eight weeks, in four bands — steps, activity (active calories), sleep hours (how close nights sit to 7–9 h), bedtime (how steady). Positive is good. NET is the four added up. Fewest strokes gained buys the coffee. There is no "par" and no "gross" any more — never write those words.
 
@@ -45,10 +45,16 @@ NUMBER RULES:
 - The joke lands on the number, not next to it. One sardonic clause per player, never two.
 - Never state anything about a day, a missing day, a watch, a sync or a cause that is not in the row.
 
+READABILITY RULES (the 2026-11-20 Friday text broke these):
+- Every player's read STARTS WITH HIS FIRST NAME ("Josh's bedtimes…", "David is walking…"). A read with no name is unreadable in a group text.
+- Nicknames must make sense to someone who hasn't seen the data: a phrase about what he did ("Curfew", "Lost Ball", "Early Bird"), never a bare number ("Ten-Eight", "Fifty-Two", "Plus-One").
+- Don't repeat a formula. If each read ends in a target, word each one differently; never the same lead-in ("weekend job:") four times.
+- Only the four players listed under PLAYERS get a line. Other user_ids in the standings whose `net` is null are left out entirely; one with a real `net` is ranked and written like anyone else.
+
 FORMAT (players ordered by net, highest first):
 
 ⛳ BackNine — Weekend Game Plan
-<one-line Letterman cold open, varies each time; it is Friday>
+<one-line Letterman cold open, varies each time; it is Friday, two days left — "making the turn" is Tuesday's line, don't use it>
 
 🥇 <headline>
 🥈 <headline>
@@ -66,7 +72,7 @@ FORMAT (players ordered by net, highest first):
 <one-line closer: who buys the coffee at the current nets, by NAME (never "the guy writing this text"; the text has no author), and that two days can still change it>.
 Your week: backnine.health/league?from=friday&w=<this Monday YYYY-MM-DD>
 
-Keep the whole thing under 170 words. A player with `net` null gets one line saying his card hasn't started instead of a read. A caveat line goes above the "Your week:" line, never after it.
+Keep the whole thing under 170 words. If one of the four listed players has `net` null, he gets one line saying his card hasn't started instead of a read. A caveat line goes above the "Your week:" line, never after it.
 
 FINAL CHECK: the last line of the message is the "Your week:" link with this Monday's date in w=.
 
